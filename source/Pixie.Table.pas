@@ -878,7 +878,7 @@ begin
       begin
         if FRows.Count > 0 then
         begin
-          ExtraRowHeight := ExtraHeight / pixel_t(FRows.Count);
+          ExtraRowHeight := ExtraHeight / FRows.Count;
           for I := 0 to FRows.Count - 1 do
             FRows.Ptr(I)^.Height := FRows.Ptr(I)^.Height + ExtraRowHeight;
         end;
