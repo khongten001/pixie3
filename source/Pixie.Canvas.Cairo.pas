@@ -132,7 +132,7 @@ type
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; override;
 
-    procedure SetViewSize(W, H: Integer); override;
+    procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
     procedure SetScale(Scale: Single); override;
   end;
 
@@ -1333,7 +1333,7 @@ end;
 // Scale / View size
 // ---------------------------------------------------------------------------
 
-procedure TPixieCairoCanvas.SetViewSize(W, H: Integer);
+procedure TPixieCairoCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   FViewWidth := W;
   FViewHeight := H;

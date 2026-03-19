@@ -102,7 +102,7 @@ type
       Color: TPixieWebColor; StrokeWidth: Single); virtual; abstract;
 
     // View size hint for render targets that need explicit sizing
-    procedure SetViewSize(W, H: Integer); virtual;
+    procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); virtual;
     // Scale/zoom — applies a uniform scale transform to all drawing
     procedure SetScale(Scale: Single); virtual;
   end;
@@ -119,7 +119,7 @@ begin
   // no-op by default
 end;
 
-procedure TPixieCanvas.SetViewSize(W, H: Integer);
+procedure TPixieCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   // no-op by default
 end;

@@ -48,6 +48,7 @@ type
     FCG: CGContextRef;
     FColorSpace: CGColorSpaceRef;
     FScale: Single;
+    FCanvasScale: Single;
     FViewWidth, FViewHeight: Integer;
     FStateStack: array[0..63] of TPixieCGSavedState;
     FStateTop: Integer;
@@ -125,7 +126,7 @@ type
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; override;
 
-    procedure SetViewSize(W, H: Integer); override;
+    procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
     procedure SetScale(Scale: Single); override;
   end;
 
@@ -303,6 +304,7 @@ begin
   FCG := nil;
   FColorSpace := CGColorSpaceCreateDeviceRGB;
   FScale := 1.0;
+  FCanvasScale := 1.0;
   FViewWidth := 800;
   FViewHeight := 600;
   FStateTop := 0;
@@ -1179,24 +1181,55 @@ procedure TPixieCGCanvas.DrawImage(Handle: TPixieImageHandle;
   DstX, DstY, DstW, DstH: Single);
 var
   Info: TPixieCGImage;
-  Sx, Sy: Single;
+  Sx, Sy, BackingScale: Single;
+  BmpCtx: CGContextRef;
+  SvgImg: CGImageRef;
+  PixW, PixH: Integer;
 begin
   if (Handle = 0) or (FCG = nil) then Exit;
   Info := TPixieCGImage(Handle);
   if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
 
-  // SVG — re-render at destination size via CoreSVG
+  // SVG — render into an offscreen bitmap, then draw the bitmap.
+  // CGContextDrawSVGDocument (private CoreSVG API) corrupts the caller's
+  // CGContext state stack, so we must isolate it in a separate context.
+  // The bitmap is created at device-pixel resolution (Retina-aware).
   if (Info.SvgDocument <> nil) and Assigned(pCGContextDrawSVGDocument) then
   begin
-    Sx := DstW / Info.ImgWidth;
-    Sy := DstH / Info.ImgHeight;
-    CGContextSaveGState(FCG);
+    // Scale bitmap to device pixels (Retina × zoom) for crisp rendering.
+    BackingScale := FCanvasScale * FScale;
+    if BackingScale < 1 then BackingScale := 1;
+
+    PixW := Round(DstW * BackingScale);
+    PixH := Round(DstH * BackingScale);
+    if (PixW < 1) or (PixH < 1) then Exit;
+
+    BmpCtx := CGBitmapContextCreate(nil, PixW, PixH, 8, PixW * 4,
+      FColorSpace,
+      kCGImageAlphaPremultipliedFirst or kCGBitmapByteOrder32Little);
+    if BmpCtx = nil then Exit;
     try
-      CGContextTranslateCTM(FCG, DstX, DstY);
-      CGContextScaleCTM(FCG, Sx, Sy);
-      pCGContextDrawSVGDocument(FCG, Info.SvgDocument);
+      Sx := PixW / Info.ImgWidth;
+      Sy := PixH / Info.ImgHeight;
+      CGContextScaleCTM(BmpCtx, Sx, Sy);
+      pCGContextDrawSVGDocument(BmpCtx, Info.SvgDocument);
+
+      SvgImg := CGBitmapContextCreateImage(BmpCtx);
     finally
-      CGContextRestoreGState(FCG);
+      CGContextRelease(BmpCtx);
+    end;
+    if SvgImg = nil then Exit;
+    try
+      CGContextSaveGState(FCG);
+      try
+        CGContextTranslateCTM(FCG, DstX, DstY + DstH);
+        CGContextScaleCTM(FCG, 1, -1);
+        CGContextDrawImage(FCG, CGRectMake(0, 0, DstW, DstH), SvgImg);
+      finally
+        CGContextRestoreGState(FCG);
+      end;
+    finally
+      CGImageRelease(SvgImg);
     end;
     Exit;
   end;
@@ -1283,10 +1316,11 @@ end;
 // Scale / View size
 // ---------------------------------------------------------------------------
 
-procedure TPixieCGCanvas.SetViewSize(W, H: Integer);
+procedure TPixieCGCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   FViewWidth := W;
   FViewHeight := H;
+  FCanvasScale := ACanvasScale;
 end;
 
 procedure TPixieCGCanvas.SetScale(Scale: Single);

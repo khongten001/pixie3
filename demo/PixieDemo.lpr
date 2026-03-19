@@ -1,7 +1,6 @@
 program PixieDemo;
 
 {$mode objfpc}{$H+}
-{$APPTYPE CONSOLE}
 
 uses
   {$IFDEF UNIX}

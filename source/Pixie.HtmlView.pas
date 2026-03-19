@@ -387,7 +387,7 @@ begin
   end;
 
   // Tell the canvas our actual pixel size (needed for D2D BindDC)
-  FCanvas.SetViewSize(ClientWidth, ClientHeight);
+  FCanvas.SetViewSize(ClientWidth, ClientHeight, GetCanvasScaleFactor);
 
   if Assigned(FOnBeforePaint) then
     FOnBeforePaint(Self);

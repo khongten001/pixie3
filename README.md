@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="#features">Features</a> &middot;
-  <a href="#screenshot">Screenshot</a> &middot;
+  <a href="#screenshots">Screenshots</a> &middot;
   <a href="#getting-started">Getting Started</a> &middot;
   <a href="#usage">Usage</a> &middot;
   <a href="#download">Download</a> &middot;
@@ -24,7 +24,7 @@ It ships with three rendering backends so the same code works across operating s
 | Platform | 2D Drawing | Text | Images |
 |----------|-----------|------|--------|
 | Windows | Direct2D | DirectWrite | WIC |
-| Linux | Cairo | Pango | GdkPixbuf + librsvg |
+| Linux | Cairo | Pango | FPImage + librsvg |
 | macOS | Core Graphics | Core Text | ImageIO |
 
 ## Features
@@ -65,10 +65,15 @@ It ships with three rendering backends so the same code works across operating s
 - `SetInnerHtml`, `SetElementText`, `SetAttr`, `AddStylesheet`
 - Live DOM mutation with automatic re-render (`BeginUpdate`/`EndUpdate` for batching)
 
-## Screenshot
+## Screenshots
 
 <p align="center">
-  <img src="images/screenshot.png" width="800" alt="Pixie Demo">
+  <img src="images/demo/demo1.png" width="800" alt="Pixie Demo">
+  <img src="images/demo/demo2.png" width="800" alt="Pixie Demo">
+  <img src="images/demo/demo3.png" width="800" alt="Pixie Demo">
+  <img src="images/demo/demo4.png" width="800" alt="Pixie Demo">
+  <img src="images/demo/demo5.png" width="800" alt="Pixie Demo">
+  <img src="images/demo/demo6.png" width="800" alt="Pixie Demo">
 </p>
 
 ## Getting Started
@@ -101,18 +106,8 @@ end;
 Load from a file:
 
 ```pascal
-procedure TForm1.FormCreate(Sender: TObject);
-var
-  Sl: TStringList;
-begin
-  Sl := TStringList.Create;
-  try
-    Sl.LoadFromFile('page.html');
-    PixieHtmlView1.LoadHtml(Sl.Text, 'file://' + ExtractFilePath(ParamStr(0)));
-  finally
-    Sl.Free;
-  end;
-end;
+PixieHtmlView1.BaseUrl := 'file://' + ExtractFilePath(ParamStr(0));
+PixieHtmlView1.Html.LoadFromFile('page.html');
 ```
 
 Handle link clicks:
