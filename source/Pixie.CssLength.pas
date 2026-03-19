@@ -123,7 +123,7 @@ begin
   if not IsPredefined then
   begin
     if FUnits = cssUnitsPercentage then
-      Result := pixel_t(AWidth * FValue / 100.0)
+      Result := AWidth * FValue / 100
     else
       Result := pixel_t(Val);
   end
