@@ -48,6 +48,8 @@ type
     FOnFetchUrl: TPixieFetchUrlEvent;
     FRedrawBoxes: TPixiePositionVector;
     FDragging: Boolean;
+    FScrollDragging: Boolean;
+    FScrollDragOffset: pixel_t;
     FCaretTimer: TTimer;
     FOnBeforeParse: TNotifyEvent;
     FOnAfterParse: TNotifyEvent;
@@ -159,6 +161,7 @@ begin
   FContentHeight := 0;
   FZoom := 1.0;
   FDragging := False;
+  FScrollDragging := False;
 
   inherited Create(AOwner);
   ControlStyle := ControlStyle + [csOpaque];
@@ -252,6 +255,7 @@ begin
   FContentHeight := 0;
   FNeedsLayout := True;
   FDragging := False;
+  FScrollDragging := False;
 
   if (FHtmlLines.Count > 0) and (FCanvas <> nil) then
   begin
@@ -575,6 +579,7 @@ procedure TPixieHtmlView.MouseDown(Button: TMouseButton;
 var
   Vx, Vy: Integer;
   InputFocused: Boolean;
+  ViewH, TrackH, ThumbH, ThumbY, MaxScroll, NewScroll: pixel_t;
 begin
   inherited MouseDown(Button, Shift, X, Y);
   SetFocus;
@@ -582,6 +587,39 @@ begin
   begin
     Vx := Round(X / FZoom);
     Vy := Round(Y / FZoom);
+
+    // Scrollbar interaction
+    ViewH := ClientHeight / FZoom;
+    if (FContentHeight > ViewH) and (Vx >= Round(ClientWidth / FZoom) - 12) then
+    begin
+      TrackH := ViewH - 4;
+      ThumbH := TrackH * (ViewH / FContentHeight);
+      if ThumbH < 16 then ThumbH := 16;
+      MaxScroll := FContentHeight - ViewH;
+      if MaxScroll > 0 then
+        ThumbY := 2 + (FScrollY / MaxScroll) * (TrackH - ThumbH)
+      else
+        ThumbY := 2;
+      if (Vy >= ThumbY) and (Vy < ThumbY + ThumbH) then
+      begin
+        FScrollDragging := True;
+        FScrollDragOffset := Vy - ThumbY;
+      end
+      else
+      begin
+        NewScroll := FScrollY;
+        if Vy < ThumbY then
+          NewScroll := FScrollY - ViewH
+        else
+          NewScroll := FScrollY + ViewH;
+        if NewScroll < 0 then NewScroll := 0;
+        if NewScroll > MaxScroll then NewScroll := MaxScroll;
+        FScrollY := NewScroll;
+      end;
+      Invalidate;
+      Exit;
+    end;
+
     FRedrawBoxes.Clear;
     if FDocument.OnLButtonDown(Vx, Vy + FScrollY, Vx, Vy,
       FRedrawBoxes) then
@@ -631,8 +669,34 @@ end;
 procedure TPixieHtmlView.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   Vx, Vy: Integer;
+  ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: pixel_t;
 begin
   inherited MouseMove(Shift, X, Y);
+  if FScrollDragging then
+  begin
+    Vy := Round(Y / FZoom);
+    ViewH := ClientHeight / FZoom;
+    TrackH := ViewH - 4;
+    ThumbH := TrackH * (ViewH / FContentHeight);
+    if ThumbH < 16 then ThumbH := 16;
+    MaxScroll := FContentHeight - ViewH;
+    NewThumbY := Vy - FScrollDragOffset;
+    if NewThumbY < 2 then NewThumbY := 2;
+    if NewThumbY > 2 + TrackH - ThumbH then
+      NewThumbY := 2 + TrackH - ThumbH;
+    if TrackH > ThumbH then
+      NewScroll := (NewThumbY - 2) / (TrackH - ThumbH) * MaxScroll
+    else
+      NewScroll := 0;
+    if NewScroll < 0 then NewScroll := 0;
+    if NewScroll > MaxScroll then NewScroll := MaxScroll;
+    if NewScroll <> FScrollY then
+    begin
+      FScrollY := NewScroll;
+      Invalidate;
+    end;
+    Exit;
+  end;
   if FDocument <> nil then
   begin
     Vx := Round(X / FZoom);
@@ -667,6 +731,11 @@ var
   Vx, Vy: Integer;
 begin
   inherited MouseUp(Button, Shift, X, Y);
+  if (Button = mbLeft) and FScrollDragging then
+  begin
+    FScrollDragging := False;
+    Exit;
+  end;
   if (Button = mbLeft) and (FDocument <> nil) then
   begin
     Vx := Round(X / FZoom);
