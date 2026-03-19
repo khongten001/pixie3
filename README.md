@@ -19,13 +19,14 @@
 
 Pixie is a drop-in Lazarus component (`TPixieHtmlView`) that renders HTML and CSS using platform-native graphics. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
 
-It ships with three rendering backends so the same code works across operating systems:
+It ships with four rendering backends so the same code works across operating systems:
 
 | Platform | 2D Drawing | Text | Images |
 |----------|-----------|------|--------|
 | Windows | Direct2D | DirectWrite | WIC |
 | Linux (GTK2, GTK3) | Cairo | Pango | FPImage + librsvg |
 | macOS | Core Graphics | Core Text | ImageIO |
+| Qt5 / Qt6 (any platform) | QPainter | QFontMetrics | QImage |
 
 ## Features
 

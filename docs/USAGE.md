@@ -29,13 +29,14 @@ HTML string
   -> Drawing via platform canvas
 ```
 
-Three platform backends are used transparently:
+Four platform backends are used transparently:
 
 | Platform | Drawing | Text | Images |
 |----------|---------|------|--------|
 | Windows  | Direct2D | DirectWrite | WIC |
 | Linux (GTK2, GTK3) | Cairo | PangoCairo | FPImage |
 | macOS    | Core Graphics | Core Text | ImageIO |
+| Qt5 / Qt6 (any platform) | QPainter | QFontMetrics | QImage |
 
 ## Properties
 
@@ -381,6 +382,7 @@ SVG rendering relies on platform-specific APIs and is not universally available:
 | Windows | `ID2D1DeviceContext5.DrawSvgDocument` | Windows 10 version 1703 (Creators Update) or later |
 | macOS | CoreSVG (private framework) | macOS 10.15 (Catalina) or later |
 | Linux | librsvg (`librsvg-2.so`) | librsvg must be installed at runtime |
+| Qt5 / Qt6 | Not yet supported | — |
 
 On older systems or without the required libraries, SVG images are silently skipped (no error, but nothing is rendered). Consider providing PNG fallbacks for critical images.
 
@@ -388,7 +390,7 @@ Windows SVG support through Direct2D has additional limitations — it handles s
 
 ### Conic Gradients
 
-`conic-gradient()` is rendered natively on Windows (via Direct2D). On Linux and macOS it is approximated using 360 pie-sector triangles, which may show minor banding artefacts on large areas.
+`conic-gradient()` is rendered natively on Windows (via Direct2D) and Qt5/Qt6 (via `QConicalGradient`). On Linux and macOS it is approximated using 360 pie-sector triangles, which may show minor banding artefacts on large areas.
 
 ### CSS Features Not Supported
 
