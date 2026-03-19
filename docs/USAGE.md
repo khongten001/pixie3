@@ -34,7 +34,7 @@ Three platform backends are used transparently:
 | Platform | Drawing | Text | Images |
 |----------|---------|------|--------|
 | Windows  | Direct2D | DirectWrite | WIC |
-| Linux    | Cairo | PangoCairo | FPImage |
+| Linux (GTK2, GTK3) | Cairo | PangoCairo | FPImage |
 | macOS    | Core Graphics | Core Text | ImageIO |
 
 ## Properties

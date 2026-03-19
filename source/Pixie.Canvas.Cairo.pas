@@ -1,6 +1,6 @@
 unit Pixie.Canvas.Cairo;
 
-// Cairo + PangoCairo implementation of TPixieCanvas for Linux/GTK2.
+// Cairo + PangoCairo implementation of TPixieCanvas for Linux/GTK2 and GTK3.
 // Provides 2D drawing via Cairo and text measurement/rendering via Pango.
 
 {$mode delphi}
@@ -11,7 +11,6 @@ uses
   SysUtils, Classes, Math, dynlibs,
   cairo, glib2, pango, pangocairo,
   Graphics, IntfGraphics, FPImage,
-  Gtk2Def, gdk2,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
   Pixie.Canvas;
@@ -137,6 +136,11 @@ type
   end;
 
 implementation
+
+uses
+  {$IFDEF LCLGtk2} Gtk2Def, gdk2 {$ENDIF}
+  {$IFDEF LCLGtk3} Gtk3Objects {$ENDIF}
+  ;
 
 var
   GCheckFontContext: PPangoContext;
@@ -355,12 +359,36 @@ end;
 // ---------------------------------------------------------------------------
 
 procedure TPixieCairoCanvas.BeginPaint(DC: PtrUInt);
+{$IFDEF LCLGtk2}
 var
   DevCtx: TGtkDeviceContext;
+{$ENDIF}
+{$IFDEF LCLGtk3}
+var
+  OrigCairo: Pcairo_t;
+  Matrix: cairo_matrix_t;
+  ClipX1, ClipY1, ClipX2, ClipY2: Double;
+{$ENDIF}
 begin
   FStateTop := 0;
+
+  {$IFDEF LCLGtk2}
   DevCtx := TGtkDeviceContext(DC);
   FCairo := gdk_cairo_create(DevCtx.Drawable);
+  {$ENDIF}
+  {$IFDEF LCLGtk3}
+  OrigCairo := Pcairo_t(Pointer(TGtk3DeviceContext(DC).pcr));
+  FCairo := cairo_create(cairo_get_target(OrigCairo));
+  // Copy the transform and clip from the original context so we
+  // paint at the correct origin and don't damage sibling controls.
+  cairo_get_matrix(OrigCairo, @Matrix);
+  cairo_set_matrix(FCairo, @Matrix);
+  cairo_clip_extents(OrigCairo, @ClipX1, @ClipY1, @ClipX2, @ClipY2);
+  cairo_rectangle(FCairo, ClipX1, ClipY1,
+    ClipX2 - ClipX1, ClipY2 - ClipY1);
+  cairo_clip(FCairo);
+  {$ENDIF}
+
   if FCairo = nil then Exit;
 
   // Apply scale transform

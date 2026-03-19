@@ -162,7 +162,7 @@ begin
 
   inherited Create(AOwner);
   ControlStyle := ControlStyle + [csOpaque];
-  Color := clBtnFace;
+  Color := clWhite;
   Width := 400;
   Height := 300;
   TabStop := True;

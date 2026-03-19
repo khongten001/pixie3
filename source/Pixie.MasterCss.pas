@@ -10,6 +10,8 @@ const
   PixieMasterCss =
     'html {' +
     '  display: block;' +
+    '  background: white;' +
+    '  color: black;' +
     '}' +
 
     'head {' +

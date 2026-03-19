@@ -24,7 +24,7 @@ It ships with three rendering backends so the same code works across operating s
 | Platform | 2D Drawing | Text | Images |
 |----------|-----------|------|--------|
 | Windows | Direct2D | DirectWrite | WIC |
-| Linux | Cairo | Pango | FPImage + librsvg |
+| Linux (GTK2, GTK3) | Cairo | Pango | FPImage + librsvg |
 | macOS | Core Graphics | Core Text | ImageIO |
 
 ## Features
