@@ -13,13 +13,13 @@ uses
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
   Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext
-  {$IFDEF MSWINDOWS}
+  {$IF defined(LCLqt5) or defined(LCLqt6)}
+    , Pixie.Canvas.Qt
+  {$ELSEIF defined(MSWINDOWS)}
     , Pixie.Canvas.D2D
-  {$ENDIF}
-  {$IFDEF DARWIN}
+  {$ELSEIF defined(DARWIN)}
     , Pixie.Canvas.CG
-  {$ENDIF}
-  {$IF defined(UNIX) and not defined(DARWIN)}
+  {$ELSEIF defined(UNIX)}
     , Pixie.Canvas.Cairo
   {$ENDIF};
 
@@ -167,13 +167,13 @@ begin
   Height := 300;
   TabStop := True;
 
-  {$IFDEF MSWINDOWS}
+  {$IF defined(LCLqt5) or defined(LCLqt6)}
+  FCanvas := TPixieQtCanvas.Create;
+  {$ELSEIF defined(MSWINDOWS)}
   FCanvas := TPixieD2DCanvas.Create;
-  {$ENDIF}
-  {$IFDEF DARWIN}
+  {$ELSEIF defined(DARWIN)}
   FCanvas := TPixieCGCanvas.Create;
-  {$ENDIF}
-  {$IF defined(UNIX) and not defined(DARWIN)}
+  {$ELSEIF defined(UNIX)}
   FCanvas := TPixieCairoCanvas.Create;
   {$ENDIF}
 
