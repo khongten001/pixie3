@@ -142,7 +142,7 @@ end;
 
 Pre-built demo application for Windows:
 
-[**Download latest release**](../../releases/latest)
+[**Download latest release**](https://gitlab.com/api/v4/projects/retrofoxed%2Fpixie/packages/generic/pixie-demo/1.0.0/PixieDemo-win64.zip)
 
 ## Licence
 
