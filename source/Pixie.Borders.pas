@@ -1,0 +1,253 @@
+unit Pixie.Borders;
+
+{$mode delphi}
+
+interface
+
+uses
+  SysUtils, Math, Pixie.Types, Pixie.CssLength, Pixie.WebColor, Pixie.Html;
+
+type
+  { TPixieCssBorder }
+  TPixieCssBorder = record
+    Width: TPixieCssLength;
+    Style: TPixieBorderStyle;
+    Color: TPixieWebColor;
+    procedure Init;
+    function ToString: string;
+  end;
+
+  { TPixieBorder }
+  TPixieBorder = record
+    Width: pixel_t;
+    Style: TPixieBorderStyle;
+    Color: TPixieWebColor;
+    procedure Init;
+    procedure InitFromCss(const CssBorder: TPixieCssBorder);
+  end;
+
+  { TPixieBorderRadiuses }
+  TPixieBorderRadiuses = record
+    TopLeftX: pixel_t;
+    TopLeftY: pixel_t;
+    TopRightX: pixel_t;
+    TopRightY: pixel_t;
+    BottomRightX: pixel_t;
+    BottomRightY: pixel_t;
+    BottomLeftX: pixel_t;
+    BottomLeftY: pixel_t;
+    procedure Init;
+    procedure FixValues; overload;
+    procedure FixValues(AWidth, AHeight: pixel_t); overload;
+    procedure AddMargins(const Mg: TPixieMargins);
+    procedure SubMargins(const Mg: TPixieMargins);
+  end;
+
+  { TPixieCssBorderRadius }
+  TPixieCssBorderRadius = record
+    TopLeftX: TPixieCssLength;
+    TopLeftY: TPixieCssLength;
+    TopRightX: TPixieCssLength;
+    TopRightY: TPixieCssLength;
+    BottomRightX: TPixieCssLength;
+    BottomRightY: TPixieCssLength;
+    BottomLeftX: TPixieCssLength;
+    BottomLeftY: TPixieCssLength;
+    function CalcPercents(AWidth, AHeight: pixel_t): TPixieBorderRadiuses;
+  end;
+
+  { TPixieCssBorders }
+  TPixieCssBorders = record
+    Left: TPixieCssBorder;
+    Top: TPixieCssBorder;
+    Right: TPixieCssBorder;
+    Bottom: TPixieCssBorder;
+    Radius: TPixieCssBorderRadius;
+    function IsVisible: Boolean;
+    function ToString: string;
+  end;
+
+  { TPixieBorders }
+  TPixieBorders = record
+    Left: TPixieBorder;
+    Top: TPixieBorder;
+    Right: TPixieBorder;
+    Bottom: TPixieBorder;
+    Radius: TPixieBorderRadiuses;
+    procedure Init;
+    procedure InitFromCss(const CssBorders: TPixieCssBorders);
+    function IsVisible: Boolean;
+  end;
+
+implementation
+
+{ TPixieCssBorder }
+
+procedure TPixieCssBorder.Init;
+begin
+  Style := bsNone;
+end;
+
+function TPixieCssBorder.ToString: string;
+begin
+  Result := Width.ToString + '/' + PixieIndexValue(Ord(Style), BorderStyleStrings) + '/' + Color.ToString;
+end;
+
+{ TPixieBorder }
+
+procedure TPixieBorder.Init;
+begin
+  Width := 0;
+  Style := bsNone;
+end;
+
+procedure TPixieBorder.InitFromCss(const CssBorder: TPixieCssBorder);
+begin
+  Width := pixel_t(CssBorder.Width.Val);
+  Style := CssBorder.Style;
+  Color := CssBorder.Color;
+end;
+
+{ TPixieBorderRadiuses }
+
+procedure TPixieBorderRadiuses.Init;
+begin
+  TopLeftX := 0;
+  TopLeftY := 0;
+  TopRightX := 0;
+  TopRightY := 0;
+  BottomRightX := 0;
+  BottomRightY := 0;
+  BottomLeftX := 0;
+  BottomLeftY := 0;
+end;
+
+procedure TPixieBorderRadiuses.FixValues;
+begin
+  if TopLeftX < 0 then TopLeftX := 0;
+  if TopLeftY < 0 then TopLeftY := 0;
+  if TopRightX < 0 then TopRightX := 0;
+  if TopRightY < 0 then TopRightY := 0;
+  if BottomRightX < 0 then BottomRightX := 0;
+  if BottomRightY < 0 then BottomRightY := 0;
+  if BottomLeftX < 0 then BottomLeftX := 0;
+  if BottomLeftY < 0 then BottomLeftY := 0;
+end;
+
+procedure TPixieBorderRadiuses.FixValues(AWidth, AHeight: pixel_t);
+var
+  HalfWidth, HalfHeight, Factor: pixel_t;
+begin
+  FixValues;
+  HalfWidth := AWidth / 2;
+  HalfHeight := AHeight / 2;
+
+  if (TopLeftX > HalfWidth) or (TopLeftY > HalfHeight) then
+  begin
+    Factor := Min(HalfWidth / TopLeftX, HalfHeight / TopLeftY);
+    TopLeftX := TopLeftX * Factor;
+    TopLeftY := TopLeftY * Factor;
+  end;
+  if (TopRightX > HalfWidth) or (TopRightY > HalfHeight) then
+  begin
+    Factor := Min(HalfWidth / TopRightX, HalfHeight / TopRightY);
+    TopRightX := TopRightX * Factor;
+    TopRightY := TopRightY * Factor;
+  end;
+  if (BottomRightX > HalfWidth) or (BottomRightY > HalfHeight) then
+  begin
+    Factor := Min(HalfWidth / BottomRightX, HalfHeight / BottomRightY);
+    BottomRightX := BottomRightX * Factor;
+    BottomRightY := BottomRightY * Factor;
+  end;
+  if (BottomLeftX > HalfWidth) or (BottomLeftY > HalfHeight) then
+  begin
+    Factor := Min(HalfWidth / BottomLeftX, HalfHeight / BottomLeftY);
+    BottomLeftX := BottomLeftX * Factor;
+    BottomLeftY := BottomLeftY * Factor;
+  end;
+end;
+
+procedure TPixieBorderRadiuses.AddMargins(const Mg: TPixieMargins);
+begin
+  TopLeftX := TopLeftX + Mg.Left;
+  TopLeftY := TopLeftY + Mg.Top;
+  TopRightX := TopRightX + Mg.Right;
+  TopRightY := TopRightY + Mg.Top;
+  BottomRightX := BottomRightX + Mg.Right;
+  BottomRightY := BottomRightY + Mg.Bottom;
+  BottomLeftX := BottomLeftX + Mg.Left;
+  BottomLeftY := BottomLeftY + Mg.Bottom;
+  FixValues;
+end;
+
+procedure TPixieBorderRadiuses.SubMargins(const Mg: TPixieMargins);
+begin
+  TopLeftX := TopLeftX - Mg.Left;
+  TopLeftY := TopLeftY - Mg.Top;
+  TopRightX := TopRightX - Mg.Right;
+  TopRightY := TopRightY - Mg.Top;
+  BottomRightX := BottomRightX - Mg.Right;
+  BottomRightY := BottomRightY - Mg.Bottom;
+  BottomLeftX := BottomLeftX - Mg.Left;
+  BottomLeftY := BottomLeftY - Mg.Bottom;
+  FixValues;
+end;
+
+{ TPixieCssBorderRadius }
+
+function TPixieCssBorderRadius.CalcPercents(AWidth, AHeight: pixel_t): TPixieBorderRadiuses;
+begin
+  Result.BottomLeftX := BottomLeftX.CalcPercent(AWidth);
+  Result.BottomLeftY := BottomLeftY.CalcPercent(AHeight);
+  Result.TopLeftX := TopLeftX.CalcPercent(AWidth);
+  Result.TopLeftY := TopLeftY.CalcPercent(AHeight);
+  Result.TopRightX := TopRightX.CalcPercent(AWidth);
+  Result.TopRightY := TopRightY.CalcPercent(AHeight);
+  Result.BottomRightX := BottomRightX.CalcPercent(AWidth);
+  Result.BottomRightY := BottomRightY.CalcPercent(AHeight);
+  Result.FixValues(AWidth, AHeight);
+end;
+
+{ TPixieCssBorders }
+
+function TPixieCssBorders.IsVisible: Boolean;
+begin
+  Result := (Left.Width.Val <> 0) or (Right.Width.Val <> 0) or
+            (Top.Width.Val <> 0) or (Bottom.Width.Val <> 0);
+end;
+
+function TPixieCssBorders.ToString: string;
+begin
+  Result := 'left: ' + Left.ToString +
+            ', top: ' + Top.ToString +
+            ', right: ' + Right.ToString +
+            ', bottom: ' + Bottom.ToString;
+end;
+
+{ TPixieBorders }
+
+procedure TPixieBorders.Init;
+begin
+  Left.Init;
+  Top.Init;
+  Right.Init;
+  Bottom.Init;
+  Radius.Init;
+end;
+
+procedure TPixieBorders.InitFromCss(const CssBorders: TPixieCssBorders);
+begin
+  Left.InitFromCss(CssBorders.Left);
+  Right.InitFromCss(CssBorders.Right);
+  Top.InitFromCss(CssBorders.Top);
+  Bottom.InitFromCss(CssBorders.Bottom);
+end;
+
+function TPixieBorders.IsVisible: Boolean;
+begin
+  Result := (Left.Width <> 0) or (Right.Width <> 0) or
+            (Top.Width <> 0) or (Bottom.Width <> 0);
+end;
+
+end.

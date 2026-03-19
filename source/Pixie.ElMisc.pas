@@ -1,0 +1,479 @@
+unit Pixie.ElMisc;
+
+// Simple HTML element types.
+
+{$mode delphi}
+
+interface
+
+uses
+  SysUtils, Generics.Collections,
+  Pixie.Types, Pixie.CssProperties,
+  Pixie.Style, Pixie.Stylesheet,
+  Pixie.Element, Pixie.HtmlTag;
+
+type
+  { TPixieElBody }
+
+  TPixieElBody = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    function IsBody: Boolean; override;
+  end;
+
+  { TPixieElBreak }
+
+  TPixieElBreak = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    function IsBreak: Boolean; override;
+  end;
+
+  { TPixieElDiv }
+
+  TPixieElDiv = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElPara }
+
+  TPixieElPara = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElFont }
+
+  TPixieElFont = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElLink }
+
+  TPixieElLink = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElTitle }
+
+  TPixieElTitle = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElBase }
+
+  TPixieElBase = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  // --- The following inherit from TPixieElement, NOT TPixieHtmlTag ---
+
+  { TPixieElScript }
+
+  TPixieElScript = class(TPixieElement)
+  private
+    FText: string;
+  public
+    constructor Create(ADoc: TObject);
+    function AppendChild(El: TPixieElement): Boolean; override;
+    function GetTag: Integer; override;
+    function GetTagName: string; override;
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElStyle }
+
+  TPixieElStyle = class(TPixieElement)
+  private
+    FChildElements: TPixieElementList;
+  public
+    constructor Create(ADoc: TObject);
+    destructor Destroy; override;
+    function AppendChild(El: TPixieElement): Boolean; override;
+    function GetTag: Integer; override;
+    function GetTagName: string; override;
+    procedure ParseAttributes; override;
+    procedure ComputeStyles(Recursive: Boolean = True); override;
+  end;
+
+  { TPixieElCData }
+
+  TPixieElCData = class(TPixieElement)
+  private
+    FText: string;
+  public
+    constructor Create(ADoc: TObject);
+    procedure GetText(var Text: string); override;
+    procedure SetData(const AData: string); override;
+  end;
+
+  { TPixieElComment }
+
+  TPixieElComment = class(TPixieElement)
+  private
+    FText: string;
+  public
+    constructor Create(ADoc: TObject);
+    function IsComment: Boolean; override;
+    procedure GetText(var Text: string); override;
+    procedure SetData(const AData: string); override;
+    function CreateRenderItem(ParentRi: Pointer): Pointer; override;
+  end;
+
+implementation
+
+uses
+  Pixie.StringId, Pixie.Html, Pixie.Container, Pixie.Document;
+
+{ TPixieElBody }
+
+constructor TPixieElBody.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+function TPixieElBody.IsBody: Boolean;
+begin
+  Result := True;
+end;
+
+{ TPixieElBreak }
+
+constructor TPixieElBreak.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+function TPixieElBreak.IsBreak: Boolean;
+begin
+  Result := True;
+end;
+
+{ TPixieElDiv }
+
+constructor TPixieElDiv.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElDiv.ParseAttributes;
+var
+  Val: string;
+begin
+  Val := GetAttr('align');
+  if Val <> '' then
+    FStyle.AddProperty(Ord(psid_text_align), Val);
+  inherited ParseAttributes;
+end;
+
+{ TPixieElPara }
+
+constructor TPixieElPara.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElPara.ParseAttributes;
+var
+  Val: string;
+begin
+  Val := GetAttr('align');
+  if Val <> '' then
+    FStyle.AddProperty(Ord(psid_text_align), Val);
+  inherited ParseAttributes;
+end;
+
+{ TPixieElFont }
+
+constructor TPixieElFont.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElFont.ParseAttributes;
+var
+  Val, SizeStr: string;
+  Sz, Offset: Integer;
+begin
+  Val := GetAttr('color');
+  if Val <> '' then
+    FStyle.AddProperty(Ord(psid_color), Val);
+
+  Val := GetAttr('face');
+  if Val <> '' then
+    FStyle.AddProperty(Ord(psid_font_family), Val);
+
+  Val := GetAttr('size');
+  if Val <> '' then
+  begin
+    Sz := 0;
+    if (Length(Val) > 0) and ((Val[1] = '+') or (Val[1] = '-')) then
+    begin
+      // Relative size
+      Offset := StrToIntDef(Val, 0);
+      Sz := 3 + Offset;
+    end
+    else
+      Sz := StrToIntDef(Val, 3);
+
+    if Sz <= 1 then
+      SizeStr := 'x-small'
+    else if Sz = 2 then
+      SizeStr := 'small'
+    else if Sz = 3 then
+      SizeStr := 'medium'
+    else if Sz = 4 then
+      SizeStr := 'large'
+    else if Sz = 5 then
+      SizeStr := 'x-large'
+    else
+      SizeStr := 'xx-large';
+
+    FStyle.AddProperty(Ord(psid_font_size), SizeStr);
+  end;
+
+  inherited ParseAttributes;
+end;
+
+{ TPixieElLink }
+
+constructor TPixieElLink.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElLink.ParseAttributes;
+var
+  Rel, Href, Media, CssText, BaseUrl: string;
+  Cont: TPixieContainer;
+  Processed: Boolean;
+begin
+  Processed := False;
+  Rel := GetAttr('rel');
+
+  if PixieLowerCase(Rel) = 'stylesheet' then
+  begin
+    Href := GetAttr('href');
+    if Href <> '' then
+    begin
+      Media := GetAttr('media');
+      CssText := '';
+      BaseUrl := '';
+      Cont := GetDocContainer;
+      if Cont <> nil then
+      begin
+        Cont.ImportCss(CssText, Href, BaseUrl);
+        if CssText <> '' then
+        begin
+          if FDoc <> nil then
+          begin
+            Assert(FDoc is TPixieDocument);
+            TPixieDocument(FDoc).AddStylesheet(CssText, BaseUrl,
+              Media);
+          end;
+          Processed := True;
+        end;
+      end;
+    end;
+  end;
+
+  if not Processed then
+  begin
+    Cont := GetDocContainer;
+    if Cont <> nil then
+      Cont.Link(FDoc, Self);
+  end;
+
+  inherited ParseAttributes;
+end;
+
+{ TPixieElTitle }
+
+constructor TPixieElTitle.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElTitle.ParseAttributes;
+var
+  Txt: string;
+  Cont: TPixieContainer;
+begin
+  Txt := '';
+  GetText(Txt);
+  Cont := GetDocContainer;
+  if Cont <> nil then
+    Cont.SetCaption(Txt);
+  inherited ParseAttributes;
+end;
+
+{ TPixieElBase }
+
+constructor TPixieElBase.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElBase.ParseAttributes;
+var
+  Href: string;
+  Cont: TPixieContainer;
+begin
+  Href := GetAttr('href');
+  if Href <> '' then
+  begin
+    Cont := GetDocContainer;
+    if Cont <> nil then
+      Cont.SetBaseUrl(Href);
+  end;
+  inherited ParseAttributes;
+end;
+
+{ TPixieElScript }
+
+constructor TPixieElScript.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+function TPixieElScript.AppendChild(El: TPixieElement): Boolean;
+var
+  Txt: string;
+begin
+  Txt := '';
+  El.GetText(Txt);
+  FText := FText + Txt;
+  Result := True;
+end;
+
+function TPixieElScript.GetTag: Integer;
+begin
+  Result := Ord(psid_script);
+end;
+
+function TPixieElScript.GetTagName: string;
+begin
+  Result := 'script';
+end;
+
+procedure TPixieElScript.ParseAttributes;
+begin
+  // Script execution not implemented
+end;
+
+{ TPixieElStyle }
+
+constructor TPixieElStyle.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+  FChildElements := TPixieElementList.Create(False);
+end;
+
+destructor TPixieElStyle.Destroy;
+begin
+  FChildElements.Free;
+  inherited Destroy;
+end;
+
+function TPixieElStyle.AppendChild(El: TPixieElement): Boolean;
+begin
+  if El.IsText then
+  begin
+    FChildElements.Add(El);
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+function TPixieElStyle.GetTag: Integer;
+begin
+  Result := Ord(psid_style);
+end;
+
+function TPixieElStyle.GetTagName: string;
+begin
+  Result := 'style';
+end;
+
+procedure TPixieElStyle.ParseAttributes;
+var
+  Txt, Media: string;
+  I: Integer;
+begin
+  Txt := '';
+  for I := 0 to FChildElements.Count - 1 do
+    FChildElements[I].GetText(Txt);
+
+  if (Txt <> '') and (FDoc <> nil) then
+  begin
+    Assert(FDoc is TPixieDocument);
+    Media := '';
+    // Style elements can have a media attribute
+    // but TPixieElStyle inherits from TPixieElement which has no GetAttr,
+    // so media filtering happens at parse time in Document
+    TPixieDocument(FDoc).AddStylesheet(Txt, '', Media);
+  end;
+end;
+
+procedure TPixieElStyle.ComputeStyles(Recursive: Boolean);
+begin
+  FCss.Display := displayNone;
+end;
+
+{ TPixieElCData }
+
+constructor TPixieElCData.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElCData.GetText(var Text: string);
+begin
+  Text := Text + FText;
+end;
+
+procedure TPixieElCData.SetData(const AData: string);
+begin
+  FText := FText + AData;
+end;
+
+{ TPixieElComment }
+
+constructor TPixieElComment.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+function TPixieElComment.IsComment: Boolean;
+begin
+  Result := True;
+end;
+
+procedure TPixieElComment.GetText(var Text: string);
+begin
+  Text := Text + FText;
+end;
+
+procedure TPixieElComment.SetData(const AData: string);
+begin
+  FText := FText + AData;
+end;
+
+function TPixieElComment.CreateRenderItem(ParentRi: Pointer): Pointer;
+begin
+  Result := nil;
+end;
+
+end.

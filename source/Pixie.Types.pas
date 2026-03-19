@@ -1,0 +1,1075 @@
+unit Pixie.Types;
+
+{$mode delphi}
+
+interface
+
+uses
+  SysUtils, Generics.Collections, Math;
+
+type
+  pixel_t = Single;
+  ucode_t = UInt32;
+
+  // Document mode
+  TPixieDocumentMode = (
+    dmNoQuirks,
+    dmQuirks,
+    dmLimitedQuirks
+  );
+
+  // Text decoration line (flags - use integer constants)
+  // style_text_decoration_line_strings = 'none;underline;overline;line-through'
+
+  // Text decoration style
+  // 'solid;double;dotted;dashed;wavy'
+  TPixieTextDecorationStyle = (
+    tdsSOlid,
+    tdsDouble,
+    tdsDotted,
+    tdsDashed,
+    tdsWavy
+  );
+
+  // Text decoration thickness
+  // 'auto;from-font'
+  TPixieTextDecorationThickness = (
+    tdtAuto,
+    tdtFromFont
+  );
+
+  // Text emphasis position (flags - use integer constants)
+  // 'over;under;left;right'
+
+  // Display
+  // 'none;block;inline;inline-block;inline-table;list-item;table;table-caption;table-cell;table-column;table-column-group;table-footer-group;table-header-group;table-row;table-row-group;inline-text;flex;inline-flex'
+  TPixieDisplay = (
+    displayNone,
+    displayBlock,
+    displayInline,
+    displayInlineBlock,
+    displayInlineTable,
+    displayListItem,
+    displayTable,
+    displayTableCaption,
+    displayTableCell,
+    displayTableColumn,
+    displayTableColumnGroup,
+    displayTableFooterGroup,
+    displayTableHeaderGroup,
+    displayTableRow,
+    displayTableRowGroup,
+    displayInlineText,
+    displayFlex,
+    displayInlineFlex,
+    displayGrid,
+    displayInlineGrid,
+    displayFlowRoot
+  );
+
+  // Font size
+  // 'xx-small;x-small;small;medium;large;x-large;xx-large;smaller;larger'
+  TPixieFontSize = (
+    fsXXSmall,
+    fsXSmall,
+    fsSmall,
+    fsMedium,
+    fsLarge,
+    fsXLarge,
+    fsXXLarge,
+    fsSmaller,
+    fsLarger
+  );
+
+  // Line height
+  // 'normal'
+  TPixieLineHeight = (
+    lhNormal
+  );
+
+  // Font style
+  // 'normal;italic'
+  TPixieFontStyle = (
+    fstNormal,
+    fstItalic
+  );
+
+  // Font variant
+  // 'normal;small-caps'
+  TPixieFontVariant = (
+    fvNormal,
+    fvSmallCaps
+  );
+
+  // Font weight
+  // 'normal;bold;bolder;lighter'
+  TPixieFontWeight = (
+    fwNormal,
+    fwBold,
+    fwBolder,
+    fwLighter
+  );
+
+  // List style type
+  // 'none;circle;disc;square;armenian;cjk-ideographic;decimal;decimal-leading-zero;georgian;hebrew;hiragana;hiragana-iroha;katakana;katakana-iroha;lower-alpha;lower-greek;lower-latin;lower-roman;upper-alpha;upper-latin;upper-roman'
+  TPixieListStyleType = (
+    lstNone,
+    lstCircle,
+    lstDisc,
+    lstSquare,
+    lstArmenian,
+    lstCjkIdeographic,
+    lstDecimal,
+    lstDecimalLeadingZero,
+    lstGeorgian,
+    lstHebrew,
+    lstHiragana,
+    lstHiraganaIroha,
+    lstKatakana,
+    lstKatakanaIroha,
+    lstLowerAlpha,
+    lstLowerGreek,
+    lstLowerLatin,
+    lstLowerRoman,
+    lstUpperAlpha,
+    lstUpperLatin,
+    lstUpperRoman
+  );
+
+  // List style position
+  // 'inside;outside'
+  TPixieListStylePosition = (
+    lspInside,
+    lspOutside
+  );
+
+  // Vertical align
+  // 'baseline;sub;super;top;text-top;middle;bottom;text-bottom'
+  TPixieVerticalAlign = (
+    vaBaseline,
+    vaSub,
+    vaSuper,
+    vaTop,
+    vaTextTop,
+    vaMiddle,
+    vaBottom,
+    vaTextBottom
+  );
+
+  // Border width
+  // 'thin;medium;thick'
+  TPixieBorderWidth = (
+    bwThin,
+    bwMedium,
+    bwThick
+  );
+
+  // Border style
+  // 'none;hidden;dotted;dashed;solid;double;groove;ridge;inset;outset'
+  TPixieBorderStyle = (
+    bsNone,
+    bsHidden,
+    bsDotted,
+    bsDashed,
+    bsSolid,
+    bsDouble,
+    bsGroove,
+    bsRidge,
+    bsInset,
+    bsOutset
+  );
+
+  // Element float
+  // 'none;left;right'
+  TPixieElementFloat = (
+    efNone,
+    efLeft,
+    efRight
+  );
+
+  // Element clear
+  // 'none;left;right;both'
+  TPixieElementClear = (
+    ecNone,
+    ecLeft,
+    ecRight,
+    ecBoth
+  );
+
+  // CSS units
+  // 'none;%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch'
+  TPixieCssUnits = (
+    cssUnitsNone,
+    cssUnitsPercentage,
+    cssUnitsIn,
+    cssUnitsCm,
+    cssUnitsMm,
+    cssUnitsEm,
+    cssUnitsEx,
+    cssUnitsPt,
+    cssUnitsPc,
+    cssUnitsPx,
+    cssUnitsVw,
+    cssUnitsVh,
+    cssUnitsVmin,
+    cssUnitsVmax,
+    cssUnitsRem,
+    cssUnitsCh,
+    cssUnitsFr
+  );
+
+  // Background attachment
+  // 'scroll;fixed'
+  TPixieBackgroundAttachment = (
+    baScroll,
+    baFixed
+  );
+
+  // Background repeat
+  // 'repeat;repeat-x;repeat-y;no-repeat'
+  TPixieBackgroundRepeat = (
+    brRepeat,
+    brRepeatX,
+    brRepeatY,
+    brNoRepeat
+  );
+
+  // Background box
+  // 'border-box;padding-box;content-box'
+  TPixieBackgroundBox = (
+    bbBorder,
+    bbPadding,
+    bbContent
+  );
+
+  // Background position
+  // 'left;right;top;bottom;center'
+  TPixieBackgroundPosition = (
+    bpLeft,
+    bpRight,
+    bpTop,
+    bpBottom,
+    bpCenter
+  );
+
+  // Element position
+  // 'static;relative;absolute;fixed'
+  TPixieElementPosition = (
+    epStatic,
+    epRelative,
+    epAbsolute,
+    epFixed
+  );
+
+  // Text align
+  // 'left;right;center;justify'
+  TPixieTextAlign = (
+    taLeft,
+    taRight,
+    taCenter,
+    taJustify
+  );
+
+  // Text transform
+  // 'none;capitalize;uppercase;lowercase'
+  TPixieTextTransform = (
+    ttNone,
+    ttCapitalize,
+    ttUppercase,
+    ttLowercase
+  );
+
+  // White space
+  // 'normal;nowrap;pre;pre-line;pre-wrap'
+  TPixieWhiteSpace = (
+    wsNormal,
+    wsNowrap,
+    wsPre,
+    wsPreLine,
+    wsPreWrap
+  );
+
+  // Overflow wrap
+  // 'normal;break-word;anywhere'
+  TPixieOverflowWrap = (
+    owNormal,
+    owBreakWord,
+    owAnywhere
+  );
+
+  // Overflow
+  // 'visible;hidden;scroll;auto;no-display;no-content'
+  TPixieOverflow = (
+    ovVisible,
+    ovHidden,
+    ovScroll,
+    ovAuto,
+    ovNoDisplay,
+    ovNoContent
+  );
+
+  // Background size
+  // 'auto;cover;contain'
+  TPixieBackgroundSize = (
+    bszAuto,
+    bszCover,
+    bszContain
+  );
+
+  // Visibility
+  // 'visible;hidden;collapse'
+  TPixieVisibility = (
+    visVisible,
+    visHidden,
+    visCollapse
+  );
+
+  // Border collapse
+  // 'collapse;separate'
+  TPixieBorderCollapse = (
+    bcCollapse,
+    bcSeparate
+  );
+
+  // Content property
+  // 'none;normal;open-quote;close-quote;no-open-quote;no-close-quote'
+  TPixieContentProperty = (
+    cpNone,
+    cpNormal,
+    cpOpenQuote,
+    cpCloseQuote,
+    cpNoOpenQuote,
+    cpNoCloseQuote
+  );
+
+  // Appearance
+  // 'none;auto;menulist-button;textfield;button;checkbox;listbox;menulist;meter;progress-bar;push-button;radio;searchfield;slider-horizontal;square-button;textarea'
+  TPixieAppearance = (
+    appNone,
+    appAuto,
+    appMenulistButton,
+    appTextfield,
+    appButton,
+    appCheckbox,
+    appListbox,
+    appMenulist,
+    appMeter,
+    appProgressBar,
+    appPushButton,
+    appRadio,
+    appSearchfield,
+    appSliderHorizontal,
+    appSquareButton,
+    appTextarea
+  );
+
+  // Box sizing
+  // 'content-box;border-box'
+  TPixieBoxSizing = (
+    bxContentBox,
+    bxBorderBox
+  );
+
+  // Media type
+  // 'all;print;screen;tty;tv;projection;handheld;braille;embossed;aural;speech'
+  TPixieMediaType = (
+    mtUnknown,
+    mtAll,
+    mtPrint,
+    mtScreen,
+    mtFirstDeprecated
+  );
+
+  // Flex direction
+  // 'row;row-reverse;column;column-reverse'
+  TPixieFlexDirection = (
+    fdRow,
+    fdRowReverse,
+    fdColumn,
+    fdColumnReverse
+  );
+
+  // Flex wrap
+  // 'nowrap;wrap;wrap-reverse'
+  TPixieFlexWrap = (
+    fwrNowrap,
+    fwrWrap,
+    fwrWrapReverse
+  );
+
+  // Flex justify content
+  // 'normal;flex-start;flex-end;center;space-between;space-around;start;end;left;right;space-evenly;stretch'
+  TPixieFlexJustifyContent = (
+    fjcNormal,
+    fjcFlexStart,
+    fjcFlexEnd,
+    fjcCenter,
+    fjcSpaceBetween,
+    fjcSpaceAround,
+    fjcStart,
+    fjcEnd,
+    fjcLeft,
+    fjcRight,
+    fjcSpaceEvenly,
+    fjcStretch
+  );
+
+  // Flex align items (values 0..10 are enum, higher values are flags)
+  // 'auto;normal;stretch;baseline;center;start;end;self-start;self-end;flex-start;flex-end'
+  TPixieFlexAlignItems = (
+    faiAuto,
+    faiNormal,
+    faiStretch,
+    faiBaseline,
+    faiCenter,
+    faiStart,
+    faiEnd,
+    faiSelfStart,
+    faiSelfEnd,
+    faiFlexStart,
+    faiFlexEnd
+  );
+
+  // Flex align content
+  // 'flex-start;start;flex-end;end;center;space-between;space-around;stretch'
+  TPixieFlexAlignContent = (
+    facFlexStart,
+    facStart,
+    facFlexEnd,
+    facEnd,
+    facCenter,
+    facSpaceBetween,
+    facSpaceAround,
+    facStretch
+  );
+
+  // Flex basis
+  // 'auto;content;fit-content;min-content;max-content'
+  TPixieFlexBasis = (
+    fbAuto,
+    fbContent,
+    fbFitContent,
+    fbMinContent,
+    fbMaxContent
+  );
+
+  // Caption side
+  // 'top;bottom'
+  TPixieCaptionSide = (
+    csTop,
+    csBottom
+  );
+
+  // Draw flag
+  TPixieDrawFlag = (
+    dfRoot,
+    dfBlock,
+    dfFloats,
+    dfInlines,
+    dfPositioned
+  );
+
+  // Render type
+  TPixieRenderType = (
+    rtAll,
+    rtNoFixed,
+    rtFixedOnly
+  );
+
+  // Baseline type
+  TPixieBaselineType = (
+    btNone,
+    btTop,
+    btBottom
+  );
+
+  // Flex clamp state (used by flex free-space distribution)
+  TPixieFlexClampState = (
+    fcsUnclamped,
+    fcsInflexible,
+    fcsMinViolation,
+    fcsMaxViolation
+  );
+
+  // CBC value type
+  TPixieCbcValueType = (
+    cbcAbsolute,
+    cbcPercentage,
+    cbcAuto,
+    cbcNone
+  );
+
+const
+  // Text decoration line flags
+  TextDecorationLineNone       = $00;
+  TextDecorationLineUnderline  = $01;
+  TextDecorationLineOverline   = $02;
+  TextDecorationLineLineThrough = $04;
+
+  // Text emphasis position flags
+  TextEmphasisPositionOver  = $00;
+  TextEmphasisPositionUnder = $01;
+  TextEmphasisPositionLeft  = $02;
+  TextEmphasisPositionRight = $04;
+
+  // Select result flags
+  SelectNoMatch          = $00;
+  SelectMatch            = $01;
+  SelectMatchPseudoClass = $02;
+  SelectMatchWithBefore  = $10;
+  SelectMatchWithAfter   = $20;
+
+  // Size mode flags
+  SizeModeNormal      = $00;
+  SizeModeExactWidth  = $01;
+  SizeModeExactHeight = $02;
+  SizeModeContent     = $04;
+
+  // Flex align items flags (combined with enum ordinals)
+  FlexAlignItemsFirst  = $100;
+  FlexAlignItemsLast   = $200;
+  FlexAlignItemsUnsafe = $400;
+  FlexAlignItemsSafe   = $800;
+
+  // Border width values
+  BorderWidthThinValue: pixel_t   = 1;
+  BorderWidthMediumValue: pixel_t = 3;
+  BorderWidthThickValue: pixel_t  = 5;
+
+  // Keyword strings (semicolon-delimited, same order as enums)
+  StyleDisplayStrings = 'none;block;inline;inline-block;inline-table;list-item;table;table-caption;table-cell;table-column;table-column-group;table-footer-group;table-header-group;table-row;table-row-group;inline-text;flex;inline-flex;grid;inline-grid;flow-root';
+  FontSizeStrings = 'xx-small;x-small;small;medium;large;x-large;xx-large;smaller;larger';
+  LineHeightStrings = 'normal';
+  FontStyleStrings = 'normal;italic';
+  FontVariantStrings = 'normal;small-caps';
+  FontWeightStrings = 'normal;bold;bolder;lighter';
+  FontSystemFamilyNameStrings = 'caption;icon;menu;message-box;small-caption;status-bar';
+  ListStyleTypeStrings = 'none;circle;disc;square;armenian;cjk-ideographic;decimal;decimal-leading-zero;georgian;hebrew;hiragana;hiragana-iroha;katakana;katakana-iroha;lower-alpha;lower-greek;lower-latin;lower-roman;upper-alpha;upper-latin;upper-roman';
+  ListStylePositionStrings = 'inside;outside';
+  VerticalAlignStrings = 'baseline;sub;super;top;text-top;middle;bottom;text-bottom';
+  BorderWidthStrings = 'thin;medium;thick';
+  BorderStyleStrings = 'none;hidden;dotted;dashed;solid;double;groove;ridge;inset;outset';
+  ElementFloatStrings = 'none;left;right';
+  ElementClearStrings = 'none;left;right;both';
+  CssUnitsStrings = 'none;%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch;fr';
+  BackgroundAttachmentStrings = 'scroll;fixed';
+  BackgroundRepeatStrings = 'repeat;repeat-x;repeat-y;no-repeat';
+  BackgroundBoxStrings = 'border-box;padding-box;content-box';
+  BackgroundPositionStrings = 'left;right;top;bottom;center';
+  ElementPositionStrings = 'static;relative;absolute;fixed';
+  TextAlignStrings = 'left;right;center;justify';
+  TextTransformStrings = 'none;capitalize;uppercase;lowercase';
+  WhiteSpaceStrings = 'normal;nowrap;pre;pre-line;pre-wrap';
+  OverflowWrapStrings = 'normal;break-word;anywhere';
+  OverflowStrings = 'visible;hidden;scroll;auto;no-display;no-content';
+  BackgroundSizeStrings = 'auto;cover;contain';
+  VisibilityStrings = 'visible;hidden;collapse';
+  BorderCollapseStrings = 'collapse;separate';
+  ContentPropertyStrings = 'none;normal;open-quote;close-quote;no-open-quote;no-close-quote';
+  AppearanceStrings = 'none;auto;menulist-button;textfield;button;checkbox;listbox;menulist;meter;progress-bar;push-button;radio;searchfield;slider-horizontal;square-button;textarea';
+  BoxSizingStrings = 'content-box;border-box';
+  DeprecatedMediaTypeStrings = 'tty;tv;projection;handheld;braille;embossed;aural;speech';
+  MediaTypeStrings = 'all;print;screen;' + DeprecatedMediaTypeStrings;
+  FlexDirectionStrings = 'row;row-reverse;column;column-reverse';
+  FlexWrapStrings = 'nowrap;wrap;wrap-reverse';
+  FlexJustifyContentStrings = 'normal;flex-start;flex-end;center;space-between;space-around;start;end;left;right;space-evenly;stretch';
+  SelfPositionStrings = 'center;start;end;self-start;self-end;flex-start;flex-end';
+  FlexAlignItemsStrings = 'auto;normal;stretch;baseline;' + SelfPositionStrings;
+  FlexAlignContentStrings = 'flex-start;start;flex-end;end;center;space-between;space-around;stretch';
+  FlexBasisStrings = 'auto;content;fit-content;min-content;max-content';
+  CaptionSideStrings = 'top;bottom';
+  TextDecorationLineStrings = 'none;underline;overline;line-through';
+  TextDecorationStyleStrings = 'solid;double;dotted;dashed;wavy';
+  TextDecorationThicknessStrings = 'auto;from-font';
+  TextEmphasisPositionStrings = 'over;under;left;right';
+
+  // Background position percentages
+  BackgroundPositionPercentages: array[TPixieBackgroundPosition] of Single = (0, 100, 0, 100, 50);
+
+  // Border width values array
+  BorderWidthValues: array[TPixieBorderWidth] of pixel_t = (1, 3, 5);
+
+type
+  { TPixieMargins }
+  TPixieMargins = record
+    Left: pixel_t;
+    Right: pixel_t;
+    Top: pixel_t;
+    Bottom: pixel_t;
+    function Width: pixel_t;
+    function Height: pixel_t;
+    procedure Init;
+  end;
+
+  { TPixiePointF }
+  TPixiePointF = record
+    X: Single;
+    Y: Single;
+    class function Create(AX, AY: Single): TPixiePointF; static;
+  end;
+
+  { TPixieSize }
+  TPixieSize = record
+    Width: pixel_t;
+    Height: pixel_t;
+    class function Create(AWidth, AHeight: pixel_t): TPixieSize; static;
+  end;
+
+  { TPixiePosition }
+  TPixiePosition = record
+    X: pixel_t;
+    Y: pixel_t;
+    Width: pixel_t;
+    Height: pixel_t;
+    class function Create(AX, AY, AWidth, AHeight: pixel_t): TPixiePosition; static;
+    function Right: pixel_t;
+    function Bottom: pixel_t;
+    function IsEmpty: Boolean;
+    function DoesIntersect(const Val: TPixiePosition): Boolean;
+    function Intersect(const Src: TPixiePosition): TPixiePosition;
+    function IsPointInside(AX, AY: pixel_t): Boolean;
+    procedure MoveTo(AX, AY: pixel_t);
+    procedure Clear;
+    procedure DoRound;
+    procedure AddMargins(const Mg: TPixieMargins);
+    procedure SubMargins(const Mg: TPixieMargins);
+  end;
+
+  { TPixieScrollValues }
+  TPixieScrollValues = record
+    Dx: pixel_t;
+    Dy: pixel_t;
+    ScrollBox: TPixiePosition;
+    procedure Init;
+  end;
+
+  { TPixieFontMetrics }
+  TPixieFontMetrics = record
+    FontSize: pixel_t;
+    Height: pixel_t;
+    Ascent: pixel_t;
+    Descent: pixel_t;
+    XHeight: pixel_t;
+    ChWidth: pixel_t;
+    SubShift: pixel_t;
+    SuperShift: pixel_t;
+    DrawSpaces: Boolean;
+    function BaseLine: pixel_t;
+  end;
+
+  { TPixieFontItem }
+  TPixieFontItem = record
+    Font: PtrUInt;
+    Metrics: TPixieFontMetrics;
+  end;
+
+  { TPixieMediaFeatures }
+  TPixieMediaFeatures = record
+    MediaType: TPixieMediaType;
+    Width: pixel_t;
+    Height: pixel_t;
+    DeviceWidth: pixel_t;
+    DeviceHeight: pixel_t;
+    Color: Integer;
+    ColorIndex: Integer;
+    Monochrome: Integer;
+    Resolution: pixel_t;
+    procedure Init;
+  end;
+
+  { TPixieTypedPixel }
+  TPixieTypedPixel = record
+    Value: pixel_t;
+    ValueType: TPixieCbcValueType;
+    class function Create(AValue: pixel_t; AType: TPixieCbcValueType): TPixieTypedPixel; static;
+  end;
+
+  { TPixieContainingBlockContext }
+  TPixieContainingBlockContext = record
+    Width: TPixieTypedPixel;
+    RenderWidth: TPixieTypedPixel;
+    MinWidth: TPixieTypedPixel;
+    MaxWidth: TPixieTypedPixel;
+    Height: TPixieTypedPixel;
+    MinHeight: TPixieTypedPixel;
+    MaxHeight: TPixieTypedPixel;
+    ContextIdx: Integer;
+    SizeMode: UInt32;
+    procedure Init;
+    function NewWidth(W: pixel_t; ASizeMode: UInt32 = SizeModeNormal): TPixieContainingBlockContext;
+    function NewWidthHeight(W, H: pixel_t; ASizeMode: UInt32 = SizeModeNormal): TPixieContainingBlockContext;
+  end;
+
+  { TPixieFloatedBox }
+  TPixieFloatedBox = record
+    Pos: TPixiePosition;
+    FloatSide: TPixieElementFloat;
+    ClearFloats: TPixieElementClear;
+    El: Pointer;
+    Context: Integer;
+    MinWidth: pixel_t;
+  end;
+
+  { TPixiePixelPixelCache }
+  TPixiePixelPixelCache = record
+    Hash: pixel_t;
+    Val: pixel_t;
+    IsValid: Boolean;
+    IsDefault: Boolean;
+    procedure Init;
+    procedure Invalidate;
+    procedure SetValue(AHash, AVal: pixel_t);
+  end;
+
+  { TPixieBaseline }
+  TPixieBaseline = record
+  private
+    FValue: pixel_t;
+    FType: TPixieBaselineType;
+  public
+    class function Create(AValue: pixel_t; AType: TPixieBaselineType): TPixieBaseline; static;
+    procedure Init;
+    procedure SetValues(AValue: pixel_t; AType: TPixieBaselineType);
+    function GetOffsetFromTop(AHeight: pixel_t): pixel_t;
+    function GetOffsetFromBottom(AHeight: pixel_t): pixel_t;
+    procedure CalcFromPositions(ATop, ABottom: pixel_t);
+    property Value: pixel_t read FValue write FValue;
+    property BaselineType: TPixieBaselineType read FType write FType;
+  end;
+
+  { TPixieDefValue — a value with "is default" tracking }
+  TPixieDefValue = record
+  private
+    FValue: pixel_t;
+    FIsDefault: Boolean;
+  public
+    procedure Init(DefVal: pixel_t);
+    procedure Reset(DefVal: pixel_t);
+    function IsDefault: Boolean;
+    procedure SetValue(NewVal: pixel_t);
+    function Value: pixel_t;
+  end;
+
+  // Generic collection types
+  TPixieStringVector = TList<string>;
+  TPixieIntVector = TList<Integer>;
+  TPixiePixelVector = TList<pixel_t>;
+  TPixieStringMap = TDictionary<string, string>;
+  TPixieFontsMap = TDictionary<string, TPixieFontItem>;
+  TPixiePositionVector = TList<TPixiePosition>;
+
+  TPixieRenderItemCheckFunc = function(Ri: Pointer): Boolean of object;
+
+  TPixieSplitResult = record
+    Before: Pointer;  // TPixieRenderItem
+    Block: Pointer;   // TPixieRenderItem
+    After: Pointer;   // TPixieRenderItem
+  end;
+
+implementation
+
+{ TPixieMargins }
+
+function TPixieMargins.Width: pixel_t;
+begin
+  Result := Left + Right;
+end;
+
+function TPixieMargins.Height: pixel_t;
+begin
+  Result := Top + Bottom;
+end;
+
+procedure TPixieMargins.Init;
+begin
+  Left := 0;
+  Right := 0;
+  Top := 0;
+  Bottom := 0;
+end;
+
+{ TPixiePointF }
+
+class function TPixiePointF.Create(AX, AY: Single): TPixiePointF;
+begin
+  Result.X := AX;
+  Result.Y := AY;
+end;
+
+{ TPixieSize }
+
+class function TPixieSize.Create(AWidth, AHeight: pixel_t): TPixieSize;
+begin
+  Result.Width := AWidth;
+  Result.Height := AHeight;
+end;
+
+{ TPixiePosition }
+
+class function TPixiePosition.Create(AX, AY, AWidth, AHeight: pixel_t): TPixiePosition;
+begin
+  Result.X := AX;
+  Result.Y := AY;
+  Result.Width := AWidth;
+  Result.Height := AHeight;
+end;
+
+function TPixiePosition.Right: pixel_t;
+begin
+  Result := X + Width;
+end;
+
+function TPixiePosition.Bottom: pixel_t;
+begin
+  Result := Y + Height;
+end;
+
+function TPixiePosition.IsEmpty: Boolean;
+begin
+  Result := (Width = 0) and (Height = 0);
+end;
+
+function TPixiePosition.DoesIntersect(const Val: TPixiePosition): Boolean;
+begin
+  Result :=
+    ((X <= Val.Right) and (Right >= Val.X) and (Bottom >= Val.Y) and (Y <= Val.Bottom)) or
+    ((Val.X <= Right) and (Val.Right >= X) and (Val.Bottom >= Y) and (Val.Y <= Bottom));
+end;
+
+function TPixiePosition.Intersect(const Src: TPixiePosition): TPixiePosition;
+var
+  DestX, DestY, DestX2, DestY2: pixel_t;
+begin
+  DestX := Max(Src.X, X);
+  DestY := Max(Src.Y, Y);
+  DestX2 := Min(Src.Right, Right);
+  DestY2 := Min(Src.Bottom, Bottom);
+
+  if (DestX2 > DestX) and (DestY2 > DestY) then
+  begin
+    Result.X := DestX;
+    Result.Y := DestY;
+    Result.Width := DestX2 - DestX;
+    Result.Height := DestY2 - DestY;
+  end
+  else
+  begin
+    Result.X := 0;
+    Result.Y := 0;
+    Result.Width := 0;
+    Result.Height := 0;
+  end;
+end;
+
+function TPixiePosition.IsPointInside(AX, AY: pixel_t): Boolean;
+begin
+  Result := (AX >= X) and (AX < Right) and (AY >= Y) and (AY < Bottom);
+end;
+
+procedure TPixiePosition.MoveTo(AX, AY: pixel_t);
+begin
+  X := AX;
+  Y := AY;
+end;
+
+procedure TPixiePosition.Clear;
+begin
+  X := 0;
+  Y := 0;
+  Width := 0;
+  Height := 0;
+end;
+
+procedure TPixiePosition.DoRound;
+begin
+  X := Round(X);
+  Y := Round(Y);
+  Width := Round(Width);
+  Height := Round(Height);
+end;
+
+procedure TPixiePosition.AddMargins(const Mg: TPixieMargins);
+begin
+  X := X - Mg.Left;
+  Y := Y - Mg.Top;
+  Width := Width + Mg.Left + Mg.Right;
+  Height := Height + Mg.Top + Mg.Bottom;
+end;
+
+procedure TPixiePosition.SubMargins(const Mg: TPixieMargins);
+begin
+  X := X + Mg.Left;
+  Y := Y + Mg.Top;
+  Width := Width - Mg.Left - Mg.Right;
+  Height := Height - Mg.Top - Mg.Bottom;
+end;
+
+{ TPixieScrollValues }
+
+procedure TPixieScrollValues.Init;
+begin
+  Dx := 0;
+  Dy := 0;
+  ScrollBox.Clear;
+end;
+
+{ TPixieFontMetrics }
+
+function TPixieFontMetrics.BaseLine: pixel_t;
+begin
+  Result := Descent;
+end;
+
+{ TPixieMediaFeatures }
+
+procedure TPixieMediaFeatures.Init;
+begin
+  MediaType := mtUnknown;
+  Width := 0;
+  Height := 0;
+  DeviceWidth := 0;
+  DeviceHeight := 0;
+  Color := 0;
+  ColorIndex := 0;
+  Monochrome := 0;
+  Resolution := 0;
+end;
+
+{ TPixieTypedPixel }
+
+class function TPixieTypedPixel.Create(AValue: pixel_t; AType: TPixieCbcValueType): TPixieTypedPixel;
+begin
+  Result.Value := AValue;
+  Result.ValueType := AType;
+end;
+
+{ TPixieContainingBlockContext }
+
+procedure TPixieContainingBlockContext.Init;
+begin
+  Width := TPixieTypedPixel.Create(0, cbcAuto);
+  RenderWidth := TPixieTypedPixel.Create(0, cbcAuto);
+  MinWidth := TPixieTypedPixel.Create(0, cbcNone);
+  MaxWidth := TPixieTypedPixel.Create(0, cbcNone);
+  Height := TPixieTypedPixel.Create(0, cbcAuto);
+  MinHeight := TPixieTypedPixel.Create(0, cbcNone);
+  MaxHeight := TPixieTypedPixel.Create(0, cbcNone);
+  ContextIdx := 0;
+  SizeMode := SizeModeNormal;
+end;
+
+function TPixieContainingBlockContext.NewWidth(W: pixel_t; ASizeMode: UInt32): TPixieContainingBlockContext;
+begin
+  Result := Self;
+  Result.RenderWidth.Value := W - (Result.Width.Value - Result.RenderWidth.Value);
+  Result.Width.Value := W;
+  Result.SizeMode := ASizeMode;
+end;
+
+function TPixieContainingBlockContext.NewWidthHeight(W, H: pixel_t; ASizeMode: UInt32): TPixieContainingBlockContext;
+begin
+  Result := Self;
+  Result.RenderWidth.Value := W - (Result.Width.Value - Result.RenderWidth.Value);
+  Result.Width.Value := W;
+  Result.Height.Value := H;
+  Result.SizeMode := ASizeMode;
+end;
+
+{ TPixiePixelPixelCache }
+
+procedure TPixiePixelPixelCache.Init;
+begin
+  Hash := 0;
+  Val := 0;
+  IsValid := False;
+  IsDefault := False;
+end;
+
+procedure TPixiePixelPixelCache.Invalidate;
+begin
+  IsValid := False;
+  IsDefault := False;
+end;
+
+procedure TPixiePixelPixelCache.SetValue(AHash, AVal: pixel_t);
+begin
+  Hash := AHash;
+  Val := AVal;
+  IsValid := True;
+end;
+
+{ TPixieBaseline }
+
+class function TPixieBaseline.Create(AValue: pixel_t; AType: TPixieBaselineType): TPixieBaseline;
+begin
+  Result.FValue := AValue;
+  Result.FType := AType;
+end;
+
+procedure TPixieBaseline.Init;
+begin
+  FValue := 0;
+  FType := btNone;
+end;
+
+procedure TPixieBaseline.SetValues(AValue: pixel_t; AType: TPixieBaselineType);
+begin
+  FValue := AValue;
+  FType := AType;
+end;
+
+function TPixieBaseline.GetOffsetFromTop(AHeight: pixel_t): pixel_t;
+begin
+  if FType = btTop then
+    Result := FValue
+  else
+    Result := AHeight - FValue;
+end;
+
+function TPixieBaseline.GetOffsetFromBottom(AHeight: pixel_t): pixel_t;
+begin
+  if FType = btBottom then
+    Result := FValue
+  else
+    Result := AHeight - FValue;
+end;
+
+procedure TPixieBaseline.CalcFromPositions(ATop, ABottom: pixel_t);
+begin
+  if FType = btTop then
+    FValue := -ATop
+  else if FType = btBottom then
+    FValue := ABottom;
+end;
+
+{ TPixieDefValue }
+
+procedure TPixieDefValue.Init(DefVal: pixel_t);
+begin
+  FValue := DefVal;
+  FIsDefault := True;
+end;
+
+procedure TPixieDefValue.Reset(DefVal: pixel_t);
+begin
+  FValue := DefVal;
+  FIsDefault := True;
+end;
+
+function TPixieDefValue.IsDefault: Boolean;
+begin
+  Result := FIsDefault;
+end;
+
+procedure TPixieDefValue.SetValue(NewVal: pixel_t);
+begin
+  FValue := NewVal;
+  FIsDefault := False;
+end;
+
+function TPixieDefValue.Value: pixel_t;
+begin
+  Result := FValue;
+end;
+
+end.

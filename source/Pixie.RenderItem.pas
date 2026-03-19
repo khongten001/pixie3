@@ -1,0 +1,2488 @@
+unit Pixie.RenderItem;
+
+// Base render item — the foundation for all render tree nodes.
+//
+// The render tree mirrors the DOM tree but with layout-specific nodes.
+// Each render item holds computed margins/padding/borders and position.
+// Subclasses (RenderBlock, RenderInlineContext, RenderFlex, etc.)
+// override _Render to implement specific layout algorithms.
+
+{$mode delphi}
+
+interface
+
+uses
+  SysUtils, Generics.Collections, Math,
+  Pixie.Types, Pixie.CssLength, Pixie.CssProperties,
+  Pixie.Element, Pixie.FormattingContext, Pixie.ScrollView,
+  Pixie.Container;
+
+type
+  TPixieRenderItem = class;
+  TPixieRenderItemList = TObjectList<TPixieRenderItem>;
+  TPixieRenderItemVector = TList<TPixieRenderItem>; // non-owning
+
+  { TPixieRenderItem }
+  TPixieRenderItem = class
+  protected
+    function _Render(X, Y: pixel_t;
+      const CbContext: TPixieContainingBlockContext;
+      FmtCtx: TPixieFormattingContext;
+      SecondPass: Boolean): pixel_t; virtual;
+
+  public
+    FElement: TPixieElement;           // non-owning
+    FParent: TPixieRenderItem;         // non-owning (weak)
+    FChildren: TPixieRenderItemList;   // owns children
+    FMargins: TPixieMargins;
+    FPadding: TPixieMargins;
+    FBorders: TPixieMargins;
+    FPos: TPixiePosition;
+    FSkip: Boolean;
+    FLayoutPositioned: Boolean;          // True if positioned during layout
+    FPositioned: TPixieRenderItemVector; // non-owning
+    FScrollView: TPixieScrollView;       // owned, can be nil
+
+    function CalculateContainingBlockContext(
+      const CbContext: TPixieContainingBlockContext): TPixieContainingBlockContext;
+    procedure CalcCbLength(const Len: TPixieCssLength;
+      PercentBase: pixel_t; var OutValue: TPixieTypedPixel);
+    constructor Create(ASrcEl: TPixieElement); virtual;
+    destructor Destroy; override;
+
+    // Scroll helpers
+    function GetScrollLeft: pixel_t; inline;
+    function GetScrollTop: pixel_t; inline;
+    procedure ScrollBox(var Box: TPixiePosition); inline;
+    function HScroll(Dx: pixel_t): pixel_t; inline;
+    function VScroll(Dy: pixel_t): pixel_t; inline;
+    function IsHScrollable(Dx: pixel_t): Boolean; inline;
+    function IsVScrollable(Dy: pixel_t): Boolean; inline;
+
+    // Tree access
+    function GetChildren: TPixieRenderItemList; inline;
+    property Pos: TPixiePosition read FPos write FPos;
+    function GetSkip: Boolean; inline;
+    procedure SetSkip(Value: Boolean); inline;
+    function GetParent: TPixieRenderItem; inline;
+    procedure SetParent(Value: TPixieRenderItem); inline;
+    function SrcEl: TPixieElement; inline;
+    function Css: TPixieCssProperties; inline;
+    procedure AddChild(Ri: TPixieRenderItem);
+    function IsRoot: Boolean; inline;
+
+    // Placement helper
+    function CalcPlacement(AX: pixel_t = 0;
+      AY: pixel_t = 0): TPixiePosition; inline;
+
+    // Outer box accessors (content + margin + padding + border)
+    function Left: pixel_t; inline;
+    function Right: pixel_t; inline;
+    function Top: pixel_t; inline;
+    function Bottom: pixel_t; inline;
+    function Width: pixel_t; inline;
+    function Height: pixel_t; inline;
+
+    // Padding accessors
+    function PaddingLeft: pixel_t; inline;
+    function PaddingRight: pixel_t; inline;
+    function PaddingTop: pixel_t; inline;
+    function PaddingBottom: pixel_t; inline;
+
+    // Border accessors
+    function BorderLeft: pixel_t; inline;
+    function BorderRight: pixel_t; inline;
+    function BorderTop: pixel_t; inline;
+    function BorderBottom: pixel_t; inline;
+
+    // Margin accessors
+    function MarginLeft: pixel_t; inline;
+    function MarginRight: pixel_t; inline;
+    function MarginTop: pixel_t; inline;
+    function MarginBottom: pixel_t; inline;
+
+    // Margins/padding/borders record access
+    function GetMargins: TPixieMargins; inline;
+    function GetPaddings: TPixieMargins; inline;
+    procedure SetPaddings(const Value: TPixieMargins); inline;
+    function GetBorders: TPixieMargins; inline;
+
+    // Content offset (margin + padding + border)
+    function ContentOffsetTop: pixel_t; inline;
+    function ContentOffsetBottom: pixel_t; inline;
+    function ContentOffsetLeft: pixel_t; inline;
+    function ContentOffsetRight: pixel_t; inline;
+    function ContentOffsetWidth: pixel_t; inline;
+    function ContentOffsetHeight: pixel_t; inline;
+
+    // Render offset (box-sizing aware)
+    function RenderOffsetLeft: pixel_t; inline;
+    function RenderOffsetRight: pixel_t; inline;
+    function RenderOffsetWidth: pixel_t; inline;
+    function RenderOffsetTop: pixel_t; inline;
+    function RenderOffsetBottom: pixel_t; inline;
+    function RenderOffsetHeight: pixel_t; inline;
+
+    // Box sizing adjustment
+    function BoxSizingLeft: pixel_t; inline;
+    function BoxSizingRight: pixel_t; inline;
+    function BoxSizingWidth: pixel_t; inline;
+    function BoxSizingTop: pixel_t; inline;
+    function BoxSizingBottom: pixel_t; inline;
+    function BoxSizingHeight: pixel_t; inline;
+
+    // Collapse helpers
+    function CollapseTopMargin: Boolean;
+    function CollapseBottomMargin: Boolean;
+    function IsVisible: Boolean; inline;
+    function IsFlexItem: Boolean;
+    function IsGridItem: Boolean;
+
+    // Core render pipeline
+    function Render(X, Y: pixel_t;
+      const CbContext: TPixieContainingBlockContext;
+      FmtCtx: TPixieFormattingContext;
+      SecondPass: Boolean = False): pixel_t;
+    procedure CalcOutlines(ParentWidth: pixel_t);
+    function CalcAutoMargins(ParentWidth: pixel_t): pixel_t;
+    procedure ApplyRelativeShift(
+      const CbContext: TPixieContainingBlockContext);
+
+    // Split inlines
+    function SplitInlines: TPixieSplitResult;
+
+    // Positioned elements
+    function FetchPositioned: Boolean;
+    procedure RenderPositioned(Rt: TPixieRenderType = rtAll);
+    procedure AddPositioned(El: TPixieRenderItem);
+    function ElementStaticOffset(
+      El: TPixieRenderItem): TPixiePointF;
+
+    // Drawing
+    procedure DrawStackingContext(Hdc: PtrUInt; X, Y: pixel_t;
+      Clip: PPixiePosition; WithPositioned: Boolean);
+    procedure DrawChildren(Hdc: PtrUInt; X, Y: pixel_t;
+      Clip: PPixiePosition; Flag: TPixieDrawFlag;
+      ZIndex: Integer); virtual;
+
+    // Hit testing
+    function GetChildByPoint(X, Y, ClientX, ClientY: pixel_t;
+      Flag: TPixieDrawFlag; ZIndex: Integer;
+      Check: TPixieRenderItemCheckFunc): TPixieElement; virtual;
+    function GetElementByPoint(X, Y, ClientX, ClientY: pixel_t;
+      Check: TPixieRenderItemCheckFunc): TPixieElement;
+    function GetTextByPoint(X, Y: pixel_t): TPixieElement; virtual;
+    function GetNearestTextByPoint(X, Y: pixel_t): TPixieElement; virtual;
+    function IsPointInside(X, Y: pixel_t): Boolean;
+
+    // Document size / redraw
+    procedure CalcDocumentSize(var Sz: TPixieSize;
+      X: pixel_t = 0; Y: pixel_t = 0);
+    procedure GetRedrawBox(var APos: TPixiePosition;
+      X: pixel_t = 0; Y: pixel_t = 0);
+    procedure GetRenderingBoxes(Boxes: TPixiePositionVector);
+
+    // Virtual methods (stubs/defaults)
+    function Init: TPixieRenderItem; virtual;
+    procedure ApplyVerticalAlign; virtual;
+    function GetFirstBaseline: pixel_t; virtual;
+    function GetLastBaseline: pixel_t; virtual;
+    function Clone: TPixieRenderItem; virtual;
+    procedure GetInlineBoxes(Boxes: TPixiePositionVector); virtual;
+    procedure AddInlineBox(const Box: TPixiePosition); virtual;
+    procedure ClearInlineBoxes; virtual;
+    function GetDrawVerticalOffset: pixel_t; virtual;
+    procedure YShift(Delta: pixel_t); virtual;
+
+    // Debug
+    procedure Dump(var Output: string; Indent: Integer = 0);
+  end;
+
+implementation
+
+uses
+  Pixie.Document, Pixie.Borders;
+
+{ TPixieRenderItem }
+
+constructor TPixieRenderItem.Create(ASrcEl: TPixieElement);
+var
+  Doc: TPixieDocument;
+  Fm: TPixieFontMetrics;
+begin
+  inherited Create;
+  FElement := ASrcEl;
+  FParent := nil;
+  FChildren := TPixieRenderItemList.Create(True);
+  FSkip := False;
+  FLayoutPositioned := False;
+  FPositioned := nil;
+  FScrollView := nil;
+  FPos.Clear;
+  FMargins.Init;
+  FPadding.Init;
+  FBorders.Init;
+
+  if FElement <> nil then
+  begin
+    Assert(FElement.GetDocument is TPixieDocument);
+    Doc := TPixieDocument(FElement.GetDocument);
+    Fm := FElement.Css.FontMetrics;
+
+    FMargins.Left   := Doc.ToPixels(FElement.Css.CssMargins.Left, Fm, 0);
+    FMargins.Right  := Doc.ToPixels(FElement.Css.CssMargins.Right, Fm, 0);
+    FMargins.Top    := Doc.ToPixels(FElement.Css.CssMargins.Top, Fm, 0);
+    FMargins.Bottom := Doc.ToPixels(FElement.Css.CssMargins.Bottom, Fm, 0);
+
+    FPadding.Left   := Doc.ToPixels(FElement.Css.CssPadding.Left, Fm, 0);
+    FPadding.Right  := Doc.ToPixels(FElement.Css.CssPadding.Right, Fm, 0);
+    FPadding.Top    := Doc.ToPixels(FElement.Css.CssPadding.Top, Fm, 0);
+    FPadding.Bottom := Doc.ToPixels(FElement.Css.CssPadding.Bottom, Fm, 0);
+
+    FBorders.Left   := Doc.ToPixels(FElement.Css.CssBorders.Left.Width, Fm, 0);
+    FBorders.Right  := Doc.ToPixels(FElement.Css.CssBorders.Right.Width, Fm, 0);
+    FBorders.Top    := Doc.ToPixels(FElement.Css.CssBorders.Top.Width, Fm, 0);
+    FBorders.Bottom := Doc.ToPixels(FElement.Css.CssBorders.Bottom.Width, Fm, 0);
+  end;
+end;
+
+destructor TPixieRenderItem.Destroy;
+begin
+  FScrollView.Free;
+  FPositioned.Free;
+  FChildren.Free;
+  inherited Destroy;
+end;
+
+// --- Scroll helpers ---
+
+function TPixieRenderItem.GetScrollLeft: pixel_t;
+begin
+  if FScrollView <> nil then
+    Result := FScrollView.GetLeft
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.GetScrollTop: pixel_t;
+begin
+  if FScrollView <> nil then
+    Result := FScrollView.GetTop
+  else
+    Result := 0;
+end;
+
+procedure TPixieRenderItem.ScrollBox(var Box: TPixiePosition);
+begin
+  if FScrollView <> nil then
+  begin
+    Box.X := Box.X - FScrollView.GetLeft;
+    Box.Y := Box.Y - FScrollView.GetTop;
+  end;
+end;
+
+function TPixieRenderItem.HScroll(Dx: pixel_t): pixel_t;
+begin
+  if FScrollView <> nil then
+    Result := FScrollView.HScroll(Dx)
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.VScroll(Dy: pixel_t): pixel_t;
+begin
+  if FScrollView <> nil then
+    Result := FScrollView.VScroll(Dy)
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.IsHScrollable(Dx: pixel_t): Boolean;
+begin
+  if FScrollView <> nil then
+    Result := FScrollView.IsHScrollable(Dx)
+  else
+    Result := False;
+end;
+
+function TPixieRenderItem.IsVScrollable(Dy: pixel_t): Boolean;
+begin
+  if FScrollView <> nil then
+    Result := FScrollView.IsVScrollable(Dy)
+  else
+    Result := False;
+end;
+
+// --- Tree access ---
+
+function TPixieRenderItem.GetChildren: TPixieRenderItemList;
+begin
+  Result := FChildren;
+end;
+
+function TPixieRenderItem.GetSkip: Boolean;
+begin
+  Result := FSkip;
+end;
+
+procedure TPixieRenderItem.SetSkip(Value: Boolean);
+begin
+  FSkip := Value;
+end;
+
+function TPixieRenderItem.GetParent: TPixieRenderItem;
+begin
+  Result := FParent;
+end;
+
+procedure TPixieRenderItem.SetParent(Value: TPixieRenderItem);
+begin
+  FParent := Value;
+end;
+
+function TPixieRenderItem.SrcEl: TPixieElement;
+begin
+  Result := FElement;
+end;
+
+function TPixieRenderItem.Css: TPixieCssProperties;
+begin
+  Result := FElement.Css;
+end;
+
+procedure TPixieRenderItem.AddChild(Ri: TPixieRenderItem);
+begin
+  FChildren.Add(Ri);
+  Ri.FParent := Self;
+end;
+
+function TPixieRenderItem.IsRoot: Boolean;
+begin
+  Result := FParent = nil;
+end;
+
+function TPixieRenderItem.CalcPlacement(AX, AY: pixel_t): TPixiePosition;
+begin
+  Result := FPos;
+  Result.X := Result.X + AX - GetScrollLeft;
+  Result.Y := Result.Y + AY - GetScrollTop;
+end;
+
+// --- Outer box accessors ---
+
+function TPixieRenderItem.Left: pixel_t;
+begin
+  Result := FPos.X - FMargins.Left - FPadding.Left - FBorders.Left;
+end;
+
+function TPixieRenderItem.Right: pixel_t;
+begin
+  Result := Left + Width;
+end;
+
+function TPixieRenderItem.Top: pixel_t;
+begin
+  Result := FPos.Y - FMargins.Top - FPadding.Top - FBorders.Top;
+end;
+
+function TPixieRenderItem.Bottom: pixel_t;
+begin
+  Result := Top + Height;
+end;
+
+function TPixieRenderItem.Width: pixel_t;
+begin
+  Result := FPos.Width + FMargins.Width + FPadding.Width + FBorders.Width;
+end;
+
+function TPixieRenderItem.Height: pixel_t;
+begin
+  Result := FPos.Height + FMargins.Height + FPadding.Height + FBorders.Height;
+end;
+
+// --- Padding ---
+
+function TPixieRenderItem.PaddingLeft: pixel_t;
+begin
+  Result := FPadding.Left;
+end;
+
+function TPixieRenderItem.PaddingRight: pixel_t;
+begin
+  Result := FPadding.Right;
+end;
+
+function TPixieRenderItem.PaddingTop: pixel_t;
+begin
+  Result := FPadding.Top;
+end;
+
+function TPixieRenderItem.PaddingBottom: pixel_t;
+begin
+  Result := FPadding.Bottom;
+end;
+
+// --- Borders ---
+
+function TPixieRenderItem.BorderLeft: pixel_t;
+begin
+  Result := FBorders.Left;
+end;
+
+function TPixieRenderItem.BorderRight: pixel_t;
+begin
+  Result := FBorders.Right;
+end;
+
+function TPixieRenderItem.BorderTop: pixel_t;
+begin
+  Result := FBorders.Top;
+end;
+
+function TPixieRenderItem.BorderBottom: pixel_t;
+begin
+  Result := FBorders.Bottom;
+end;
+
+// --- Margins ---
+
+function TPixieRenderItem.MarginLeft: pixel_t;
+begin
+  Result := FMargins.Left;
+end;
+
+function TPixieRenderItem.MarginRight: pixel_t;
+begin
+  Result := FMargins.Right;
+end;
+
+function TPixieRenderItem.MarginTop: pixel_t;
+begin
+  Result := FMargins.Top;
+end;
+
+function TPixieRenderItem.MarginBottom: pixel_t;
+begin
+  Result := FMargins.Bottom;
+end;
+
+// --- Record access ---
+
+function TPixieRenderItem.GetMargins: TPixieMargins;
+begin
+  Result := FMargins;
+end;
+
+function TPixieRenderItem.GetPaddings: TPixieMargins;
+begin
+  Result := FPadding;
+end;
+
+procedure TPixieRenderItem.SetPaddings(const Value: TPixieMargins);
+begin
+  FPadding := Value;
+end;
+
+function TPixieRenderItem.GetBorders: TPixieMargins;
+begin
+  Result := FBorders;
+end;
+
+// --- Content offset ---
+
+function TPixieRenderItem.ContentOffsetTop: pixel_t;
+begin
+  Result := FMargins.Top + FPadding.Top + FBorders.Top;
+end;
+
+function TPixieRenderItem.ContentOffsetBottom: pixel_t;
+begin
+  Result := FMargins.Bottom + FPadding.Bottom + FBorders.Bottom;
+end;
+
+function TPixieRenderItem.ContentOffsetLeft: pixel_t;
+begin
+  Result := FMargins.Left + FPadding.Left + FBorders.Left;
+end;
+
+function TPixieRenderItem.ContentOffsetRight: pixel_t;
+begin
+  Result := FMargins.Right + FPadding.Right + FBorders.Right;
+end;
+
+function TPixieRenderItem.ContentOffsetWidth: pixel_t;
+begin
+  Result := ContentOffsetLeft + ContentOffsetRight;
+end;
+
+function TPixieRenderItem.ContentOffsetHeight: pixel_t;
+begin
+  Result := ContentOffsetTop + ContentOffsetBottom;
+end;
+
+// --- Render offset (box-sizing aware) ---
+
+function TPixieRenderItem.RenderOffsetLeft: pixel_t;
+begin
+  if Css.BoxSizing = bxContentBox then
+    Result := FMargins.Left + FBorders.Left + FPadding.Left
+  else
+    Result := FMargins.Left;
+end;
+
+function TPixieRenderItem.RenderOffsetRight: pixel_t;
+begin
+  if Css.BoxSizing = bxContentBox then
+    Result := FMargins.Right + FBorders.Right + FPadding.Right
+  else
+    Result := FMargins.Right;
+end;
+
+function TPixieRenderItem.RenderOffsetWidth: pixel_t;
+begin
+  Result := RenderOffsetLeft + RenderOffsetRight;
+end;
+
+function TPixieRenderItem.RenderOffsetTop: pixel_t;
+begin
+  if Css.BoxSizing = bxContentBox then
+    Result := FMargins.Top + FBorders.Top + FPadding.Top
+  else
+    Result := FMargins.Top;
+end;
+
+function TPixieRenderItem.RenderOffsetBottom: pixel_t;
+begin
+  if Css.BoxSizing = bxContentBox then
+    Result := FMargins.Bottom + FBorders.Bottom + FPadding.Bottom
+  else
+    Result := FMargins.Bottom;
+end;
+
+function TPixieRenderItem.RenderOffsetHeight: pixel_t;
+begin
+  Result := RenderOffsetTop + RenderOffsetBottom;
+end;
+
+// --- Box sizing adjustment ---
+
+function TPixieRenderItem.BoxSizingLeft: pixel_t;
+begin
+  if Css.BoxSizing = bxBorderBox then
+    Result := FPadding.Left + FBorders.Left
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.BoxSizingRight: pixel_t;
+begin
+  if Css.BoxSizing = bxBorderBox then
+    Result := FPadding.Right + FBorders.Right
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.BoxSizingWidth: pixel_t;
+begin
+  Result := BoxSizingLeft + BoxSizingRight;
+end;
+
+function TPixieRenderItem.BoxSizingTop: pixel_t;
+begin
+  if Css.BoxSizing = bxBorderBox then
+    Result := FPadding.Top + FBorders.Top
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.BoxSizingBottom: pixel_t;
+begin
+  if Css.BoxSizing = bxBorderBox then
+    Result := FPadding.Bottom + FBorders.Bottom
+  else
+    Result := 0;
+end;
+
+function TPixieRenderItem.BoxSizingHeight: pixel_t;
+begin
+  Result := BoxSizingTop + BoxSizingBottom;
+end;
+
+// --- Collapse / visibility helpers ---
+
+function TPixieRenderItem.CollapseTopMargin: Boolean;
+begin
+  Result := (FBorders.Top = 0) and
+            (FPadding.Top = 0) and
+            FElement.InNormalFlow and
+            (FElement.Css.Float_ = efNone) and
+            (FMargins.Top >= 0) and
+            (not IsFlexItem) and
+            (not IsGridItem) and
+            (not IsRoot) and
+            (Css.Overflow <> ovHidden) and
+            (Css.Overflow <> ovScroll) and
+            (Css.Overflow <> ovAuto);
+end;
+
+function TPixieRenderItem.CollapseBottomMargin: Boolean;
+begin
+  Result := (FBorders.Bottom = 0) and
+            (FPadding.Bottom = 0) and
+            FElement.InNormalFlow and
+            (FElement.Css.Float_ = efNone) and
+            (FMargins.Bottom >= 0) and
+            (not IsRoot) and
+            (Css.Overflow <> ovHidden) and
+            (Css.Overflow <> ovScroll) and
+            (Css.Overflow <> ovAuto);
+end;
+
+function TPixieRenderItem.IsVisible: Boolean;
+begin
+  Result := not (FSkip or
+    (FElement.Css.Display = displayNone) or
+    (FElement.Css.Visibility <> visVisible));
+end;
+
+function TPixieRenderItem.IsFlexItem: Boolean;
+var
+  Par: TPixieRenderItem;
+begin
+  Par := FParent;
+  if (Par <> nil) and
+     ((Par.Css.Display = displayInlineFlex) or
+      (Par.Css.Display = displayFlex)) then
+    Exit(True);
+  Result := False;
+end;
+
+function TPixieRenderItem.IsGridItem: Boolean;
+var
+  Par: TPixieRenderItem;
+begin
+  Par := FParent;
+  if (Par <> nil) and
+     ((Par.Css.Display = displayGrid) or
+      (Par.Css.Display = displayInlineGrid)) then
+    Exit(True);
+  Result := False;
+end;
+
+// --- Core render pipeline ---
+
+function TPixieRenderItem.Render(X, Y: pixel_t;
+  const CbContext: TPixieContainingBlockContext;
+  FmtCtx: TPixieFormattingContext; SecondPass: Boolean): pixel_t;
+var
+  CLeft, CTop: pixel_t;
+  Fmt: TPixieFormattingContext;
+begin
+  CalcOutlines(CbContext.Width.Value);
+
+  FPos.Clear;
+  FPos.MoveTo(X, Y);
+
+  CLeft := ContentOffsetLeft;
+  CTop := ContentOffsetTop;
+
+  FPos.X := FPos.X + CLeft;
+  FPos.Y := FPos.Y + CTop;
+
+  if FElement.IsBlockFormattingContext or (FmtCtx = nil) then
+  begin
+    Fmt := TPixieFormattingContext.Create;
+    try
+      Result := _Render(X, Y, CbContext, Fmt, SecondPass);
+      Fmt.ApplyRelativeShift(CbContext);
+    finally
+      Fmt.Free;
+    end;
+  end
+  else
+  begin
+    FmtCtx.PushPosition(X + CLeft, Y + CTop);
+    Result := _Render(X, Y, CbContext, FmtCtx, SecondPass);
+    FmtCtx.PopPosition(X + CLeft, Y + CTop);
+  end;
+end;
+
+function TPixieRenderItem._Render(X, Y: pixel_t;
+  const CbContext: TPixieContainingBlockContext;
+  FmtCtx: TPixieFormattingContext; SecondPass: Boolean): pixel_t;
+begin
+  Result := 0;
+end;
+
+procedure TPixieRenderItem.CalcOutlines(ParentWidth: pixel_t);
+begin
+  FPadding.Left   := FElement.Css.CssPadding.Left.CalcPercent(ParentWidth);
+  FPadding.Right  := FElement.Css.CssPadding.Right.CalcPercent(ParentWidth);
+
+  FBorders.Left   := FElement.Css.CssBorders.Left.Width.CalcPercent(ParentWidth);
+  FBorders.Right  := FElement.Css.CssBorders.Right.Width.CalcPercent(ParentWidth);
+
+  FMargins.Left   := FElement.Css.CssMargins.Left.CalcPercent(ParentWidth);
+  FMargins.Right  := FElement.Css.CssMargins.Right.CalcPercent(ParentWidth);
+
+  FMargins.Top    := FElement.Css.CssMargins.Top.CalcPercent(ParentWidth);
+  FMargins.Bottom := FElement.Css.CssMargins.Bottom.CalcPercent(ParentWidth);
+
+  FPadding.Top    := FElement.Css.CssPadding.Top.CalcPercent(ParentWidth);
+  FPadding.Bottom := FElement.Css.CssPadding.Bottom.CalcPercent(ParentWidth);
+end;
+
+function TPixieRenderItem.CalcAutoMargins(ParentWidth: pixel_t): pixel_t;
+var
+  ElWidth: pixel_t;
+begin
+  Result := 0;
+  if ((FElement.Css.Display = displayBlock) or
+      (FElement.Css.Display = displayTable)) and
+     (FElement.Css.ElPosition <> epAbsolute) and
+     (FElement.Css.Float_ = efNone) then
+  begin
+    if FElement.Css.CssMargins.Left.IsPredefined and
+       FElement.Css.CssMargins.Right.IsPredefined then
+    begin
+      ElWidth := FPos.Width + FBorders.Left + FBorders.Right +
+        FPadding.Left + FPadding.Right;
+      if ElWidth <= ParentWidth then
+      begin
+        FMargins.Left := (ParentWidth - ElWidth) / 2;
+        FMargins.Right := (ParentWidth - ElWidth) - FMargins.Left;
+      end
+      else
+      begin
+        FMargins.Left := 0;
+        FMargins.Right := 0;
+      end;
+      Result := FMargins.Left;
+    end
+    else if FElement.Css.CssMargins.Left.IsPredefined and
+            (not FElement.Css.CssMargins.Right.IsPredefined) then
+    begin
+      ElWidth := FPos.Width + FBorders.Left + FBorders.Right +
+        FPadding.Left + FPadding.Right + FMargins.Right;
+      FMargins.Left := ParentWidth - ElWidth;
+      if FMargins.Left < 0 then
+        FMargins.Left := 0;
+      Result := FMargins.Left;
+    end
+    else if (not FElement.Css.CssMargins.Left.IsPredefined) and
+            FElement.Css.CssMargins.Right.IsPredefined then
+    begin
+      ElWidth := FPos.Width + FBorders.Left + FBorders.Right +
+        FPadding.Left + FPadding.Right + FMargins.Left;
+      FMargins.Right := ParentWidth - ElWidth;
+      if FMargins.Right < 0 then
+        FMargins.Right := 0;
+    end;
+  end;
+end;
+
+procedure TPixieRenderItem.ApplyRelativeShift(
+  const CbContext: TPixieContainingBlockContext);
+var
+  Offsets: TPixieCssOffsets;
+begin
+  if FElement.Css.ElPosition = epRelative then
+  begin
+    Offsets := FElement.Css.CssOffsets;
+    if not Offsets.Left.IsPredefined then
+      FPos.X := FPos.X + Offsets.Left.CalcPercent(CbContext.Width.Value)
+    else if not Offsets.Right.IsPredefined then
+      FPos.X := FPos.X - Offsets.Right.CalcPercent(CbContext.Width.Value);
+
+    if not Offsets.Top.IsPredefined then
+      FPos.Y := FPos.Y + Offsets.Top.CalcPercent(CbContext.Height.Value)
+    else if not Offsets.Bottom.IsPredefined then
+      FPos.Y := FPos.Y - Offsets.Bottom.CalcPercent(CbContext.Height.Value);
+  end;
+end;
+
+// --- Split inlines ---
+
+function TPixieRenderItem.SplitInlines: TPixieSplitResult;
+var
+  I, J: Integer;
+  Child: TPixieRenderItem;
+  ChildSplit: TPixieSplitResult;
+  Found: Boolean;
+begin
+  Result.Before := nil;
+  Result.Block := nil;
+  Result.After := nil;
+
+  for I := 0 to FChildren.Count - 1 do
+  begin
+    Child := FChildren[I];
+
+    // Direct block child in inline context?
+    if Child.SrcEl.IsBlockBox and (Child.SrcEl.Css.Float_ = efNone) then
+    begin
+      Result.Before := Clone;
+      Result.Block := Child;
+      Result.After := Clone;
+
+      Assert(TObject(Result.Before) is TPixieRenderItem);
+      Assert(TObject(Result.Block) is TPixieRenderItem);
+      Assert(TObject(Result.After) is TPixieRenderItem);
+      TPixieRenderItem(Result.Block).FParent := TPixieRenderItem(Result.Before);
+      TPixieRenderItem(Result.After).FParent := TPixieRenderItem(Result.Before);
+
+      Found := False;
+      for J := 0 to FChildren.Count - 1 do
+      begin
+        if FChildren[J] = Child then
+        begin
+          Found := True;
+          Continue;
+        end;
+        if not Found then
+          TPixieRenderItem(Result.Before).AddChild(FChildren[J])
+        else
+          TPixieRenderItem(Result.After).AddChild(FChildren[J]);
+      end;
+      Exit;
+    end;
+
+    // Recurse into children
+    if Child.FChildren.Count > 0 then
+    begin
+      ChildSplit := Child.SplitInlines;
+      if ChildSplit.Before <> nil then
+      begin
+        Result.Before := Clone;
+        Result.Block := ChildSplit.Block;
+        Result.After := Clone;
+
+        Assert(TObject(Result.Before) is TPixieRenderItem);
+        Assert(TObject(Result.After) is TPixieRenderItem);
+        Assert(TObject(ChildSplit.Before) is TPixieRenderItem);
+        Assert(TObject(ChildSplit.After) is TPixieRenderItem);
+        TPixieRenderItem(Result.After).FParent := TPixieRenderItem(Result.Before);
+
+        Found := False;
+        for J := 0 to FChildren.Count - 1 do
+        begin
+          if FChildren[J] = Child then
+          begin
+            Found := True;
+            Continue;
+          end;
+          if not Found then
+            TPixieRenderItem(Result.Before).AddChild(FChildren[J])
+          else
+            TPixieRenderItem(Result.After).AddChild(FChildren[J]);
+        end;
+        TPixieRenderItem(Result.Before).AddChild(
+          TPixieRenderItem(ChildSplit.Before));
+        TPixieRenderItem(Result.After).AddChild(
+          TPixieRenderItem(ChildSplit.After));
+        Exit;
+      end;
+    end;
+  end;
+end;
+
+// --- Positioned elements ---
+
+function TPixieRenderItem.FetchPositioned: Boolean;
+var
+  I: Integer;
+  El: TPixieRenderItem;
+  ElPos: TPixieElementPosition;
+begin
+  Result := False;
+  if FPositioned <> nil then
+    FPositioned.Clear;
+
+  for I := 0 to FChildren.Count - 1 do
+  begin
+    El := FChildren[I];
+    ElPos := El.SrcEl.Css.ElPosition;
+    El.FLayoutPositioned := ElPos <> epStatic;
+    if El.FLayoutPositioned then
+      AddPositioned(El);
+    if (not Result) and ((ElPos = epAbsolute) or (ElPos = epFixed)) then
+      Result := True;
+    if El.FetchPositioned then
+      Result := True;
+  end;
+end;
+
+procedure TPixieRenderItem.AddPositioned(El: TPixieRenderItem);
+var
+  ElParent: TPixieRenderItem;
+begin
+  if (FElement.Css.ElPosition <> epStatic) or IsRoot then
+  begin
+    if FPositioned = nil then
+      FPositioned := TPixieRenderItemVector.Create;
+    FPositioned.Add(El);
+  end
+  else
+  begin
+    ElParent := FParent;
+    if ElParent <> nil then
+      ElParent.AddPositioned(El);
+  end;
+end;
+
+function TPixieRenderItem.ElementStaticOffset(
+  El: TPixieRenderItem): TPixiePointF;
+var
+  OffsetX, OffsetY: pixel_t;
+  CurEl, ThisEl: TPixieRenderItem;
+  Doc: TPixieDocument;
+begin
+  OffsetX := 0;
+  OffsetY := 0;
+
+  if El.Css.ElPosition <> epFixed then
+    ThisEl := Self
+  else
+  begin
+    Assert(FElement.GetDocument is TPixieDocument);
+    Doc := TPixieDocument(FElement.GetDocument);
+    Assert(TObject(Doc.RootRender) is TPixieRenderItem);
+    ThisEl := TPixieRenderItem(Doc.RootRender);
+  end;
+
+  CurEl := El.FParent;
+  while (CurEl <> nil) and (CurEl <> ThisEl) do
+  begin
+    OffsetX := OffsetX + CurEl.FPos.X;
+    OffsetY := OffsetY + CurEl.FPos.Y;
+    CurEl := CurEl.FParent;
+  end;
+
+  if (El.Css.ElPosition = epFixed) or
+     (IsRoot and (not FElement.IsPositioned)) then
+  begin
+    if ThisEl <> nil then
+    begin
+      OffsetX := OffsetX + ThisEl.FPos.X;
+      OffsetY := OffsetY + ThisEl.FPos.Y;
+    end;
+  end
+  else
+  begin
+    OffsetX := OffsetX + FPadding.Left;
+    OffsetY := OffsetY + FPadding.Top;
+  end;
+
+  Result.X := OffsetX;
+  Result.Y := OffsetY;
+end;
+
+// Helper for RenderPositioned: clamp height by min/max
+function FixHeightMinMax(El: TPixieRenderItem;
+  AHeight, CbHeight: pixel_t): pixel_t;
+var
+  MaxH, MinH, Val: TPixieCssLength;
+begin
+  Result := AHeight;
+  MaxH := El.Css.CssMaxHeight;
+  MinH := El.Css.CssMinHeight;
+  if not MaxH.IsPredefined then
+  begin
+    Val := MaxH;
+    if Result > Val.CalcPercent(CbHeight) then
+      Result := Val.CalcPercent(CbHeight);
+  end;
+  if not MinH.IsPredefined then
+  begin
+    Val := MinH;
+    if Result < Val.CalcPercent(CbHeight) then
+      Result := Val.CalcPercent(CbHeight);
+  end;
+  Result := Result + El.ContentOffsetHeight;
+end;
+
+// Helper for RenderPositioned: clamp width by min/max
+function FixWidthMinMax(El: TPixieRenderItem;
+  AWidth, CbWidth: pixel_t): pixel_t;
+var
+  MaxW, MinW, Val: TPixieCssLength;
+begin
+  Result := AWidth;
+  MaxW := El.Css.CssMaxWidth;
+  MinW := El.Css.CssMinWidth;
+  if not MaxW.IsPredefined then
+  begin
+    Val := MaxW;
+    if Result > Val.CalcPercent(CbWidth) then
+      Result := Val.CalcPercent(CbWidth);
+  end;
+  if not MinW.IsPredefined then
+  begin
+    Val := MinW;
+    if Result < Val.CalcPercent(CbWidth) then
+      Result := Val.CalcPercent(CbWidth);
+  end;
+  Result := Result + El.ContentOffsetWidth;
+end;
+
+procedure TPixieRenderItem.RenderPositioned(Rt: TPixieRenderType);
+var
+  Viewport: TPixiePosition;
+  Doc: TPixieDocument;
+  Cont: TPixieContainer;
+  I, J, Divider: Integer;
+  El: TPixieRenderItem;
+  ElPosition: TPixieElementPosition;
+  Process, NeedRender: Boolean;
+  CbSize: TPixieContainingBlockContext;
+  CssLeft, CssRight, CssTop, CssBottom: TPixieCssLength;
+  ElWidth, ElHeight: TPixieCssLength;
+  ElBottom, ElTop, ElH: pixel_t;
+  ElRight, ElLeft, ElW: pixel_t;
+  StaticOff: TPixiePointF;
+  ElStaticX, ElStaticY: pixel_t;
+  Remained: pixel_t;
+  SavedPos: TPixiePosition;
+  FixedPos: TPixiePosition;
+begin
+  Assert(FElement.GetDocument is TPixieDocument);
+  Doc := TPixieDocument(FElement.GetDocument);
+  Cont := Doc.Container;
+  Cont.GetViewport(Viewport);
+
+  if FPositioned = nil then
+    Exit;
+  for I := 0 to FPositioned.Count - 1 do
+  begin
+    El := FPositioned[I];
+    ElPosition := El.SrcEl.Css.ElPosition;
+
+    Process := False;
+    if El.SrcEl.Css.Display <> displayNone then
+    begin
+      if ElPosition = epAbsolute then
+      begin
+        if Rt <> rtFixedOnly then
+          Process := True;
+      end
+      else if ElPosition = epFixed then
+      begin
+        if Rt <> rtNoFixed then
+          Process := True;
+      end;
+    end;
+
+    if Process then
+    begin
+      CbSize.Init;
+      if (ElPosition = epFixed) or
+         (IsRoot and (not FElement.IsPositioned)) then
+      begin
+        CbSize.Height.Value := Viewport.Height;
+        CbSize.Width.Value := Viewport.Width;
+      end
+      else
+      begin
+        CbSize.Height.Value := FPos.Height + FPadding.Height;
+        CbSize.Width.Value := FPos.Width + FPadding.Width;
+      end;
+
+      CssLeft   := El.SrcEl.Css.CssOffsets.Left;
+      CssRight  := El.SrcEl.Css.CssOffsets.Right;
+      CssTop    := El.SrcEl.Css.CssOffsets.Top;
+      CssBottom := El.SrcEl.Css.CssOffsets.Bottom;
+
+      NeedRender := False;
+
+      ElWidth  := El.SrcEl.Css.CssWidth;
+      ElHeight := El.SrcEl.Css.CssHeight;
+
+      ElBottom := 0;
+      ElTop := 0;
+      ElH := 0;
+
+      StaticOff := ElementStaticOffset(El);
+      ElStaticX := El.FPos.X + StaticOff.X;
+      ElStaticY := El.FPos.Y + StaticOff.Y;
+
+      // --- Vertical position (CSS 2.2 §10.6.4) ---
+      if CssTop.IsPredefined and (not CssBottom.IsPredefined) and
+         ElHeight.IsPredefined then
+      begin
+        // Case 1: top+height auto, bottom not auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElH := El.Height;
+        ElBottom := CssBottom.CalcPercent(CbSize.Height.Value);
+        ElTop := CbSize.Height.Value - ElH - ElBottom;
+      end
+      else if CssTop.IsPredefined and CssBottom.IsPredefined and
+              (not ElHeight.IsPredefined) then
+      begin
+        // Case 2: top+bottom auto, height not auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElTop := ElStaticY - El.ContentOffsetTop;
+        ElH := FixHeightMinMax(El,
+          ElHeight.CalcPercent(CbSize.Height.Value), CbSize.Height.Value);
+      end
+      else if (not CssTop.IsPredefined) and CssBottom.IsPredefined and
+              ElHeight.IsPredefined then
+      begin
+        // Case 3: height+bottom auto, top not auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElH := El.Height;
+        ElTop := CssTop.CalcPercent(CbSize.Height.Value);
+      end
+      else if CssTop.IsPredefined and (not CssBottom.IsPredefined) and
+              (not ElHeight.IsPredefined) then
+      begin
+        // Case 4: top auto, height+bottom not auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElH := FixHeightMinMax(El,
+          ElHeight.CalcPercent(CbSize.Height.Value), CbSize.Height.Value);
+        ElBottom := CssBottom.CalcPercent(CbSize.Height.Value);
+        ElTop := CbSize.Height.Value - ElH - ElBottom;
+      end
+      else if (not CssTop.IsPredefined) and (not CssBottom.IsPredefined) and
+              ElHeight.IsPredefined then
+      begin
+        // Case 5: height auto, top+bottom not auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElBottom := CssBottom.CalcPercent(CbSize.Height.Value);
+        ElTop := CssTop.CalcPercent(CbSize.Height.Value);
+        if El.SrcEl.IsReplaced then
+        begin
+          ElH := El.Height - El.ContentOffsetHeight;
+          Remained := (CbSize.Height.Value - ElTop - ElBottom) -
+            ElH - El.ContentOffsetHeight;
+          if Remained > 0 then
+          begin
+            Divider := 0;
+            if El.Css.CssMargins.Top.IsPredefined then Inc(Divider);
+            if El.Css.CssMargins.Bottom.IsPredefined then Inc(Divider);
+            if Divider <> 0 then
+            begin
+              if El.Css.CssMargins.Top.IsPredefined then
+                El.FMargins.Top := Remained / Divider;
+              if El.Css.CssMargins.Bottom.IsPredefined then
+                El.FMargins.Bottom := Remained / Divider;
+            end;
+          end;
+          ElH := ElH + El.ContentOffsetHeight;
+        end
+        else
+          ElH := CbSize.Height.Value - ElTop - ElBottom;
+
+        if not El.Css.CssMaxHeight.IsPredefined then
+        begin
+          if ElH - El.ContentOffsetHeight >
+             El.Css.CssMaxHeight.CalcPercent(CbSize.Height.Value) then
+          begin
+            Remained := ElH - El.ContentOffsetHeight -
+              El.Css.CssMaxHeight.CalcPercent(CbSize.Height.Value);
+            ElH := El.Css.CssMaxHeight.CalcPercent(CbSize.Height.Value);
+            Divider := 0;
+            if El.Css.CssMargins.Top.IsPredefined then Inc(Divider);
+            if El.Css.CssMargins.Bottom.IsPredefined then Inc(Divider);
+            if Divider <> 0 then
+            begin
+              if El.Css.CssMargins.Top.IsPredefined then
+                El.FMargins.Top := Remained / Divider;
+              if El.Css.CssMargins.Bottom.IsPredefined then
+                El.FMargins.Bottom := Remained / Divider;
+            end;
+            ElH := ElH + El.ContentOffsetHeight;
+          end;
+        end;
+      end
+      else if (not CssTop.IsPredefined) and CssBottom.IsPredefined and
+              (not ElHeight.IsPredefined) then
+      begin
+        // Case 6: bottom auto, top+height not auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElH := FixHeightMinMax(El,
+          ElHeight.CalcPercent(CbSize.Height.Value), CbSize.Height.Value);
+        ElTop := CssTop.CalcPercent(CbSize.Height.Value);
+      end
+      else if CssTop.IsPredefined and CssBottom.IsPredefined and
+              ElHeight.IsPredefined then
+      begin
+        // All three auto
+        if El.Css.CssMargins.Top.IsPredefined then El.FMargins.Top := 0;
+        if El.Css.CssMargins.Bottom.IsPredefined then El.FMargins.Bottom := 0;
+        ElH := El.Height;
+        ElTop := ElStaticY - El.ContentOffsetTop;
+      end
+      else
+      begin
+        // None auto
+        ElH := FixHeightMinMax(El,
+          ElHeight.CalcPercent(CbSize.Height.Value), CbSize.Height.Value);
+        ElTop := CssTop.CalcPercent(CbSize.Height.Value);
+        ElBottom := CssBottom.CalcPercent(CbSize.Height.Value);
+        Remained := CbSize.Height.Value - ElH - ElTop - ElBottom;
+
+        if El.Css.CssMargins.Top.IsPredefined and
+           El.Css.CssMargins.Bottom.IsPredefined then
+        begin
+          El.FMargins.Top := Remained / 2;
+          El.FMargins.Bottom := Remained / 2;
+          ElH := ElH + El.FMargins.Top + El.FMargins.Bottom;
+        end
+        else
+        begin
+          if El.Css.CssMargins.Top.IsPredefined then
+          begin
+            El.FMargins.Top := Remained;
+            ElH := ElH + El.FMargins.Top;
+          end;
+          if El.Css.CssMargins.Bottom.IsPredefined then
+          begin
+            El.FMargins.Bottom := Remained;
+            ElH := ElH + El.FMargins.Bottom;
+          end;
+        end;
+      end;
+
+      El.FPos.Y := ElTop + El.ContentOffsetTop;
+      if El.FPos.Height <> ElH - El.ContentOffsetHeight then
+      begin
+        El.FPos.Height := ElH - El.ContentOffsetHeight;
+        NeedRender := True;
+      end;
+
+      // --- Horizontal position (CSS 2.2 §10.3.7) ---
+      ElRight := 0;
+      ElLeft := 0;
+      ElW := 0;
+
+      if CssLeft.IsPredefined and (not CssRight.IsPredefined) and
+         ElWidth.IsPredefined then
+      begin
+        // Case 1
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElW := El.Width;
+        ElRight := CssRight.CalcPercent(CbSize.Width.Value);
+        ElLeft := CbSize.Width.Value - ElW - ElRight;
+      end
+      else if CssLeft.IsPredefined and CssRight.IsPredefined and
+              (not ElWidth.IsPredefined) then
+      begin
+        // Case 2
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElLeft := ElStaticX - El.ContentOffsetLeft;
+        ElW := FixWidthMinMax(El,
+          ElWidth.CalcPercent(CbSize.Width.Value), CbSize.Width.Value);
+      end
+      else if (not CssLeft.IsPredefined) and CssRight.IsPredefined and
+              ElWidth.IsPredefined then
+      begin
+        // Case 3
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElW := El.Width;
+        ElLeft := CssLeft.CalcPercent(CbSize.Width.Value);
+      end
+      else if CssLeft.IsPredefined and (not CssRight.IsPredefined) and
+              (not ElWidth.IsPredefined) then
+      begin
+        // Case 4
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElRight := CssRight.CalcPercent(CbSize.Width.Value);
+        ElW := FixWidthMinMax(El,
+          ElWidth.CalcPercent(CbSize.Width.Value), CbSize.Width.Value);
+        ElLeft := CbSize.Width.Value - ElRight - ElW;
+      end
+      else if (not CssLeft.IsPredefined) and (not CssRight.IsPredefined) and
+              ElWidth.IsPredefined then
+      begin
+        // Case 5
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElLeft := CssLeft.CalcPercent(CbSize.Width.Value);
+        ElRight := CssRight.CalcPercent(CbSize.Width.Value);
+        if El.SrcEl.IsReplaced then
+        begin
+          ElW := El.Width - El.ContentOffsetWidth;
+          Remained := (CbSize.Width.Value - ElLeft - ElRight) -
+            ElW - El.ContentOffsetWidth;
+          if Remained <> 0 then
+          begin
+            Divider := 0;
+            if El.Css.CssMargins.Left.IsPredefined then Inc(Divider);
+            if El.Css.CssMargins.Right.IsPredefined then Inc(Divider);
+            if Divider <> 0 then
+            begin
+              if El.Css.CssMargins.Left.IsPredefined then
+                El.FMargins.Left := Remained / Divider;
+              if El.Css.CssMargins.Right.IsPredefined then
+                El.FMargins.Right := Remained / Divider;
+            end;
+          end;
+          ElW := ElW + El.ContentOffsetWidth;
+        end
+        else
+          ElW := CbSize.Width.Value - ElLeft - ElRight;
+
+        if not El.Css.CssMaxWidth.IsPredefined then
+        begin
+          if ElW - El.ContentOffsetWidth >
+             El.Css.CssMaxWidth.CalcPercent(CbSize.Height.Value) then
+          begin
+            Remained := ElW - El.ContentOffsetWidth -
+              El.Css.CssMaxWidth.CalcPercent(CbSize.Height.Value);
+            ElW := El.Css.CssMaxWidth.CalcPercent(CbSize.Height.Value);
+            Divider := 0;
+            if El.Css.CssMargins.Left.IsPredefined then Inc(Divider);
+            if El.Css.CssMargins.Right.IsPredefined then Inc(Divider);
+            if Divider <> 0 then
+            begin
+              if El.Css.CssMargins.Left.IsPredefined then
+                El.FMargins.Left := Remained / Divider;
+              if El.Css.CssMargins.Right.IsPredefined then
+                El.FMargins.Right := Remained / Divider;
+            end;
+            ElW := ElW + El.ContentOffsetWidth;
+          end;
+        end;
+      end
+      else if (not CssLeft.IsPredefined) and CssRight.IsPredefined and
+              (not ElWidth.IsPredefined) then
+      begin
+        // Case 6
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElLeft := CssLeft.CalcPercent(CbSize.Width.Value);
+        ElW := FixWidthMinMax(El,
+          ElWidth.CalcPercent(CbSize.Width.Value), CbSize.Width.Value);
+      end
+      else if CssLeft.IsPredefined and CssRight.IsPredefined and
+              ElWidth.IsPredefined then
+      begin
+        // All three auto
+        if El.Css.CssMargins.Left.IsPredefined then El.FMargins.Left := 0;
+        if El.Css.CssMargins.Right.IsPredefined then El.FMargins.Right := 0;
+        ElW := El.Width;
+        ElLeft := ElStaticX - El.ContentOffsetLeft;
+      end
+      else
+      begin
+        // None auto
+        ElW := FixWidthMinMax(El,
+          ElWidth.CalcPercent(CbSize.Width.Value), CbSize.Width.Value);
+        ElLeft := CssLeft.CalcPercent(CbSize.Width.Value);
+        ElRight := CssRight.CalcPercent(CbSize.Width.Value);
+        Remained := CbSize.Width.Value - ElW - ElLeft - ElRight;
+
+        if El.Css.CssMargins.Left.IsPredefined and
+           El.Css.CssMargins.Right.IsPredefined then
+        begin
+          El.FMargins.Left := Remained / 2;
+          El.FMargins.Right := Remained / 2;
+          if El.FMargins.Left < 0 then
+          begin
+            El.FMargins.Left := 0;
+            El.FMargins.Right := Remained;
+          end;
+          ElW := ElW + El.FMargins.Left + El.FMargins.Right;
+        end
+        else
+        begin
+          if El.Css.CssMargins.Left.IsPredefined then
+          begin
+            El.FMargins.Left := Remained;
+            ElW := ElW + El.FMargins.Left;
+          end;
+          if El.Css.CssMargins.Right.IsPredefined then
+          begin
+            El.FMargins.Right := Remained;
+            ElW := ElW + El.FMargins.Right;
+          end;
+        end;
+      end;
+
+      El.FPos.X := ElLeft + El.ContentOffsetLeft;
+      if El.FPos.Width <> ElW - El.ContentOffsetWidth then
+      begin
+        El.FPos.Width := ElW - El.ContentOffsetWidth;
+        NeedRender := True;
+      end;
+
+      if ElPosition <> epFixed then
+      begin
+        El.FPos.X := El.FPos.X - StaticOff.X;
+        El.FPos.Y := El.FPos.Y - StaticOff.Y;
+      end;
+
+      if NeedRender then
+      begin
+        SavedPos := El.FPos;
+        El.Render(El.Left, El.Top,
+          CbSize.NewWidth(El.Width), nil, True);
+        El.FPos := SavedPos;
+      end;
+
+      if ElPosition = epFixed then
+      begin
+        FixedPos := El.Pos;
+        El.GetRedrawBox(FixedPos);
+        Doc.AddFixedBox(FixedPos);
+      end;
+    end;
+
+    El.RenderPositioned;
+  end;
+
+  // Sort positioned by z-index (stable sort)
+  if (FPositioned <> nil) and (FPositioned.Count > 1) then
+  begin
+    // Simple insertion sort (stable)
+    for I := 1 to FPositioned.Count - 1 do
+    begin
+      J := I;
+      while (J > 0) and
+            (FPositioned[J].SrcEl.Css.ZIndex <
+             FPositioned[J - 1].SrcEl.Css.ZIndex) do
+      begin
+        FPositioned.Exchange(J, J - 1);
+        Dec(J);
+      end;
+    end;
+  end;
+end;
+
+// --- Drawing ---
+
+procedure TPixieRenderItem.DrawStackingContext(Hdc: PtrUInt;
+  X, Y: pixel_t; Clip: PPixiePosition; WithPositioned: Boolean);
+var
+  I, Idx: Integer;
+  ZIndexes: TList<Integer>;
+begin
+  if not IsVisible then
+    Exit;
+
+  ZIndexes := nil;
+  if WithPositioned and (FPositioned <> nil) then
+  begin
+    ZIndexes := TList<Integer>.Create;
+    try
+      // Collect unique z-indexes
+      for I := 0 to FPositioned.Count - 1 do
+      begin
+        Idx := FPositioned[I].SrcEl.Css.ZIndex;
+        if ZIndexes.IndexOf(Idx) < 0 then
+          ZIndexes.Add(Idx);
+      end;
+      ZIndexes.Sort;
+
+      // Negative z-index positioned elements
+      for I := 0 to ZIndexes.Count - 1 do
+      begin
+        if ZIndexes[I] < 0 then
+          DrawChildren(Hdc, X, Y, Clip, dfPositioned, ZIndexes[I]);
+      end;
+
+      // Block children
+      DrawChildren(Hdc, X, Y, Clip, dfBlock, 0);
+      // Float children
+      DrawChildren(Hdc, X, Y, Clip, dfFloats, 0);
+      // Inline children
+      DrawChildren(Hdc, X, Y, Clip, dfInlines, 0);
+
+      // Zero z-index positioned elements
+      for I := 0 to ZIndexes.Count - 1 do
+      begin
+        if ZIndexes[I] = 0 then
+          DrawChildren(Hdc, X, Y, Clip, dfPositioned, ZIndexes[I]);
+      end;
+
+      // Positive z-index positioned elements
+      for I := 0 to ZIndexes.Count - 1 do
+      begin
+        if ZIndexes[I] > 0 then
+          DrawChildren(Hdc, X, Y, Clip, dfPositioned, ZIndexes[I]);
+      end;
+    finally
+      ZIndexes.Free;
+    end;
+  end
+  else
+  begin
+    DrawChildren(Hdc, X, Y, Clip, dfBlock, 0);
+    DrawChildren(Hdc, X, Y, Clip, dfFloats, 0);
+    DrawChildren(Hdc, X, Y, Clip, dfInlines, 0);
+  end;
+end;
+
+procedure TPixieRenderItem.DrawChildren(Hdc: PtrUInt;
+  X, Y: pixel_t; Clip: PPixiePosition; Flag: TPixieDrawFlag;
+  ZIndex: Integer);
+var
+  ElPos, ClipBox, BorderBox: TPixiePosition;
+  Doc: TPixieDocument;
+  Cont: TPixieContainer;
+  HasOpacity: Boolean;
+  PseudoShiftX, PseudoShiftY: pixel_t;
+  Offsets: TPixieCssOffsets;
+  I: Integer;
+  El: TPixieRenderItem;
+  Process: Boolean;
+  BdrRadius: TPixieBorderRadiuses;
+begin
+  ElPos := FPos;
+  ElPos.X := ElPos.X + X - GetScrollLeft;
+  ElPos.Y := ElPos.Y + Y - GetScrollTop;
+
+  Assert(FElement.GetDocument is TPixieDocument);
+  Doc := TPixieDocument(FElement.GetDocument);
+  Cont := Doc.Container;
+
+  if FElement.Css.Overflow > ovVisible then
+  begin
+    if FElement.Css.Display <> displayInline then
+    begin
+      ClipBox := FPos;
+      ClipBox.X := ClipBox.X + X;
+      ClipBox.Y := ClipBox.Y + Y;
+      BorderBox := ClipBox;
+      BorderBox.AddMargins(FPadding);
+      BorderBox.AddMargins(FBorders);
+
+      BdrRadius := FElement.Css.CssBorders.Radius.CalcPercents(
+        BorderBox.Width, BorderBox.Height);
+      BdrRadius.SubMargins(FBorders);
+      BdrRadius.SubMargins(FPadding);
+
+      Cont.SetClip(ClipBox, BdrRadius);
+    end;
+  end;
+
+  for I := 0 to FChildren.Count - 1 do
+  begin
+    El := FChildren[I];
+    if El.IsVisible then
+    begin
+      // Apply visual relative shift for elements that became positioned
+      // via pseudo-class (:active/:hover) without re-layout
+      PseudoShiftX := 0;
+      PseudoShiftY := 0;
+      if (not El.FLayoutPositioned) and
+         (El.SrcEl.Css.ElPosition = epRelative) then
+      begin
+        Offsets := El.SrcEl.Css.CssOffsets;
+        if not Offsets.Left.IsPredefined then
+          PseudoShiftX := Offsets.Left.Val
+        else if not Offsets.Right.IsPredefined then
+          PseudoShiftX := -Offsets.Right.Val;
+        if not Offsets.Top.IsPredefined then
+          PseudoShiftY := Offsets.Top.Val
+        else if not Offsets.Bottom.IsPredefined then
+          PseudoShiftY := -Offsets.Bottom.Val;
+        El.FPos.X := El.FPos.X + PseudoShiftX;
+        El.FPos.Y := El.FPos.Y + PseudoShiftY;
+      end;
+
+      HasOpacity := False;
+      Process := True;
+      case Flag of
+        dfPositioned:
+        begin
+          if El.FLayoutPositioned and
+             (El.SrcEl.Css.ZIndex = ZIndex) then
+          begin
+            HasOpacity := El.SrcEl.Css.Opacity < 1;
+            if HasOpacity then Cont.PushOpacity(El.SrcEl.Css.Opacity);
+            if El.SrcEl.Css.ElPosition = epFixed then
+            begin
+              El.SrcEl.Draw(Hdc, 0, 0, Clip, El);
+              El.DrawStackingContext(Hdc, 0, 0, Clip, True);
+            end
+            else
+            begin
+              El.SrcEl.Draw(Hdc, ElPos.X, ElPos.Y, Clip, El);
+              El.DrawStackingContext(Hdc, ElPos.X, ElPos.Y, Clip, True);
+            end;
+            if HasOpacity then Cont.PopOpacity;
+            Process := False;
+          end;
+        end;
+        dfBlock:
+        begin
+          if (not El.SrcEl.IsInline) and
+             (El.SrcEl.Css.Float_ = efNone) and
+             (not El.FLayoutPositioned) then
+          begin
+            HasOpacity := El.SrcEl.Css.Opacity < 1;
+            if HasOpacity then Cont.PushOpacity(El.SrcEl.Css.Opacity);
+            El.SrcEl.Draw(Hdc, ElPos.X, ElPos.Y, Clip, El);
+          end;
+        end;
+        dfFloats:
+        begin
+          if (El.SrcEl.Css.Float_ <> efNone) and
+             (not El.FLayoutPositioned) then
+          begin
+            HasOpacity := El.SrcEl.Css.Opacity < 1;
+            if HasOpacity then Cont.PushOpacity(El.SrcEl.Css.Opacity);
+            El.SrcEl.Draw(Hdc, ElPos.X, ElPos.Y, Clip, El);
+            El.DrawStackingContext(Hdc, ElPos.X, ElPos.Y, Clip, False);
+            if HasOpacity then Cont.PopOpacity;
+            Process := False;
+          end;
+        end;
+        dfInlines:
+        begin
+          if El.SrcEl.IsInline and
+             (El.SrcEl.Css.Float_ = efNone) and
+             (not El.FLayoutPositioned) then
+          begin
+            HasOpacity := El.SrcEl.Css.Opacity < 1;
+            if HasOpacity then Cont.PushOpacity(El.SrcEl.Css.Opacity);
+            El.SrcEl.Draw(Hdc, ElPos.X, ElPos.Y, Clip, El);
+            if (El.SrcEl.Css.Display = displayInlineBlock) or
+               (El.SrcEl.Css.Display = displayInlineFlex) or
+               (El.SrcEl.Css.Display = displayInlineGrid) then
+            begin
+              El.DrawStackingContext(Hdc, ElPos.X, ElPos.Y, Clip, False);
+              if HasOpacity then Cont.PopOpacity;
+              Process := False;
+            end;
+          end;
+        end;
+      end;
+
+      if Process then
+      begin
+        if Flag = dfPositioned then
+        begin
+          if not El.FLayoutPositioned then
+            El.DrawChildren(Hdc, ElPos.X, ElPos.Y, Clip, Flag, ZIndex);
+        end
+        else
+        begin
+          if (El.SrcEl.Css.Float_ = efNone) and
+             (El.SrcEl.Css.Display <> displayInlineBlock) and
+             (not El.FLayoutPositioned) then
+            El.DrawChildren(Hdc, ElPos.X, ElPos.Y, Clip, Flag, ZIndex);
+        end;
+        if HasOpacity then Cont.PopOpacity;
+      end;
+
+      // Restore FPos after pseudo-relative shift
+      if (PseudoShiftX <> 0) or (PseudoShiftY <> 0) then
+      begin
+        El.FPos.X := El.FPos.X - PseudoShiftX;
+        El.FPos.Y := El.FPos.Y - PseudoShiftY;
+      end;
+    end;
+  end;
+
+  if FElement.Css.Overflow > ovVisible then
+    Cont.DelClip;
+end;
+
+// --- Hit testing ---
+
+function TPixieRenderItem.GetChildByPoint(X, Y, ClientX, ClientY: pixel_t;
+  Flag: TPixieDrawFlag; ZIndex: Integer;
+  Check: TPixieRenderItemCheckFunc): TPixieElement;
+var
+  ElPos: TPixiePosition;
+  I: Integer;
+  El: TPixieRenderItem;
+  Ret: TPixieElement;
+  Process: Boolean;
+begin
+  if FElement.Css.Overflow > ovVisible then
+  begin
+    if not FPos.IsPointInside(X, Y) then
+      Exit(nil);
+  end;
+
+  Result := nil;
+
+  ElPos := FPos;
+  ElPos.X := X - ElPos.X + GetScrollLeft;
+  ElPos.Y := Y - ElPos.Y + GetScrollTop;
+
+  for I := FChildren.Count - 1 downto 0 do
+  begin
+    El := FChildren[I];
+    if El.IsVisible and (El.SrcEl.Css.Display <> displayInlineText) then
+    begin
+      Process := True;
+      case Flag of
+        dfPositioned:
+        begin
+          if El.FLayoutPositioned and
+             (El.SrcEl.Css.ZIndex = ZIndex) then
+          begin
+            if El.SrcEl.Css.ElPosition = epFixed then
+            begin
+              Ret := El.GetElementByPoint(ClientX, ClientY,
+                ClientX, ClientY, Check);
+              if (Ret = nil) and El.IsPointInside(ClientX, ClientY) then
+              begin
+                if (not Assigned(Check)) or Check(El) then
+                  Ret := El.SrcEl;
+              end;
+            end
+            else
+            begin
+              Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+                ClientX, ClientY, Check);
+              if (Ret = nil) and El.IsPointInside(ElPos.X, ElPos.Y) then
+              begin
+                if (not Assigned(Check)) or Check(El) then
+                  Ret := El.SrcEl;
+              end;
+            end;
+            Process := False;
+            if Ret <> nil then Exit(Ret);
+          end;
+        end;
+        dfBlock:
+        begin
+          if (not El.SrcEl.IsInline) and
+             (El.SrcEl.Css.Float_ = efNone) and
+             (not El.FLayoutPositioned) then
+          begin
+            Ret := El.GetChildByPoint(ElPos.X, ElPos.Y,
+              ClientX, ClientY, Flag, ZIndex, Check);
+            if (Ret = nil) and El.IsPointInside(ElPos.X, ElPos.Y) then
+            begin
+              if (not Assigned(Check)) or Check(El) then
+                Ret := El.SrcEl;
+            end;
+            Process := False;
+            if Ret <> nil then Exit(Ret);
+          end;
+        end;
+        dfFloats:
+        begin
+          if (El.SrcEl.Css.Float_ <> efNone) and
+             (not El.FLayoutPositioned) then
+          begin
+            Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+              ClientX, ClientY, Check);
+            if (Ret = nil) and El.IsPointInside(ElPos.X, ElPos.Y) then
+              Ret := El.SrcEl;
+            Process := False;
+            if Ret <> nil then Exit(Ret);
+          end;
+        end;
+        dfInlines:
+        begin
+          if El.SrcEl.IsInline and
+             (El.SrcEl.Css.Float_ = efNone) and
+             (not El.FLayoutPositioned) then
+          begin
+            if (El.SrcEl.Css.Display = displayInlineBlock) or
+               (El.SrcEl.Css.Display = displayInlineTable) or
+               (El.SrcEl.Css.Display = displayInlineFlex) or
+               (El.SrcEl.Css.Display = displayInlineGrid) then
+            begin
+              Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+                ClientX, ClientY, Check);
+              Process := False;
+              if Ret <> nil then Exit(Ret);
+            end
+            else if El.SrcEl.Css.Display = displayInline then
+            begin
+              // Check children first (e.g. inline-block inside inline)
+              Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+                ClientX, ClientY, Check);
+              Process := False;
+              if Ret <> nil then Exit(Ret);
+            end;
+            if El.IsPointInside(ElPos.X, ElPos.Y) then
+            begin
+              if (not Assigned(Check)) or Check(El) then
+                Exit(El.SrcEl);
+            end;
+          end;
+        end;
+      end;
+
+      if Process and (not El.FLayoutPositioned) then
+      begin
+        if Flag = dfPositioned then
+        begin
+          Ret := El.GetChildByPoint(ElPos.X, ElPos.Y,
+            ClientX, ClientY, Flag, ZIndex, Check);
+          if Ret <> nil then
+          begin
+            if not Assigned(Check) then
+              Exit(Ret)
+            else if Check(El) then
+              Exit(Ret);
+          end;
+        end
+        else
+        begin
+          if (El.SrcEl.Css.Float_ = efNone) and
+             (El.SrcEl.Css.Display <> displayInlineBlock) and
+             (El.SrcEl.Css.Display <> displayInlineFlex) and
+             (El.SrcEl.Css.Display <> displayInlineGrid) then
+          begin
+            Ret := El.GetChildByPoint(ElPos.X, ElPos.Y,
+              ClientX, ClientY, Flag, ZIndex, Check);
+            if Ret <> nil then
+            begin
+              if not Assigned(Check) then
+                Exit(Ret)
+              else if Check(El) then
+                Exit(Ret);
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TPixieRenderItem.GetElementByPoint(X, Y, ClientX, ClientY: pixel_t;
+  Check: TPixieRenderItemCheckFunc): TPixieElement;
+var
+  I, Idx: Integer;
+  ZIndexes: TList<Integer>;
+  Ret: TPixieElement;
+begin
+  if not IsVisible then
+    Exit(nil);
+
+  Result := nil;
+
+  ZIndexes := TList<Integer>.Create;
+  try
+    // Collect unique z-indexes
+    if FPositioned <> nil then
+    for I := 0 to FPositioned.Count - 1 do
+    begin
+      Idx := FPositioned[I].SrcEl.Css.ZIndex;
+      if ZIndexes.IndexOf(Idx) < 0 then
+        ZIndexes.Add(Idx);
+    end;
+    ZIndexes.Sort;
+
+    // Positive z-index (reverse)
+    for I := ZIndexes.Count - 1 downto 0 do
+    begin
+      if ZIndexes[I] > 0 then
+      begin
+        Ret := GetChildByPoint(X, Y, ClientX, ClientY,
+          dfPositioned, ZIndexes[I], Check);
+        if Ret <> nil then Exit(Ret);
+      end;
+    end;
+
+    // Zero z-index
+    for I := 0 to ZIndexes.Count - 1 do
+    begin
+      if ZIndexes[I] = 0 then
+      begin
+        Ret := GetChildByPoint(X, Y, ClientX, ClientY,
+          dfPositioned, ZIndexes[I], Check);
+        if Ret <> nil then Exit(Ret);
+      end;
+    end;
+
+    // Inlines
+    Ret := GetChildByPoint(X, Y, ClientX, ClientY,
+      dfInlines, 0, Check);
+    if Ret <> nil then Exit(Ret);
+
+    // Floats
+    Ret := GetChildByPoint(X, Y, ClientX, ClientY,
+      dfFloats, 0, Check);
+    if Ret <> nil then Exit(Ret);
+
+    // Blocks
+    Ret := GetChildByPoint(X, Y, ClientX, ClientY,
+      dfBlock, 0, Check);
+    if Ret <> nil then Exit(Ret);
+
+    // Negative z-index (reverse)
+    for I := ZIndexes.Count - 1 downto 0 do
+    begin
+      if ZIndexes[I] < 0 then
+      begin
+        Ret := GetChildByPoint(X, Y, ClientX, ClientY,
+          dfPositioned, ZIndexes[I], Check);
+        if Ret <> nil then Exit(Ret);
+      end;
+    end;
+  finally
+    ZIndexes.Free;
+  end;
+
+  // Check self
+  if FElement.Css.ElPosition = epFixed then
+  begin
+    if IsPointInside(ClientX, ClientY) then
+    begin
+      if (not Assigned(Check)) or Check(Self) then
+        Result := FElement;
+    end;
+  end
+  else
+  begin
+    if IsPointInside(X, Y) then
+    begin
+      if (not Assigned(Check)) or Check(Self) then
+        Result := FElement;
+    end;
+  end;
+end;
+
+function TPixieRenderItem.GetTextByPoint(X, Y: pixel_t): TPixieElement;
+var
+  LocalX, LocalY: pixel_t;
+  I: Integer;
+  El: TPixieRenderItem;
+  Ret: TPixieElement;
+begin
+  Result := nil;
+  if not IsVisible then Exit;
+
+  // Respect overflow clipping
+  if FElement.Css.Overflow > ovVisible then
+  begin
+    if not FPos.IsPointInside(X, Y) then
+      Exit;
+  end;
+
+  // Transform point to local coordinate space
+  LocalX := X - FPos.X + GetScrollLeft;
+  LocalY := Y - FPos.Y + GetScrollTop;
+
+  for I := FChildren.Count - 1 downto 0 do
+  begin
+    El := FChildren[I];
+    if not El.IsVisible then Continue;
+
+    if El.SrcEl.Css.Display = displayInlineText then
+    begin
+      if El.IsPointInside(LocalX, LocalY) then
+        Exit(El.SrcEl);
+    end
+    else
+    begin
+      Ret := El.GetTextByPoint(LocalX, LocalY);
+      if Ret <> nil then
+        Exit(Ret);
+    end;
+  end;
+end;
+
+function TPixieRenderItem.GetNearestTextByPoint(
+  X, Y: pixel_t): TPixieElement;
+var
+  Best: TPixieElement;
+  BestDist: pixel_t;
+
+  procedure Search(Ri: TPixieRenderItem; PX, PY: pixel_t);
+  var
+    LocalX, LocalY, DX, DY, Dist: pixel_t;
+    I: Integer;
+    El: TPixieRenderItem;
+    P: TPixiePosition;
+  begin
+    if not Ri.IsVisible then Exit;
+
+    // Respect overflow clipping
+    if Ri.FElement.Css.Overflow > ovVisible then
+      if not Ri.FPos.IsPointInside(PX, PY) then
+        Exit;
+
+    // Transform to local coordinates
+    LocalX := PX - Ri.FPos.X + Ri.GetScrollLeft;
+    LocalY := PY - Ri.FPos.Y + Ri.GetScrollTop;
+
+    for I := 0 to Ri.FChildren.Count - 1 do
+    begin
+      El := Ri.FChildren[I];
+      if not El.IsVisible then Continue;
+
+      if El.SrcEl.Css.Display = displayInlineText then
+      begin
+        P := El.FPos;
+        // Compute gap from point to bounding box
+        if LocalX < P.X then
+          DX := P.X - LocalX
+        else if LocalX > P.X + P.Width then
+          DX := LocalX - (P.X + P.Width)
+        else
+          DX := 0;
+
+        if LocalY < P.Y then
+          DY := P.Y - LocalY
+        else if LocalY > P.Y + P.Height then
+          DY := LocalY - (P.Y + P.Height)
+        else
+          DY := 0;
+
+        Dist := DY * 10000 + DX;
+        if (Best = nil) or (Dist < BestDist) then
+        begin
+          Best := El.SrcEl;
+          BestDist := Dist;
+        end;
+      end
+      else
+        Search(El, LocalX, LocalY);
+    end;
+  end;
+
+begin
+  Best := nil;
+  BestDist := 0;
+  Search(Self, X, Y);
+  Result := Best;
+end;
+
+function TPixieRenderItem.IsPointInside(X, Y: pixel_t): Boolean;
+var
+  P: TPixiePosition;
+  Boxes: TPixiePositionVector;
+  Offsets: TPixieCssOffsets;
+  I: Integer;
+begin
+  if (FElement.Css.Display <> displayInline) and
+     (FElement.Css.Display <> displayTableRow) then
+  begin
+    P := FPos;
+    P.AddMargins(FPadding);
+    P.AddMargins(FBorders);
+    // Account for pseudo-relative shift (position changed via :active/:hover
+    // without re-layout — FPos doesn't include the offset yet)
+    if (not FLayoutPositioned) and (FElement.Css.ElPosition = epRelative) then
+    begin
+      Offsets := FElement.Css.CssOffsets;
+      if not Offsets.Left.IsPredefined then
+        P.X := P.X + Offsets.Left.Val
+      else if not Offsets.Right.IsPredefined then
+        P.X := P.X - Offsets.Right.Val;
+      if not Offsets.Top.IsPredefined then
+        P.Y := P.Y + Offsets.Top.Val
+      else if not Offsets.Bottom.IsPredefined then
+        P.Y := P.Y - Offsets.Bottom.Val;
+    end;
+    Result := P.IsPointInside(X, Y);
+  end
+  else
+  begin
+    Boxes := TPixiePositionVector.Create;
+    try
+      GetInlineBoxes(Boxes);
+      for I := 0 to Boxes.Count - 1 do
+      begin
+        if Boxes[I].IsPointInside(X, Y) then
+          Exit(True);
+      end;
+      Result := False;
+    finally
+      Boxes.Free;
+    end;
+  end;
+end;
+
+// --- Document size / redraw ---
+
+procedure TPixieRenderItem.CalcDocumentSize(var Sz: TPixieSize;
+  X: pixel_t; Y: pixel_t);
+var
+  I: Integer;
+  ChildSize: TPixieSize;
+  Boxes: TPixiePositionVector;
+begin
+  if (Css.Display <> displayInline) and
+     (Css.Display <> displayTableRow) then
+  begin
+    if IsVisible then
+    begin
+      if FElement.Css.ElPosition <> epFixed then
+      begin
+        Sz.Width := Max(Sz.Width, X + Right);
+        Sz.Height := Max(Sz.Height, Y + Bottom);
+      end;
+
+      if (FElement.Css.Overflow = ovScroll) or
+         (FElement.Css.Overflow = ovAuto) then
+      begin
+        ChildSize.Width := 0;
+        ChildSize.Height := 0;
+        for I := 0 to FChildren.Count - 1 do
+          FChildren[I].CalcDocumentSize(ChildSize, 0, 0);
+        if FScrollView = nil then
+          FScrollView := TPixieScrollView.Create(FPos, ChildSize)
+        else
+          FScrollView.SetViewport(FPos, ChildSize);
+      end
+      else
+      begin
+        if (FElement.Css.Overflow = ovVisible) and
+           (FElement.Css.Display <> displayTable) then
+        begin
+          for I := 0 to FChildren.Count - 1 do
+            FChildren[I].CalcDocumentSize(Sz, X + FPos.X, Y + FPos.Y);
+        end
+        else
+        begin
+          ChildSize.Width := 0;
+          ChildSize.Height := 0;
+          for I := 0 to FChildren.Count - 1 do
+            FChildren[I].CalcDocumentSize(ChildSize, 0, 0);
+        end;
+      end;
+    end;
+  end
+  else
+  begin
+    Boxes := TPixiePositionVector.Create;
+    try
+      GetInlineBoxes(Boxes);
+      for I := 0 to Boxes.Count - 1 do
+      begin
+        Sz.Width := Max(Sz.Width, X + Boxes[I].X + Boxes[I].Width);
+        Sz.Height := Max(Sz.Height, Y + Boxes[I].Y + Boxes[I].Height);
+      end;
+    finally
+      Boxes.Free;
+    end;
+  end;
+end;
+
+procedure TPixieRenderItem.GetRedrawBox(var APos: TPixiePosition;
+  X: pixel_t; Y: pixel_t);
+var
+  PLeft, PRight, PTop, PBottom: pixel_t;
+  I: Integer;
+begin
+  if IsVisible then
+  begin
+    PLeft   := Min(APos.X, X + FPos.X - FPadding.Left - FBorders.Left);
+    PRight  := Max(APos.Right, X + FPos.Right + FPadding.Left + FBorders.Left);
+    PTop    := Min(APos.Y, Y + FPos.Y - FPadding.Top - FBorders.Top);
+    PBottom := Max(APos.Bottom, Y + FPos.Bottom + FPadding.Bottom + FBorders.Bottom);
+
+    APos.X := PLeft;
+    APos.Y := PTop;
+    APos.Width := PRight - PLeft;
+    APos.Height := PBottom - PTop;
+
+    if FElement.Css.Overflow = ovVisible then
+    begin
+      for I := 0 to FChildren.Count - 1 do
+      begin
+        if FChildren[I].SrcEl.Css.ElPosition <> epFixed then
+          FChildren[I].GetRedrawBox(APos, X + FPos.X, Y + FPos.Y);
+      end;
+    end;
+  end;
+end;
+
+procedure TPixieRenderItem.GetRenderingBoxes(Boxes: TPixiePositionVector);
+var
+  P: TPixiePosition;
+  CurEl: TPixieRenderItem;
+  AddX, AddY: pixel_t;
+  I: Integer;
+  Doc: TPixieDocument;
+  Cont: TPixieContainer;
+  Viewport: TPixiePosition;
+begin
+  if (FElement.Css.Display = displayInline) or
+     (FElement.Css.Display = displayTableRow) then
+  begin
+    GetInlineBoxes(Boxes);
+    for I := 0 to Boxes.Count - 1 do
+    begin
+      P := Boxes[I];
+      ScrollBox(P);
+      Boxes[I] := P;
+    end;
+  end
+  else
+  begin
+    P := FPos;
+    P.AddMargins(FPadding);
+    P.AddMargins(FBorders);
+    Boxes.Add(P);
+  end;
+
+  Assert(FElement.GetDocument is TPixieDocument);
+  Doc := TPixieDocument(FElement.GetDocument);
+  Cont := Doc.Container;
+
+  if FElement.Css.ElPosition <> epFixed then
+  begin
+    CurEl := FParent;
+    AddX := 0;
+    AddY := 0;
+    while CurEl <> nil do
+    begin
+      if CurEl.Css.ElPosition = epFixed then
+      begin
+        Cont.GetViewport(Viewport);
+        AddX := AddX + CurEl.FPos.X + Viewport.X - CurEl.GetScrollLeft;
+        AddY := AddY + CurEl.FPos.Y + Viewport.Y - CurEl.GetScrollTop;
+        Break;
+      end;
+      AddX := AddX + CurEl.FPos.X - CurEl.GetScrollLeft;
+      AddY := AddY + CurEl.FPos.Y - CurEl.GetScrollTop;
+      CurEl := CurEl.FParent;
+    end;
+    for I := 0 to Boxes.Count - 1 do
+    begin
+      P := Boxes[I];
+      P.X := P.X + AddX;
+      P.Y := P.Y + AddY;
+      Boxes[I] := P;
+    end;
+  end
+  else
+  begin
+    Cont.GetViewport(Viewport);
+    for I := 0 to Boxes.Count - 1 do
+    begin
+      P := Boxes[I];
+      P.X := P.X + Viewport.X;
+      P.Y := P.Y + Viewport.Y;
+      Boxes[I] := P;
+    end;
+  end;
+end;
+
+// --- Containing block context ---
+
+procedure TPixieRenderItem.CalcCbLength(const Len: TPixieCssLength;
+  PercentBase: pixel_t; var OutValue: TPixieTypedPixel);
+var
+  Doc: TPixieDocument;
+begin
+  if not Len.IsPredefined then
+  begin
+    if Len.Units = cssUnitsPercentage then
+    begin
+      OutValue.Value := Len.CalcPercent(PercentBase);
+      OutValue.ValueType := cbcPercentage;
+    end
+    else
+    begin
+      Assert(FElement.GetDocument is TPixieDocument);
+      Doc := TPixieDocument(FElement.GetDocument);
+      OutValue.Value := Doc.ToPixels(Len, Css.FontMetrics, 0);
+      OutValue.ValueType := cbcAbsolute;
+    end;
+  end;
+end;
+
+function TPixieRenderItem.CalculateContainingBlockContext(
+  const CbContext: TPixieContainingBlockContext): TPixieContainingBlockContext;
+var
+  Par: TPixieRenderItem;
+  CssW, CssH: TPixieCssLength;
+  UseWidth, UseHeight: Boolean;
+begin
+  Result.Init;
+  Result.ContextIdx := CbContext.ContextIdx + 1;
+  Result.Width.Value := CbContext.Width.Value - ContentOffsetWidth;
+  Result.MaxWidth.Value := Result.Width.Value;
+  if (FElement.Css.ElPosition <> epAbsolute) and
+     (FElement.Css.ElPosition <> epFixed) then
+    Result.Height.Value := CbContext.Height.Value - ContentOffsetHeight;
+
+  // Width/height from CSS (skip for table-cell)
+  if FElement.Css.Display <> displayTableCell then
+  begin
+    Par := FParent;
+
+    // --- Width ---
+    if (CbContext.SizeMode and SizeModeExactWidth) <> 0 then
+    begin
+      Result.Width.Value := CbContext.Width.Value;
+      Result.Width.ValueType := cbcAbsolute;
+    end
+    else
+    begin
+      UseWidth := True;
+      CssW := Css.CssWidth;
+      if (Par <> nil) and
+         ((Par.Css.Display = displayFlex) or
+          (Par.Css.Display = displayInlineFlex)) then
+      begin
+        if (not Css.FlexBasis.IsPredefined) and
+           (Css.FlexBasis.Val >= 0) then
+        begin
+          if (Par.Css.FlexDirection = fdRow) or
+             (Par.Css.FlexDirection = fdRowReverse) then
+          begin
+            Result.Width.ValueType := cbcAuto;
+            Result.Width.Value := 0;
+            UseWidth := False;
+          end;
+        end;
+      end;
+      if UseWidth then
+        CalcCbLength(CssW, CbContext.Width.Value, Result.Width);
+    end;
+
+    // --- Height ---
+    if (CbContext.SizeMode and SizeModeExactHeight) <> 0 then
+    begin
+      Result.Height.Value := CbContext.Height.Value;
+      Result.Height.ValueType := cbcAbsolute;
+    end
+    else
+    begin
+      UseHeight := True;
+      CssH := Css.CssHeight;
+      if (Par <> nil) and
+         ((Par.Css.Display = displayFlex) or
+          (Par.Css.Display = displayInlineFlex)) then
+      begin
+        if (not Css.FlexBasis.IsPredefined) and
+           (Css.FlexBasis.Val >= 0) then
+        begin
+          if (Par.Css.FlexDirection = fdColumn) or
+             (Par.Css.FlexDirection = fdColumnReverse) then
+          begin
+            Result.Height.ValueType := cbcAuto;
+            Result.Height.Value := 0;
+            UseHeight := False;
+          end;
+        end;
+      end;
+      if UseHeight then
+        CalcCbLength(CssH, CbContext.Height.Value, Result.Height);
+    end;
+
+    // Adjust for table/root
+    if (Result.Width.ValueType <> cbcAuto) and
+       ((FElement.Css.Display = displayTable) or FElement.IsRoot) then
+      Result.Width.Value := Result.Width.Value - ContentOffsetWidth;
+    if (Result.Height.ValueType <> cbcAuto) and
+       ((FElement.Css.Display = displayTable) or FElement.IsRoot) then
+      Result.Height.Value := Result.Height.Value - ContentOffsetHeight;
+  end;
+
+  Result.RenderWidth := Result.Width;
+
+  // Min/max
+  CalcCbLength(FElement.Css.CssMinWidth, CbContext.Width.Value, Result.MinWidth);
+  CalcCbLength(FElement.Css.CssMaxWidth, CbContext.Width.Value, Result.MaxWidth);
+  CalcCbLength(FElement.Css.CssMinHeight, CbContext.Height.Value, Result.MinHeight);
+  CalcCbLength(FElement.Css.CssMaxHeight, CbContext.Height.Value, Result.MaxHeight);
+
+  // Fix box sizing
+  if Result.Width.ValueType <> cbcAuto then
+    Result.RenderWidth.Value := Result.Width.Value - BoxSizingWidth;
+  if Result.MinWidth.ValueType <> cbcNone then
+    Result.MinWidth.Value := Result.MinWidth.Value - BoxSizingWidth;
+  if Result.MaxWidth.ValueType <> cbcNone then
+    Result.MaxWidth.Value := Result.MaxWidth.Value - BoxSizingWidth;
+  if Result.MinHeight.ValueType <> cbcNone then
+    Result.MinHeight.Value := Result.MinHeight.Value - BoxSizingHeight;
+  if Result.MaxHeight.ValueType <> cbcNone then
+    Result.MaxHeight.Value := Result.MaxHeight.Value - BoxSizingHeight;
+end;
+
+// --- Virtual stubs ---
+
+function TPixieRenderItem.Init: TPixieRenderItem;
+var
+  I: Integer;
+  Child, NewChild: TPixieRenderItem;
+begin
+  FElement.AddRender(Self);
+
+  for I := 0 to FChildren.Count - 1 do
+  begin
+    Child := FChildren[I];
+    NewChild := Child.Init;
+    if NewChild <> Child then
+    begin
+      FChildren.OwnsObjects := False;
+      FChildren[I] := NewChild;
+      FChildren.OwnsObjects := True;
+      Child.Free;
+    end;
+  end;
+
+  Result := Self;
+end;
+
+procedure TPixieRenderItem.ApplyVerticalAlign;
+begin
+  // no-op in base class
+end;
+
+function TPixieRenderItem.GetFirstBaseline: pixel_t;
+begin
+  Result := Height - MarginBottom;
+end;
+
+function TPixieRenderItem.GetLastBaseline: pixel_t;
+begin
+  Result := Height - MarginBottom;
+end;
+
+function TPixieRenderItem.Clone: TPixieRenderItem;
+begin
+  Result := TPixieRenderItem.Create(FElement);
+end;
+
+procedure TPixieRenderItem.GetInlineBoxes(Boxes: TPixiePositionVector);
+begin
+  // no-op
+end;
+
+procedure TPixieRenderItem.AddInlineBox(const Box: TPixiePosition);
+begin
+  // no-op
+end;
+
+procedure TPixieRenderItem.ClearInlineBoxes;
+begin
+  // no-op
+end;
+
+function TPixieRenderItem.GetDrawVerticalOffset: pixel_t;
+begin
+  Result := 0;
+end;
+
+procedure TPixieRenderItem.YShift(Delta: pixel_t);
+begin
+  FPos.Y := FPos.Y + Delta;
+end;
+
+// --- Debug ---
+
+procedure TPixieRenderItem.Dump(var Output: string; Indent: Integer);
+var
+  Prefix: string;
+  I: Integer;
+begin
+  Prefix := StringOfChar(' ', Indent * 2);
+  Output := Output + Prefix + FElement.DumpGetName;
+  Output := Output + ' pos=' + IntToStr(Round(FPos.X)) + ',' +
+    IntToStr(Round(FPos.Y)) + ',' + IntToStr(Round(FPos.Width)) + ',' +
+    IntToStr(Round(FPos.Height));
+  Output := Output + #10;
+
+  for I := 0 to FChildren.Count - 1 do
+    FChildren[I].Dump(Output, Indent + 1);
+end;
+
+end.

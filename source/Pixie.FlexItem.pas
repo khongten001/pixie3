@@ -1,0 +1,1287 @@
+unit Pixie.FlexItem;
+
+// Flex item + flex line: both live here to avoid circular dependency.
+
+{$mode delphi}
+
+interface
+
+uses
+  Generics.Collections,
+  Pixie.Types;
+
+type
+  TPixieFlexLine = class;
+
+  { TPixieFlexItem — base class for flex items }
+  TPixieFlexItem = class
+  public
+    El: Pointer;
+
+    // All sizes are outer/margin-box sizes
+    BaseSize: pixel_t;
+    MinSize: pixel_t;
+    MaxSize: TPixieDefValue;
+    MainSize: pixel_t;
+
+    Grow: Integer;     // flex-grow * 1000
+    Shrink: Integer;   // flex-shrink * 1000
+    ScaledFlexShrinkFactor: pixel_t;
+
+    Frozen: Boolean;
+    ClampState: TPixieFlexClampState;
+
+    Order: Integer;
+    SrcOrder: Integer;
+
+    AutoMarginMainStart: TPixieDefValue;
+    AutoMarginMainEnd: TPixieDefValue;
+    AutoMarginCrossStart: Boolean;
+    AutoMarginCrossEnd: Boolean;
+
+    Align: Integer; // enum ordinal + flags
+
+    constructor Create(AEl: Pointer);
+    destructor Destroy; override;
+
+    function CompareTo(Other: TPixieFlexItem): Integer;
+
+    procedure Init(const SelfSize: TPixieContainingBlockContext;
+      FmtCtx: Pointer; AlignItems: Integer);
+    procedure Place(var Ln: TPixieFlexLine; AMainPos: pixel_t;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+    function GetFirstBaseline(AType: TPixieBaselineType): pixel_t;
+    function GetLastBaseline(AType: TPixieBaselineType): pixel_t;
+
+    procedure ApplyMainAutoMargins; virtual; abstract;
+    function ApplyCrossAutoMargins(ACrossSize: pixel_t): Boolean; virtual; abstract;
+    procedure SetMainPosition(Pos: pixel_t); virtual; abstract;
+    procedure SetCrossPosition(Pos: pixel_t); virtual; abstract;
+    function GetElMainSize: pixel_t; virtual; abstract;
+    function GetElCrossSize: pixel_t; virtual; abstract;
+  protected
+    procedure DirectionSpecificInit(const SelfSize: TPixieContainingBlockContext;
+      FmtCtx: Pointer); virtual; abstract;
+    procedure AlignStretch(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); virtual; abstract;
+    procedure AlignBaseline(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); virtual; abstract;
+  end;
+
+  { TPixieFlexItemRow — row direction flex item }
+  TPixieFlexItemRow = class(TPixieFlexItem)
+  public
+    procedure ApplyMainAutoMargins; override;
+    function ApplyCrossAutoMargins(ACrossSize: pixel_t): Boolean; override;
+    procedure SetMainPosition(Pos: pixel_t); override;
+    procedure SetCrossPosition(Pos: pixel_t); override;
+    function GetElMainSize: pixel_t; override;
+    function GetElCrossSize: pixel_t; override;
+  protected
+    procedure DirectionSpecificInit(const SelfSize: TPixieContainingBlockContext;
+      FmtCtx: Pointer); override;
+    procedure AlignStretch(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
+    procedure AlignBaseline(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
+  end;
+
+  { TPixieFlexItemColumn — column direction flex item }
+  TPixieFlexItemColumn = class(TPixieFlexItem)
+  public
+    procedure ApplyMainAutoMargins; override;
+    function ApplyCrossAutoMargins(ACrossSize: pixel_t): Boolean; override;
+    procedure SetMainPosition(Pos: pixel_t); override;
+    procedure SetCrossPosition(Pos: pixel_t); override;
+    function GetElMainSize: pixel_t; override;
+    function GetElCrossSize: pixel_t; override;
+  protected
+    procedure DirectionSpecificInit(const SelfSize: TPixieContainingBlockContext;
+      FmtCtx: Pointer); override;
+    procedure AlignStretch(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
+    procedure AlignBaseline(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
+  end;
+
+  TPixieFlexItemList = TObjectList<TPixieFlexItem>;
+
+  { TPixieFlexLine — a single line of flex items }
+  TPixieFlexLine = class
+  public
+    Items: TPixieFlexItemList;
+    CrossStart: pixel_t;
+    MainSize: pixel_t;
+    CrossSize: pixel_t;
+    BaseSize: pixel_t;
+    NumAutoMarginMainStart: Integer;
+    NumAutoMarginMainEnd: Integer;
+    FirstBaseline: TPixieBaseline;
+    LastBaseline: TPixieBaseline;
+    ReverseMain: Boolean;
+    ReverseCross: Boolean;
+    MainGap: pixel_t;
+
+    constructor Create(AReverseMain, AReverseCross: Boolean);
+    destructor Destroy; override;
+
+    procedure Init(ContainerMainSize: pixel_t; FitContainer: Boolean;
+      IsRowDirection: Boolean;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+    function DistributeMainAutoMargins(FreeMainSize: pixel_t): Boolean;
+    function CalculateItemsPosition(ContainerMainSize: pixel_t;
+      JustifyContent: TPixieFlexJustifyContent;
+      IsRowDirection: Boolean;
+      const SelfSize: TPixieContainingBlockContext;
+      FmtCtx: Pointer): pixel_t;
+
+    procedure DistributeFreeSpace(ContainerMainSize: pixel_t);
+    procedure DistributeFreeSpaceGrow(ContainerMainSize: pixel_t);
+    procedure DistributeFreeSpaceShrink(ContainerMainSize: pixel_t);
+    function FixMinMaxViolations: Boolean;
+  end;
+
+implementation
+
+uses
+  Math,
+  Pixie.CssLength, Pixie.CssProperties,
+  Pixie.Element, Pixie.FormattingContext,
+  Pixie.RenderItem, Pixie.RenderBlock;
+
+{ TPixieFlexLine }
+
+constructor TPixieFlexLine.Create(AReverseMain, AReverseCross: Boolean);
+begin
+  inherited Create;
+  Items := TPixieFlexItemList.Create(True);
+  CrossStart := 0;
+  MainSize := 0;
+  CrossSize := 0;
+  BaseSize := 0;
+  NumAutoMarginMainStart := 0;
+  NumAutoMarginMainEnd := 0;
+  FirstBaseline.Init;
+  LastBaseline.Init;
+  ReverseMain := AReverseMain;
+  ReverseCross := AReverseCross;
+  MainGap := 0;
+end;
+
+destructor TPixieFlexLine.Destroy;
+begin
+  Items.Free;
+  inherited;
+end;
+
+procedure TPixieFlexLine.Init(ContainerMainSize: pixel_t;
+  FitContainer: Boolean; IsRowDirection: Boolean;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  I: Integer;
+  Item: TPixieFlexItem;
+  Ri: TPixieRenderItem;
+  FirstBaselineTop, FirstBaselineBottom: pixel_t;
+  LastBaselineTop, LastBaselineBottom: pixel_t;
+  FirstBaselineTopSet, FirstBaselineBottomSet: Boolean;
+  LastBaselineTopSet, LastBaselineBottomSet: Boolean;
+  NonBaselineHeight: pixel_t;
+  MaxCrossSize: pixel_t;
+  MaxCrossSizeSet: Boolean;
+  TopVal, BottomVal: pixel_t;
+  ElRetWidth: pixel_t;
+  TotalGap: pixel_t;
+begin
+  // Subtract total gap from available main size for flex distribution
+  TotalGap := 0;
+  if (MainGap > 0) and (Items.Count > 1) then
+    TotalGap := MainGap * (Items.Count - 1);
+
+  if not FitContainer then
+    DistributeFreeSpace(ContainerMainSize - TotalGap);
+
+  CrossSize := 0;
+  MainSize := 0;
+  FirstBaseline.SetValues(0, btNone);
+  LastBaseline.SetValues(0, btNone);
+
+  if IsRowDirection then
+  begin
+    FirstBaselineTop := 0;
+    FirstBaselineBottom := 0;
+    LastBaselineTop := 0;
+    LastBaselineBottom := 0;
+    FirstBaselineTopSet := False;
+    FirstBaselineBottomSet := False;
+    LastBaselineTopSet := False;
+    LastBaselineBottomSet := False;
+    NonBaselineHeight := 0;
+
+    // Calculate maximum cross size
+    MaxCrossSizeSet := False;
+    MaxCrossSize := 0;
+    if SelfSize.Height.ValueType <> cbcAuto then
+    begin
+      MaxCrossSize := SelfSize.Height.Value;
+      MaxCrossSizeSet := True;
+    end;
+    if SelfSize.MaxHeight.ValueType <> cbcNone then
+    begin
+      if not MaxCrossSizeSet then
+      begin
+        MaxCrossSize := SelfSize.MaxHeight.Value;
+        MaxCrossSizeSet := True;
+      end
+      else
+        MaxCrossSize := Max(MaxCrossSize, SelfSize.MaxHeight.Value);
+    end;
+
+    // Render items, find cross_size and baselines
+    for I := 0 to Items.Count - 1 do
+    begin
+      Item := Items[I];
+      Assert(TObject(Item.El) is TPixieRenderItem);
+      Ri := TPixieRenderItem(Item.El);
+      Assert(TObject(FmtCtx) is TPixieFormattingContext);
+      Ri.Render(0, 0,
+        SelfSize.NewWidth(Item.MainSize - Ri.RenderOffsetWidth,
+          SizeModeExactWidth),
+        TPixieFormattingContext(FmtCtx));
+
+      if (Item.Align and $FF) = Ord(faiBaseline) then
+      begin
+        if (Item.Align and FlexAlignItemsLast) <> 0 then
+        begin
+          LastBaseline.BaselineType := btBottom;
+          if ReverseCross then
+            LastBaseline.BaselineType := btTop;
+
+          TopVal := -Ri.GetLastBaseline;
+          BottomVal := TopVal + Ri.Height;
+
+          if not LastBaselineTopSet then
+          begin
+            LastBaselineTop := TopVal;
+            LastBaselineTopSet := True;
+          end
+          else
+            LastBaselineTop := Min(LastBaselineTop, TopVal);
+
+          if not LastBaselineBottomSet then
+          begin
+            LastBaselineBottom := BottomVal;
+            LastBaselineBottomSet := True;
+          end
+          else
+            LastBaselineBottom := Max(LastBaselineBottom, BottomVal);
+        end
+        else
+        begin
+          FirstBaseline.BaselineType := btTop;
+          if ReverseCross then
+            FirstBaseline.BaselineType := btBottom;
+
+          TopVal := -Ri.GetFirstBaseline;
+          BottomVal := TopVal + Ri.Height;
+
+          if not FirstBaselineTopSet then
+          begin
+            FirstBaselineTop := TopVal;
+            FirstBaselineTopSet := True;
+          end
+          else
+            FirstBaselineTop := Min(FirstBaselineTop, TopVal);
+
+          if not FirstBaselineBottomSet then
+          begin
+            FirstBaselineBottom := BottomVal;
+            FirstBaselineBottomSet := True;
+          end
+          else
+            FirstBaselineBottom := Max(FirstBaselineBottom, BottomVal);
+        end;
+      end
+      else
+        NonBaselineHeight := Max(NonBaselineHeight, Ri.Height);
+
+      MainSize := MainSize + Ri.Width;
+    end;
+
+    CrossSize := Max(FirstBaselineBottom - FirstBaselineTop,
+      LastBaselineBottom - LastBaselineTop);
+    CrossSize := Max(CrossSize, NonBaselineHeight);
+    if MaxCrossSizeSet and (CrossSize > MaxCrossSize) then
+      CrossSize := MaxCrossSize;
+
+    FirstBaseline.CalcFromPositions(FirstBaselineTop, FirstBaselineBottom);
+    LastBaseline.CalcFromPositions(LastBaselineTop, LastBaselineBottom);
+  end
+  else
+  begin
+    // Column direction
+    MaxCrossSizeSet := False;
+    MaxCrossSize := 0;
+    if SelfSize.Width.ValueType <> cbcAuto then
+    begin
+      MaxCrossSize := SelfSize.Width.Value;
+      MaxCrossSizeSet := True;
+    end;
+    if SelfSize.MaxWidth.ValueType <> cbcNone then
+    begin
+      if not MaxCrossSizeSet then
+      begin
+        MaxCrossSize := SelfSize.MaxWidth.Value;
+        MaxCrossSizeSet := True;
+      end
+      else
+        MaxCrossSize := Max(MaxCrossSize, SelfSize.MaxWidth.Value);
+    end;
+
+    for I := 0 to Items.Count - 1 do
+    begin
+      Item := Items[I];
+      Assert(TObject(Item.El) is TPixieRenderItem);
+      Ri := TPixieRenderItem(Item.El);
+      Assert(TObject(FmtCtx) is TPixieFormattingContext);
+      ElRetWidth := Ri.Render(0, 0, SelfSize, TPixieFormattingContext(FmtCtx));
+      Ri.Render(0, 0,
+        SelfSize.NewWidthHeight(
+          ElRetWidth - Ri.ContentOffsetWidth,
+          Item.MainSize - Ri.ContentOffsetHeight,
+          SizeModeExactWidth or SizeModeExactHeight),
+        TPixieFormattingContext(FmtCtx));
+      MainSize := MainSize + Ri.Height;
+      CrossSize := Max(CrossSize, Ri.Width);
+    end;
+    if MaxCrossSizeSet and (CrossSize > MaxCrossSize) then
+      CrossSize := MaxCrossSize;
+  end;
+end;
+
+procedure TPixieFlexLine.DistributeFreeSpace(ContainerMainSize: pixel_t);
+begin
+  if MainSize < ContainerMainSize then
+    DistributeFreeSpaceGrow(ContainerMainSize)
+  else
+    DistributeFreeSpaceShrink(ContainerMainSize);
+end;
+
+procedure TPixieFlexLine.DistributeFreeSpaceGrow(ContainerMainSize: pixel_t);
+var
+  InitialFreeSpace: pixel_t;
+  AllInflexible: Boolean;
+  SumFlexGrowFactor: Integer;
+  RemainingFreeSpace: pixel_t;
+  AdjustedFreeSpace: pixel_t;
+  I: Integer;
+  Item: TPixieFlexItem;
+begin
+  InitialFreeSpace := ContainerMainSize;
+  AllInflexible := True;
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    if (Item.Grow = 0) or (Item.BaseSize > Item.MainSize) then
+    begin
+      Item.Frozen := True;
+      Item.ClampState := fcsInflexible;
+      InitialFreeSpace := InitialFreeSpace - Item.MainSize;
+    end
+    else
+    begin
+      InitialFreeSpace := InitialFreeSpace - Item.BaseSize;
+      AllInflexible := False;
+    end;
+  end;
+
+  if AllInflexible then
+    Exit;
+
+  while True do
+  begin
+    SumFlexGrowFactor := 0;
+    RemainingFreeSpace := ContainerMainSize;
+
+    for I := 0 to Items.Count - 1 do
+    begin
+      Item := Items[I];
+      if Item.Frozen then
+        RemainingFreeSpace := RemainingFreeSpace - Item.MainSize
+      else
+      begin
+        RemainingFreeSpace := RemainingFreeSpace - Item.BaseSize;
+        SumFlexGrowFactor := SumFlexGrowFactor + Item.Grow;
+      end;
+    end;
+
+    if SumFlexGrowFactor < 1000 then
+    begin
+      AdjustedFreeSpace := InitialFreeSpace * SumFlexGrowFactor / 1000;
+      if AdjustedFreeSpace < RemainingFreeSpace then
+        RemainingFreeSpace := AdjustedFreeSpace;
+    end;
+
+    if RemainingFreeSpace <> 0 then
+    begin
+      for I := 0 to Items.Count - 1 do
+      begin
+        Item := Items[I];
+        if not Item.Frozen then
+          Item.MainSize := Item.BaseSize +
+            RemainingFreeSpace * Item.Grow / SumFlexGrowFactor;
+      end;
+    end;
+
+    if FixMinMaxViolations then
+      Break;
+  end;
+end;
+
+procedure TPixieFlexLine.DistributeFreeSpaceShrink(ContainerMainSize: pixel_t);
+var
+  InitialFreeSpace: pixel_t;
+  AllInflexible: Boolean;
+  SumFlexShrinkFactor: Integer;
+  SumScaledFlexShrinkFactor: pixel_t;
+  RemainingFreeSpace: pixel_t;
+  AdjustedFreeSpace: pixel_t;
+  I: Integer;
+  Item: TPixieFlexItem;
+begin
+  InitialFreeSpace := ContainerMainSize;
+  AllInflexible := True;
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    if (Item.Shrink = 0) or (Item.BaseSize < Item.MainSize) then
+    begin
+      Item.Frozen := True;
+      Item.ClampState := fcsInflexible;
+      InitialFreeSpace := InitialFreeSpace - Item.MainSize;
+    end
+    else
+    begin
+      InitialFreeSpace := InitialFreeSpace - Item.BaseSize;
+      AllInflexible := False;
+    end;
+  end;
+
+  if AllInflexible then
+    Exit;
+
+  while True do
+  begin
+    SumFlexShrinkFactor := 0;
+    SumScaledFlexShrinkFactor := 0;
+    RemainingFreeSpace := ContainerMainSize;
+
+    for I := 0 to Items.Count - 1 do
+    begin
+      Item := Items[I];
+      if Item.Frozen then
+        RemainingFreeSpace := RemainingFreeSpace - Item.MainSize
+      else
+      begin
+        RemainingFreeSpace := RemainingFreeSpace - Item.BaseSize;
+        SumFlexShrinkFactor := SumFlexShrinkFactor + Item.Shrink;
+        SumScaledFlexShrinkFactor := SumScaledFlexShrinkFactor +
+          Item.ScaledFlexShrinkFactor;
+      end;
+    end;
+
+    if SumFlexShrinkFactor < 1000 then
+    begin
+      AdjustedFreeSpace := InitialFreeSpace * SumFlexShrinkFactor / 1000;
+      if AdjustedFreeSpace > RemainingFreeSpace then
+        RemainingFreeSpace := AdjustedFreeSpace;
+    end;
+
+    if (RemainingFreeSpace <> 0) and (SumScaledFlexShrinkFactor <> 0) then
+    begin
+      for I := 0 to Items.Count - 1 do
+      begin
+        Item := Items[I];
+        if not Item.Frozen then
+          Item.MainSize := Item.BaseSize +
+            RemainingFreeSpace * Item.ScaledFlexShrinkFactor /
+            SumScaledFlexShrinkFactor;
+      end;
+    end;
+
+    if FixMinMaxViolations then
+      Break;
+  end;
+end;
+
+function TPixieFlexLine.FixMinMaxViolations: Boolean;
+var
+  TotalViolation: pixel_t;
+  AllFrozen: Boolean;
+  StateToFreeze: TPixieFlexClampState;
+  I: Integer;
+  Item: TPixieFlexItem;
+begin
+  TotalViolation := 0;
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    if not Item.Frozen then
+    begin
+      if Item.MainSize < Item.MinSize then
+      begin
+        TotalViolation := TotalViolation + (Item.MinSize - Item.MainSize);
+        Item.MainSize := Item.MinSize;
+        Item.ClampState := fcsMinViolation;
+      end
+      else if (not Item.MaxSize.IsDefault) and (Item.MainSize > Item.MaxSize.Value) then
+      begin
+        TotalViolation := TotalViolation + (Item.MaxSize.Value - Item.MainSize);
+        Item.MainSize := Item.MaxSize.Value;
+        Item.ClampState := fcsMaxViolation;
+      end;
+    end;
+  end;
+
+  if TotalViolation = 0 then
+  begin
+    for I := 0 to Items.Count - 1 do
+      Items[I].Frozen := True;
+    Result := True;
+    Exit;
+  end;
+
+  AllFrozen := True;
+
+  if TotalViolation > 0 then
+    StateToFreeze := fcsMinViolation
+  else
+    StateToFreeze := fcsMaxViolation;
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    if not Item.Frozen then
+    begin
+      if Item.ClampState = StateToFreeze then
+        Item.Frozen := True
+      else
+      begin
+        AllFrozen := False;
+        Item.ClampState := fcsUnclamped;
+      end;
+    end;
+  end;
+
+  Result := AllFrozen;
+end;
+
+function TPixieFlexLine.DistributeMainAutoMargins(FreeMainSize: pixel_t): Boolean;
+var
+  Add: pixel_t;
+  DistributeStep: pixel_t;
+  I: Integer;
+  Item: TPixieFlexItem;
+begin
+  Result := False;
+  if (FreeMainSize <= 0) or
+     ((NumAutoMarginMainStart = 0) and (NumAutoMarginMainEnd = 0)) then
+    Exit;
+
+  Add := FreeMainSize / (Items.Count * 2);
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    if not Item.AutoMarginMainStart.IsDefault then
+    begin
+      Item.AutoMarginMainStart.SetValue(Add);
+      Item.MainSize := Item.MainSize + Add;
+      MainSize := MainSize + Add;
+      FreeMainSize := FreeMainSize - Add;
+    end;
+    if not Item.AutoMarginMainEnd.IsDefault then
+    begin
+      Item.AutoMarginMainEnd.SetValue(Add);
+      Item.MainSize := Item.MainSize + Add;
+      MainSize := MainSize + Add;
+      FreeMainSize := FreeMainSize - Add;
+    end;
+  end;
+
+  DistributeStep := 1;
+  while FreeMainSize > 0 do
+  begin
+    for I := 0 to Items.Count - 1 do
+    begin
+      Item := Items[I];
+      if not Item.AutoMarginMainStart.IsDefault then
+      begin
+        Item.AutoMarginMainStart.SetValue(Item.AutoMarginMainStart.Value + DistributeStep);
+        FreeMainSize := FreeMainSize - DistributeStep;
+        if FreeMainSize < DistributeStep then
+          Break;
+      end;
+      if not Item.AutoMarginMainEnd.IsDefault then
+      begin
+        Item.AutoMarginMainEnd.SetValue(Item.AutoMarginMainEnd.Value + DistributeStep);
+        FreeMainSize := FreeMainSize - DistributeStep;
+        if FreeMainSize < DistributeStep then
+          Break;
+      end;
+    end;
+  end;
+
+  Result := True;
+end;
+
+function TPixieFlexLine.CalculateItemsPosition(ContainerMainSize: pixel_t;
+  JustifyContent: TPixieFlexJustifyContent;
+  IsRowDirection: Boolean;
+  const SelfSize: TPixieContainingBlockContext;
+  FmtCtx: Pointer): pixel_t;
+var
+  FreeMainSize: pixel_t;
+  MainPos: pixel_t;
+  AddBeforeItem: pixel_t;
+  AddAfterItem: pixel_t;
+  ItemRemainder: pixel_t;
+  DistributeStep: pixel_t;
+  Height: pixel_t;
+  TotalGap: pixel_t;
+  I: Integer;
+  Item: TPixieFlexItem;
+begin
+  TotalGap := 0;
+  if (MainGap > 0) and (Items.Count > 1) then
+    TotalGap := MainGap * (Items.Count - 1);
+
+  FreeMainSize := ContainerMainSize - MainSize - TotalGap;
+  DistributeMainAutoMargins(FreeMainSize);
+  FreeMainSize := ContainerMainSize - MainSize - TotalGap;
+
+  case JustifyContent of
+    fjcLeft, fjcRight:
+      if not IsRowDirection then
+        JustifyContent := fjcStart;
+    fjcSpaceBetween:
+      if (Items.Count = 1) or (FreeMainSize < 0) then
+        JustifyContent := fjcFlexStart;
+    fjcSpaceAround, fjcSpaceEvenly:
+      if (Items.Count = 1) or (FreeMainSize < 0) then
+        JustifyContent := fjcCenter;
+  end;
+
+  MainPos := 0;
+  AddBeforeItem := 0;
+  AddAfterItem := 0;
+  ItemRemainder := 0;
+
+  case JustifyContent of
+    fjcRight:
+      MainPos := FreeMainSize;
+    fjcLeft, fjcStart:
+      MainPos := 0;
+    fjcEnd:
+      MainPos := FreeMainSize;
+    fjcFlexEnd:
+    begin
+      if not ReverseMain then
+        MainPos := FreeMainSize;
+    end;
+    fjcCenter:
+      MainPos := FreeMainSize / 2;
+    fjcSpaceBetween:
+    begin
+      AddAfterItem := FreeMainSize / (Items.Count - 1);
+      ItemRemainder := FreeMainSize - (AddAfterItem * (Items.Count - 1));
+    end;
+    fjcSpaceAround:
+    begin
+      AddAfterItem := FreeMainSize / (Items.Count * 2);
+      AddBeforeItem := AddAfterItem;
+      ItemRemainder := FreeMainSize - (AddAfterItem * Items.Count * 2);
+    end;
+    fjcSpaceEvenly:
+    begin
+      AddBeforeItem := FreeMainSize / (Items.Count + 1);
+      ItemRemainder := FreeMainSize - AddBeforeItem * (Items.Count + 1);
+    end;
+  else
+    if ReverseMain then
+      MainPos := FreeMainSize;
+  end;
+
+  Height := 0;
+  DistributeStep := 1;
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+    MainPos := MainPos + AddBeforeItem;
+    if (I > 0) and (MainGap > 0) then
+      MainPos := MainPos + MainGap;
+    if (AddBeforeItem > 0) and (ItemRemainder > 0) then
+    begin
+      MainPos := MainPos + DistributeStep;
+      ItemRemainder := ItemRemainder - DistributeStep;
+    end;
+    Item.Place(Self, MainPos, SelfSize, FmtCtx);
+    MainPos := MainPos + Item.GetElMainSize + AddAfterItem;
+    Assert(TObject(Item.El) is TPixieRenderItem);
+    Height := Max(Height, TPixieRenderItem(Item.El).Bottom);
+    if (AddAfterItem > 0) and (ItemRemainder > 0) then
+    begin
+      MainPos := MainPos + DistributeStep;
+      ItemRemainder := ItemRemainder - DistributeStep;
+    end;
+  end;
+
+  Result := Height;
+end;
+
+{ TPixieFlexItem }
+
+constructor TPixieFlexItem.Create(AEl: Pointer);
+begin
+  inherited Create;
+  El := AEl;
+  BaseSize := 0;
+  MinSize := 0;
+  MaxSize.Init(0);
+  MainSize := 0;
+  Grow := 0;
+  Shrink := 0;
+  ScaledFlexShrinkFactor := 0;
+  Frozen := False;
+  ClampState := fcsUnclamped;
+  Order := 0;
+  SrcOrder := 0;
+  AutoMarginMainStart.Init(0);
+  AutoMarginMainEnd.Init(0);
+  AutoMarginCrossStart := False;
+  AutoMarginCrossEnd := False;
+  Align := Ord(faiAuto);
+end;
+
+destructor TPixieFlexItem.Destroy;
+begin
+  inherited;
+end;
+
+function TPixieFlexItem.CompareTo(Other: TPixieFlexItem): Integer;
+begin
+  if Order < Other.Order then
+    Result := -1
+  else if Order > Other.Order then
+    Result := 1
+  else if SrcOrder < Other.SrcOrder then
+    Result := -1
+  else if SrcOrder > Other.SrcOrder then
+    Result := 1
+  else
+    Result := 0;
+end;
+
+procedure TPixieFlexItem.Init(const SelfSize: TPixieContainingBlockContext;
+  FmtCtx: Pointer; AlignItems: Integer);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+
+  Grow := Round(Ri.Css.FlexGrow * 1000);
+  if Grow < 0 then
+    Grow := 0;
+
+  Shrink := Round(Ri.Css.FlexShrink * 1000);
+  if Shrink < 0 then
+    Shrink := 1000;
+
+  Ri.CalcOutlines(SelfSize.RenderWidth.Value);
+  Order := Ri.Css.Order;
+
+  DirectionSpecificInit(SelfSize, FmtCtx);
+
+  if Ri.Css.FlexAlignSelf = faiAuto then
+    Align := AlignItems
+  else
+    Align := Ord(Ri.Css.FlexAlignSelf);
+
+  // Clamp base_size to min/max -> main_size
+  if BaseSize < MinSize then
+    MainSize := MinSize
+  else if (not MaxSize.IsDefault) and (BaseSize > MaxSize.Value) then
+    MainSize := MaxSize.Value
+  else
+    MainSize := BaseSize;
+
+  Frozen := False;
+end;
+
+procedure TPixieFlexItem.Place(var Ln: TPixieFlexLine; AMainPos: pixel_t;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+begin
+  ApplyMainAutoMargins;
+  SetMainPosition(AMainPos);
+  if not ApplyCrossAutoMargins(Ln.CrossSize) then
+  begin
+    case Align and $FF of
+      Ord(faiBaseline):
+        AlignBaseline(Ln, SelfSize, FmtCtx);
+      Ord(faiFlexEnd):
+      begin
+        if Ln.ReverseCross then
+          SetCrossPosition(Ln.CrossStart)
+        else
+          SetCrossPosition(Ln.CrossStart + Ln.CrossSize - GetElCrossSize);
+      end;
+      Ord(faiEnd):
+        SetCrossPosition(Ln.CrossStart + Ln.CrossSize - GetElCrossSize);
+      Ord(faiCenter):
+        SetCrossPosition(Ln.CrossStart + Ln.CrossSize / 2 - GetElCrossSize / 2);
+      Ord(faiFlexStart):
+      begin
+        if Ln.ReverseCross then
+          SetCrossPosition(Ln.CrossStart + Ln.CrossSize - GetElCrossSize)
+        else
+          SetCrossPosition(Ln.CrossStart);
+      end;
+      Ord(faiStart):
+        SetCrossPosition(Ln.CrossStart);
+    else
+      AlignStretch(Ln, SelfSize, FmtCtx);
+    end;
+  end;
+end;
+
+function TPixieFlexItem.GetFirstBaseline(AType: TPixieBaselineType): pixel_t;
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  if AType = btTop then
+    Result := Ri.GetFirstBaseline
+  else if AType = btBottom then
+    Result := Ri.Height - Ri.GetFirstBaseline
+  else
+    Result := 0;
+end;
+
+function TPixieFlexItem.GetLastBaseline(AType: TPixieBaselineType): pixel_t;
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  if AType = btTop then
+    Result := Ri.GetLastBaseline
+  else if AType = btBottom then
+    Result := Ri.Height - Ri.GetLastBaseline
+  else
+    Result := 0;
+end;
+
+{ TPixieFlexItemRow }
+
+procedure TPixieFlexItemRow.DirectionSpecificInit(
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  Ri: TPixieRenderItem;
+  ContentSize: pixel_t;
+  ContentSizeSet: Boolean;
+  FlexBasisPredefined: Boolean;
+  Predef: Integer;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Assert(TObject(FmtCtx) is TPixieFormattingContext);
+
+  // Check auto margins
+  if Ri.Css.CssMargins.Left.IsPredefined then
+    AutoMarginMainStart.SetValue(0);
+  if Ri.Css.CssMargins.Right.IsPredefined then
+    AutoMarginMainEnd.SetValue(0);
+  if Ri.Css.CssMargins.Top.IsPredefined then
+    AutoMarginCrossStart := True;
+  if Ri.Css.CssMargins.Bottom.IsPredefined then
+    AutoMarginCrossEnd := True;
+
+  // Min size
+  ContentSizeSet := False;
+  ContentSize := 0;
+  if Ri.Css.CssMinWidth.IsPredefined then
+  begin
+    ContentSize := Ri.Render(0, 0,
+      SelfSize.NewWidth(Ri.ContentOffsetWidth, SizeModeContent),
+      TPixieFormattingContext(FmtCtx));
+    ContentSizeSet := True;
+    MinSize := ContentSize;
+  end
+  else
+    MinSize := Ri.Css.CssMinWidth.CalcPercent(SelfSize.RenderWidth.Value) +
+      Ri.RenderOffsetWidth;
+
+  // Max size
+  if not Ri.Css.CssMaxWidth.IsPredefined then
+    MaxSize.SetValue(Ri.Css.CssMaxWidth.CalcPercent(SelfSize.RenderWidth.Value) +
+      Ri.RenderOffsetWidth);
+
+  // Flex basis
+  FlexBasisPredefined := Ri.Css.FlexBasis.IsPredefined;
+  Predef := Ord(fbAuto);
+  if FlexBasisPredefined then
+    Predef := Ri.Css.FlexBasis.Predef
+  else if Ri.Css.FlexBasis.Val < 0 then
+    FlexBasisPredefined := True;
+
+  if FlexBasisPredefined then
+  begin
+    if (Predef = Ord(fbAuto)) and Ri.Css.CssWidth.IsPredefined then
+      Predef := Ord(fbContent);
+
+    case Predef of
+      Ord(fbAuto):
+        BaseSize := Ri.Css.CssWidth.CalcPercent(SelfSize.RenderWidth.Value) +
+          Ri.RenderOffsetWidth;
+      Ord(fbFitContent), Ord(fbContent):
+        BaseSize := Ri.Render(0, 0,
+          SelfSize.NewWidth(SelfSize.RenderWidth.Value + Ri.ContentOffsetWidth,
+            SizeModeContent or SizeModeExactWidth),
+          TPixieFormattingContext(FmtCtx));
+      Ord(fbMinContent):
+      begin
+        if not ContentSizeSet then
+          ContentSize := Ri.Render(0, 0,
+            SelfSize.NewWidth(Ri.ContentOffsetWidth, SizeModeContent),
+            TPixieFormattingContext(FmtCtx));
+        BaseSize := ContentSize;
+      end;
+      Ord(fbMaxContent):
+      begin
+        Ri.Render(0, 0, SelfSize, TPixieFormattingContext(FmtCtx));
+        BaseSize := Ri.Width;
+      end;
+    else
+      BaseSize := 0;
+    end;
+  end
+  else
+    BaseSize := Ri.Css.FlexBasis.CalcPercent(SelfSize.RenderWidth.Value) +
+      Ri.RenderOffsetWidth;
+
+  ScaledFlexShrinkFactor := (BaseSize - Ri.RenderOffsetWidth) * Shrink;
+end;
+
+procedure TPixieFlexItemRow.ApplyMainAutoMargins;
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  if not AutoMarginMainStart.IsDefault then
+  begin
+    Ri.FMargins.Left := AutoMarginMainStart.Value;
+    Ri.FPos.X := Ri.FPos.X + AutoMarginMainStart.Value;
+  end;
+  if not AutoMarginMainEnd.IsDefault then
+    Ri.FMargins.Right := AutoMarginMainEnd.Value;
+end;
+
+function TPixieFlexItemRow.ApplyCrossAutoMargins(ACrossSize: pixel_t): Boolean;
+var
+  Ri: TPixieRenderItem;
+  MarginsNum: Integer;
+  Margin: pixel_t;
+begin
+  Result := False;
+  if not (AutoMarginCrossEnd or AutoMarginCrossStart) then
+    Exit;
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  MarginsNum := 0;
+  if AutoMarginCrossEnd then
+    Inc(MarginsNum);
+  if AutoMarginCrossStart then
+    Inc(MarginsNum);
+  Margin := (ACrossSize - Ri.Height) / MarginsNum;
+  if AutoMarginCrossStart then
+  begin
+    Ri.FMargins.Top := Margin;
+    Ri.FPos.Y := Ri.ContentOffsetTop;
+  end;
+  if AutoMarginCrossEnd then
+    Ri.FMargins.Bottom := Margin;
+  Result := True;
+end;
+
+procedure TPixieFlexItemRow.SetMainPosition(Pos: pixel_t);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Ri.FPos.X := Pos + Ri.ContentOffsetLeft;
+end;
+
+procedure TPixieFlexItemRow.SetCrossPosition(Pos: pixel_t);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Ri.FPos.Y := Pos + Ri.ContentOffsetTop;
+end;
+
+function TPixieFlexItemRow.GetElMainSize: pixel_t;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Result := TPixieRenderItem(El).Width;
+end;
+
+function TPixieFlexItemRow.GetElCrossSize: pixel_t;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Result := TPixieRenderItem(El).Height;
+end;
+
+procedure TPixieFlexItemRow.AlignStretch(var Ln: TPixieFlexLine;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Assert(TObject(FmtCtx) is TPixieFormattingContext);
+  SetCrossPosition(Ln.CrossStart);
+  if Ri.Css.CssHeight.IsPredefined then
+  begin
+    Ri.Render(Ri.Left, Ri.Top,
+      SelfSize.NewWidthHeight(
+        Ri.FPos.Width + Ri.BoxSizingWidth,
+        Ln.CrossSize - Ri.ContentOffsetHeight + Ri.BoxSizingHeight,
+        SizeModeExactWidth or SizeModeExactHeight),
+      TPixieFormattingContext(FmtCtx));
+    ApplyMainAutoMargins;
+  end;
+end;
+
+procedure TPixieFlexItemRow.AlignBaseline(var Ln: TPixieFlexLine;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  if (Align and FlexAlignItemsLast) <> 0 then
+    SetCrossPosition(Ln.CrossStart +
+      Ln.LastBaseline.GetOffsetFromTop(Ln.CrossSize) - Ri.GetLastBaseline)
+  else
+    SetCrossPosition(Ln.CrossStart +
+      Ln.FirstBaseline.GetOffsetFromTop(Ln.CrossSize) - Ri.GetFirstBaseline);
+end;
+
+{ TPixieFlexItemColumn }
+
+procedure TPixieFlexItemColumn.DirectionSpecificInit(
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  Ri: TPixieRenderItem;
+  FlexBasisPredefined: Boolean;
+  Predef: Integer;
+  ElRetWidth: pixel_t;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Assert(TObject(FmtCtx) is TPixieFormattingContext);
+
+  // Check auto margins (swapped vs row: main=Y, cross=X)
+  if Ri.Css.CssMargins.Top.IsPredefined then
+    AutoMarginMainStart.SetValue(0);
+  if Ri.Css.CssMargins.Bottom.IsPredefined then
+    AutoMarginMainEnd.SetValue(0);
+  if Ri.Css.CssMargins.Left.IsPredefined then
+    AutoMarginCrossStart := True;
+  if Ri.Css.CssMargins.Right.IsPredefined then
+    AutoMarginCrossEnd := True;
+
+  // Min size
+  if Ri.Css.CssMinHeight.IsPredefined then
+  begin
+    Ri.Render(0, 0, SelfSize.NewWidth(SelfSize.RenderWidth.Value, SizeModeContent),
+      TPixieFormattingContext(FmtCtx));
+    MinSize := Ri.Height;
+  end
+  else
+    MinSize := Ri.Css.CssMinHeight.CalcPercent(SelfSize.Height.Value) +
+      Ri.RenderOffsetHeight;
+
+  // Max size
+  if not Ri.Css.CssMaxHeight.IsPredefined then
+    MaxSize.SetValue(Ri.Css.CssMaxHeight.CalcPercent(SelfSize.Height.Value) +
+      Ri.RenderOffsetHeight);
+
+  // Flex basis
+  FlexBasisPredefined := Ri.Css.FlexBasis.IsPredefined;
+  Predef := Ord(fbAuto);
+  if FlexBasisPredefined then
+    Predef := Ri.Css.FlexBasis.Predef
+  else if Ri.Css.FlexBasis.Val < 0 then
+    FlexBasisPredefined := True;
+
+  if FlexBasisPredefined then
+  begin
+    if (Predef = Ord(fbAuto)) and Ri.Css.CssHeight.IsPredefined then
+      Predef := Ord(fbFitContent);
+
+    case Predef of
+      Ord(fbAuto):
+        BaseSize := Ri.Css.CssHeight.CalcPercent(SelfSize.Height.Value) +
+          Ri.RenderOffsetHeight;
+      Ord(fbMaxContent), Ord(fbFitContent):
+      begin
+        Ri.Render(0, 0, SelfSize, TPixieFormattingContext(FmtCtx));
+        BaseSize := Ri.Height;
+      end;
+      Ord(fbMinContent):
+        BaseSize := MinSize;
+    else
+      BaseSize := 0;
+    end;
+  end
+  else
+  begin
+    if Ri.Css.FlexBasis.Units = cssUnitsPercentage then
+    begin
+      if SelfSize.Height.ValueType = cbcAbsolute then
+        BaseSize := Ri.Css.FlexBasis.CalcPercent(SelfSize.Height.Value) +
+          Ri.RenderOffsetHeight
+      else
+        BaseSize := 0;
+    end
+    else
+      BaseSize := Round(Ri.Css.FlexBasis.Val) + Ri.RenderOffsetHeight;
+  end;
+
+  ScaledFlexShrinkFactor := (BaseSize - Ri.RenderOffsetHeight) * Shrink;
+end;
+
+procedure TPixieFlexItemColumn.ApplyMainAutoMargins;
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  if not AutoMarginMainStart.IsDefault then
+  begin
+    Ri.FMargins.Top := AutoMarginMainStart.Value;
+    Ri.FPos.Y := Ri.FPos.Y + AutoMarginMainStart.Value;
+  end;
+  if not AutoMarginMainEnd.IsDefault then
+    Ri.FMargins.Bottom := AutoMarginMainEnd.Value;
+end;
+
+function TPixieFlexItemColumn.ApplyCrossAutoMargins(ACrossSize: pixel_t): Boolean;
+var
+  Ri: TPixieRenderItem;
+  MarginsNum: Integer;
+  Margin: pixel_t;
+begin
+  Result := False;
+  if not (AutoMarginCrossEnd or AutoMarginCrossStart) then
+    Exit;
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  MarginsNum := 0;
+  if AutoMarginCrossEnd then
+    Inc(MarginsNum);
+  if AutoMarginCrossStart then
+    Inc(MarginsNum);
+  Margin := (ACrossSize - Ri.Width) / MarginsNum;
+  if AutoMarginCrossStart then
+  begin
+    Ri.FMargins.Left := Margin;
+    Ri.FPos.X := Ri.FPos.X + Ri.ContentOffsetLeft;
+  end;
+  if AutoMarginCrossEnd then
+    Ri.FMargins.Right := Margin;
+  // Returns false here (no return true like row direction)
+end;
+
+procedure TPixieFlexItemColumn.SetMainPosition(Pos: pixel_t);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Ri.FPos.Y := Pos + Ri.ContentOffsetTop;
+end;
+
+procedure TPixieFlexItemColumn.SetCrossPosition(Pos: pixel_t);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Ri.FPos.X := Pos + Ri.ContentOffsetLeft;
+end;
+
+function TPixieFlexItemColumn.GetElMainSize: pixel_t;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Result := TPixieRenderItem(El).Height;
+end;
+
+function TPixieFlexItemColumn.GetElCrossSize: pixel_t;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Result := TPixieRenderItem(El).Width;
+end;
+
+procedure TPixieFlexItemColumn.AlignStretch(var Ln: TPixieFlexLine;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  Ri: TPixieRenderItem;
+  Mode: UInt32;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  Assert(TObject(FmtCtx) is TPixieFormattingContext);
+  if not Ri.Css.CssWidth.IsPredefined then
+    Mode := SizeModeExactHeight
+  else
+    Mode := SizeModeExactWidth or SizeModeExactHeight;
+  Ri.Render(Ln.CrossStart,
+    Ri.FPos.Y - Ri.ContentOffsetTop,
+    SelfSize.NewWidthHeight(
+      Ln.CrossSize - Ri.ContentOffsetWidth + Ri.BoxSizingWidth,
+      MainSize - Ri.ContentOffsetHeight + Ri.BoxSizingHeight,
+      Mode),
+    TPixieFormattingContext(FmtCtx));
+  ApplyMainAutoMargins;
+end;
+
+procedure TPixieFlexItemColumn.AlignBaseline(var Ln: TPixieFlexLine;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+begin
+  // Column direction: baseline falls back to start/end
+  if (Align and FlexAlignItemsLast) <> 0 then
+  begin
+    if Ln.ReverseCross then
+      SetCrossPosition(Ln.CrossStart)
+    else
+      SetCrossPosition(Ln.CrossStart + Ln.CrossSize - GetElCrossSize);
+  end
+  else
+  begin
+    if not Ln.ReverseCross then
+      SetCrossPosition(Ln.CrossStart)
+    else
+      SetCrossPosition(Ln.CrossStart + Ln.CrossSize - GetElCrossSize);
+  end;
+end;
+
+end.

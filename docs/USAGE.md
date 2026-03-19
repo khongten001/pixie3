@@ -1,0 +1,421 @@
+# Pixie HTML View — Usage Guide
+
+Pixie is a lightweight HTML/CSS rendering engine for Free Pascal. It provides `TPixieHtmlView`, a Lazarus visual component that renders HTML content with mouse interaction, text selection, focus management, and form controls.
+
+## Installation
+
+The package is located in `package/Pixie.Package.lpk`. Install it into the Lazarus IDE to add `TPixieHtmlView` to the **Misc** component palette tab.
+
+## Quick Start
+
+Drop a `TPixieHtmlView` onto a form and load HTML:
+
+```pascal
+PixieHtmlView1.LoadHtml(
+  '<h1>Hello</h1><p>This is <b>Pixie</b>.</p>');
+```
+
+Or assign multi-line HTML via the `Html` property in the Object Inspector.
+
+## Rendering Pipeline
+
+```
+HTML string
+  -> HTML5 parser (tokeniser + tree builder)
+  -> DOM tree (TPixieElement nodes)
+  -> CSS cascade and style computation
+  -> Render tree construction
+  -> Layout (block, inline, table, flex, grid)
+  -> Drawing via platform canvas
+```
+
+Three platform backends are used transparently:
+
+| Platform | Drawing | Text | Images |
+|----------|---------|------|--------|
+| Windows  | Direct2D | DirectWrite | WIC |
+| Linux    | Cairo | PangoCairo | FPImage |
+| macOS    | Core Graphics | Core Text | ImageIO |
+
+## Properties
+
+### Published Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Html` | `TStrings` | HTML content. Setting this rebuilds the document. |
+| `BaseUrl` | `string` | Base URL for resolving relative image/CSS paths. |
+| `UserCss` | `string` | Additional CSS applied after the built-in user-agent stylesheet. |
+| `Zoom` | `Double` | Zoom factor, clamped to 0.25 .. 4.0. Default: 1.0. |
+| `Color` | `TColor` | Background colour when no document is loaded or outside the HTML body. |
+
+### Public Properties
+
+| Property | Type | Access | Description |
+|----------|------|--------|-------------|
+| `Document` | `TPixieDocument` | read-only | The parsed DOM document. `nil` if no HTML is loaded. |
+| `ContentHeight` | `pixel_t` | read-only | Total content height in virtual (pre-zoom) pixels. |
+| `ScrollY` | `pixel_t` | read/write | Vertical scroll offset in virtual pixels. |
+
+## Events
+
+### OnAnchorClick
+
+```pascal
+procedure(Sender: TObject; const Url: string) of object;
+```
+
+Fired when the user clicks an `<a href="...">` element. The `Url` is resolved against `BaseUrl`. Use this to open links in an external browser or navigate internally.
+
+### OnElementClick
+
+```pascal
+function(Sender: TObject; El: TObject): Boolean of object;
+```
+
+Fired when the user clicks any element. `El` is a `TPixieHtmlTag` instance (cast from `TObject`). Return `True` to suppress default handling (anchor navigation, checkbox toggling, etc.).
+
+### OnFetchUrl
+
+```pascal
+procedure(Sender: TObject; const Url: string;
+  Stream: TStream; var Success: Boolean) of object;
+```
+
+Callback for loading external resources (images, CSS `@import`). Write the fetched data to `Stream` and set `Success := True`. If not handled, the resource is skipped silently.
+
+### OnBeforeParse / OnAfterParse
+
+`TNotifyEvent`. Fired before and after HTML parsing. Useful for progress indication.
+
+### OnBeforePaint / OnAfterPaint
+
+`TNotifyEvent`. Fired before and after each paint cycle.
+
+## Methods
+
+### LoadHtml
+
+```pascal
+procedure LoadHtml(const AHtml: string; const ABaseUrl: string = '');
+```
+
+Sets `BaseUrl`, replaces the HTML content, and rebuilds the document in one call. This is the most common way to load content.
+
+### RegisterImage / UnregisterImage
+
+```pascal
+procedure RegisterImage(const Name: string; Stream: TStream);
+procedure UnregisterImage(const Name: string);
+```
+
+Pre-register a named image from a stream. Reference it in HTML as:
+
+```html
+<img src="#MyImage">
+```
+
+The stream data is copied internally and decoded on first use. Call `UnregisterImage` to release the cached bitmap.
+
+## Image Sources
+
+The `<img>` element's `src` attribute supports several prefixes:
+
+| Prefix | Example | Description |
+|--------|---------|-------------|
+| `#name` | `<img src="#logo">` | Pre-registered image via `RegisterImage`. |
+| `@RESNAME` | `<img src="@ICON_HELP">` | Embedded Lazarus resource (`RT_RCDATA`). |
+| URL | `<img src="https://...">` | Fetched via the `OnFetchUrl` event. |
+| File path | `<img src="/path/to/image.png">` | Loaded directly from disk. |
+
+Supported raster formats: PNG, JPEG, BMP, GIF (all platforms); TIFF and ICO additionally on Windows and macOS for file-based loading. SVG is supported on Windows 10 1703+, macOS 10.15+, and Linux with librsvg installed (see [Known Limitations](#known-limitations)).
+
+## Built-in Keyboard and Mouse Behaviour
+
+| Input | Action |
+|-------|--------|
+| Tab / Shift+Tab | Cycle focus between text inputs, buttons, checkboxes |
+| Ctrl+C (Cmd+C on macOS) | Copy selected text to clipboard |
+| Ctrl+0 (Cmd+0) | Reset zoom to 100% |
+| Ctrl+Mouse wheel | Zoom in/out |
+| Arrow Up/Down | Scroll by 40 px |
+| Page Up/Down | Scroll by one viewport height |
+| Mouse wheel | Scroll 40 px per notch (or scroll a focused textarea) |
+| Click + drag | Text selection |
+| Double-click | Select word |
+
+CSS `cursor` values are mapped automatically: `pointer` to hand cursor, `text` to I-beam, `crosshair` and `move` to their OS equivalents.
+
+## DOM Access
+
+Access the DOM via `HtmlView.Document`:
+
+```pascal
+var
+  El: TPixieElement;
+begin
+  El := PixieHtmlView1.Document.GetElementById('status');
+  if El <> nil then
+    ShowMessage(El.GetTextContent);
+end;
+```
+
+### Finding Elements
+
+```pascal
+// By ID
+El := Doc.GetElementById('myId');
+
+// First match for a CSS selector
+El := Doc.QuerySelector('div.content > p:first-child');
+
+// All matches
+List := Doc.QuerySelectorAll('input[type="text"]');
+```
+
+### Reading Element Data
+
+```pascal
+// Tag name and attributes
+S := El.GetTagName;                      // e.g. 'div'
+S := El.GetAttr('href', '');             // attribute value or default
+
+// Text content (recursive)
+S := El.GetTextContent;
+
+// Computed CSS properties
+Css := El.Css;
+Display := Css.Display;                  // e.g. displayBlock
+Color := Css.Color;                      // TPixieWebColor
+```
+
+### Tree Navigation
+
+```pascal
+ParentEl := El.Parent;
+ChildList := El.Children;               // TObjectList<TPixieElement>
+for I := 0 to ChildList.Count - 1 do
+  ProcessChild(ChildList[I]);
+```
+
+## DOM Mutation
+
+You can modify the document tree after it has been parsed. High-level methods on `TPixieDocument` automatically rebuild the render tree, so changes take effect immediately.
+
+### Creating Elements
+
+```pascal
+var
+  Doc: TPixieDocument;
+  Span, TextNode: TPixieElement;
+begin
+  Doc := PixieHtmlView1.Document;
+
+  // Create an element (pass nil for no attributes)
+  Span := Doc.CreateElement('span', nil);
+  Span.SetAttr('class', 'highlight');
+
+  // Create a text node
+  TextNode := Doc.CreateTextNode('Hello world');
+
+  // Build the subtree
+  Span.AppendChild(TextNode);
+
+  // Attach to the document
+  Doc.GetElementById('container').AppendChild(Span);
+
+  // Apply changes
+  Doc.Rebuild;
+end;
+```
+
+### Inserting Elements
+
+```pascal
+// Insert NewChild before RefChild in the same parent
+Parent.InsertBefore(NewChild, RefChild);
+
+// Append at the end
+Parent.AppendChild(NewChild);
+```
+
+### Removing Elements
+
+```pascal
+// Detaches from parent, unregisters (frees) the element
+// and all descendants, then rebuilds automatically
+Doc.RemoveElement(El);
+```
+
+### Replacing Content
+
+```pascal
+// Replace all children with new HTML (auto-rebuild)
+Doc.SetInnerHtml(ContainerEl, '<p>New content</p>');
+```
+
+### Modifying Text
+
+```pascal
+// Replace all children with a text node (auto-rebuild)
+Doc.SetElementText(StatusEl, 'Done');
+```
+
+### Modifying Attributes
+
+```pascal
+El.SetAttr('class', 'active');
+El.SetAttr('style', 'color: red; font-weight: bold');
+Doc.Rebuild;  // required for changes to take effect
+```
+
+### Batching Multiple Changes
+
+When making several mutations at once, wrap them in `BeginUpdate`/`EndUpdate` to defer the rebuild until the end:
+
+```pascal
+Doc.BeginUpdate;
+try
+  El := Doc.CreateElement('li', nil);
+  El.AppendChild(Doc.CreateTextNode('Item'));
+  ListEl.AppendChild(El);
+  Doc.SetElementText(CountEl, '3 items');
+finally
+  Doc.EndUpdate;  // single rebuild happens here
+end;
+```
+
+### Low-Level API
+
+The low-level `RemoveChild`, `UnregisterElement`, and `Rebuild` methods are still available for advanced use cases. Prefer the high-level methods above for most tasks.
+
+## Supported HTML
+
+### Elements
+
+- **Structural:** `html`, `head`, `body`, `div`, `span`, `section`, `article`, `nav`, `aside`, `header`, `footer`, `main`
+- **Text:** `p`, `br`, `hr`, `pre`, `blockquote`, `code`, `em`, `strong`, `b`, `i`, `u`, `s`, `sub`, `sup`, `small`, `mark`, `abbr`, `q`, `cite`, `kbd`, `var`, `samp`
+- **Headings:** `h1` through `h6`
+- **Links:** `a`
+- **Images:** `img` (raster and SVG)
+- **Lists:** `ul`, `ol`, `li`, `dl`, `dt`, `dd`
+- **Tables:** `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, `td`, `caption`, `colgroup`, `col`
+- **Forms:** `input` (text, password, checkbox, radio), `textarea`, `button`
+- **Semantic HTML5:** `figure`, `figcaption`, `details`, `summary`, `time`, `address`
+- **Other:** `style`, `title`, `meta`, `link`
+
+### Parser
+
+Full HTML5 tokeniser (68 states) and tree builder (23 insertion modes) with:
+
+- 2125 named character entities plus numeric references
+- Automatic tag closing and implicit element insertion
+- Adoption agency algorithm for misnested formatting tags
+- Foster parenting for misplaced table content
+- SVG and MathML foreign content
+- Quirks mode detection
+
+## Supported CSS
+
+### Selectors
+
+Type, class (`.`), ID (`#`), universal (`*`), attribute selectors (`[attr]`, `[attr=val]`, `[attr~=val]`, `[attr|=val]`, `[attr^=val]`, `[attr$=val]`, `[attr*=val]`), combinators (descendant, child `>`, adjacent sibling `+`, general sibling `~`).
+
+Pseudo-classes: `:first-child`, `:last-child`, `:nth-child()`, `:nth-of-type()`, `:not()`, `:is()`, `:hover`, `:active`, `:focus`, `:checked`, `:disabled`, `:link`, `:visited`, `:lang()`.
+
+Pseudo-elements: `::before`, `::after` (with `content` property).
+
+### Layout
+
+| Mode | Properties |
+|------|------------|
+| **Block** | Margin collapse, percentage sizing, min/max constraints |
+| **Inline** | Line boxes, `vertical-align`, `text-align` |
+| **Flexbox** | `flex-direction`, `flex-wrap`, `justify-content`, `align-items`, `align-self`, `align-content`, `flex-grow`/`shrink`/`basis`, `order`, `gap` |
+| **CSS Grid** | `grid-template-columns`/`rows` (px, %, fr, auto, `minmax()`), `grid-column`/`row` placement, `span`, `justify-items`/`self`, `align-items`/`self`, `gap`, auto-placement |
+| **Table** | `border-collapse`, `border-spacing`, `colspan`, `rowspan`, `caption-side` |
+| **Float** | `float`, `clear` |
+| **Positioning** | `static`, `relative`, `absolute`, `fixed`, `z-index` |
+
+### Properties
+
+**Box model:** `margin`, `padding`, `border`, `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height`, `box-sizing`, `display`, `overflow`.
+
+**Typography:** `font-family`, `font-size`, `font-weight`, `font-style`, `font-variant`, `line-height`, `text-align`, `text-decoration`, `text-transform`, `text-indent`, `letter-spacing`, `word-spacing`, `white-space`, `vertical-align`.
+
+**Colours and backgrounds:** `color`, `background` (shorthand and individual properties), `background-image` (url, `linear-gradient()`, `radial-gradient()`, `conic-gradient()` and repeating variants), `background-size`, `background-position`, `background-repeat`, `background-clip`, `background-origin`, `opacity`.
+
+**Borders:** `border-width`, `border-style`, `border-color`, `border-radius` (all sides and shorthands).
+
+**Lists:** `list-style-type` (disc, circle, square, decimal, roman, alpha, greek), `list-style-position`, CSS counters (`counter-reset`, `counter-increment`, `content`).
+
+**Custom properties:** `var()` with `--*` custom property detection.
+
+### At-rules
+
+`@media` with Media Queries Level 4 (range syntax, `min-`/`max-` prefixes). Supported features: `width`, `height`, `device-width`, `device-height`, `color`, `color-index`, `monochrome`, `orientation`, `resolution`, `aspect-ratio`.
+
+## Form Controls
+
+Pixie includes owner-drawn form controls that do not rely on native OS widgets:
+
+| Control | HTML | Features |
+|---------|------|----------|
+| Text input | `<input type="text">` | Caret, selection, clipboard, undo |
+| Password | `<input type="password">` | Masked display (bullet characters) |
+| Textarea | `<textarea>` | Multi-line editing, scroll |
+| Checkbox | `<input type="checkbox">` | Toggle on click, `:checked` pseudo-class |
+| Radio | `<input type="radio">` | Grouped by `name` attribute |
+| Button | `<button>` | Click handling, `:active` feedback |
+
+All controls support `:focus`, `:checked`, `:disabled` pseudo-classes, Tab/Shift+Tab focus cycling, and CSS styling.
+
+## Known Limitations
+
+### SVG Support
+
+SVG rendering relies on platform-specific APIs and is not universally available:
+
+| Platform | API Used | Requirement |
+|----------|----------|-------------|
+| Windows | `ID2D1DeviceContext5.DrawSvgDocument` | Windows 10 version 1703 (Creators Update) or later |
+| macOS | CoreSVG (private framework) | macOS 10.15 (Catalina) or later |
+| Linux | librsvg (`librsvg-2.so`) | librsvg must be installed at runtime |
+
+On older systems or without the required libraries, SVG images are silently skipped (no error, but nothing is rendered). Consider providing PNG fallbacks for critical images.
+
+Windows SVG support through Direct2D has additional limitations — it handles simple SVG content but may not render complex SVGs with filters, masks, or advanced path operations correctly.
+
+### Conic Gradients
+
+`conic-gradient()` is rendered natively on Windows (via Direct2D). On Linux and macOS it is approximated using 360 pie-sector triangles, which may show minor banding artefacts on large areas.
+
+### CSS Features Not Supported
+
+- `grid-template-areas`, `repeat()`, named grid lines, `grid-auto-flow: column | dense`, `subgrid`
+- CSS animations and transitions
+- `@font-face` (custom web fonts)
+- `@keyframes`
+- `calc()` expressions
+- `position: sticky`
+- CSS transforms (`transform`, `rotate`, `scale`, `translate`)
+- CSS filters (`filter`, `backdrop-filter`)
+- `box-shadow`, `text-shadow`
+- Multi-column layout (`columns`)
+- `clip-path`, `mask`
+- `writing-mode` (vertical text)
+
+### HTML Features Not Supported
+
+- `<video>`, `<audio>`, `<canvas>`, `<iframe>`
+- `<select>`, `<option>` (dropdown lists)
+- `<input type="range|date|file|color|number">`
+- `<form>` submission
+- JavaScript execution
+- `contenteditable`
+
+### Other Limitations
+
+- No network stack — external resources (images, CSS) must be provided via the `OnFetchUrl` callback.
+- `Document.Rebuild` resets focus, hover, and active state.
+- Opacity layer stack is limited to 16 levels on Linux (Cairo backend).
