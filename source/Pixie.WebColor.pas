@@ -26,6 +26,7 @@ type
     function ToString: string;
   end;
   PPixieWebColor = ^TPixieWebColor;
+  TPixieColorMap = TDictionary<string, TPixieWebColor>;
 
 function PixieParseHashColorString(const S: string; out Color: TPixieWebColor): Boolean;
 function PixieParseNamedColor(const Name: string; out Color: TPixieWebColor): Boolean;
@@ -41,7 +42,7 @@ type
   end;
 
 var
-  ColorMap: TDictionary<string, TPixieWebColor>;
+  ColorMap: TPixieColorMap;
 
 const
   DefColors: array[0..148] of TDefColor = (
@@ -368,7 +369,7 @@ var
   Hex: string;
   Clr: TPixieWebColor;
 begin
-  ColorMap := TDictionary<string, TPixieWebColor>.Create;
+  ColorMap := TPixieColorMap.Create;
   for I := 0 to High(DefColors) do
   begin
     Hex := DefColors[I].Hex;

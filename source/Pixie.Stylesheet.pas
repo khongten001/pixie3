@@ -21,9 +21,9 @@ type
   TPixieStylesheet = class
   private
     FSelectors: TPixieCssSelectorList;
-    FStyles: TObjectList<TPixieStyle>;
-    FMediaQueries: TObjectList<TPixieMediaQueryListList>;
-    FMqLists: TObjectList<TPixieMediaQueryList>;
+    FStyles: TPixieStyleList;
+    FMediaQueries: TPixieMediaQueryListListObjList;
+    FMqLists: TPixieMediaQueryListObjList;
     FOrder: Integer;
 
     // Selector hash indices (non-owning lists, selectors owned by FSelectors)
@@ -73,9 +73,9 @@ constructor TPixieStylesheet.Create;
 begin
   inherited Create;
   FSelectors := TPixieCssSelectorList.Create;
-  FStyles := TObjectList<TPixieStyle>.Create;
-  FMediaQueries := TObjectList<TPixieMediaQueryListList>.Create;
-  FMqLists := TObjectList<TPixieMediaQueryList>.Create;
+  FStyles := TPixieStyleList.Create;
+  FMediaQueries := TPixieMediaQueryListListObjList.Create;
+  FMqLists := TPixieMediaQueryListObjList.Create;
   FOrder := 0;
   FTagIndex := nil;
   FClassIndex := nil;

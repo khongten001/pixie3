@@ -512,7 +512,7 @@ procedure TPixieTableGrid.DistributeWidth(AWidth: pixel_t;
   Start, End_: Integer);
 var
   Step, Col: Integer;
-  DistCols: TList<Integer>;
+  DistCols: TPixieIntVector;
   ColsWidth, Add, AddedWidth: pixel_t;
   ColP: PPixieTableColumn;
 begin
@@ -520,7 +520,7 @@ begin
           (End_ >= 0) and (End_ < FColsCount)) then
     Exit;
 
-  DistCols := TList<Integer>.Create;
+  DistCols := TPixieIntVector.Create;
   try
     for Step := 0 to 2 do
     begin

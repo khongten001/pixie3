@@ -21,6 +21,7 @@ implementation
 
 type
   TPixieEntityMap = TDictionary<string, TPixieEntityData>;
+  TPixieStringBoolMap = TDictionary<string, Boolean>;
 
   TPixieEntityEntry = record
     Name: string;
@@ -2305,7 +2306,7 @@ const
 
 var
   EntityMap: TPixieEntityMap;
-  LegacySet: TDictionary<string, Boolean>;
+  LegacySet: TPixieStringBoolMap;
 
 function PixieLookupEntity(const Name: string; out Data: TPixieEntityData): Boolean;
 begin
@@ -2343,7 +2344,7 @@ begin
     EntityMap.Add(EntityData[I].Name, Data);
   end;
 
-  LegacySet := TDictionary<string, Boolean>.Create(LegacyEntityCount);
+  LegacySet := TPixieStringBoolMap.Create(LegacyEntityCount);
   for I := 0 to LegacyEntityCount - 1 do
     LegacySet.Add(LegacyEntityNames[I], True);
 end;

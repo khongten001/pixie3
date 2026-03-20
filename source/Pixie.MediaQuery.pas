@@ -92,11 +92,13 @@ type
     class function ParseFromString(const Str: string): TPixieMediaQueryList; static;
   end;
 
+  TPixieMediaQueryListObjList = TObjectList<TPixieMediaQueryList>;
+
   { TPixieMediaQueryListList }
 
   TPixieMediaQueryListList = class
   public
-    Lists: TObjectList<TPixieMediaQueryList>; // owned
+    Lists: TPixieMediaQueryListObjList; // owned
   private
     FIsUsed: Boolean;
   public
@@ -106,6 +108,8 @@ type
     function IsUsed: Boolean;
     function ApplyMediaFeatures(const Features: TPixieMediaFeatures): Boolean;
   end;
+
+  TPixieMediaQueryListListObjList = TObjectList<TPixieMediaQueryListList>;
 
 implementation
 
@@ -216,6 +220,8 @@ type
     Known: Boolean;
   end;
 
+  TPixieMfInfoMap = TDictionary<string, TMfInfo>;
+
 function MakeMfInfo(AType: TMfType; AVType: TMfValueType): TMfInfo;
 begin
   Result.FeatureType := AType;
@@ -246,11 +252,11 @@ begin
 end;
 
 var
-  SupportedFeatures: TDictionary<string, TMfInfo>;
+  SupportedFeatures: TPixieMfInfoMap;
 
 procedure InitSupportedFeatures;
 begin
-  SupportedFeatures := TDictionary<string, TMfInfo>.Create;
+  SupportedFeatures := TPixieMfInfoMap.Create;
   SupportedFeatures.Add('width',              MakeMfInfo(mfRange, mfvLength));
   SupportedFeatures.Add('height',             MakeMfInfo(mfRange, mfvLength));
   SupportedFeatures.Add('aspect-ratio',       MakeMfInfo(mfRange, mfvRatio));
@@ -1300,7 +1306,7 @@ end;
 class function TPixieMediaQueryList.Parse(Tokens: TPixieCssTokenList): TPixieMediaQueryList;
 var
   NormTokens: TPixieCssTokenList;
-  Lists: TList<TPixieCssTokenList>;
+  Lists: TPixieCssTokenListList;
   I: Integer;
   Query: TPixieMediaQuery;
 begin
@@ -1359,7 +1365,7 @@ end;
 constructor TPixieMediaQueryListList.Create;
 begin
   inherited Create;
-  Lists := TObjectList<TPixieMediaQueryList>.Create;
+  Lists := TPixieMediaQueryListObjList.Create;
   FIsUsed := False;
 end;
 

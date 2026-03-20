@@ -200,7 +200,7 @@ type
 
     // Used styles access (for refresh)
     property UsedStyles: TPixieUsedSelectorList read FUsedStyles;
-    property CounterValues: TDictionary<Integer, Integer>
+    property CounterValues: TPixieIntIntMap
       read FCounterValues;
   end;
 

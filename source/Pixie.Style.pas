@@ -144,6 +144,8 @@ type
     property Properties: TPixiePropsMap read FProperties;
   end;
 
+  TPixieStyleList = TObjectList<TPixieStyle>;
+
 // Free-standing parse helpers (used by Style and later by CssProperties)
 function PixieParseUrl(Token: TPixieCssToken; out Url: string): Boolean;
 function PixieParseCssLength(Token: TPixieCssToken; out Len: TPixieCssLength;
@@ -168,10 +170,12 @@ uses
 
 type
   TValidValuesMap = TDictionary<Integer, string>;
+  TPixieShorthandMap = TDictionary<Integer, TPixieIntVector>;
+  TPixieIntArray = TArray<Integer>;
 
 var
   ValidValues: TValidValuesMap;
-  ShorthandMap: TDictionary<Integer, TPixieIntVector>;
+  ShorthandMap: TPixieShorthandMap;
 
 procedure InitValidValues;
 begin
@@ -239,7 +243,7 @@ procedure InitShorthands;
   end;
 
 begin
-  ShorthandMap := TDictionary<Integer, TPixieIntVector>.Create;
+  ShorthandMap := TPixieShorthandMap.Create;
 
   AddShorthand(Ord(psid_font), [
     Ord(psid_font_style), Ord(psid_font_variant), Ord(psid_font_weight),
@@ -1129,7 +1133,7 @@ end;
 function ParseFontFamily(Tokens: TPixieCssTokenList; StartIndex: Integer;
   out FontFamily: string): Boolean;
 var
-  List: TList<TPixieCssTokenList>;
+  List: TPixieCssTokenListList;
   I, J: Integer;
   Name: TPixieCssTokenList;
   S: string;
@@ -2019,7 +2023,7 @@ end;
 procedure TPixieStyle.ParseBackground(Tokens: TPixieCssTokenList;
   const BaseUrl: string; Important: Boolean);
 var
-  Layers: TList<TPixieCssTokenList>;
+  Layers: TPixieCssTokenListList;
   I, J: Integer;
   Layer: TPixieCssTokenList;
   Tok: TPixieCssToken;
@@ -2196,7 +2200,7 @@ end;
 procedure TPixieStyle.ParseBackgroundImage(Tokens: TPixieCssTokenList;
   const BaseUrl: string; Important: Boolean);
 var
-  Layers: TList<TPixieCssTokenList>;
+  Layers: TPixieCssTokenListList;
   I: Integer;
   ImageTokens: TPixieCssTokenList;
 begin
@@ -2230,7 +2234,7 @@ end;
 procedure TPixieStyle.ParseKeywordCommaList(Name: Integer; Tokens: TPixieCssTokenList;
   Important: Boolean);
 var
-  Layers: TList<TPixieCssTokenList>;
+  Layers: TPixieCssTokenListList;
   I, Idx: Integer;
   Vec: TPixieIntVector;
   ValidStr: string;
@@ -2267,7 +2271,7 @@ end;
 
 procedure TPixieStyle.ParseBackgroundPosition(Tokens: TPixieCssTokenList; Important: Boolean);
 var
-  Layers: TList<TPixieCssTokenList>;
+  Layers: TPixieCssTokenListList;
   I, Index: Integer;
   X, Y: TPixieCssLength;
   XPos, YPos: TPixieLengthVector;
@@ -2307,7 +2311,7 @@ end;
 
 procedure TPixieStyle.ParseBackgroundSize(Tokens: TPixieCssTokenList; Important: Boolean);
 var
-  Layers: TList<TPixieCssTokenList>;
+  Layers: TPixieCssTokenListList;
   I, Index: Integer;
   Size: TPixieCssSize;
   Sizes: TPixieSizeVector;
@@ -2960,7 +2964,7 @@ end;
 procedure TPixieStyle.SubstVars(El: TObject);
 var
   Tag: TPixieHtmlTag;
-  Keys: TArray<Integer>;
+  Keys: TPixieIntArray;
   I, Key: Integer;
   Prop: TPixiePropertyValue;
 begin

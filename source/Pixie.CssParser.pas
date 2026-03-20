@@ -77,7 +77,7 @@ procedure PixieCssRemoveWhitespace(Tokens: TPixieCssTokenList;
 procedure PixieCssParseStyleBlockContents(Tokens: TPixieCssTokenList;
   out Decls: TPixieCssRawDeclarationList; out Rules: TPixieCssRawRuleList);
 
-function PixieCssParseCommaSeparatedList(Tokens: TPixieCssTokenList): TList<TPixieCssTokenList>;
+function PixieCssParseCommaSeparatedList(Tokens: TPixieCssTokenList): TPixieCssTokenListList;
 
 function PixieCssIsAnyValue(Tokens: TPixieCssTokenList): Boolean;
 function PixieCssIsDeclarationValue(Tokens: TPixieCssTokenList; Index: Integer = 0): Boolean;
@@ -845,13 +845,13 @@ end;
 
 // https://www.w3.org/TR/css-syntax-3/#parse-comma-separated-list-of-component-values
 // Note: result is never empty. If input is empty result is one empty list.
-function PixieCssParseCommaSeparatedList(Tokens: TPixieCssTokenList): TList<TPixieCssTokenList>;
+function PixieCssParseCommaSeparatedList(Tokens: TPixieCssTokenList): TPixieCssTokenListList;
 var
   I: Integer;
   Current: TPixieCssTokenList;
   Tok: TPixieCssToken;
 begin
-  Result := TList<TPixieCssTokenList>.Create;
+  Result := TPixieCssTokenListList.Create;
   Current := TPixieCssTokenList.Create(False);
 
   for I := 0 to Tokens.Count - 1 do

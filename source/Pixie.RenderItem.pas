@@ -1457,14 +1457,14 @@ procedure TPixieRenderItem.DrawStackingContext(Hdc: PtrUInt;
   X, Y: pixel_t; Clip: PPixiePosition; WithPositioned: Boolean);
 var
   I, Idx: Integer;
-  ZIndexes: TList<Integer>;
+  ZIndexes: TPixieIntVector;
 begin
   if not IsVisible then
     Exit;
 
   if WithPositioned and (FPositioned <> nil) then
   begin
-    ZIndexes := TList<Integer>.Create;
+    ZIndexes := TPixieIntVector.Create;
     try
       // Collect unique z-indexes
       for I := 0 to FPositioned.Count - 1 do
@@ -1845,7 +1845,7 @@ function TPixieRenderItem.GetElementByPoint(X, Y, ClientX, ClientY: pixel_t;
   Check: TPixieRenderItemCheckFunc): TPixieElement;
 var
   I, Idx: Integer;
-  ZIndexes: TList<Integer>;
+  ZIndexes: TPixieIntVector;
   Ret: TPixieElement;
 begin
   if not IsVisible then
@@ -1853,7 +1853,7 @@ begin
 
   Result := nil;
 
-  ZIndexes := TList<Integer>.Create;
+  ZIndexes := TPixieIntVector.Create;
   try
     // Collect unique z-indexes
     if FPositioned <> nil then

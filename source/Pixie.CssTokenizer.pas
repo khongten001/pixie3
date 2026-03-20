@@ -63,6 +63,7 @@ type
 
   TPixieCssToken = class;
   TPixieCssTokenList = TObjectList<TPixieCssToken>;
+  TPixieCssTokenListList = TList<TPixieCssTokenList>;
 
   { TPixieCssToken }
   TPixieCssToken = class

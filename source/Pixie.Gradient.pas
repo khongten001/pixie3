@@ -880,7 +880,7 @@ begin
   end;
 end;
 
-function ParseColorStopListLength(List: TList<TPixieCssTokenList>;
+function ParseColorStopListLength(List: TPixieCssTokenListList;
   Grad: TPixieGradient): Boolean;
 var
   I: Integer;
@@ -909,7 +909,7 @@ begin
   Result := True;
 end;
 
-function ParseColorStopListAngle(List: TList<TPixieCssTokenList>;
+function ParseColorStopListAngle(List: TPixieCssTokenListList;
   Grad: TPixieGradient): Boolean;
 var
   I: Integer;
@@ -940,7 +940,7 @@ end;
 
 { Main entry point }
 
-procedure FreeCommaList(List: TList<TPixieCssTokenList>);
+procedure FreeCommaList(List: TPixieCssTokenListList);
 var
   I: Integer;
 begin
@@ -953,7 +953,7 @@ function PixieParseGradient(Token: TPixieCssToken; out Grad: TPixieGradient): Bo
 var
   GradType: Integer;
   G: TPixieGradient;
-  List: TList<TPixieCssTokenList>;
+  List: TPixieCssTokenListList;
   Ok: Boolean;
   First: TPixieCssTokenList;
 begin

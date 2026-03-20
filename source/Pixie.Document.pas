@@ -49,13 +49,13 @@ type
     FFixedBoxes: TPixiePositionVector;
     FOverElement: TPixieElement;
     FActiveElement: TPixieElement;
-    FMediaLists: TObjectList<TPixieMediaQueryListList>;
+    FMediaLists: TPixieMediaQueryListListObjList;
     FMedia: TPixieMediaFeatures;
     FLang: string;
     FCulture: string;
     FMode: TPixieDocumentMode;
     FAllElements: TPixieElementList;
-    FTabularElements: TList<Pointer>; // non-owning list of TPixieRenderItem
+    FTabularElements: TPixiePointerList; // non-owning list of TPixieRenderItem
 
     // Focus state
     FFocusedElement: TPixieElement;
@@ -217,8 +217,8 @@ begin
   FMasterCss := TPixieStylesheet.Create;
   FUserCss := TPixieStylesheet.Create;
   FFixedBoxes := TPixiePositionVector.Create;
-  FMediaLists := TObjectList<TPixieMediaQueryListList>.Create(False);
-  FTabularElements := TList<Pointer>.Create;
+  FMediaLists := TPixieMediaQueryListListObjList.Create(False);
+  FTabularElements := TPixiePointerList.Create;
   FAllElements := TPixieElementList.Create(True); // owns elements
   FSelMap := TPixieSelectionSet.Create;
   FSize.Width := 0;

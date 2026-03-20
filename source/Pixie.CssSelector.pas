@@ -822,7 +822,7 @@ end;
 function PixieParseSelectorList(Tokens: TPixieCssTokenList; Options: Integer;
   Mode: TPixieDocumentMode): TPixieCssSelectorList;
 var
-  Lists: TList<TPixieCssTokenList>;
+  Lists: TPixieCssTokenListList;
   I: Integer;
   Sel: TPixieCssSelector;
 begin
