@@ -2,7 +2,7 @@ unit Pixie.ElMisc;
 
 // Simple HTML element types.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -217,7 +217,6 @@ begin
   Val := GetAttr('size');
   if Val <> '' then
   begin
-    Sz := 0;
     if (Length(Val) > 0) and ((Val[1] = '+') or (Val[1] = '-')) then
     begin
       // Relative size

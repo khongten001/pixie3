@@ -3,7 +3,7 @@ unit Pixie.Iterators;
 // Render tree traversal — iterates through children of a render item,
 // optionally descending into inline parents and selecting specific items.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

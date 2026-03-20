@@ -3,7 +3,7 @@ unit Pixie.RenderFlex;
 // Flexbox layout — arranges flex items along main/cross axes with
 // wrapping, alignment, and flexible length distribution.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

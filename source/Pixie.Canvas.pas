@@ -3,11 +3,12 @@ unit Pixie.Canvas;
 // Platform-independent drawing canvas interface.
 // Concrete implementations: Pixie.Canvas.D2D (Windows), Pixie.Canvas.Cairo (Linux).
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
 uses
+  Classes,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription;
 
@@ -86,6 +87,7 @@ type
       out W, H: Single); virtual; abstract;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); virtual; abstract;
+    function LoadImageFromStream(Stream: TStream): TPixieImageHandle; virtual;
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; virtual;
 
@@ -127,6 +129,12 @@ end;
 procedure TPixieCanvas.SetScale(Scale: Single);
 begin
   // no-op by default
+end;
+
+function TPixieCanvas.LoadImageFromStream(
+  Stream: TStream): TPixieImageHandle;
+begin
+  Result := 0;
 end;
 
 function TPixieCanvas.LoadSvgFromData(Data: Pointer;

@@ -2,7 +2,7 @@ unit Pixie.CssTokenizer;
 
 // CSS3 tokenizer following https://www.w3.org/TR/css-syntax-3/#tokenization
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -206,7 +206,7 @@ begin
   // Quick check: does the string need any processing?
   NeedsWork := False;
   for I := 1 to Len do
-    if S[I] in [#0, #12, #13] then
+    if {$IFDEF FPC}S[I] in [#0, #12, #13]{$ELSE}CharInSet(S[I], [#0, #12, #13]){$ENDIF} then
     begin
       NeedsWork := True;
       Break;

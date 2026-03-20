@@ -6,7 +6,7 @@ unit Pixie.Table;
 // width/height distribution algorithms. Render items are stored as Pointer
 // to avoid circular dependencies with Phase 5 render item types.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -145,7 +145,7 @@ implementation
 function TPixieTableRowList.Ptr(I: Integer): PPixieTableRow;
 begin
   Assert((I >= 0) and (I < Count), 'Row index out of bounds');
-  Result := @FItems[I];
+  Result := @{$IFDEF FPC}FItems{$ELSE}List{$ENDIF}[I];
 end;
 
 { TPixieTableColumnList }
@@ -153,7 +153,7 @@ end;
 function TPixieTableColumnList.Ptr(I: Integer): PPixieTableColumn;
 begin
   Assert((I >= 0) and (I < Count), 'Column index out of bounds');
-  Result := @FItems[I];
+  Result := @{$IFDEF FPC}FItems{$ELSE}List{$ENDIF}[I];
 end;
 
 { TPixieTableCellList }
@@ -161,7 +161,7 @@ end;
 function TPixieTableCellList.Ptr(I: Integer): PPixieTableCell;
 begin
   Assert((I >= 0) and (I < Count), 'Cell index out of bounds');
-  Result := @FItems[I];
+  Result := @{$IFDEF FPC}FItems{$ELSE}List{$ENDIF}[I];
 end;
 
 { TPixieTableRow }
@@ -562,7 +562,6 @@ begin
 
         if ColsWidth <> 0 then
         begin
-          Add := AWidth / DistCols.Count;
           for Col := 0 to DistCols.Count - 1 do
           begin
             Add := AWidth * ((FColumns[DistCols[Col]].MaxWidth -

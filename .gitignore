@@ -7,6 +7,14 @@
 *.dbg
 lib/
 
+# Delphi
+*.dcu
+*.drc
+*.map
+*.dres
+demo/delphi/Win32/
+demo/delphi/Win64/
+
 # Lazarus IDE backup files
 backup/
 *.~*

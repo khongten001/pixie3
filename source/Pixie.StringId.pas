@@ -1,11 +1,11 @@
 unit Pixie.StringId;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
 uses
-  SysUtils, Generics.Collections;
+  SysUtils, {$IFNDEF FPC}TypInfo,{$ENDIF} Generics.Collections;
 
 type
   TPixieStringId = (
@@ -427,7 +427,11 @@ begin
   // The enum names follow pattern psid_xxx where xxx maps to the CSS string
   // with underscores replaced by hyphens
   S := '';
+  {$IFDEF FPC}
   WriteStr(S, Id);
+  {$ELSE}
+  S := GetEnumName(TypeInfo(TPixieStringId), Ord(Id));
+  {$ENDIF}
 
   // Strip 'psid_' prefix
   if (Length(S) > 5) and (Copy(S, 1, 5) = 'psid_') then

@@ -3,7 +3,7 @@ unit Pixie.D2DHeaders;
 // Consolidated DirectX/Direct2D/DirectWrite/WIC declarations for Pixie.
 // Only declarations needed by Pixie.Canvas.D2D.pas are included.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

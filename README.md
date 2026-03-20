@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  A lightweight HTML/CSS rendering engine for Free Pascal and Lazarus.
+  A lightweight HTML/CSS rendering engine for Free Pascal (Lazarus) and Delphi (VCL).
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 
 ---
 
-Pixie is a drop-in Lazarus component (`TPixieHtmlView`) that renders HTML and CSS using platform-native graphics. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
+Pixie is a drop-in visual component (`TPixieHtmlView`) for Lazarus and Delphi that renders HTML and CSS using platform-native graphics. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
 
 It ships with four rendering backends so the same code works across operating systems:
 
@@ -79,9 +79,11 @@ It ships with four rendering backends so the same code works across operating sy
 
 ## Getting Started
 
+### Lazarus (Free Pascal)
+
 **Requirements:** [Lazarus](https://www.lazarus-ide.org/) with Free Pascal.
 
-1. Open `package/Pixie.Package.lpk` in the Lazarus IDE.
+1. Open `package/Pixie.Package.Lazarus.lpk` in the Lazarus IDE.
 2. Click **Compile**, then **Use > Install**.
 3. Restart the IDE. `TPixieHtmlView` appears on the component palette.
 
@@ -89,7 +91,20 @@ Or add the package as a dependency without installing:
 
 1. Open your project's `.lpi` in the IDE.
 2. Go to **Project > Project Inspector > Add > New Requirement**.
-3. Select `Pixie.Package`.
+3. Select `Pixie.Package.Lazarus`.
+
+### Delphi (VCL)
+
+**Requirements:** Embarcadero Delphi (Windows only, uses Direct2D/DirectWrite backend).
+
+1. Open `package/Pixie.Package.Delphi.dpk` in the Delphi IDE.
+2. Right-click the project in the Project Manager and select **Install**.
+3. `TPixieHtmlView` appears on the component palette.
+
+Or add the source files directly to your project without installing the package:
+
+1. Add `source/` to your project's unit search path.
+2. Add `Pixie.HtmlView.VCL` to your form's `uses` clause.
 
 ## Usage
 
@@ -116,7 +131,7 @@ Handle link clicks:
 ```pascal
 procedure TForm1.PixieHtmlView1AnchorClick(Sender: TObject; const Url: string);
 begin
-  OpenURL(Url);
+  // handle the click as desired
 end;
 ```
 

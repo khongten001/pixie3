@@ -2,7 +2,7 @@ unit Pixie.ElAnchor;
 
 // Anchor element (<a>).
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

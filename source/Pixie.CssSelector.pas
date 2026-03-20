@@ -2,7 +2,7 @@ unit Pixie.CssSelector;
 
 // CSS selector model and parsing.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

@@ -2,7 +2,7 @@ unit Pixie.FlexItem;
 
 // Flex item + flex line: both live here to avoid circular dependency.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -1092,7 +1092,6 @@ var
   Ri: TPixieRenderItem;
   FlexBasisPredefined: Boolean;
   Predef: Integer;
-  ElRetWidth: pixel_t;
 begin
   Assert(TObject(El) is TPixieRenderItem);
   Ri := TPixieRenderItem(El);

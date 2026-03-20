@@ -4,7 +4,7 @@ unit Pixie.ElTextInput;
 // elements. All are replaced elements with editable text, caret, selection,
 // and clipboard support.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -45,7 +45,7 @@ type
     procedure MoveCaretWord(Direction: Integer; Shift: Boolean);
     procedure MoveCaretHome(Shift: Boolean);
     procedure MoveCaretEnd(Shift: Boolean);
-    procedure SelectAll;
+    procedure SelectAll; reintroduce;
     procedure SelectWordAtCaret;
     procedure ClearSelection;
     function HasSelection: Boolean;
@@ -120,7 +120,7 @@ type
 implementation
 
 uses
-  LCLType, Clipbrd,
+  {$IFDEF FPC}LCLType, Clipbrd,{$ELSE}Windows, Vcl.Clipbrd,{$ENDIF}
   Pixie.StringId, Pixie.Background, Pixie.Canvas,
   Pixie.NativeContainer,
   Pixie.Document, Pixie.RenderItem, Pixie.RenderInput,
@@ -242,7 +242,7 @@ begin
     Len := UTF8CharCount(FValue);
     Result := '';
     for I := 1 to Len do
-      Result := Result + #$E2#$80#$A2; // U+2022 BULLET
+      Result := Result + {$IFDEF FPC}#$E2#$80#$A2{$ELSE}#$2022{$ENDIF}; // ● // U+2022 BULLET
   end
   else
     Result := FValue;
@@ -408,7 +408,7 @@ begin
       CharCount := UTF8CharCount(Copy(FValue, 1, FCaretPos));
       ColText := '';
       for I := 1 to CharCount do
-        ColText := ColText + #$E2#$80#$A2;
+        ColText := ColText + {$IFDEF FPC}#$E2#$80#$A2{$ELSE}#$2022{$ENDIF}; // ●
     end
     else
       ColText := Copy(FValue, 1, FCaretPos);
@@ -450,7 +450,6 @@ begin
   end
   else
   begin
-    TargetLine := 0;
     LineStr := DisplayText;
     LS := 0;
     AdjX := RelX + FScrollX;

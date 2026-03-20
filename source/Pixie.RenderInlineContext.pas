@@ -3,7 +3,7 @@ unit Pixie.RenderInlineContext;
 // Inline formatting context — lays out inline elements in line boxes,
 // handles whitespace collapsing, text wrapping, and vertical alignment.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -358,7 +358,6 @@ begin
     end
     else
     begin
-      Shift := 0;
       PrevMargin := FLineBoxes[FLineBoxes.Count - 2].BottomMargin;
       if PrevMargin > Item.GetEl.MarginTop then
         Shift := Item.GetEl.MarginTop

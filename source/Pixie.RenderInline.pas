@@ -3,7 +3,7 @@ unit Pixie.RenderInline;
 // Inline element render item — wraps inline containers (<span> etc.)
 // that can span multiple lines via inline boxes.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

@@ -1,6 +1,6 @@
 unit Pixie.Url;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

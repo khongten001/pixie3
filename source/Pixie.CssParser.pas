@@ -7,7 +7,7 @@ unit Pixie.CssParser;
 //   - At-rules and qualified rules (TPixieCssRawRule)
 //   - Declaration lists (TPixieCssRawDeclaration)
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -606,8 +606,6 @@ end;
 { Token cloning helper }
 
 function PixieCssTokenClone(Source: TPixieCssToken): TPixieCssToken;
-var
-  I: Integer;
 begin
   if Source = nil then
     Exit(nil);
@@ -683,7 +681,7 @@ procedure RemoveWhitespaceSmall(Tokens: TPixieCssTokenList;
 procedure RemoveWhitespaceLarge(Tokens: TPixieCssTokenList;
   KeepWhitespace: TPixieCssKeepWhitespaceFunc);
 var
-  I, N, KeptCount: Integer;
+  I, N: Integer;
   Tok, Left, Right: TPixieCssToken;
   Keep: Boolean;
   Saved: array of TPixieCssToken;

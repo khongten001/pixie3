@@ -5,13 +5,13 @@ unit Pixie.NativeContainer;
 // logic (background layers, borders, list markers, etc.) written once
 // and shared across all platforms.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
 uses
   SysUtils, Classes, Math, Generics.Collections,
-  LCLType, FPImage,
+  {$IFDEF FPC}LCLType, FPImage,{$ELSE}Windows,{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription, Pixie.CssLength,
   Pixie.Container, Pixie.Canvas;
@@ -158,7 +158,8 @@ type
 implementation
 
 uses
-  FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,
+  {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,{$ENDIF}
+  {$IFNDEF FPC}Vcl.Graphics,{$ENDIF}
   Pixie.Url;
 
 // ---------------------------------------------------------------------------
@@ -358,13 +359,21 @@ end;
 function TPixieNativeContainer.DecodeStreamToHandle(
   Stream: TStream): TPixieImageHandle;
 var
+  SvgBuf: TMemoryStream;
+{$IFDEF FPC}
   Img: TFPMemoryImage;
   Pixels: PByte;
   Pitch, X, Y, W, H: Integer;
   Colour: TFPColor;
   Dst: PByte;
   A, R, G, B: Byte;
-  SvgBuf: TMemoryStream;
+{$ELSE}
+  WImg: TWICImage;
+  Bmp: TBitmap;
+  Pixels, Src, Dst: PByte;
+  Pitch, X, Y, W, H: Integer;
+  A, R, G, B: Byte;
+{$ENDIF}
 begin
   Result := 0;
   if (FCanvas = nil) or (Stream = nil) or (Stream.Size = 0) then Exit;
@@ -389,6 +398,7 @@ begin
     Exit;
   end;
 
+{$IFDEF FPC}
   // Load via FPImage readers directly — bypasses platform bitmap handles
   // and preserves alpha (GTK2's TBitmap.Canvas.Draw composites against
   // black, destroying transparency)
@@ -451,6 +461,76 @@ begin
   finally
     Img.Free;
   end;
+{$ELSE}
+  // Delphi: decode via TWICImage -> extract BGRA pixels
+  WImg := TWICImage.Create;
+  try
+    try
+      Stream.Position := 0;
+      WImg.LoadFromStream(Stream);
+    except
+      Exit;
+    end;
+
+    W := WImg.Width;
+    H := WImg.Height;
+    if (W <= 0) or (H <= 0) then Exit;
+
+    Bmp := TBitmap.Create;
+    try
+      Bmp.PixelFormat := pf32bit;
+      Bmp.SetSize(W, H);
+      Bmp.Canvas.Draw(0, 0, WImg);
+
+      Pitch := W * 4;
+      GetMem(Pixels, Pitch * H);
+      try
+        for Y := 0 to H - 1 do
+        begin
+          Src := Bmp.ScanLine[Y];
+          Dst := Pixels + Y * Pitch;
+          for X := 0 to W - 1 do
+          begin
+            B := Src^; Inc(Src);
+            G := Src^; Inc(Src);
+            R := Src^; Inc(Src);
+            A := Src^; Inc(Src);
+            // GDI does not premultiply — do it for D2D
+            if A = 0 then
+            begin
+              Dst^ := 0; Inc(Dst);
+              Dst^ := 0; Inc(Dst);
+              Dst^ := 0; Inc(Dst);
+              Dst^ := 0; Inc(Dst);
+            end
+            else if A = 255 then
+            begin
+              Dst^ := B; Inc(Dst);
+              Dst^ := G; Inc(Dst);
+              Dst^ := R; Inc(Dst);
+              Dst^ := 255; Inc(Dst);
+            end
+            else
+            begin
+              Dst^ := B * A div 255; Inc(Dst);
+              Dst^ := G * A div 255; Inc(Dst);
+              Dst^ := R * A div 255; Inc(Dst);
+              Dst^ := A; Inc(Dst);
+            end;
+          end;
+        end;
+
+        Result := FCanvas.LoadImageFromPixels(W, H, Pixels, Pitch);
+      finally
+        FreeMem(Pixels);
+      end;
+    finally
+      Bmp.Free;
+    end;
+  finally
+    WImg.Free;
+  end;
+{$ENDIF}
 end;
 
 function TPixieNativeContainer.LoadFromResource(
@@ -816,9 +896,9 @@ begin
       PrevSpace := True;
       for I := 1 to Length(Text) do
       begin
-        if PrevSpace and (Text[I] in ['a'..'z']) then
+        if PrevSpace and ({$IFDEF FPC}Text[I] in ['a'..'z']{$ELSE}CharInSet(Text[I], ['a'..'z']){$ENDIF}) then
           Text[I] := UpCase(Text[I]);
-        PrevSpace := Text[I] in [' ', #9, #10, #13, #12];
+        PrevSpace := {$IFDEF FPC}Text[I] in [' ', #9, #10, #13, #12]{$ELSE}CharInSet(Text[I], [' ', #9, #10, #13, #12]){$ENDIF};
       end;
     end;
   end;

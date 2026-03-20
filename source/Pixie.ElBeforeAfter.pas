@@ -2,7 +2,7 @@ unit Pixie.ElBeforeAfter;
 
 // ::before and ::after pseudo-element implementations.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

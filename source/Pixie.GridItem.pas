@@ -3,7 +3,7 @@ unit Pixie.GridItem;
 // Grid item + track + occupancy data structures for CSS Grid layout.
 // Mirrors the pattern of Pixie.FlexItem.pas for flexbox.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

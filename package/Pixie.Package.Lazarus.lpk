@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <Package Version="5">
-    <Name Value="Pixie.Package"/>
+    <Name Value="Pixie.Package.Lazarus"/>
     <Type Value="RunAndDesignTime"/>
     <CompilerOptions>
       <Version Value="11"/>
@@ -161,9 +161,9 @@
         <UnitName Value="Pixie.NumCvt"/>
       </Item>
       <Item>
-        <Filename Value="Pixie.Register.pas"/>
+        <Filename Value="Pixie.Register.Lazarus.pas"/>
         <HasRegisterProc Value="True"/>
-        <UnitName Value="Pixie.Register"/>
+        <UnitName Value="Pixie.Register.Lazarus"/>
       </Item>
       <Item>
         <Filename Value="../source/Pixie.RenderBlock.pas"/>

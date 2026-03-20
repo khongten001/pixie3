@@ -3,7 +3,7 @@ unit Pixie.RenderImage;
 // Image element render item — handles <img> layout with
 // aspect ratio preservation and max-width/max-height clamping.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

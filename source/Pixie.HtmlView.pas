@@ -3,7 +3,7 @@ unit Pixie.HtmlView;
 // TPixieHtmlView — Lazarus visual component that renders HTML content
 // using the Pixie engine with platform-native graphics.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

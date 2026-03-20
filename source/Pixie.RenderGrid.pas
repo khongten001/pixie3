@@ -3,7 +3,7 @@ unit Pixie.RenderGrid;
 // CSS Grid layout — arranges grid items in a 2D grid of tracks.
 // Follows the same architecture as Pixie.RenderFlex.pas.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -301,7 +301,6 @@ end;
 
 procedure TPixieRenderGrid.DetermineExplicitGrid;
 var
-  ExplicitCols, ExplicitRows: Integer;
   I: Integer;
   Track: TPixieGridTrack;
 begin
@@ -315,7 +314,6 @@ begin
     FRowTracks.Clear;
 
   // Build column tracks from template
-  ExplicitCols := 0;
   if Css.GridTemplateColumns <> nil then
   begin
     I := 0;
@@ -345,13 +343,9 @@ begin
         Inc(I);
       end;
     end;
-    ExplicitCols := FColTracks.Count;
   end;
-  if ExplicitCols = 0 then
-    ExplicitCols := 1;
 
   // Build row tracks from template
-  ExplicitRows := 0;
   if Css.GridTemplateRows <> nil then
   begin
     I := 0;
@@ -380,7 +374,6 @@ begin
         Inc(I);
       end;
     end;
-    ExplicitRows := FRowTracks.Count;
   end;
 end;
 
@@ -388,7 +381,7 @@ end;
 
 procedure TPixieRenderGrid.AutoPlace;
 var
-  I, Span, NumCols, NumRows: Integer;
+  I, NumCols, NumRows: Integer;
   Item: TPixieGridItem;
   P: TPixieGridPlacement;
   CursorRow, CursorCol: Integer;

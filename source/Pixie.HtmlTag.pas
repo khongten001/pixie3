@@ -7,7 +7,7 @@ unit Pixie.HtmlTag;
 // methods from TPixieElement including selector matching, style
 // application, compute_styles, mouse events, and drawing.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -34,10 +34,9 @@ type
     FAttrs: TPixieStringMap;
     FPseudoClasses: TPixieIntVector;
 
+  public
     procedure SelectAll(const Selector: TPixieCssSelector;
       Res: TPixieElementList); override;
-
-  public
     constructor Create(ADoc: TObject); overload;
     constructor CreateAnonymous(AParent: TPixieElement;
       const AStyle: string = 'display: block'); overload;

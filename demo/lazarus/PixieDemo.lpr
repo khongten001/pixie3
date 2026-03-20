@@ -10,7 +10,7 @@ uses
   Forms, PixieDemoMain;
 
 {$R *.res}
-{$R resources/images.res}
+{$R ../resources/images.res}
 
 begin
   RequireDerivedFormResource := True;

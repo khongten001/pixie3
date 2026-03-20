@@ -1,6 +1,6 @@
 unit Pixie.NumCvt;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

@@ -1,6 +1,6 @@
 unit Pixie.HtmlEntities;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

@@ -4,7 +4,7 @@ unit Pixie.LineBox;
 // Handles whitespace collapsing, text alignment, vertical alignment,
 // and inline box tracking across lines.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -826,7 +826,6 @@ var
   Inlines: TInlineItemBoxList;
   InlBox: TInlineItemBox;
   Lbi: TPixieLineBoxItem;
-  P: PPixiePosition;
 begin
   RetItems := TPixieLineBoxItemList.Create(True);
 

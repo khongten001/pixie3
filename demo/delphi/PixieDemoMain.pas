@@ -1,29 +1,33 @@
-unit PixieDemoMain;
-
-{$mode objfpc}{$H+}
+﻿unit PixieDemoMain;
 
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, StdCtrls,
-  ExtCtrls, Buttons,
-  {$ifdef windows}Windows,{$endif}
-  fphttpclient, opensslsockets,
-  Pixie.HtmlView, Pixie.NativeContainer, Pixie.Url,
+  Classes, SysUtils, Windows,
+  Vcl.Forms, Vcl.Controls, Vcl.Graphics, Vcl.Dialogs, Vcl.ComCtrls,
+  Vcl.StdCtrls, Vcl.ExtCtrls,
+  System.Net.HttpClient,
+  Pixie.HtmlView.VCL, Pixie.NativeContainer, Pixie.Url,
   Pixie.Element, Pixie.Document;
 
 type
   TMainForm = class(TForm)
-    BtnOpen: TSpeedButton;
+    BtnOpen: TButton;
     BtnGo: TButton;
     UrlEdit: TEdit;
     UrlPanel: TPanel;
     StatusBar: TStatusBar;
-    PixieHtmlView: TPixieHtmlView;
     procedure FormCreate(Sender: TObject);
     procedure BtnOpenClick(Sender: TObject);
     procedure BtnGoClick(Sender: TObject);
     procedure UrlEditKeyPress(Sender: TObject; var Key: Char);
+  private
+    PixieHtmlView: TPixieHtmlView;
+    FCardCount: Integer;
+    FParseStart: Int64;
+    FPaintStart: Int64;
+    FFetchAccum: Int64;
+    FNavWarningShown: Boolean;
     procedure ViewAnchorClick(Sender: TObject; const Url: string);
     function ViewElementClick(Sender: TObject; El: TObject): Boolean;
     procedure FetchUrl(Sender: TObject; const AUrl: string;
@@ -32,12 +36,6 @@ type
     procedure ViewAfterParse(Sender: TObject);
     procedure ViewBeforePaint(Sender: TObject);
     procedure ViewAfterPaint(Sender: TObject);
-  private
-    FCardCount: Integer;
-    FParseStart: Int64;
-    FPaintStart: Int64;
-    FFetchAccum: Int64;
-    FNavWarningShown: Boolean;
     procedure NavigateToUrl(const Url: string);
   end;
 
@@ -46,9 +44,8 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
-{$ifdef windows}
 function StopwatchNow: Int64;
 begin
   QueryPerformanceCounter(Result);
@@ -62,27 +59,29 @@ begin
   QueryPerformanceFrequency(Freq);
   Result := (Now - Start) * 1000.0 / Freq;
 end;
-{$else}
-function StopwatchNow: Int64;
-begin
-  Result := GetTickCount64;
-end;
-
-function StopwatchElapsedMs(Start: Int64): Double;
-begin
-  Result := GetTickCount64 - Start;
-end;
-{$endif}
 
 procedure TMainForm.FormCreate(Sender: TObject);
 var
   ImgPath, SvgPath: string;
   Stream: TFileStream;
 begin
-  ImgPath := ExtractFilePath(ParamStr(0));
+  ImgPath := ExtractFilePath(ParamStr(0)) + '..\resources\';
   SvgPath := ImgPath;
   Randomize;
   FCardCount := 0;
+
+  // Create TPixieHtmlView in code (no design-time registration)
+  PixieHtmlView := TPixieHtmlView.Create(Self);
+  PixieHtmlView.Parent := Self;
+  PixieHtmlView.Align := alClient;
+  PixieHtmlView.Color := clWhite;
+  PixieHtmlView.OnAnchorClick := ViewAnchorClick;
+  PixieHtmlView.OnElementClick := ViewElementClick;
+  PixieHtmlView.OnFetchUrl := FetchUrl;
+  PixieHtmlView.OnBeforeParse := ViewBeforeParse;
+  PixieHtmlView.OnAfterParse := ViewAfterParse;
+  PixieHtmlView.OnBeforePaint := ViewBeforePaint;
+  PixieHtmlView.OnAfterPaint := ViewAfterPaint;
 
   // Register images from streams for #name syntax
   if FileExists(ImgPath + 'firefox.png') then
@@ -138,10 +137,10 @@ begin
     '<img src="@PIXIELOGO" width="96" height="96" ' +
       'style="float: left; margin: 0 14px 8px 0;">' +
     '<p style="color: #555;">The <b>Pixie</b> engine is a complete HTML/CSS rendering implementation ' +
-    'in <i>Free Pascal</i>. It supports tables, lists, flexbox, CSS grid, ' +
+    'in <i>Free Pascal &amp; Delphi</i>. It supports tables, lists, flexbox, CSS grid, ' +
     'gradients, images and more.</p>' +
-    '<p style="color: #555;">Движок <b>Pixie</b> — это полная реализация рендеринга HTML/CSS ' +
-    'на <i>Free Pascal</i>. Поддерживаются таблицы, списки, флексбокс, CSS-гриды, ' +
+    '<p style="color: #555;">Движок <b>Pixie</b> — это полная реализация рендеринга ' +
+    'HTML/CSS на <i>Free Pascal &amp; Delphi</i>. Поддерживаются таблицы, списки, флексбокс, CSS-гриды, ' +
     'градиенты, изображения и многое другое.</p>' +
     '</div>' +
     '<div style="clear: both;"></div>' +
@@ -182,7 +181,7 @@ begin
     '<h2 style="color: #994422;">Images</h2>' +
     '<p>' +
       '<img src="' + ImgPath + 'firefox.png" style="vertical-align: middle;"> Firefox ' +
-      '<img src="' + ImgPath + 'chrome.png" style="vertical-align: middle;"> Chrome ' +
+      '<img src="' + ImgPath + 'chrome.png" style="vertical-align: middle;"> Chrome (alpha) ' +
       '<img src="' + ImgPath + 'opera.png" style="vertical-align: middle;"> Opera ' +
       '<img src="' + ImgPath + 'steam.png" style="vertical-align: middle;"> Steam' +
     '</p>' +
@@ -197,13 +196,14 @@ begin
     '<h2 style="color: #994422;">Stream-Registered Images (#name)</h2>' +
     '<p>' +
       '<img src="#firefox" style="vertical-align: middle;"> Firefox (from stream) ' +
-      '<img src="#chrome" style="vertical-align: middle;"> Chrome (from stream)' +
+      '<img src="#chrome" style="vertical-align: middle;"> Chrome with alpha (from stream)' +
     '</p>' +
 
     // ---- Resource-embedded images ----
     '<h2 style="color: #994422;">Resource-Embedded Images (@resname)</h2>' +
     '<p>' +
       '<img src="@FIREFOX" style="vertical-align: middle;"> Firefox (from resource) ' +
+      '<img src="@CHROME" style="vertical-align: middle;"> Chrome with alpha (from resource) ' +
       '<img src="@OPERA" style="vertical-align: middle;"> Opera (from resource) ' +
       '<img src="@STEAM" style="vertical-align: middle;"> Steam (from resource) ' +
       '<img src="@ABOUTSVG" width="48" height="48" style="vertical-align: middle;"> SVG (from resource)' +
@@ -550,7 +550,7 @@ begin
       'Pixie HTML Engine &copy; 2025 &mdash; No Electron was harmed in the making of this demo &#x1F308;</p>' +
 
     '</body></html>',
-    ExtractFilePath(ParamStr(0)));
+    ImgPath);
 end;
 
 // ---------------------------------------------------------------------------
@@ -560,17 +560,17 @@ end;
 procedure TMainForm.FetchUrl(Sender: TObject; const AUrl: string;
   Stream: TStream; var Success: Boolean);
 var
-  Client: TFPHTTPClient;
+  Client: THTTPClient;
+  Resp: IHTTPResponse;
   T: Int64;
 begin
   T := StopwatchNow;
-  Client := TFPHTTPClient.Create(nil);
+  Client := THTTPClient.Create;
   try
-    Client.AllowRedirect := True;
-    Client.AddHeader('User-Agent', 'Pixie/1.0');
+    Client.UserAgent := 'Pixie/1.0';
     try
-      Client.Get(AUrl, Stream);
-      Success := True;
+      Resp := Client.Get(AUrl, Stream);
+      Success := (Resp.StatusCode >= 200) and (Resp.StatusCode < 400);
     except
       Success := False;
     end;
@@ -582,7 +582,8 @@ end;
 
 procedure TMainForm.NavigateToUrl(const Url: string);
 var
-  Client: TFPHTTPClient;
+  Client: THTTPClient;
+  Resp: IHTTPResponse;
   HtmlText: string;
   ActualUrl: string;
 begin
@@ -591,12 +592,12 @@ begin
      (Pos('https://', LowerCase(ActualUrl)) <> 1) then
     ActualUrl := 'https://' + ActualUrl;
 
-  Client := TFPHTTPClient.Create(nil);
+  Client := THTTPClient.Create;
   try
-    Client.AllowRedirect := True;
-    Client.AddHeader('User-Agent', 'Pixie/1.0');
+    Client.UserAgent := 'Pixie/1.0';
     try
-      HtmlText := Client.Get(ActualUrl);
+      Resp := Client.Get(ActualUrl);
+      HtmlText := Resp.ContentAsString;
     except
       on E: Exception do
       begin
@@ -647,12 +648,12 @@ procedure TMainForm.BtnGoClick(Sender: TObject);
 begin
   if UrlEdit.Text = '' then Exit;
   if FNavWarningShown or
-     (MessageDlg('Navigate to URL',
-      'You are about to navigate to:' + LineEnding + LineEnding +
-      UrlEdit.Text + LineEnding + LineEnding +
+     (MessageDlg(
+      'You are about to navigate to:' + sLineBreak + sLineBreak +
+      UrlEdit.Text + sLineBreak + sLineBreak +
       'Please note that Pixie is a lightweight HTML/CSS rendering ' +
       'engine designed for rich content display, not a full web browser. ' +
-      'Complex web pages may render incorrectly or incompletely.' + LineEnding + LineEnding +
+      'Complex web pages may render incorrectly or incompletely.' + sLineBreak + sLineBreak +
       'Continue?',
       mtConfirmation, [mbYes, mbNo], 0) = mrYes) then
   begin
@@ -688,12 +689,12 @@ begin
      (Pos('https://', LowerCase(FullUrl)) = 1) then
   begin
     if FNavWarningShown or
-       (MessageDlg('Navigate to URL',
-        'You are about to navigate to:' + LineEnding + LineEnding +
-        FullUrl + LineEnding + LineEnding +
+       (MessageDlg(
+        'You are about to navigate to:' + sLineBreak + sLineBreak +
+        FullUrl + sLineBreak + sLineBreak +
         'Please note that Pixie is a lightweight HTML/CSS rendering ' +
         'engine designed for rich content display, not a full web browser. ' +
-        'Complex web pages may render incorrectly or incompletely.' + LineEnding + LineEnding +
+        'Complex web pages may render incorrectly or incompletely.' + sLineBreak + sLineBreak +
         'Continue?',
         mtConfirmation, [mbYes, mbNo], 0) = mrYes) then
     begin
@@ -772,6 +773,7 @@ begin
       // Also randomise the three button colours
       for I := 0 to 2 do
       begin
+        NewEl := nil;
         case I of
           0: NewEl := Doc.GetElementById('btn-blue');
           1: NewEl := Doc.GetElementById('btn-green');
@@ -816,17 +818,11 @@ end;
 procedure TMainForm.ViewAfterParse(Sender: TObject);
 var
   TotalMs, FetchMs: Double;
-  {$ifdef windows}
   Freq: Int64;
-  {$endif}
 begin
   TotalMs := StopwatchElapsedMs(FParseStart);
-  {$ifdef windows}
   QueryPerformanceFrequency(Freq);
   FetchMs := FFetchAccum * 1000.0 / Freq;
-  {$else}
-  FetchMs := FFetchAccum;
-  {$endif}
   StatusBar.Panels[0].Text := Format('Parse: %.1f ms (net: %.1f ms)',
     [TotalMs - FetchMs, FetchMs]);
 end;

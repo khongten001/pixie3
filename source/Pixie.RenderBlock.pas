@@ -3,7 +3,7 @@ unit Pixie.RenderBlock;
 // Block-level render item — the base for block context, inline context,
 // flex and table layout.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

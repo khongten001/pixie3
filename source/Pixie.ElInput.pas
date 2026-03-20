@@ -3,7 +3,7 @@ unit Pixie.ElInput;
 // Owner-drawn <input type="checkbox">, <input type="radio"> and <button>
 // elements. All are replaced elements that draw their own visuals.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

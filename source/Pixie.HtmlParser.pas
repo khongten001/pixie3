@@ -1,6 +1,6 @@
 unit Pixie.HtmlParser;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

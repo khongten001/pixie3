@@ -3,7 +3,7 @@ unit Pixie.Stylesheet;
 // CSS stylesheet container: parses CSS text into a sorted list of selectors
 // with attached styles and media queries.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -209,21 +209,17 @@ var
   Rules: TPixieCssRawRuleList;
   Rule: TPixieCssRawRule;
   I: Integer;
-  ImportAllowed: Boolean;
   RuleName: Integer;
 begin
   Rules := PixieCssParseStylesheet(Tokens, TopLevel);
   try
-    ImportAllowed := TopLevel;
-
     for I := 0 to Rules.Count - 1 do
     begin
       Rule := Rules[I];
 
       if Rule.RuleType = cssRuleQualified then
       begin
-        if ParseStyleRule(Rule, BaseUrl, Mode, Media) then
-          ImportAllowed := False;
+        ParseStyleRule(Rule, BaseUrl, Mode, Media);
         Continue;
       end;
 
@@ -235,16 +231,12 @@ begin
         Continue;
 
       if RuleName = Ord(psid_import) then
-      begin
         // @import: requires document container for fetching — skip for now
-        ImportAllowed := False;
         Continue;
-      end;
 
       if RuleName = Ord(psid_media) then
       begin
         ParseMediaRule(Rule, BaseUrl, Mode, Media);
-        ImportAllowed := False;
         Continue;
       end;
 

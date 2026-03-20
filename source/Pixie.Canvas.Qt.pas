@@ -3,7 +3,7 @@ unit Pixie.Canvas.Qt;
 // QPainter implementation of TPixieCanvas for Qt5 and Qt6 widgetsets.
 // Provides 2D drawing via QPainter and text measurement via QFontMetrics.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

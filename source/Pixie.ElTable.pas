@@ -2,7 +2,7 @@ unit Pixie.ElTable;
 
 // Table elements: <table>, <tr>, <td>/<th>.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

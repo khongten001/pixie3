@@ -4,7 +4,7 @@ unit Pixie.Canvas.CG;
 // Provides 2D drawing via Quartz 2D and text measurement/rendering via CoreText.
 // SVG rendering uses Apple's private CoreSVG framework (macOS 10.15+).
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

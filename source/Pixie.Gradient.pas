@@ -5,7 +5,7 @@ unit Pixie.Gradient;
 // Parses linear-gradient, radial-gradient, conic-gradient (and repeating
 // variants) from componentized CSS function tokens into TPixieGradient.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -583,7 +583,7 @@ function ParseRadialShapeSizePositionInterpolation(Tokens: TPixieCssTokenList;
   Grad: TPixieGradient): Boolean;
 var
   Index, SaveIndex: Integer;
-  Shape, Val: Integer;
+  Shape: Integer;
   TempGrad: TPixieGradient;
   LColorSpace: TPixieColorSpace;
   LHueInterp: TPixieHueInterpolation;

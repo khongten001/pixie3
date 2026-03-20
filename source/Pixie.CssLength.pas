@@ -1,6 +1,6 @@
 unit Pixie.CssLength;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

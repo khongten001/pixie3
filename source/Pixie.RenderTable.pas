@@ -4,7 +4,7 @@ unit Pixie.RenderTable;
 // the CSS table layout algorithm: column width distribution, row height
 // calculation, cell placement, captions, and border collapse/separate.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -85,10 +85,8 @@ end;
 
 function TPixieRenderTable.Init: TPixieRenderItem;
 var
-  I, J, K: Integer;
-  El, Child, Cell, NewChild: TPixieRenderItem;
-  Colspan, Rowspan: Integer;
-  Brd: TPixieMargins;
+  I: Integer;
+  El, NewChild: TPixieRenderItem;
   Fm: TPixieFontMetrics;
   Doc: TPixieDocument;
 

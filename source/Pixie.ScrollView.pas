@@ -2,7 +2,7 @@ unit Pixie.ScrollView;
 
 // Scroll state management for overflow containers.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

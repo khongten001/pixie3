@@ -3,7 +3,7 @@ unit Pixie.RenderBlockContext;
 // Block formatting context — stacks block children vertically with
 // margin collapsing, float placement, and relative positioning.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

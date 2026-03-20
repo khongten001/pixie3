@@ -2,7 +2,7 @@ unit Pixie.ElImage;
 
 // Image element (<img>).
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

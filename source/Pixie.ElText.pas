@@ -2,7 +2,7 @@ unit Pixie.ElText;
 
 // Text and whitespace DOM nodes.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -266,6 +266,8 @@ begin
   case FCss.WhiteSpace of
     wsPre, wsPreLine, wsPreWrap:
       Result := FText = #10;
+    else
+      ;
   end;
 end;
 

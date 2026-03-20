@@ -3,7 +3,7 @@ unit Pixie.Document;
 // Document class — owns DOM tree, manages stylesheet application,
 // style computation, font caching, unit conversion, and rendering.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -1137,7 +1137,6 @@ var
   AnonTag: TPixieHtmlTag;
   AnonRi: TPixieRenderItem;
   Child: TPixieRenderItem;
-  I: Integer;
 
   procedure FlushElements;
   var

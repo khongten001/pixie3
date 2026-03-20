@@ -6,7 +6,7 @@ unit Pixie.Container;
 // to handle font creation, text measurement, drawing, image loading,
 // CSS import, and other platform-specific operations.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

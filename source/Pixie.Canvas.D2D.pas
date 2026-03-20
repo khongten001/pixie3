@@ -3,12 +3,12 @@ unit Pixie.Canvas.D2D;
 // Direct2D + DirectWrite implementation of TPixieCanvas for Windows.
 // Replaces GDI+ for jitter-free ClearType text and native gradient support.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
 uses
-  Windows, ActiveX, SysUtils, Math,
+  Windows, ActiveX, SysUtils, Classes, Math,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
   Pixie.Canvas,
@@ -110,6 +110,8 @@ type
     function PtToPx(Pt: Single): pixel_t; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
+    function LoadImageFromStream(
+      Stream: TStream): TPixieImageHandle; override;
     function LoadImageFromPixels(Width, Height: Integer;
       Pixels: Pointer; Pitch: Integer): TPixieImageHandle; override;
     procedure FreeImage(Handle: TPixieImageHandle); override;
@@ -1031,6 +1033,7 @@ var
   ValCount: Integer;
   Token: string;
 begin
+  FillChar(Vals, SizeOf(Vals), 0);
   W := 300;
   H := 150;
 
@@ -1080,7 +1083,7 @@ var
   F: file;
   Buf: array[0..4095] of AnsiChar;
   BytesRead: Integer;
-  S: string;
+  S: AnsiString;
   W, H: Single;
 begin
   Result := 0;
@@ -1099,8 +1102,8 @@ begin
     BlockRead(F, Buf, SizeOf(Buf), BytesRead);
     CloseFile(F);
     {$I+}
-    SetString(S, @Buf[0], BytesRead);
-    ParseSvgViewBox(S, W, H);
+    SetString(S, PAnsiChar(@Buf[0]), BytesRead);
+    ParseSvgViewBox(string(S), W, H);
   end;
 
   // Create IStream from file
@@ -1129,7 +1132,7 @@ var
   Stream: IStream;
   SvgDoc: ID2D1SvgDocument;
   ViewSize: TD2d1SizeF;
-  S: string;
+  S: AnsiString;
   W, H: Single;
   Hg: HGLOBAL;
   Ptr: Pointer;
@@ -1142,7 +1145,7 @@ begin
   Len := Size;
   if Len > 4096 then Len := 4096;
   SetString(S, PAnsiChar(Data), Len);
-  ParseSvgViewBox(S, W, H);
+  ParseSvgViewBox(string(S), W, H);
 
   // Create IStream from memory buffer
   Hg := GlobalAlloc(GMEM_MOVEABLE, Size);
@@ -1202,6 +1205,42 @@ begin
   if Failed(Decoder.GetFrame(0, Frame)) then Exit;
 
   // Convert to premultiplied BGRA for D2D compatibility
+  if Failed(FWicFactory.CreateFormatConverter(Converter)) then Exit;
+  if Failed(Converter.Initialize(Frame, GUID_WICPixelFormat32bppPBGRA,
+    WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then
+    Exit;
+
+  Frame.GetSize(IW, IH);
+
+  New(Info);
+  FillChar(Info^, SizeOf(TPixieD2DImage), 0);
+  Info.WicSource := Converter;
+  Info.ImgWidth := IW;
+  Info.ImgHeight := IH;
+  Result := TPixieImageHandle(Info);
+end;
+
+function TPixieD2DCanvas.LoadImageFromStream(
+  Stream: TStream): TPixieImageHandle;
+var
+  Info: PPixieD2DImage;
+  AdapterStream: IStream;
+  Decoder: IWICBitmapDecoder;
+  Frame: IWICBitmapFrameDecode;
+  Converter: IWICFormatConverter;
+  IW, IH: UINT;
+begin
+  Result := 0;
+  if (FWicFactory = nil) or (Stream = nil) or (Stream.Size = 0) then Exit;
+
+  Stream.Position := 0;
+  AdapterStream := TStreamAdapter.Create(Stream, soReference);
+  if Failed(FWicFactory.CreateDecoderFromStream(AdapterStream,
+    GUID_NULL, 0, Decoder)) then
+    Exit;
+
+  if Failed(Decoder.GetFrame(0, Frame)) then Exit;
+
   if Failed(FWicFactory.CreateFormatConverter(Converter)) then Exit;
   if Failed(Converter.Initialize(Frame, GUID_WICPixelFormat32bppPBGRA,
     WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then

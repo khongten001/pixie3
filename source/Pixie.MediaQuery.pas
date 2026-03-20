@@ -2,7 +2,7 @@ unit Pixie.MediaQuery;
 
 // CSS Media Queries Level 4 parsing and evaluation.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -610,7 +610,6 @@ function VerifyAndConvert(var MF: TPixieMediaFeature; Syntax: Integer;
 var
   Mfi: TMfInfo;
   RealName: string;
-  I: Integer;
 begin
   if Syntax = Ord(psid_boolean) then
   begin
@@ -684,7 +683,7 @@ var
   Index: Integer;
   MF: TPixieMediaFeature;
   Val0, Val1, Val2_0, Val2_1, DummyVal0, DummyVal1: TMfVal;
-  Op, Op2, SaveIdx: Integer;
+  Op, Op2: Integer;
   Name: string;
 begin
   if (Token = nil) or (Token.TokenType <> cssTokenRoundBlock) then Exit(nil);
@@ -732,7 +731,6 @@ begin
   if Tokens.Count < 3 then Exit(nil);
 
   // Try: name comparison value
-  SaveIdx := 0;
   Index := 0;
   if (TokenType(Tokens, 0) = cssTokenIdent) then
   begin
@@ -762,7 +760,6 @@ begin
   Index := 0;
   if ParseMfValue(Tokens, Index, Val0, Val1) then
   begin
-    SaveIdx := Index;
     if ParseMfComparison(Tokens, Index, Op) then
     begin
       if (TokenType(Tokens, Index) = cssTokenIdent) then
@@ -791,7 +788,6 @@ begin
   Index := 0;
   if ParseMfValue(Tokens, Index, Val0, Val1) then
   begin
-    SaveIdx := Index;
     if ParseMfLt(Tokens, Index, Op) then
     begin
       if (TokenType(Tokens, Index) = cssTokenIdent) then

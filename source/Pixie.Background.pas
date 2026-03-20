@@ -9,7 +9,7 @@ unit Pixie.Background;
 // (endpoints, radii, normalized color stops) for linear, radial and conic
 // gradients.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

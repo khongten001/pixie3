@@ -17,11 +17,11 @@
         <CompilerOptions>
           <Version Value="11"/>
           <Target>
-            <Filename Value="bin/PixieDemo"/>
+            <Filename Value="../bin/PixieDemo"/>
           </Target>
           <SearchPaths>
-            <OtherUnitFiles Value="../source;../package"/>
-            <UnitOutputDirectory Value="bin"/>
+            <OtherUnitFiles Value="../../source;../../package"/>
+            <UnitOutputDirectory Value="$Env(TEMP)/pixie-units/$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
             <SyntaxOptions>
@@ -49,11 +49,11 @@
         <CompilerOptions>
           <Version Value="11"/>
           <Target>
-            <Filename Value="bin/PixieDemo"/>
+            <Filename Value="../bin/PixieDemo"/>
           </Target>
           <SearchPaths>
-            <OtherUnitFiles Value="../source;../package"/>
-            <UnitOutputDirectory Value="bin"/>
+            <OtherUnitFiles Value="../../source;../../package"/>
+            <UnitOutputDirectory Value="$Env(TEMP)/pixie-units/$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
             <SyntaxOptions>
@@ -105,11 +105,11 @@
   <CompilerOptions>
     <Version Value="11"/>
     <Target>
-      <Filename Value="bin/PixieDemo"/>
+      <Filename Value="../bin/PixieDemo"/>
     </Target>
     <SearchPaths>
-      <OtherUnitFiles Value="../source;../package"/>
-      <UnitOutputDirectory Value="bin"/>
+      <OtherUnitFiles Value="../../source;../../package"/>
+      <UnitOutputDirectory Value="$Env(TEMP)/pixie-units/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
       <SyntaxOptions>

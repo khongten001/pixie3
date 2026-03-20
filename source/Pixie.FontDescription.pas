@@ -1,6 +1,6 @@
 unit Pixie.FontDescription;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

@@ -1,11 +1,17 @@
 unit Pixie.Types;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
 uses
   SysUtils, Generics.Collections, Math;
+
+{$IFNDEF FPC}
+type
+  PtrUInt = NativeUInt;
+  PtrInt = NativeInt;
+{$ENDIF}
 
 type
   pixel_t = Single;

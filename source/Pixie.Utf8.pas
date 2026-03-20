@@ -1,6 +1,6 @@
 unit Pixie.Utf8;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -9,6 +9,12 @@ procedure PrevUtf8Char(const Str: string; var Index: Integer);
 procedure AppendUtf8Char(var Str: string; Ch: UInt32);
 
 implementation
+
+{$IFDEF FPC}
+
+// ---------------------------------------------------------------------------
+// FPC implementation — string is UTF-8 (AnsiString)
+// ---------------------------------------------------------------------------
 
 function ReadUtf8Char(const Str: string; var Index: Integer): UInt32;
 var
@@ -123,5 +129,82 @@ begin
     Str := Str + Char((Ch and 63) + 128);
   end;
 end;
+
+{$ELSE}
+
+// ---------------------------------------------------------------------------
+// Delphi implementation — string is UTF-16 (UnicodeString)
+// ---------------------------------------------------------------------------
+
+function ReadUtf8Char(const Str: string; var Index: Integer): UInt32;
+var
+  W: Word;
+  Len: Integer;
+begin
+  Len := Length(Str);
+  if Index > Len then
+    Exit(0);
+
+  W := Ord(Str[Index]);
+  Inc(Index);
+
+  // BMP character (not a surrogate)
+  if (W < $D800) or (W > $DFFF) then
+    Exit(W);
+
+  // High surrogate — read low surrogate to form full codepoint
+  if (W >= $D800) and (W <= $DBFF) then
+  begin
+    Result := (W - $D800) shl 10;
+    if Index <= Len then
+    begin
+      W := Ord(Str[Index]);
+      if (W >= $DC00) and (W <= $DFFF) then
+      begin
+        Result := (Result or UInt32(W - $DC00)) + $10000;
+        Inc(Index);
+      end
+      else
+        Result := $FFFD;
+    end
+    else
+      Result := $FFFD;
+    Exit;
+  end;
+
+  // Lone low surrogate
+  Result := $FFFD;
+end;
+
+procedure PrevUtf8Char(const Str: string; var Index: Integer);
+var
+  W: Word;
+begin
+  if Index > 1 then
+  begin
+    Dec(Index);
+    W := Ord(Str[Index]);
+    // If we landed on a low surrogate, skip back past the high surrogate
+    if (W >= $DC00) and (W <= $DFFF) and (Index > 1) then
+      Dec(Index);
+  end;
+end;
+
+procedure AppendUtf8Char(var Str: string; Ch: UInt32);
+begin
+  if (Ch >= $D800) and (Ch <= $DFFF) then
+    Exit; // Surrogate: skip (error)
+
+  if Ch <= $FFFF then
+    Str := Str + Char(Ch)
+  else if Ch <= $10FFFF then
+  begin
+    Ch := Ch - $10000;
+    Str := Str + Char($D800 + (Ch shr 10));
+    Str := Str + Char($DC00 + (Ch and $3FF));
+  end;
+end;
+
+{$ENDIF}
 
 end.

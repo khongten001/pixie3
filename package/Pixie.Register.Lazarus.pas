@@ -1,6 +1,6 @@
-unit Pixie.Register;
+unit Pixie.Register.Lazarus;
 
-{$mode delphi}
+{$MODE DELPHI}
 
 {$R Pixie.IDE.Icons.res}
 

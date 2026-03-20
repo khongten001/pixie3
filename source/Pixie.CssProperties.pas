@@ -6,7 +6,7 @@ unit Pixie.CssProperties;
 // property values that drive layout and rendering.  The Compute() method
 // (which requires element and document types) is deferred to Phase 4.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -588,8 +588,6 @@ begin
     ParentSz := ElParent.Css.GetFontSize
   else
     ParentSz := DocFontSize;
-
-  FS := ParentSz;
 
   if Sz.IsPredefined then
   begin

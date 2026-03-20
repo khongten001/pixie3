@@ -2,7 +2,7 @@ unit Pixie.MasterCss;
 
 // Built-in user-agent stylesheet applied to all documents before author styles.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

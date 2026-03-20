@@ -10,7 +10,7 @@ unit Pixie.Element;
 //  - counter values
 // The document owns all element instances; elements do not free each other.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

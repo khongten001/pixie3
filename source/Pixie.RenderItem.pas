@@ -7,7 +7,7 @@ unit Pixie.RenderItem;
 // Subclasses (RenderBlock, RenderInlineContext, RenderFlex, etc.)
 // override _Render to implement specific layout algorithms.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -1097,10 +1097,6 @@ begin
       ElWidth  := El.SrcEl.Css.CssWidth;
       ElHeight := El.SrcEl.Css.CssHeight;
 
-      ElBottom := 0;
-      ElTop := 0;
-      ElH := 0;
-
       StaticOff := ElementStaticOffset(El);
       ElStaticX := El.FPos.X + StaticOff.X;
       ElStaticY := El.FPos.Y + StaticOff.Y;
@@ -1257,10 +1253,6 @@ begin
       end;
 
       // --- Horizontal position (CSS 2.2 §10.3.7) ---
-      ElRight := 0;
-      ElLeft := 0;
-      ElW := 0;
-
       if CssLeft.IsPredefined and (not CssRight.IsPredefined) and
          ElWidth.IsPredefined then
       begin
@@ -1470,7 +1462,6 @@ begin
   if not IsVisible then
     Exit;
 
-  ZIndexes := nil;
   if WithPositioned and (FPositioned <> nil) then
   begin
     ZIndexes := TList<Integer>.Create;

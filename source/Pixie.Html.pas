@@ -1,6 +1,6 @@
 unit Pixie.Html;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

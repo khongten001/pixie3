@@ -1,6 +1,6 @@
 unit Pixie.WebColor;
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

@@ -3,7 +3,7 @@ unit Pixie.Canvas.Cairo;
 // Cairo + PangoCairo implementation of TPixieCanvas for Linux/GTK2 and GTK3.
 // Provides 2D drawing via Cairo and text measurement/rendering via Pango.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 

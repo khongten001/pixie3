@@ -9,7 +9,7 @@ unit Pixie.Style;
 // and provides helper functions to parse individual property values from
 // token lists.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
@@ -501,8 +501,6 @@ begin
 end;
 
 function TPixiePropertyValue.Clone: TPixiePropertyValue;
-var
-  I: Integer;
 begin
   Result := Self;
   // Deep-copy owned objects so source and clone are independent
@@ -751,7 +749,7 @@ end;
 function ParseColorFunction(const FuncName: string; Args: TPixieCssTokenList;
   out Color: TPixieWebColor): Boolean;
 var
-  I, J: Integer;
+  I: Integer;
   Values: array[0..3] of Single;
   Count: Integer;
   IsHsl: Boolean;
@@ -764,7 +762,6 @@ begin
   Count := 0;
   Values[3] := 255; // default alpha
 
-  J := 0;
   for I := 0 to Args.Count - 1 do
   begin
     Tok := Args[I];
@@ -2668,7 +2665,6 @@ var
   Basis: TPixieCssLength;
   IdentId: Integer;
   AutoBasis: TPixieCssLength;
-  LenParsed: Boolean;
 begin
   N := Tokens.Count;
   if (N < 1) or (N > 3) then
@@ -2999,7 +2995,6 @@ var
   I, J: Integer;
   Tok: TPixieCssToken;
   Len, MinLen, MaxLen, MarkerLen: TPixieCssLength;
-  FuncName: string;
   Args: TPixieCssTokenList;
   CommaIdx: Integer;
 begin

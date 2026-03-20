@@ -3,7 +3,7 @@ unit Pixie.RenderInput;
 // Render item for <input type="checkbox"> and <input type="radio"> —
 // replaced elements with intrinsic size, no aspect ratio logic needed.
 
-{$mode delphi}
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
