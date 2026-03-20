@@ -60,6 +60,12 @@ It ships with four rendering backends so the same code works across operating sy
 - Owner-drawn form controls: text input, password, textarea, checkbox, radio, button
 - Caret, selection, clipboard, undo, Tab/Shift+Tab focus cycling
 
+**PDF Export**
+- Export any HTML content to multi-page PDF with `TPixiePdfExport`
+- TrueType font embedding with subsetting
+- Searchable/selectable text, images, gradients, borders, opacity
+- Configurable page size (A4, Letter, Legal, custom) and margins
+
 **DOM API**
 - `CreateElement`, `CreateTextNode`, `AppendChild`, `RemoveElement`
 - `GetElementById`, `QuerySelector`, `QuerySelectorAll`
@@ -132,6 +138,24 @@ Handle link clicks:
 procedure TForm1.PixieHtmlView1AnchorClick(Sender: TObject; const Url: string);
 begin
   // handle the click as desired
+end;
+```
+
+Export to PDF:
+
+```pascal
+uses Pixie.PdfExport;
+
+var
+  Pdf: TPixiePdfExport;
+begin
+  Pdf := TPixiePdfExport.Create;
+  try
+    Pdf.Title := 'My Document';
+    Pdf.SaveToFile(PixieHtmlView1.Html.Text, 'output.pdf');
+  finally
+    Pdf.Free;
+  end;
 end;
 ```
 

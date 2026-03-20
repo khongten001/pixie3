@@ -39,6 +39,9 @@ type
     FPostScriptName: string;
     FFsSelection: UInt16;
 
+    // Offset to the table directory (0 for plain TTF, font offset for TTC)
+    FTableBase: UInt32;
+
     // Table offsets and lengths
     FCmapOffset: UInt32;
     FCmapLength: UInt32;
@@ -123,7 +126,7 @@ implementation
 
 {$IFDEF MSWINDOWS}
 uses
-  {$IFDEF FPC}Registry{$ELSE}System.Win.Registry{$ENDIF};
+  {$IFDEF FPC}Registry{$ELSE}Winapi.Windows, System.Win.Registry{$ENDIF};
 {$ENDIF}
 
 // ---------------------------------------------------------------------------
@@ -181,13 +184,13 @@ begin
   Result := False;
   TblOffset := 0;
   TblLength := 0;
-  if Length(FData) < 12 then Exit;
+  if Length(FData) < Integer(FTableBase) + 12 then Exit;
 
-  NumTables := ReadU16(4);
+  NumTables := ReadU16(FTableBase + 4);
   SetLength(T, 4);
   for I := 0 to NumTables - 1 do
   begin
-    Offset := 12 + UInt32(I) * 16;
+    Offset := FTableBase + 12 + UInt32(I) * 16;
     if Offset + 15 >= UInt32(Length(FData)) then Exit;
     T[1] := AnsiChar(FData[Offset]);
     T[2] := AnsiChar(FData[Offset + 1]);
@@ -525,6 +528,16 @@ begin
     SetLength(FData, Stream.Size);
     Stream.Position := 0;
     if Stream.Read(FData[0], Length(FData)) <> Length(FData) then Exit;
+
+    // Detect TTC (TrueType Collection) — use first font
+    FTableBase := 0;
+    if (Length(FData) >= 16) and
+       (FData[0] = Ord('t')) and (FData[1] = Ord('t')) and
+       (FData[2] = Ord('c')) and (FData[3] = Ord('f')) then
+    begin
+      if ReadU32(8) = 0 then Exit; // numFonts = 0
+      FTableBase := ReadU32(12);   // offset to first font
+    end;
 
     if not ParseHead then Exit;
     if not ParseHhea then Exit;
@@ -1199,7 +1212,7 @@ var
         end;
 
         Ext := LowerCase(ExtractFileExt(SR.Name));
-        if (Ext <> '.ttf') and (Ext <> '.otf') then Continue;
+        if (Ext <> '.ttf') and (Ext <> '.otf') and (Ext <> '.ttc') then Continue;
 
         Font := TPixieTrueTypeFont.Create;
         try
@@ -1256,6 +1269,7 @@ begin
   {$IFDEF DARWIN}
   Result := ScanFontDirs(Family, Weight, Italic, [
     '/System/Library/Fonts',
+    '/System/Library/Fonts/Supplemental',
     '/Library/Fonts',
     ExpandFileName('~/Library/Fonts')
   ]);

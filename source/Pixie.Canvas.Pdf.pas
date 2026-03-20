@@ -177,13 +177,16 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
+    function LoadSvgFromData(Data: Pointer;
+      Size: Integer): TPixieImageHandle; override;
+
     property Writer: TPixiePdfWriter read FWriter;
   end;
 
 implementation
 
 uses
-  Pixie.Utf8
+  Pixie.Utf8, Pixie.SvgToPdf
   {$IFDEF FPC}
   , FPImage, FPReadPNG, FPReadBMP, FPReadGIF, FPReadJPEG
   {$ENDIF}
@@ -1120,6 +1123,8 @@ procedure TPixiePdfCanvas.DrawBorders(const Borders: TPixieBorders;
 
 var
   X, Y, W, H: Single;
+  HasR: Boolean;
+  PW: Single;
 begin
   if not Borders.IsVisible then Exit;
 
@@ -1127,6 +1132,34 @@ begin
   Y := Pos.Y;
   W := Pos.Width;
   H := Pos.Height;
+
+  HasR := (Borders.Radius.TopLeftX > 0) or (Borders.Radius.TopLeftY > 0) or
+          (Borders.Radius.TopRightX > 0) or (Borders.Radius.TopRightY > 0) or
+          (Borders.Radius.BottomRightX > 0) or (Borders.Radius.BottomRightY > 0) or
+          (Borders.Radius.BottomLeftX > 0) or (Borders.Radius.BottomLeftY > 0);
+
+  if HasR then
+  begin
+    // Stroke a rounded rect path using the top border's style
+    if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) and
+       (Borders.Top.Style <> bsHidden) then
+    begin
+      PW := PxToPt(Borders.Top.Width);
+      SetPdfColor(Borders.Top.Color, False);
+      EmitLn(PdfFloat(PW) + ' w');
+      case Borders.Top.Style of
+        bsDashed:
+          EmitLn('[' + PdfFloat(PW * 3) + ' ' + PdfFloat(PW * 3) + '] 0 d');
+        bsDotted:
+          EmitLn('[' + PdfFloat(PW) + ' ' + PdfFloat(PW) + '] 0 d');
+      else
+        EmitLn('[] 0 d');
+      end;
+      BuildRoundedRectPath(X, Y, W, H, Borders.Radius);
+      EmitLn('S');
+    end;
+    Exit;
+  end;
 
   // Top
   DrawSide(Borders.Top,
@@ -1409,12 +1442,31 @@ var
   ImgObj, SmaskObj: TPixiePdfObject;
   Info: TPixiePdfImageInfo;
   W, H: Integer;
-  IsJpeg: Boolean;
+  IsJpeg, IsSvg: Boolean;
   SofLen: Integer;
   I: Integer;
 begin
   Result := 0;
   if not FileExists(Path) then Exit;
+
+  // Detect SVG by file extension
+  if LowerCase(ExtractFileExt(Path)) = '.svg' then
+  begin
+    try
+      Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+      try
+        if Stream.Size < 4 then Exit;
+        SetLength(ImgData, Stream.Size);
+        Stream.Read(ImgData[0], Length(ImgData));
+      finally
+        Stream.Free;
+      end;
+    except
+      Exit;
+    end;
+    Result := LoadSvgFromData(@ImgData[0], Length(ImgData));
+    Exit;
+  end;
 
   try
     Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
@@ -1700,6 +1752,40 @@ begin
     EmitLn(PdfFloat(PxToPt(Points[I * 2])) + ' ' +
            PdfFloat(PxToY(Points[I * 2 + 1])) + ' l');
   EmitLn('S');
+end;
+
+// ---------------------------------------------------------------------------
+// SVG loading
+// ---------------------------------------------------------------------------
+
+function TPixiePdfCanvas.LoadSvgFromData(Data: Pointer;
+  Size: Integer): TPixieImageHandle;
+var
+  Renderer: TPixieSvgRenderer;
+  Info: TPixiePdfImageInfo;
+  ObjId: Integer;
+  W, H: Single;
+begin
+  Result := 0;
+  if (Data = nil) or (Size <= 0) then Exit;
+
+  Renderer := TPixieSvgRenderer.Create(FWriter, FFontCache);
+  try
+    ObjId := Renderer.RenderToFormXObject(Data, Size, W, H);
+  finally
+    Renderer.Free;
+  end;
+
+  if ObjId = 0 then Exit;
+
+  Info := TPixiePdfImageInfo.Create;
+  Info.PdfName := AllocImageName;
+  Info.ObjId := ObjId;
+  Info.SmaskObjId := 0;
+  Info.ImgWidth := Round(W);
+  Info.ImgHeight := Round(H);
+  FImages.Add(Info);
+  Result := TPixieImageHandle(Info);
 end;
 
 end.

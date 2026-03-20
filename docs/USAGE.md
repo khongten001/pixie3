@@ -371,6 +371,118 @@ Pixie includes owner-drawn form controls that do not rely on native OS widgets:
 
 All controls support `:focus`, `:checked`, `:disabled` pseudo-classes, Tab/Shift+Tab focus cycling, and CSS styling.
 
+## PDF Export
+
+Pixie can export any HTML content to a multi-page PDF document using `TPixiePdfExport`. The export uses its own PDF rendering canvas, independent of the on-screen component, so it works without a GUI.
+
+### Basic Usage
+
+```pascal
+uses Pixie.PdfExport;
+
+var
+  Pdf: TPixiePdfExport;
+begin
+  Pdf := TPixiePdfExport.Create;
+  try
+    Pdf.Title := 'My Report';
+    Pdf.Author := 'My Application';
+    Pdf.SaveToFile('<h1>Hello</h1><p>World</p>', 'report.pdf');
+  finally
+    Pdf.Free;
+  end;
+end;
+```
+
+### Exporting from TPixieHtmlView
+
+```pascal
+var
+  Pdf: TPixiePdfExport;
+begin
+  Pdf := TPixiePdfExport.Create;
+  try
+    Pdf.SaveToFile(PixieHtmlView1.Html.Text, 'output.pdf');
+  finally
+    Pdf.Free;
+  end;
+end;
+```
+
+### Saving to a Stream
+
+```pascal
+var
+  Pdf: TPixiePdfExport;
+  Stream: TMemoryStream;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    Pdf := TPixiePdfExport.Create;
+    try
+      Pdf.SaveToStream('<h1>Hello</h1>', Stream);
+    finally
+      Pdf.Free;
+    end;
+    // use Stream...
+  finally
+    Stream.Free;
+  end;
+end;
+```
+
+### Page Size and Margins
+
+```pascal
+Pdf := TPixiePdfExport.Create;
+Pdf.PageSize := ppsLetter;    // ppsA4 (default), ppsLetter, ppsLegal, ppsCustom
+Pdf.Margins.Top := 54;        // in points (72 points = 1 inch)
+Pdf.Margins.Bottom := 54;
+Pdf.Margins.Left := 72;
+Pdf.Margins.Right := 72;
+```
+
+For custom page sizes:
+
+```pascal
+Pdf.PageSize := ppsCustom;
+Pdf.CustomWidth := 400;       // points
+Pdf.CustomHeight := 600;      // points
+```
+
+### Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `PageSize` | `TPixiePdfPageSize` | `ppsA4` | Page size preset |
+| `CustomWidth` | `Single` | 0 | Custom page width in points (when `PageSize = ppsCustom`) |
+| `CustomHeight` | `Single` | 0 | Custom page height in points (when `PageSize = ppsCustom`) |
+| `Margins.Top` | `Single` | 72 | Top margin in points |
+| `Margins.Bottom` | `Single` | 72 | Bottom margin in points |
+| `Margins.Left` | `Single` | 72 | Left margin in points |
+| `Margins.Right` | `Single` | 72 | Right margin in points |
+| `Title` | `string` | — | PDF document title metadata |
+| `Author` | `string` | — | PDF document author metadata |
+
+### What Is Supported
+
+- Text with fonts, sizes, weights, styles, colours
+- TrueType font embedding with glyph subsetting (searchable/selectable text)
+- Tables, lists, flexbox, CSS Grid layouts
+- Borders (solid, dashed, dotted) with border-radius
+- Background colours and images
+- Linear and radial gradients
+- Opacity
+- Multi-page output with automatic page breaks
+
+### Limitations
+
+- Conic gradients are rendered as solid colour fills
+- Gradient opacity uses average alpha across all stops rather than per-stop alpha
+- SVG images are not supported in PDF output
+- Non-BMP characters (emoji) are not included in font subsets
+- Form controls are rendered but not interactive in PDF output
+
 ## Known Limitations
 
 ### SVG Support
