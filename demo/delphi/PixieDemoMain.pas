@@ -8,15 +8,17 @@ uses
   Vcl.StdCtrls, Vcl.ExtCtrls,
   System.Net.HttpClient,
   Pixie.HtmlView.VCL, Pixie.NativeContainer, Pixie.Url,
-  Pixie.Element, Pixie.Document;
+  Pixie.Element, Pixie.Document, Pixie.PdfExport;
 
 type
   TMainForm = class(TForm)
     BtnOpen: TButton;
+    BtnSavePdf: TButton;
     BtnGo: TButton;
     UrlEdit: TEdit;
     UrlPanel: TPanel;
     StatusBar: TStatusBar;
+    procedure BtnSavePdfClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure BtnOpenClick(Sender: TObject);
     procedure BtnGoClick(Sender: TObject);
@@ -616,6 +618,31 @@ end;
 // ---------------------------------------------------------------------------
 // Toolbar actions
 // ---------------------------------------------------------------------------
+
+procedure TMainForm.BtnSavePdfClick(Sender: TObject);
+var
+  Dlg: TSaveDialog;
+  Pdf: TPixiePdfExport;
+begin
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Filter := 'PDF files (*.pdf)|*.pdf';
+    Dlg.DefaultExt := '.pdf';
+    Dlg.FileName := 'document.pdf';
+    if Dlg.Execute then
+    begin
+      Pdf := TPixiePdfExport.Create;
+      try
+        Pdf.Title := Caption;
+        Pdf.SaveToFile(PixieHtmlView.Html.Text, Dlg.FileName);
+      finally
+        Pdf.Free;
+      end;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
 
 procedure TMainForm.BtnOpenClick(Sender: TObject);
 var

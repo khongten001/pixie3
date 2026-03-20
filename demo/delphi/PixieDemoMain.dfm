@@ -36,6 +36,21 @@ object MainForm: TMainForm
       TabOrder = 0
       OnClick = BtnOpenClick
     end
+    object BtnSavePdf: TButton
+      AlignWithMargins = True
+      Left = 138
+      Top = 6
+      Width = 90
+      Height = 24
+      Margins.Left = 4
+      Margins.Top = 6
+      Margins.Right = 0
+      Margins.Bottom = 6
+      Align = alLeft
+      Caption = 'Save as PDF'
+      TabOrder = 3
+      OnClick = BtnSavePdfClick
+    end
     object BtnGo: TButton
       AlignWithMargins = True
       Left = 746

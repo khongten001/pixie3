@@ -28,6 +28,18 @@ object MainForm: TMainForm
       Caption = 'Load HTML from file'
       OnClick = BtnOpenClick
     end
+    object BtnSavePdf: TSpeedButton
+      Left = 134
+      Height = 24
+      Top = 6
+      Width = 90
+      Align = alLeft
+      BorderSpacing.Left = 4
+      BorderSpacing.Top = 6
+      BorderSpacing.Bottom = 6
+      Caption = 'Save as PDF'
+      OnClick = BtnSavePdfClick
+    end
     object BtnGo: TButton
       Left = 746
       Height = 24

@@ -10,16 +10,18 @@ uses
   {$ifdef windows}Windows,{$endif}
   fphttpclient, opensslsockets,
   Pixie.HtmlView, Pixie.NativeContainer, Pixie.Url,
-  Pixie.Element, Pixie.Document;
+  Pixie.Element, Pixie.Document, Pixie.PdfExport;
 
 type
   TMainForm = class(TForm)
     BtnOpen: TSpeedButton;
+    BtnSavePdf: TSpeedButton;
     BtnGo: TButton;
     UrlEdit: TEdit;
     UrlPanel: TPanel;
     StatusBar: TStatusBar;
     PixieHtmlView: TPixieHtmlView;
+    procedure BtnSavePdfClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure BtnOpenClick(Sender: TObject);
     procedure BtnGoClick(Sender: TObject);
@@ -616,6 +618,39 @@ end;
 // ---------------------------------------------------------------------------
 // Toolbar actions
 // ---------------------------------------------------------------------------
+
+procedure TMainForm.BtnSavePdfClick(Sender: TObject);
+var
+  Dlg: TSaveDialog;
+  Pdf: TPixiePdfExport;
+begin
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Filter := 'PDF files (*.pdf)|*.pdf';
+    Dlg.DefaultExt := '.pdf';
+    Dlg.FileName := 'document.pdf';
+    if Dlg.Execute then
+    begin
+      Pdf := TPixiePdfExport.Create;
+      try
+        Pdf.Title := Caption;
+        try
+          Pdf.SaveToFile(PixieHtmlView.Html.Text, Dlg.FileName);
+          StatusBar.Panels[0].Text := 'PDF saved.';
+        except
+          on E: Exception do
+            ShowMessage(E.ClassName + ' at ' +
+              IntToHex({$IFDEF FPC}PtrUInt(ExceptAddr){$ELSE}0{$ENDIF}, 8) +
+              ': ' + E.Message);
+        end;
+      finally
+        Pdf.Free;
+      end;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
 
 procedure TMainForm.BtnOpenClick(Sender: TObject);
 var

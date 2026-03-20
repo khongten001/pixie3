@@ -1,0 +1,1705 @@
+unit Pixie.Canvas.Pdf;
+
+// PDF content stream implementation of TPixieCanvas.
+// All drawing is accumulated as PDF operators, text is measured
+// using TrueType font metrics, and results are written to PDF objects
+// via TPixiePdfWriter.
+
+{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
+
+interface
+
+uses
+  SysUtils, Classes, Math, Generics.Collections,
+  Pixie.Types, Pixie.WebColor, Pixie.Borders,
+  Pixie.Background, Pixie.FontDescription,
+  Pixie.Canvas, Pixie.TrueType, Pixie.PdfWriter;
+
+type
+  TPixieUInt16List = TList<UInt16>;
+  TPixiePdfObjectRefList = TList<TPixiePdfObject>;
+
+  { TPixiePdfFontInfo }
+
+  TPixiePdfFontInfo = class
+    TtFont: TPixieTrueTypeFont;
+    FamilyName: string;
+    FontSize: pixel_t;
+    DecorationLine: Integer;
+    PdfName: AnsiString;      // e.g. /F1
+    Type0ObjId: Integer;      // PDF object id for the Type0 font
+    CidFontObjId: Integer;
+    DescriptorObjId: Integer;
+    FontFileObjId: Integer;
+    ToUnicodeObjId: Integer;
+    UsedGlyphs: TPixieGlyphMap; // glyph ID -> codepoint
+    Metrics: TPixieFontMetrics;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+  TPixiePdfFontInfoList = TObjectList<TPixiePdfFontInfo>;
+
+  { TPixiePdfImageInfo }
+
+  TPixiePdfImageInfo = class
+    PdfName: AnsiString;      // e.g. /Im1
+    ObjId: Integer;
+    SmaskObjId: Integer;
+    ImgWidth: Integer;
+    ImgHeight: Integer;
+  end;
+
+  TPixiePdfImageInfoList = TObjectList<TPixiePdfImageInfo>;
+
+  { TPixiePdfSavedState }
+
+  TPixiePdfSavedState = record
+    Dummy: Integer;
+  end;
+
+  { TPixiePdfCanvas }
+
+  TPixiePdfCanvas = class(TPixieCanvas)
+  private
+    FWriter: TPixiePdfWriter;
+    FPageHeight: Single;       // in points
+    FFontCache: TPixieTrueTypeFontCache;
+    FFonts: TPixiePdfFontInfoList;
+    FImages: TPixiePdfImageInfoList;
+    FContentStream: TMemoryStream;
+    FFontCounter: Integer;
+    FImageCounter: Integer;
+    FGsCounter: Integer;
+    FShadingCounter: Integer;
+    FCurrentPage: TPixiePdfObject;
+    FAllPages: TPixiePdfObjectRefList;
+    FResourceFonts: AnsiString;
+    FResourceXObjects: AnsiString;
+    FResourceExtGState: AnsiString;
+    FResourceShading: AnsiString;
+    FOpacityStack: array[0..31] of Single;
+    FOpacityTop: Integer;
+
+    procedure Emit(const S: AnsiString);
+    procedure EmitLn(const S: AnsiString);
+    function PxToPt(V: Single): Single;
+    function PxToY(V: Single): Single;
+    procedure SetPdfColor(const C: TPixieWebColor; Fill: Boolean);
+    procedure BuildRoundedRectPath(X, Y, W, H: Single;
+      const R: TPixieBorderRadiuses);
+    function FindOrCreateFont(const Family: string;
+      Weight: Integer; Italic: Boolean): TPixieTrueTypeFont;
+    function AllocFontName: AnsiString;
+    function AllocImageName: AnsiString;
+    function AllocGsName: AnsiString;
+    function AllocShadingName: AnsiString;
+    procedure EmitBezierEllipse(CX, CY, RX, RY: Single);
+    procedure RegisterFontUsedGlyph(Info: TPixiePdfFontInfo;
+      GlyphId: UInt16; Codepoint: UInt32);
+    function BuildType2Function(const C0, C1: TPixieWebColor): TPixiePdfObject;
+    function BuildColorFunction(
+      ColorPoints: TPixieColorPointList): TPixiePdfObject;
+    procedure EmitClipPath(X, Y, W, H: Single;
+      const Radius: TPixieBorderRadiuses);
+    procedure BuildFontObjects(Info: TPixiePdfFontInfo);
+    procedure FinalizeFonts;
+    procedure FinalizePageResources;
+    {$IFDEF FPC}
+    function LoadImageFPImage(const Path: string): TPixieImageHandle;
+    {$ENDIF}
+  public
+    constructor Create(AWriter: TPixiePdfWriter;
+      AFontCache: TPixieTrueTypeFontCache);
+    destructor Destroy; override;
+
+    // Page management
+    procedure BeginPage(PageWidth, PageHeight: Single);
+    procedure EndPage;
+
+    // --- TPixieCanvas overrides ---
+
+    procedure BeginPaint(DC: PtrUInt); override;
+    procedure EndPaint; override;
+
+    procedure SaveState; override;
+    procedure RestoreState; override;
+    procedure PushOpacity(AOpacity: Single); override;
+    procedure PopOpacity; override;
+
+    procedure SetClipRect(const R: TPixiePosition;
+      const Radius: TPixieBorderRadiuses); override;
+
+    procedure FillRect(X, Y, W, H: Single;
+      Color: TPixieWebColor); override;
+    procedure FillRoundedRect(X, Y, W, H: Single;
+      const Radius: TPixieBorderRadiuses;
+      Color: TPixieWebColor); override;
+    procedure FillLinearGradient(X, Y, W, H: Single;
+      const Radius: TPixieBorderRadiuses;
+      const Gradient: TPixieLinearGradientLayer); override;
+    procedure FillRadialGradient(X, Y, W, H: Single;
+      const Radius: TPixieBorderRadiuses;
+      const Gradient: TPixieRadialGradientLayer); override;
+    procedure FillConicGradient(X, Y, W, H: Single;
+      const Radius: TPixieBorderRadiuses;
+      const Gradient: TPixieConicGradientLayer); override;
+
+    procedure DrawBorders(const Borders: TPixieBorders;
+      const Pos: TPixiePosition; IsRoot: Boolean); override;
+
+    function CreateFont(const Descr: TPixieFontDescription;
+      out Metrics: TPixieFontMetrics): TPixieFontHandle; override;
+    procedure DeleteFont(Handle: TPixieFontHandle); override;
+    function MeasureText(const Text: string;
+      Handle: TPixieFontHandle): pixel_t; override;
+    procedure DrawText(const Text: string; Handle: TPixieFontHandle;
+      Color: TPixieWebColor; X, Y, W, H: Single); override;
+    function PtToPx(Pt: Single): pixel_t; override;
+
+    function LoadImage(const Path: string): TPixieImageHandle; override;
+    function LoadImageFromPixels(Width, Height: Integer;
+      Pixels: Pointer; Pitch: Integer): TPixieImageHandle; override;
+    procedure FreeImage(Handle: TPixieImageHandle); override;
+    procedure GetImageSize(Handle: TPixieImageHandle;
+      out W, H: Single); override;
+    procedure DrawImage(Handle: TPixieImageHandle;
+      DstX, DstY, DstW, DstH: Single); override;
+
+    procedure FillEllipse(X, Y, W, H: Single;
+      Color: TPixieWebColor); override;
+    procedure DrawEllipse(X, Y, W, H: Single;
+      Color: TPixieWebColor; StrokeWidth: Single); override;
+    procedure DrawRect(X, Y, W, H: Single;
+      Color: TPixieWebColor; StrokeWidth: Single); override;
+    procedure DrawLine(X1, Y1, X2, Y2: Single;
+      Color: TPixieWebColor; StrokeWidth: Single); override;
+    procedure StrokePolyline(const Points: array of Single;
+      Color: TPixieWebColor; StrokeWidth: Single); override;
+
+    property Writer: TPixiePdfWriter read FWriter;
+  end;
+
+implementation
+
+uses
+  Pixie.Utf8
+  {$IFDEF FPC}
+  , FPImage, FPReadPNG, FPReadBMP, FPReadGIF, FPReadJPEG
+  {$ENDIF}
+  ;
+
+const
+  // Bezier kappa for circle approximation
+  Kappa: Single = 0.5522847498;
+
+// ---------------------------------------------------------------------------
+// TPixiePdfFontInfo
+// ---------------------------------------------------------------------------
+
+constructor TPixiePdfFontInfo.Create;
+begin
+  inherited Create;
+  UsedGlyphs := TPixieGlyphMap.Create;
+end;
+
+destructor TPixiePdfFontInfo.Destroy;
+begin
+  UsedGlyphs.Free;
+  inherited;
+end;
+
+// ---------------------------------------------------------------------------
+// TPixiePdfCanvas - construction
+// ---------------------------------------------------------------------------
+
+constructor TPixiePdfCanvas.Create(AWriter: TPixiePdfWriter;
+  AFontCache: TPixieTrueTypeFontCache);
+begin
+  inherited Create;
+  FWriter := AWriter;
+  FFontCache := AFontCache;
+  FFonts := TPixiePdfFontInfoList.Create(True);
+  FImages := TPixiePdfImageInfoList.Create(True);
+  FAllPages := TPixiePdfObjectRefList.Create;
+  FContentStream := TMemoryStream.Create;
+  FFontCounter := 0;
+  FImageCounter := 0;
+  FGsCounter := 0;
+  FShadingCounter := 0;
+  FOpacityTop := -1;
+end;
+
+destructor TPixiePdfCanvas.Destroy;
+begin
+  FAllPages.Free;
+  FContentStream.Free;
+  FImages.Free;
+  FFonts.Free;
+  inherited;
+end;
+
+// ---------------------------------------------------------------------------
+// Content stream writing
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.Emit(const S: AnsiString);
+begin
+  if Length(S) > 0 then
+    FContentStream.Write(S[1], Length(S));
+end;
+
+procedure TPixiePdfCanvas.EmitLn(const S: AnsiString);
+begin
+  Emit(S + #10);
+end;
+
+// ---------------------------------------------------------------------------
+// Coordinate transforms: Pixie px (top-left, Y-down) -> PDF pt (bottom-left, Y-up)
+// ---------------------------------------------------------------------------
+
+function TPixiePdfCanvas.PxToPt(V: Single): Single;
+begin
+  Result := V * 72.0 / 96.0;
+end;
+
+function TPixiePdfCanvas.PxToY(V: Single): Single;
+begin
+  // Convert Pixie Y (px, top-down) to PDF Y (pt, bottom-up)
+  Result := FPageHeight - V * 72.0 / 96.0;
+end;
+
+// ---------------------------------------------------------------------------
+// PDF color operators
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.SetPdfColor(const C: TPixieWebColor; Fill: Boolean);
+var
+  R, G, B: Single;
+begin
+  R := C.Red / 255.0;
+  G := C.Green / 255.0;
+  B := C.Blue / 255.0;
+  if Fill then
+    EmitLn(PdfFloat(R) + ' ' + PdfFloat(G) + ' ' + PdfFloat(B) + ' rg')
+  else
+    EmitLn(PdfFloat(R) + ' ' + PdfFloat(G) + ' ' + PdfFloat(B) + ' RG');
+end;
+
+// ---------------------------------------------------------------------------
+// Rounded rect path
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.BuildRoundedRectPath(X, Y, W, H: Single;
+  const R: TPixieBorderRadiuses);
+var
+  PX, PY, PW, PH: Single;
+  RTlX, RTlY, RTrX, RTrY, RBrX, RBrY, RBlX, RBlY: Single;
+begin
+  PX := PxToPt(X);
+  PY := PxToY(Y + H); // bottom-left in PDF coords
+  PW := PxToPt(W);
+  PH := PxToPt(H);
+  RTlX := PxToPt(R.TopLeftX);
+  RTlY := PxToPt(R.TopLeftY);
+  RTrX := PxToPt(R.TopRightX);
+  RTrY := PxToPt(R.TopRightY);
+  RBrX := PxToPt(R.BottomRightX);
+  RBrY := PxToPt(R.BottomRightY);
+  RBlX := PxToPt(R.BottomLeftX);
+  RBlY := PxToPt(R.BottomLeftY);
+
+  // Start at top-left, after the top-left radius (in PDF: top = PY + PH)
+  EmitLn(PdfFloat(PX + RTlX) + ' ' + PdfFloat(PY + PH) + ' m');
+
+  // Top edge -> top-right corner
+  EmitLn(PdfFloat(PX + PW - RTrX) + ' ' + PdfFloat(PY + PH) + ' l');
+  if (RTrX > 0) or (RTrY > 0) then
+    EmitLn(
+      PdfFloat(PX + PW - RTrX + RTrX * Kappa) + ' ' + PdfFloat(PY + PH) + ' ' +
+      PdfFloat(PX + PW) + ' ' + PdfFloat(PY + PH - RTrY + RTrY * Kappa) + ' ' +
+      PdfFloat(PX + PW) + ' ' + PdfFloat(PY + PH - RTrY) + ' c');
+
+  // Right edge -> bottom-right corner
+  EmitLn(PdfFloat(PX + PW) + ' ' + PdfFloat(PY + RBrY) + ' l');
+  if (RBrX > 0) or (RBrY > 0) then
+    EmitLn(
+      PdfFloat(PX + PW) + ' ' + PdfFloat(PY + RBrY - RBrY * Kappa) + ' ' +
+      PdfFloat(PX + PW - RBrX + RBrX * Kappa) + ' ' + PdfFloat(PY) + ' ' +
+      PdfFloat(PX + PW - RBrX) + ' ' + PdfFloat(PY) + ' c');
+
+  // Bottom edge -> bottom-left corner
+  EmitLn(PdfFloat(PX + RBlX) + ' ' + PdfFloat(PY) + ' l');
+  if (RBlX > 0) or (RBlY > 0) then
+    EmitLn(
+      PdfFloat(PX + RBlX - RBlX * Kappa) + ' ' + PdfFloat(PY) + ' ' +
+      PdfFloat(PX) + ' ' + PdfFloat(PY + RBlY - RBlY * Kappa) + ' ' +
+      PdfFloat(PX) + ' ' + PdfFloat(PY + RBlY) + ' c');
+
+  // Left edge -> top-left corner
+  EmitLn(PdfFloat(PX) + ' ' + PdfFloat(PY + PH - RTlY) + ' l');
+  if (RTlX > 0) or (RTlY > 0) then
+    EmitLn(
+      PdfFloat(PX) + ' ' + PdfFloat(PY + PH - RTlY + RTlY * Kappa) + ' ' +
+      PdfFloat(PX + RTlX - RTlX * Kappa) + ' ' + PdfFloat(PY + PH) + ' ' +
+      PdfFloat(PX + RTlX) + ' ' + PdfFloat(PY + PH) + ' c');
+end;
+
+// ---------------------------------------------------------------------------
+// Bezier ellipse (4 curves)
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.EmitBezierEllipse(CX, CY, RX, RY: Single);
+var
+  KX, KY: Single;
+begin
+  KX := RX * Kappa;
+  KY := RY * Kappa;
+
+  // Start at top
+  EmitLn(PdfFloat(CX) + ' ' + PdfFloat(CY + RY) + ' m');
+  // Top -> right
+  EmitLn(PdfFloat(CX + KX) + ' ' + PdfFloat(CY + RY) + ' ' +
+         PdfFloat(CX + RX) + ' ' + PdfFloat(CY + KY) + ' ' +
+         PdfFloat(CX + RX) + ' ' + PdfFloat(CY) + ' c');
+  // Right -> bottom
+  EmitLn(PdfFloat(CX + RX) + ' ' + PdfFloat(CY - KY) + ' ' +
+         PdfFloat(CX + KX) + ' ' + PdfFloat(CY - RY) + ' ' +
+         PdfFloat(CX) + ' ' + PdfFloat(CY - RY) + ' c');
+  // Bottom -> left
+  EmitLn(PdfFloat(CX - KX) + ' ' + PdfFloat(CY - RY) + ' ' +
+         PdfFloat(CX - RX) + ' ' + PdfFloat(CY - KY) + ' ' +
+         PdfFloat(CX - RX) + ' ' + PdfFloat(CY) + ' c');
+  // Left -> top
+  EmitLn(PdfFloat(CX - RX) + ' ' + PdfFloat(CY + KY) + ' ' +
+         PdfFloat(CX - KX) + ' ' + PdfFloat(CY + RY) + ' ' +
+         PdfFloat(CX) + ' ' + PdfFloat(CY + RY) + ' c');
+end;
+
+// ---------------------------------------------------------------------------
+// Font management
+// ---------------------------------------------------------------------------
+
+function TPixiePdfCanvas.FindOrCreateFont(const Family: string;
+  Weight: Integer; Italic: Boolean): TPixieTrueTypeFont;
+var
+  Key, FilePath: string;
+begin
+  Key := LowerCase(Family) + ':' + IntToStr(Weight) + ':' +
+    IntToStr(Ord(Italic));
+
+  if FFontCache.TryGetValue(Key, Result) then
+    Exit;
+
+  FilePath := PixieFindFontFile(Family, Weight, Italic);
+  if FilePath = '' then
+  begin
+    // Try default sans-serif
+    {$IFDEF MSWINDOWS}
+    FilePath := PixieFindFontFile('Segoe UI', Weight, Italic);
+    if FilePath = '' then
+      FilePath := PixieFindFontFile('Arial', Weight, Italic);
+    {$ENDIF}
+    {$IFDEF LINUX}
+    FilePath := PixieFindFontFile('DejaVu Sans', Weight, Italic);
+    {$ENDIF}
+    {$IFDEF DARWIN}
+    FilePath := PixieFindFontFile('Helvetica', Weight, Italic);
+    {$ENDIF}
+  end;
+
+  Result := TPixieTrueTypeFont.Create;
+  if (FilePath <> '') and Result.LoadFromFile(FilePath) then
+    FFontCache.Add(Key, Result)
+  else
+  begin
+    Result.Free;
+    Result := nil;
+  end;
+end;
+
+function TPixiePdfCanvas.AllocFontName: AnsiString;
+begin
+  Inc(FFontCounter);
+  Result := 'F' + AnsiString(IntToStr(FFontCounter));
+end;
+
+function TPixiePdfCanvas.AllocImageName: AnsiString;
+begin
+  Inc(FImageCounter);
+  Result := 'Im' + AnsiString(IntToStr(FImageCounter));
+end;
+
+function TPixiePdfCanvas.AllocGsName: AnsiString;
+begin
+  Inc(FGsCounter);
+  Result := 'GS' + AnsiString(IntToStr(FGsCounter));
+end;
+
+function TPixiePdfCanvas.AllocShadingName: AnsiString;
+begin
+  Inc(FShadingCounter);
+  Result := 'Sh' + AnsiString(IntToStr(FShadingCounter));
+end;
+
+// ---------------------------------------------------------------------------
+// Gradient helpers
+// ---------------------------------------------------------------------------
+
+function TPixiePdfCanvas.BuildType2Function(
+  const C0, C1: TPixieWebColor): TPixiePdfObject;
+begin
+  Result := FWriter.AllocObject;
+  Result.AddEntry('FunctionType', '2');
+  Result.AddEntry('Domain', '[0 1]');
+  Result.AddEntry('C0', '[' + PdfFloat(C0.Red / 255.0) + ' ' +
+    PdfFloat(C0.Green / 255.0) + ' ' + PdfFloat(C0.Blue / 255.0) + ']');
+  Result.AddEntry('C1', '[' + PdfFloat(C1.Red / 255.0) + ' ' +
+    PdfFloat(C1.Green / 255.0) + ' ' + PdfFloat(C1.Blue / 255.0) + ']');
+  Result.AddEntry('N', '1');
+end;
+
+function TPixiePdfCanvas.BuildColorFunction(
+  ColorPoints: TPixieColorPointList): TPixiePdfObject;
+var
+  I, N: Integer;
+  SubFuncs: TPixiePdfObjectRefList;
+  FuncsStr, BoundsStr, EncodeStr: AnsiString;
+begin
+  N := ColorPoints.Count;
+  if N < 2 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
+  if N = 2 then
+  begin
+    Result := BuildType2Function(ColorPoints[0].Color,
+      ColorPoints[1].Color);
+    Exit;
+  end;
+
+  // N >= 3: build stitching function (Type 3)
+  SubFuncs := TPixiePdfObjectRefList.Create;
+  try
+    for I := 0 to N - 2 do
+      SubFuncs.Add(BuildType2Function(ColorPoints[I].Color,
+        ColorPoints[I + 1].Color));
+
+    FuncsStr := '[';
+    for I := 0 to SubFuncs.Count - 1 do
+      FuncsStr := FuncsStr + PdfRef(SubFuncs[I].Id) + ' ';
+    FuncsStr := FuncsStr + ']';
+
+    BoundsStr := '[';
+    for I := 1 to N - 2 do
+      BoundsStr := BoundsStr + PdfFloat(ColorPoints[I].Offset) + ' ';
+    BoundsStr := BoundsStr + ']';
+
+    EncodeStr := '[';
+    for I := 0 to N - 2 do
+      EncodeStr := EncodeStr + '0 1 ';
+    EncodeStr := EncodeStr + ']';
+
+    Result := FWriter.AllocObject;
+    Result.AddEntry('FunctionType', '3');
+    Result.AddEntry('Domain', '[0 1]');
+    Result.AddEntry('Functions', FuncsStr);
+    Result.AddEntry('Bounds', BoundsStr);
+    Result.AddEntry('Encode', EncodeStr);
+  finally
+    SubFuncs.Free;
+  end;
+end;
+
+procedure TPixiePdfCanvas.EmitClipPath(X, Y, W, H: Single;
+  const Radius: TPixieBorderRadiuses);
+var
+  HasR: Boolean;
+  PX, PY, PW, PH: Single;
+begin
+  HasR := (Radius.TopLeftX > 0) or (Radius.TopLeftY > 0) or
+          (Radius.TopRightX > 0) or (Radius.TopRightY > 0) or
+          (Radius.BottomRightX > 0) or (Radius.BottomRightY > 0) or
+          (Radius.BottomLeftX > 0) or (Radius.BottomLeftY > 0);
+
+  if HasR then
+  begin
+    BuildRoundedRectPath(X, Y, W, H, Radius);
+    EmitLn('W n');
+  end
+  else
+  begin
+    PX := PxToPt(X);
+    PY := PxToY(Y + H);
+    PW := PxToPt(W);
+    PH := PxToPt(H);
+    EmitLn(PdfFloat(PX) + ' ' + PdfFloat(PY) + ' ' +
+           PdfFloat(PW) + ' ' + PdfFloat(PH) + ' re W n');
+  end;
+end;
+
+procedure TPixiePdfCanvas.RegisterFontUsedGlyph(Info: TPixiePdfFontInfo;
+  GlyphId: UInt16; Codepoint: UInt32);
+begin
+  if not Info.UsedGlyphs.ContainsKey(GlyphId) then
+    Info.UsedGlyphs.Add(GlyphId, Codepoint);
+end;
+
+// ---------------------------------------------------------------------------
+// Font PDF object construction
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.BuildFontObjects(Info: TPixiePdfFontInfo);
+var
+  FontFile, Descriptor, CidFont, Type0, ToUnicode: TPixiePdfObject;
+  FontData: TBytes;
+  WArray: AnsiString;
+  I, J, ChunkSize: Integer;
+  Pair: TPair<UInt16, UInt32>;
+  SortedGlyphs: TPixieUInt16List;
+  GlyphId: UInt16;
+  AdvWidth: UInt16;
+  Scale: Single;
+  CmapStr: AnsiString;
+  Flags: Integer;
+  Asc, Desc: Single;
+begin
+  if Info.TtFont = nil then Exit;
+
+  Scale := 1000.0 / Info.TtFont.UnitsPerEm;
+
+  // 1. FontFile2 — Flate-compressed subset .ttf
+  FontFile := FWriter.AllocObject;
+  Info.FontFileObjId := FontFile.Id;
+  FontData := Info.TtFont.BuildSubsetFont(Info.UsedGlyphs);
+  FontFile.AddEntry('Length1', AnsiString(IntToStr(Length(FontData))));
+  FontFile.SetStream(FontData, True);
+
+  // 2. FontDescriptor
+  Descriptor := FWriter.AllocObject;
+  Info.DescriptorObjId := Descriptor.Id;
+  Flags := 32; // Nonsymbolic
+  if Info.TtFont.ItalicAngle <> 0 then
+    Flags := Flags or 64; // Italic
+  if Info.TtFont.WeightClass >= 700 then
+    Flags := Flags or (1 shl 18); // ForceBold
+
+  Asc := Info.TtFont.Ascent * Scale;
+  Desc := Info.TtFont.Descent * Scale;
+
+  Descriptor.AddEntry('Type', '/FontDescriptor');
+  Descriptor.AddEntry('FontName', '/' + Info.PdfName + 'TT');
+  Descriptor.AddEntry('Flags', AnsiString(IntToStr(Flags)));
+  Descriptor.AddEntry('FontBBox', PdfRect(
+    Info.TtFont.BBoxXMin * Scale,
+    Info.TtFont.BBoxYMin * Scale,
+    Info.TtFont.BBoxXMax * Scale,
+    Info.TtFont.BBoxYMax * Scale));
+  Descriptor.AddEntry('ItalicAngle', PdfFloat(Info.TtFont.ItalicAngle));
+  Descriptor.AddEntry('Ascent', PdfFloat(Asc));
+  Descriptor.AddEntry('Descent', PdfFloat(Desc));
+  Descriptor.AddEntry('CapHeight',
+    PdfFloat(Info.TtFont.CapHeight * Scale));
+  Descriptor.AddEntry('StemV', '80');
+  Descriptor.AddEntry('FontFile2', PdfRef(FontFile.Id));
+
+  // 3. /W array (glyph widths for used glyphs)
+  SortedGlyphs := TPixieUInt16List.Create;
+  try
+    for Pair in Info.UsedGlyphs do
+      SortedGlyphs.Add(Pair.Key);
+    SortedGlyphs.Sort;
+
+    WArray := '[';
+    for I := 0 to SortedGlyphs.Count - 1 do
+    begin
+      GlyphId := SortedGlyphs[I];
+      AdvWidth := Info.TtFont.GetGlyphWidth(GlyphId);
+      WArray := WArray + AnsiString(IntToStr(GlyphId)) + ' [' +
+        PdfFloat(AdvWidth * Scale) + '] ';
+    end;
+    WArray := WArray + ']';
+  finally
+    SortedGlyphs.Free;
+  end;
+
+  // 4. CIDFontType2
+  CidFont := FWriter.AllocObject;
+  Info.CidFontObjId := CidFont.Id;
+  CidFont.AddEntry('Type', '/Font');
+  CidFont.AddEntry('Subtype', '/CIDFontType2');
+  CidFont.AddEntry('BaseFont', '/' + Info.PdfName + 'TT');
+  CidFont.AddEntry('CIDSystemInfo',
+    '<< /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>');
+  CidFont.AddEntry('FontDescriptor', PdfRef(Descriptor.Id));
+  CidFont.AddEntry('W', WArray);
+  CidFont.AddEntry('DW', '1000');
+
+  // 5. ToUnicode CMap
+  ToUnicode := FWriter.AllocObject;
+  Info.ToUnicodeObjId := ToUnicode.Id;
+
+  CmapStr :=
+    '/CIDInit /ProcSet findresource begin'#10 +
+    '12 dict begin'#10 +
+    'begincmap'#10 +
+    '/CIDSystemInfo'#10 +
+    '<< /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def'#10 +
+    '/CMapName /Adobe-Identity-UCS def'#10 +
+    '/CMapType 2 def'#10 +
+    '1 begincodespacerange'#10 +
+    '<0000> <FFFF>'#10 +
+    'endcodespacerange'#10;
+
+  // Build bfchar entries
+  SortedGlyphs := TPixieUInt16List.Create;
+  try
+    for Pair in Info.UsedGlyphs do
+      SortedGlyphs.Add(Pair.Key);
+    SortedGlyphs.Sort;
+
+    if SortedGlyphs.Count > 0 then
+    begin
+      I := 0;
+      while I < SortedGlyphs.Count do
+      begin
+        ChunkSize := SortedGlyphs.Count - I;
+        if ChunkSize > 100 then
+          ChunkSize := 100;
+        CmapStr := CmapStr +
+          AnsiString(IntToStr(ChunkSize)) + ' beginbfchar'#10;
+        for J := I to I + ChunkSize - 1 do
+        begin
+          GlyphId := SortedGlyphs[J];
+          CmapStr := CmapStr +
+            '<' + AnsiString(LowerCase(IntToHex(GlyphId, 4))) + '> ' +
+            '<' + AnsiString(LowerCase(IntToHex(
+              Info.UsedGlyphs[GlyphId], 4))) + '>'#10;
+        end;
+        CmapStr := CmapStr + 'endbfchar'#10;
+        Inc(I, ChunkSize);
+      end;
+    end;
+  finally
+    SortedGlyphs.Free;
+  end;
+
+  CmapStr := CmapStr +
+    'endcmap'#10 +
+    'CMapName currentdict /CMap defineresource pop'#10 +
+    'end'#10 +
+    'end'#10;
+
+  ToUnicode.SetStream(TEncoding.ASCII.GetBytes(string(CmapStr)), True);
+
+  // 6. Type0 (composite font root)
+  Type0 := FWriter.AllocObject;
+  Info.Type0ObjId := Type0.Id;
+  Type0.AddEntry('Type', '/Font');
+  Type0.AddEntry('Subtype', '/Type0');
+  Type0.AddEntry('BaseFont', '/' + Info.PdfName + 'TT');
+  Type0.AddEntry('Encoding', '/Identity-H');
+  Type0.AddEntry('DescendantFonts', '[' + PdfRef(CidFont.Id) + ']');
+  Type0.AddEntry('ToUnicode', PdfRef(ToUnicode.Id));
+end;
+
+procedure TPixiePdfCanvas.FinalizeFonts;
+var
+  I: Integer;
+begin
+  for I := 0 to FFonts.Count - 1 do
+    BuildFontObjects(FFonts[I]);
+end;
+
+procedure TPixiePdfCanvas.FinalizePageResources;
+var
+  I: Integer;
+  FontsDict, XObjDict: AnsiString;
+begin
+  // Build font resource dictionary string
+  FontsDict := '<< ';
+  for I := 0 to FFonts.Count - 1 do
+  begin
+    if FFonts[I].Type0ObjId <> 0 then
+      FontsDict := FontsDict + '/' + FFonts[I].PdfName + ' ' +
+        PdfRef(FFonts[I].Type0ObjId) + ' ';
+  end;
+  FontsDict := FontsDict + '>>';
+  FResourceFonts := FontsDict;
+
+  // Build XObject dictionary for images
+  XObjDict := '<< ';
+  for I := 0 to FImages.Count - 1 do
+    XObjDict := XObjDict + '/' + FImages[I].PdfName + ' ' +
+      PdfRef(FImages[I].ObjId) + ' ';
+  XObjDict := XObjDict + '>>';
+  FResourceXObjects := XObjDict;
+end;
+
+// ---------------------------------------------------------------------------
+// Page management
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.BeginPage(PageWidth, PageHeight: Single);
+begin
+  FPageHeight := PageHeight;
+  FContentStream.Size := 0;
+  FCurrentPage := FWriter.AllocPage(PageWidth, PageHeight);
+  FAllPages.Add(FCurrentPage);
+end;
+
+procedure TPixiePdfCanvas.EndPage;
+var
+  ContentObj: TPixiePdfObject;
+  Buf: TBytes;
+begin
+  // Create content stream object
+  ContentObj := FWriter.AllocObject;
+  SetLength(Buf, FContentStream.Size);
+  if FContentStream.Size > 0 then
+  begin
+    FContentStream.Position := 0;
+    FContentStream.Read(Buf[0], Length(Buf));
+  end;
+  ContentObj.SetStream(Buf, True);
+
+  FCurrentPage.AddEntry('Contents', PdfRef(ContentObj.Id));
+
+  // Resources will be finalized later when all fonts are known
+  // Store the page for later resource assignment
+end;
+
+// ---------------------------------------------------------------------------
+// TPixieCanvas overrides
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.BeginPaint(DC: PtrUInt);
+begin
+  // No-op for PDF
+end;
+
+procedure TPixiePdfCanvas.EndPaint;
+var
+  I: Integer;
+  ResStr: AnsiString;
+begin
+  // Finalize all font objects and assign resources to pages
+  FinalizeFonts;
+  FinalizePageResources;
+
+  // Build combined resource string
+  ResStr := '<< /Font ' + FResourceFonts +
+    ' /XObject ' + FResourceXObjects;
+  if FResourceExtGState <> '' then
+    ResStr := ResStr + ' /ExtGState << ' + FResourceExtGState + ' >>';
+  if FResourceShading <> '' then
+    ResStr := ResStr + ' /Shading << ' + FResourceShading + ' >>';
+  ResStr := ResStr + ' >>';
+
+  // Set resources on all pages
+  for I := 0 to FAllPages.Count - 1 do
+    FAllPages[I].SetEntry('Resources', ResStr);
+end;
+
+procedure TPixiePdfCanvas.SaveState;
+begin
+  EmitLn('q');
+end;
+
+procedure TPixiePdfCanvas.RestoreState;
+begin
+  EmitLn('Q');
+end;
+
+procedure TPixiePdfCanvas.PushOpacity(AOpacity: Single);
+var
+  GsName: AnsiString;
+  GsObj: TPixiePdfObject;
+  Effective: Single;
+begin
+  // Compose with parent opacity
+  if (FOpacityTop >= 0) and (FOpacityTop <= High(FOpacityStack)) then
+    Effective := AOpacity * FOpacityStack[FOpacityTop]
+  else
+    Effective := AOpacity;
+
+  Inc(FOpacityTop);
+  if FOpacityTop <= High(FOpacityStack) then
+    FOpacityStack[FOpacityTop] := Effective;
+
+  // Create ExtGState object
+  GsObj := FWriter.AllocObject;
+  GsObj.AddEntry('Type', '/ExtGState');
+  GsObj.AddEntry('ca', PdfFloat(Effective));
+  GsObj.AddEntry('CA', PdfFloat(Effective));
+
+  GsName := AllocGsName;
+  FResourceExtGState := FResourceExtGState + '/' + GsName + ' ' +
+    PdfRef(GsObj.Id) + ' ';
+
+  EmitLn('q');
+  EmitLn('/' + GsName + ' gs');
+end;
+
+procedure TPixiePdfCanvas.PopOpacity;
+begin
+  if FOpacityTop >= 0 then
+    Dec(FOpacityTop);
+  EmitLn('Q');
+end;
+
+procedure TPixiePdfCanvas.SetClipRect(const R: TPixiePosition;
+  const Radius: TPixieBorderRadiuses);
+var
+  HasR: Boolean;
+  PX, PY, PW, PH: Single;
+begin
+  HasR := (Radius.TopLeftX > 0) or (Radius.TopLeftY > 0) or
+          (Radius.TopRightX > 0) or (Radius.TopRightY > 0) or
+          (Radius.BottomRightX > 0) or (Radius.BottomRightY > 0) or
+          (Radius.BottomLeftX > 0) or (Radius.BottomLeftY > 0);
+
+  if HasR then
+  begin
+    BuildRoundedRectPath(R.X, R.Y, R.Width, R.Height, Radius);
+    EmitLn('W n');
+  end
+  else
+  begin
+    PX := PxToPt(R.X);
+    PY := PxToY(R.Y + R.Height);
+    PW := PxToPt(R.Width);
+    PH := PxToPt(R.Height);
+    EmitLn(PdfFloat(PX) + ' ' + PdfFloat(PY) + ' ' +
+           PdfFloat(PW) + ' ' + PdfFloat(PH) + ' re W n');
+  end;
+end;
+
+procedure TPixiePdfCanvas.FillRect(X, Y, W, H: Single;
+  Color: TPixieWebColor);
+var
+  PX, PY, PW, PH: Single;
+begin
+  if Color.Alpha = 0 then Exit;
+  PX := PxToPt(X);
+  PY := PxToY(Y + H);
+  PW := PxToPt(W);
+  PH := PxToPt(H);
+  SetPdfColor(Color, True);
+  EmitLn(PdfFloat(PX) + ' ' + PdfFloat(PY) + ' ' +
+         PdfFloat(PW) + ' ' + PdfFloat(PH) + ' re f');
+end;
+
+procedure TPixiePdfCanvas.FillRoundedRect(X, Y, W, H: Single;
+  const Radius: TPixieBorderRadiuses; Color: TPixieWebColor);
+var
+  HasR: Boolean;
+begin
+  if Color.Alpha = 0 then Exit;
+
+  HasR := (Radius.TopLeftX > 0) or (Radius.TopLeftY > 0) or
+          (Radius.TopRightX > 0) or (Radius.TopRightY > 0) or
+          (Radius.BottomRightX > 0) or (Radius.BottomRightY > 0) or
+          (Radius.BottomLeftX > 0) or (Radius.BottomLeftY > 0);
+
+  SetPdfColor(Color, True);
+  if HasR then
+  begin
+    BuildRoundedRectPath(X, Y, W, H, Radius);
+    EmitLn('f');
+  end
+  else
+    FillRect(X, Y, W, H, Color);
+end;
+
+procedure TPixiePdfCanvas.FillLinearGradient(X, Y, W, H: Single;
+  const Radius: TPixieBorderRadiuses;
+  const Gradient: TPixieLinearGradientLayer);
+var
+  ColorFunc, ShadingObj: TPixiePdfObject;
+  ShName: AnsiString;
+  X0, Y0, X1, Y1: Single;
+  I: Integer;
+  AvgAlpha: Single;
+  GsObj: TPixiePdfObject;
+  GsName: AnsiString;
+begin
+  if Gradient.ColorPoints.Count < 2 then Exit;
+
+  ColorFunc := BuildColorFunction(Gradient.ColorPoints);
+  if ColorFunc = nil then Exit;
+
+  // Convert gradient endpoints from px to PDF pt
+  X0 := PxToPt(Gradient.StartPt.X);
+  Y0 := PxToY(Gradient.StartPt.Y);
+  X1 := PxToPt(Gradient.EndPt.X);
+  Y1 := PxToY(Gradient.EndPt.Y);
+
+  // Create shading object (Type 2 = axial)
+  ShadingObj := FWriter.AllocObject;
+  ShadingObj.AddEntry('ShadingType', '2');
+  ShadingObj.AddEntry('ColorSpace', '/DeviceRGB');
+  ShadingObj.AddEntry('Coords', '[' + PdfFloat(X0) + ' ' + PdfFloat(Y0) +
+    ' ' + PdfFloat(X1) + ' ' + PdfFloat(Y1) + ']');
+  ShadingObj.AddEntry('Function', PdfRef(ColorFunc.Id));
+  ShadingObj.AddEntry('Extend', '[true true]');
+
+  ShName := AllocShadingName;
+  FResourceShading := FResourceShading + '/' + ShName + ' ' +
+    PdfRef(ShadingObj.Id) + ' ';
+
+  // Check average alpha for opacity
+  AvgAlpha := 0;
+  for I := 0 to Gradient.ColorPoints.Count - 1 do
+    AvgAlpha := AvgAlpha + Gradient.ColorPoints[I].Color.Alpha;
+  AvgAlpha := AvgAlpha / Gradient.ColorPoints.Count / 255.0;
+
+  EmitLn('q');
+
+  // Apply opacity if needed
+  if AvgAlpha < 1.0 then
+  begin
+    GsObj := FWriter.AllocObject;
+    GsObj.AddEntry('Type', '/ExtGState');
+    GsObj.AddEntry('ca', PdfFloat(AvgAlpha));
+    GsObj.AddEntry('CA', PdfFloat(AvgAlpha));
+    GsName := AllocGsName;
+    FResourceExtGState := FResourceExtGState + '/' + GsName + ' ' +
+      PdfRef(GsObj.Id) + ' ';
+    EmitLn('/' + GsName + ' gs');
+  end;
+
+  // Clip to the box
+  EmitClipPath(X, Y, W, H, Radius);
+
+  // Paint shading
+  EmitLn('/' + ShName + ' sh');
+  EmitLn('Q');
+end;
+
+procedure TPixiePdfCanvas.FillRadialGradient(X, Y, W, H: Single;
+  const Radius: TPixieBorderRadiuses;
+  const Gradient: TPixieRadialGradientLayer);
+var
+  ColorFunc, ShadingObj: TPixiePdfObject;
+  ShName: AnsiString;
+  CX, CY, MaxR, ScaleX, ScaleY: Single;
+  I: Integer;
+  AvgAlpha: Single;
+  GsObj: TPixiePdfObject;
+  GsName: AnsiString;
+  IsEllipse: Boolean;
+begin
+  if Gradient.ColorPoints.Count < 2 then Exit;
+
+  ColorFunc := BuildColorFunction(Gradient.ColorPoints);
+  if ColorFunc = nil then Exit;
+
+  // Determine if elliptical
+  IsEllipse := Abs(Gradient.Radius.X - Gradient.Radius.Y) > 0.01;
+
+  if IsEllipse then
+  begin
+    // Use the larger radius for the circle shading, then scale via CTM
+    MaxR := Max(PxToPt(Gradient.Radius.X), PxToPt(Gradient.Radius.Y));
+    ScaleX := PxToPt(Gradient.Radius.X) / MaxR;
+    ScaleY := PxToPt(Gradient.Radius.Y) / MaxR;
+    // Shading centre must be pre-divided by the scale so it maps correctly
+    CX := PxToPt(Gradient.Position.X) / ScaleX;
+    CY := PxToY(Gradient.Position.Y) / ScaleY;
+  end
+  else
+  begin
+    MaxR := PxToPt(Gradient.Radius.X);
+    CX := PxToPt(Gradient.Position.X);
+    CY := PxToY(Gradient.Position.Y);
+    ScaleX := 1;
+    ScaleY := 1;
+  end;
+
+  // Create shading object (Type 3 = radial)
+  ShadingObj := FWriter.AllocObject;
+  ShadingObj.AddEntry('ShadingType', '3');
+  ShadingObj.AddEntry('ColorSpace', '/DeviceRGB');
+  ShadingObj.AddEntry('Coords', '[' + PdfFloat(CX) + ' ' + PdfFloat(CY) +
+    ' 0 ' + PdfFloat(CX) + ' ' + PdfFloat(CY) + ' ' +
+    PdfFloat(MaxR) + ']');
+  ShadingObj.AddEntry('Function', PdfRef(ColorFunc.Id));
+  ShadingObj.AddEntry('Extend', '[true true]');
+
+  ShName := AllocShadingName;
+  FResourceShading := FResourceShading + '/' + ShName + ' ' +
+    PdfRef(ShadingObj.Id) + ' ';
+
+  // Check average alpha
+  AvgAlpha := 0;
+  for I := 0 to Gradient.ColorPoints.Count - 1 do
+    AvgAlpha := AvgAlpha + Gradient.ColorPoints[I].Color.Alpha;
+  AvgAlpha := AvgAlpha / Gradient.ColorPoints.Count / 255.0;
+
+  EmitLn('q');
+
+  // Apply opacity if needed
+  if AvgAlpha < 1.0 then
+  begin
+    GsObj := FWriter.AllocObject;
+    GsObj.AddEntry('Type', '/ExtGState');
+    GsObj.AddEntry('ca', PdfFloat(AvgAlpha));
+    GsObj.AddEntry('CA', PdfFloat(AvgAlpha));
+    GsName := AllocGsName;
+    FResourceExtGState := FResourceExtGState + '/' + GsName + ' ' +
+      PdfRef(GsObj.Id) + ' ';
+    EmitLn('/' + GsName + ' gs');
+  end;
+
+  // Clip to the box
+  EmitClipPath(X, Y, W, H, Radius);
+
+  // Apply elliptical CTM if needed
+  if IsEllipse then
+    EmitLn(PdfFloat(ScaleX) + ' 0 0 ' + PdfFloat(ScaleY) + ' 0 0 cm');
+
+  // Paint shading
+  EmitLn('/' + ShName + ' sh');
+  EmitLn('Q');
+end;
+
+procedure TPixiePdfCanvas.FillConicGradient(X, Y, W, H: Single;
+  const Radius: TPixieBorderRadiuses;
+  const Gradient: TPixieConicGradientLayer);
+var
+  C: TPixieWebColor;
+begin
+  // Simplified: fill with first color
+  if Gradient.ColorPoints.Count > 0 then
+  begin
+    C := Gradient.ColorPoints[0].Color;
+    FillRoundedRect(X, Y, W, H, Radius, C);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// Borders
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.DrawBorders(const Borders: TPixieBorders;
+  const Pos: TPixiePosition; IsRoot: Boolean);
+
+  procedure DrawSide(const Border: TPixieBorder;
+    X1, Y1, X2, Y2: Single);
+  var
+    PX1, PY1, PX2, PY2, PW: Single;
+  begin
+    if (Border.Width <= 0) or (Border.Style = bsNone) or
+       (Border.Style = bsHidden) then Exit;
+
+    PW := PxToPt(Border.Width);
+    PX1 := PxToPt(X1);
+    PY1 := PxToY(Y1);
+    PX2 := PxToPt(X2);
+    PY2 := PxToY(Y2);
+
+    SetPdfColor(Border.Color, False);
+    EmitLn(PdfFloat(PW) + ' w');
+
+    // Dash pattern
+    case Border.Style of
+      bsDashed:
+        EmitLn('[' + PdfFloat(PW * 3) + ' ' + PdfFloat(PW * 3) + '] 0 d');
+      bsDotted:
+        EmitLn('[' + PdfFloat(PW) + ' ' + PdfFloat(PW) + '] 0 d');
+    else
+      EmitLn('[] 0 d');
+    end;
+
+    EmitLn(PdfFloat(PX1) + ' ' + PdfFloat(PY1) + ' m ' +
+           PdfFloat(PX2) + ' ' + PdfFloat(PY2) + ' l S');
+  end;
+
+var
+  X, Y, W, H: Single;
+begin
+  if not Borders.IsVisible then Exit;
+
+  X := Pos.X;
+  Y := Pos.Y;
+  W := Pos.Width;
+  H := Pos.Height;
+
+  // Top
+  DrawSide(Borders.Top,
+    X, Y + Borders.Top.Width / 2,
+    X + W, Y + Borders.Top.Width / 2);
+  // Right
+  DrawSide(Borders.Right,
+    X + W - Borders.Right.Width / 2, Y,
+    X + W - Borders.Right.Width / 2, Y + H);
+  // Bottom
+  DrawSide(Borders.Bottom,
+    X, Y + H - Borders.Bottom.Width / 2,
+    X + W, Y + H - Borders.Bottom.Width / 2);
+  // Left
+  DrawSide(Borders.Left,
+    X + Borders.Left.Width / 2, Y,
+    X + Borders.Left.Width / 2, Y + H);
+end;
+
+// ---------------------------------------------------------------------------
+// Font creation and text
+// ---------------------------------------------------------------------------
+
+function CheckPdfFont(const Name: string): Boolean;
+begin
+  // Accept all — we resolve to files ourselves
+  Result := True;
+end;
+
+function TPixiePdfCanvas.CreateFont(const Descr: TPixieFontDescription;
+  out Metrics: TPixieFontMetrics): TPixieFontHandle;
+var
+  Info: TPixiePdfFontInfo;
+  TtFont: TPixieTrueTypeFont;
+  Family: string;
+  Scale: Single;
+  SpaceGlyph: UInt16;
+  I: Integer;
+begin
+  FillChar(Metrics, SizeOf(Metrics), 0);
+
+  Family := PixieResolveFontFamily(Descr.Family, CheckPdfFont);
+
+  TtFont := FindOrCreateFont(Family, Descr.Weight,
+    Descr.Style = fstItalic);
+  if TtFont = nil then
+  begin
+    Result := 0;
+    Exit;
+  end;
+
+  // Reuse existing font info if same font and size (avoids duplicate
+  // PDF font objects and ensures glyph registration is shared)
+  for I := 0 to FFonts.Count - 1 do
+  begin
+    Info := FFonts[I];
+    if (Info.TtFont = TtFont) and
+       (Abs(Info.FontSize - Descr.Size) < 0.01) and
+       (Info.DecorationLine = Descr.DecorationLine) then
+    begin
+      Metrics := Info.Metrics;
+      Result := TPixieFontHandle(Info);
+      Exit;
+    end;
+  end;
+
+  Info := TPixiePdfFontInfo.Create;
+  Info.TtFont := TtFont;
+  Info.FamilyName := Family;
+  Info.FontSize := Descr.Size;
+  Info.DecorationLine := Descr.DecorationLine;
+  Info.PdfName := AllocFontName;
+  FFonts.Add(Info);
+
+  // Compute metrics (in CSS pixels)
+  Scale := Descr.Size / TtFont.UnitsPerEm;
+  Metrics.FontSize := Descr.Size;
+  Metrics.Ascent := TtFont.Ascent * Scale;
+  Metrics.Descent := Abs(TtFont.Descent) * Scale;
+  Metrics.Height := Metrics.Ascent + Metrics.Descent;
+
+  if TtFont.XHeight > 0 then
+    Metrics.XHeight := TtFont.XHeight * Scale
+  else
+    Metrics.XHeight := Metrics.Ascent * 0.53;
+
+  // ch width (width of '0')
+  SpaceGlyph := TtFont.CharToGlyph(Ord('0'));
+  if SpaceGlyph <> 0 then
+    Metrics.ChWidth := TtFont.GetGlyphWidth(SpaceGlyph) * Scale
+  else
+    Metrics.ChWidth := Descr.Size * 0.5;
+
+  Metrics.SubShift := Metrics.Ascent * 0.25;
+  Metrics.SuperShift := Metrics.Ascent * 0.35;
+  Metrics.DrawSpaces := False;
+
+  Info.Metrics := Metrics;
+
+  Result := TPixieFontHandle(Info);
+end;
+
+procedure TPixiePdfCanvas.DeleteFont(Handle: TPixieFontHandle);
+begin
+  // Fonts are owned by FFonts list and freed on canvas destroy
+  // Do not delete individual fonts here — they are needed for PDF writing
+end;
+
+function TPixiePdfCanvas.MeasureText(const Text: string;
+  Handle: TPixieFontHandle): pixel_t;
+var
+  Info: TPixiePdfFontInfo;
+  Scale: Single;
+  I, Len: Integer;
+  Codepoint: UInt32;
+  GlyphId: UInt16;
+  TotalWidth: Single;
+begin
+  Result := 0;
+  if Handle = 0 then Exit;
+  Info := TPixiePdfFontInfo(Handle);
+  if Info.TtFont = nil then Exit;
+
+  Scale := Info.FontSize / Info.TtFont.UnitsPerEm;
+  TotalWidth := 0;
+  I := 1;
+  Len := Length(Text);
+
+  while I <= Len do
+  begin
+    Codepoint := ReadUtf8Char(Text, I);
+    if Codepoint = 0 then Break;
+
+    GlyphId := Info.TtFont.CharToGlyph(Codepoint);
+    TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
+  end;
+
+  Result := TotalWidth;
+end;
+
+procedure TPixiePdfCanvas.DrawText(const Text: string;
+  Handle: TPixieFontHandle; Color: TPixieWebColor;
+  X, Y, W, H: Single);
+var
+  Info: TPixiePdfFontInfo;
+  Scale, PtSize, TextY, LineY: Single;
+  I, Len: Integer;
+  Codepoint: UInt32;
+  GlyphId: UInt16;
+  HexStr: AnsiString;
+  TotalWidth: Single;
+begin
+  if Handle = 0 then Exit;
+  Info := TPixiePdfFontInfo(Handle);
+  if Info.TtFont = nil then Exit;
+
+
+
+  PtSize := Info.FontSize * 72.0 / 96.0;
+
+  // PDF text matrix: position at baseline
+  // Baseline = Y + ascent (in Pixie px coords)
+  Scale := Info.FontSize / Info.TtFont.UnitsPerEm;
+  TextY := Y + Info.TtFont.Ascent * Scale;
+
+  SetPdfColor(Color, True);
+  EmitLn('BT');
+  EmitLn('/' + Info.PdfName + ' ' + PdfFloat(PtSize) + ' Tf');
+  EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(TextY)) + ' Td');
+
+  // Emit glyph IDs as hex string
+  HexStr := '<';
+  I := 1;
+  Len := Length(Text);
+  TotalWidth := 0;
+  while I <= Len do
+  begin
+    Codepoint := ReadUtf8Char(Text, I);
+    if Codepoint = 0 then Break;
+
+    GlyphId := Info.TtFont.CharToGlyph(Codepoint);
+    RegisterFontUsedGlyph(Info, GlyphId, Codepoint);
+    HexStr := HexStr + AnsiString(LowerCase(IntToHex(GlyphId, 4)));
+    TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
+  end;
+  HexStr := HexStr + '>';
+
+  EmitLn(HexStr + ' Tj');
+  EmitLn('ET');
+
+  // Draw underline
+  if (Info.DecorationLine and TextDecorationLineUnderline) <> 0 then
+  begin
+    LineY := Y + Info.Metrics.Ascent + Info.Metrics.Descent * 0.3;
+    SetPdfColor(Color, False);
+    EmitLn(PdfFloat(PxToPt(1)) + ' w');
+    EmitLn('[] 0 d');
+    EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(LineY)) + ' m ' +
+           PdfFloat(PxToPt(X + TotalWidth)) + ' ' + PdfFloat(PxToY(LineY)) + ' l S');
+  end;
+
+  // Draw strikethrough
+  if (Info.DecorationLine and TextDecorationLineLineThrough) <> 0 then
+  begin
+    LineY := Y + Info.Metrics.Ascent * 0.65;
+    SetPdfColor(Color, False);
+    EmitLn(PdfFloat(PxToPt(1)) + ' w');
+    EmitLn('[] 0 d');
+    EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(LineY)) + ' m ' +
+           PdfFloat(PxToPt(X + TotalWidth)) + ' ' + PdfFloat(PxToY(LineY)) + ' l S');
+  end;
+
+  // Draw overline
+  if (Info.DecorationLine and TextDecorationLineOverline) <> 0 then
+  begin
+    LineY := Y;
+    SetPdfColor(Color, False);
+    EmitLn(PdfFloat(PxToPt(1)) + ' w');
+    EmitLn('[] 0 d');
+    EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(LineY)) + ' m ' +
+           PdfFloat(PxToPt(X + TotalWidth)) + ' ' + PdfFloat(PxToY(LineY)) + ' l S');
+  end;
+end;
+
+function TPixiePdfCanvas.PtToPx(Pt: Single): pixel_t;
+begin
+  Result := Trunc(Pt * 96.0 / 72.0);
+end;
+
+// ---------------------------------------------------------------------------
+// Image
+// ---------------------------------------------------------------------------
+
+{$IFDEF FPC}
+function TPixiePdfCanvas.LoadImageFPImage(
+  const Path: string): TPixieImageHandle;
+var
+  Img: TFPMemoryImage;
+  X, Y, W, H: Integer;
+  C: TFPColor;
+  Pixels: TBytes;
+  Idx: Integer;
+begin
+  Result := 0;
+  Img := TFPMemoryImage.Create(0, 0);
+  try
+    try
+      Img.LoadFromFile(Path);
+    except
+      Exit;
+    end;
+    W := Img.Width;
+    H := Img.Height;
+    if (W <= 0) or (H <= 0) then Exit;
+
+    // Convert to BGRA pixel array (matches LoadImageFromPixels expectation)
+    SetLength(Pixels, W * H * 4);
+    Idx := 0;
+    for Y := 0 to H - 1 do
+      for X := 0 to W - 1 do
+      begin
+        C := Img.Colors[X, Y];
+        Pixels[Idx] := Byte(C.Blue shr 8);  Inc(Idx);
+        Pixels[Idx] := Byte(C.Green shr 8); Inc(Idx);
+        Pixels[Idx] := Byte(C.Red shr 8);   Inc(Idx);
+        Pixels[Idx] := Byte(C.Alpha shr 8); Inc(Idx);
+      end;
+
+    Result := LoadImageFromPixels(W, H, @Pixels[0], W * 4);
+  finally
+    Img.Free;
+  end;
+end;
+{$ENDIF}
+
+function TPixiePdfCanvas.LoadImage(const Path: string): TPixieImageHandle;
+var
+  Stream: TFileStream;
+  ImgData: TBytes;
+  ImgObj, SmaskObj: TPixiePdfObject;
+  Info: TPixiePdfImageInfo;
+  W, H: Integer;
+  IsJpeg: Boolean;
+  SofLen: Integer;
+  I: Integer;
+begin
+  Result := 0;
+  if not FileExists(Path) then Exit;
+
+  try
+    Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+    try
+      if Stream.Size < 4 then Exit;
+      SetLength(ImgData, Stream.Size);
+      Stream.Read(ImgData[0], Length(ImgData));
+    finally
+      Stream.Free;
+    end;
+  except
+    Exit;
+  end;
+
+  if Length(ImgData) < 4 then Exit;
+
+  // Detect JPEG by FF D8 FF header
+  IsJpeg := (ImgData[0] = $FF) and (ImgData[1] = $D8) and (ImgData[2] = $FF);
+
+  if IsJpeg then
+  begin
+    // Parse JPEG SOF marker for dimensions
+    W := 0;
+    H := 0;
+    I := 2;
+    while I < Length(ImgData) - 8 do
+    begin
+      if ImgData[I] = $FF then
+      begin
+        if (ImgData[I + 1] >= $C0) and (ImgData[I + 1] <= $C3) then
+        begin
+          H := (ImgData[I + 5] shl 8) or ImgData[I + 6];
+          W := (ImgData[I + 7] shl 8) or ImgData[I + 8];
+          Break;
+        end;
+        SofLen := (ImgData[I + 2] shl 8) or ImgData[I + 3];
+        Inc(I, 2 + SofLen);
+      end
+      else
+        Inc(I);
+    end;
+
+    if (W = 0) or (H = 0) then Exit;
+
+    ImgObj := FWriter.AllocObject;
+    ImgObj.AddEntry('Type', '/XObject');
+    ImgObj.AddEntry('Subtype', '/Image');
+    ImgObj.AddEntry('Width', AnsiString(IntToStr(W)));
+    ImgObj.AddEntry('Height', AnsiString(IntToStr(H)));
+    ImgObj.AddEntry('ColorSpace', '/DeviceRGB');
+    ImgObj.AddEntry('BitsPerComponent', '8');
+    ImgObj.AddEntry('Filter', '/DCTDecode');
+    ImgObj.SetStream(ImgData, False); // JPEG is already compressed
+    ImgObj.CompressStream := False;
+
+    Info := TPixiePdfImageInfo.Create;
+    Info.PdfName := AllocImageName;
+    Info.ObjId := ImgObj.Id;
+    Info.SmaskObjId := 0;
+    Info.ImgWidth := W;
+    Info.ImgHeight := H;
+    FImages.Add(Info);
+    Result := TPixieImageHandle(Info);
+  end
+  {$IFDEF FPC}
+  else
+  begin
+    // Decode PNG/BMP/GIF via FPImage and create from raw pixels
+    Result := LoadImageFPImage(Path);
+  end
+  {$ENDIF}
+  ;
+end;
+
+function TPixiePdfCanvas.LoadImageFromPixels(Width, Height: Integer;
+  Pixels: Pointer; Pitch: Integer): TPixieImageHandle;
+var
+  ImgObj, SmaskObj: TPixiePdfObject;
+  Info: TPixiePdfImageInfo;
+  RgbData, AlphaData: TBytes;
+  X, Y: Integer;
+  Src: PByte;
+  HasAlpha: Boolean;
+  B, G, R, A: Byte;
+  RgbIdx, AlphaIdx: Integer;
+begin
+  Result := 0;
+  if (Width <= 0) or (Height <= 0) or (Pixels = nil) then Exit;
+
+  // Split BGRA pixels into RGB + Alpha
+  SetLength(RgbData, Width * Height * 3);
+  SetLength(AlphaData, Width * Height);
+  HasAlpha := False;
+  RgbIdx := 0;
+  AlphaIdx := 0;
+
+  for Y := 0 to Height - 1 do
+  begin
+    Src := PByte(Pixels) + Y * Pitch;
+    for X := 0 to Width - 1 do
+    begin
+      B := Src^; Inc(Src);
+      G := Src^; Inc(Src);
+      R := Src^; Inc(Src);
+      A := Src^; Inc(Src);
+
+      // Un-premultiply alpha
+      if (A > 0) and (A < 255) then
+      begin
+        R := Min(255, R * 255 div A);
+        G := Min(255, G * 255 div A);
+        B := Min(255, B * 255 div A);
+      end;
+
+      RgbData[RgbIdx] := R; Inc(RgbIdx);
+      RgbData[RgbIdx] := G; Inc(RgbIdx);
+      RgbData[RgbIdx] := B; Inc(RgbIdx);
+      AlphaData[AlphaIdx] := A; Inc(AlphaIdx);
+
+      if A <> 255 then HasAlpha := True;
+    end;
+  end;
+
+  // Create SMask if needed
+  SmaskObj := nil;
+  if HasAlpha then
+  begin
+    SmaskObj := FWriter.AllocObject;
+    SmaskObj.AddEntry('Type', '/XObject');
+    SmaskObj.AddEntry('Subtype', '/Image');
+    SmaskObj.AddEntry('Width', AnsiString(IntToStr(Width)));
+    SmaskObj.AddEntry('Height', AnsiString(IntToStr(Height)));
+    SmaskObj.AddEntry('ColorSpace', '/DeviceGray');
+    SmaskObj.AddEntry('BitsPerComponent', '8');
+    SmaskObj.SetStream(AlphaData, True);
+  end;
+
+  // Create image object
+  ImgObj := FWriter.AllocObject;
+  ImgObj.AddEntry('Type', '/XObject');
+  ImgObj.AddEntry('Subtype', '/Image');
+  ImgObj.AddEntry('Width', AnsiString(IntToStr(Width)));
+  ImgObj.AddEntry('Height', AnsiString(IntToStr(Height)));
+  ImgObj.AddEntry('ColorSpace', '/DeviceRGB');
+  ImgObj.AddEntry('BitsPerComponent', '8');
+  if SmaskObj <> nil then
+    ImgObj.AddEntry('SMask', PdfRef(SmaskObj.Id));
+  ImgObj.SetStream(RgbData, True);
+
+  Info := TPixiePdfImageInfo.Create;
+  Info.PdfName := AllocImageName;
+  Info.ObjId := ImgObj.Id;
+  if SmaskObj <> nil then
+    Info.SmaskObjId := SmaskObj.Id
+  else
+    Info.SmaskObjId := 0;
+  Info.ImgWidth := Width;
+  Info.ImgHeight := Height;
+  FImages.Add(Info);
+  Result := TPixieImageHandle(Info);
+end;
+
+procedure TPixiePdfCanvas.FreeImage(Handle: TPixieImageHandle);
+begin
+  // Images are owned by FImages list; freed on canvas destroy
+end;
+
+procedure TPixiePdfCanvas.GetImageSize(Handle: TPixieImageHandle;
+  out W, H: Single);
+var
+  Info: TPixiePdfImageInfo;
+begin
+  W := 0;
+  H := 0;
+  if Handle = 0 then Exit;
+  Info := TPixiePdfImageInfo(Handle);
+  W := Info.ImgWidth;
+  H := Info.ImgHeight;
+end;
+
+procedure TPixiePdfCanvas.DrawImage(Handle: TPixieImageHandle;
+  DstX, DstY, DstW, DstH: Single);
+var
+  Info: TPixiePdfImageInfo;
+  PX, PY, PW, PH: Single;
+begin
+  if Handle = 0 then Exit;
+  Info := TPixiePdfImageInfo(Handle);
+
+  PW := PxToPt(DstW);
+  PH := PxToPt(DstH);
+  PX := PxToPt(DstX);
+  PY := PxToY(DstY + DstH); // bottom-left in PDF
+
+  EmitLn('q');
+  // Transformation matrix: scale and translate
+  EmitLn(PdfFloat(PW) + ' 0 0 ' + PdfFloat(PH) + ' ' +
+         PdfFloat(PX) + ' ' + PdfFloat(PY) + ' cm');
+  EmitLn('/' + Info.PdfName + ' Do');
+  EmitLn('Q');
+end;
+
+// ---------------------------------------------------------------------------
+// Shapes
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.FillEllipse(X, Y, W, H: Single;
+  Color: TPixieWebColor);
+var
+  CX, CY, RX, RY: Single;
+begin
+  if Color.Alpha = 0 then Exit;
+  CX := PxToPt(X + W / 2);
+  CY := PxToY(Y + H / 2);
+  RX := PxToPt(W / 2);
+  RY := PxToPt(H / 2);
+
+  SetPdfColor(Color, True);
+  EmitBezierEllipse(CX, CY, RX, RY);
+  EmitLn('f');
+end;
+
+procedure TPixiePdfCanvas.DrawEllipse(X, Y, W, H: Single;
+  Color: TPixieWebColor; StrokeWidth: Single);
+var
+  CX, CY, RX, RY: Single;
+begin
+  if Color.Alpha = 0 then Exit;
+  CX := PxToPt(X + W / 2);
+  CY := PxToY(Y + H / 2);
+  RX := PxToPt(W / 2);
+  RY := PxToPt(H / 2);
+
+  SetPdfColor(Color, False);
+  EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
+  EmitBezierEllipse(CX, CY, RX, RY);
+  EmitLn('S');
+end;
+
+procedure TPixiePdfCanvas.DrawRect(X, Y, W, H: Single;
+  Color: TPixieWebColor; StrokeWidth: Single);
+var
+  PX, PY, PW, PH: Single;
+begin
+  if Color.Alpha = 0 then Exit;
+  PX := PxToPt(X);
+  PY := PxToY(Y + H);
+  PW := PxToPt(W);
+  PH := PxToPt(H);
+
+  SetPdfColor(Color, False);
+  EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
+  EmitLn(PdfFloat(PX) + ' ' + PdfFloat(PY) + ' ' +
+         PdfFloat(PW) + ' ' + PdfFloat(PH) + ' re S');
+end;
+
+procedure TPixiePdfCanvas.DrawLine(X1, Y1, X2, Y2: Single;
+  Color: TPixieWebColor; StrokeWidth: Single);
+begin
+  if Color.Alpha = 0 then Exit;
+  SetPdfColor(Color, False);
+  EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
+  EmitLn('[] 0 d');
+  EmitLn(PdfFloat(PxToPt(X1)) + ' ' + PdfFloat(PxToY(Y1)) + ' m ' +
+         PdfFloat(PxToPt(X2)) + ' ' + PdfFloat(PxToY(Y2)) + ' l S');
+end;
+
+procedure TPixiePdfCanvas.StrokePolyline(const Points: array of Single;
+  Color: TPixieWebColor; StrokeWidth: Single);
+var
+  I, Count: Integer;
+begin
+  Count := Length(Points) div 2;
+  if (Count < 2) or (Color.Alpha = 0) then Exit;
+
+  SetPdfColor(Color, False);
+  EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
+  EmitLn('[] 0 d');
+
+  EmitLn(PdfFloat(PxToPt(Points[0])) + ' ' +
+         PdfFloat(PxToY(Points[1])) + ' m');
+  for I := 1 to Count - 1 do
+    EmitLn(PdfFloat(PxToPt(Points[I * 2])) + ' ' +
+           PdfFloat(PxToY(Points[I * 2 + 1])) + ' l');
+  EmitLn('S');
+end;
+
+end.
