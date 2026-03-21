@@ -1,4 +1,4 @@
-﻿unit PixieFmxDemoMain;
+﻿unit PixieDemoMain;
 
 interface
 

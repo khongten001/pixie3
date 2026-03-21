@@ -1,9 +1,9 @@
-program PixieFmxDemo;
+program PixieDemo;
 
 uses
   System.StartUpCopy,
   FMX.Forms,
-  PixieFmxDemoMain in 'PixieFmxDemoMain.pas' {MainForm};
+  PixieDemoMain in 'PixieDemoMain.pas' {MainForm};
 
 {$R *.res}
 {$R ..\..\resources\images.res}
