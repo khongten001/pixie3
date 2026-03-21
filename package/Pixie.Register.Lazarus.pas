@@ -15,7 +15,7 @@ uses
 
 procedure Register;
 begin
-  RegisterComponents('Misc', [TPixieHtmlView]);
+  RegisterComponents('Additional', [TPixieHtmlView]);
 end;
 
 end.
