@@ -193,6 +193,16 @@ begin
       '<img src="@STEAM" style="vertical-align: middle;"> Steam (from resource) ' +
     '</p>' +
 
+    // ---- Inline base64 data URI ----
+    '<h2 style="color: #994422;">Inline Data URI (base64)</h2>' +
+    '<p>' +
+      '<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0' +
+        'NAAAAQ0lEQVR4nGNgGNLg/0zj/9gw1Qwiy2BiDSPKUFINI2goVQ0k1zCcho4aOAgNHPzpkF' +
+        'xD8RpGqqFEGcZAhMEkGzSoAAAomEQ/wkqkJQAAAABJRU5ErkJggg==" ' +
+        'style="vertical-align: middle;"> ' +
+      'Inline PNG (20x20 orange circle embedded as base64 in the HTML source)' +
+    '</p>' +
+
     // ---- Table ----
     '<h2 style="color: #994422;">Table</h2>' +
     '<table style="border-collapse: collapse; width: 100%; margin-bottom: 12px;">' +
