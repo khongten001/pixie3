@@ -25,6 +25,7 @@ type
   PPixieD2DImage = ^TPixieD2DImage;
   TPixieD2DImage = record
     WicSource: IWICBitmapSource;
+    WicStream: IStream;       // Prevent premature release of underlying stream
     D2DBitmap: ID2D1Bitmap;
     SvgDocument: ID2D1SvgDocument;
     ImgWidth: UINT;
@@ -1224,6 +1225,7 @@ function TPixieD2DCanvas.LoadImageFromStream(
   Stream: TStream): TPixieImageHandle;
 var
   Info: PPixieD2DImage;
+  Copy: TMemoryStream;
   AdapterStream: IStream;
   Decoder: IWICBitmapDecoder;
   Frame: IWICBitmapFrameDecode;
@@ -1233,8 +1235,14 @@ begin
   Result := 0;
   if (FWicFactory = nil) or (Stream = nil) or (Stream.Size = 0) then Exit;
 
-  Stream.Position := 0;
-  AdapterStream := TStreamAdapter.Create(Stream, soReference);
+  // Copy stream data — WIC's decoder may seek back to it lazily during
+  // CreateBitmapFromWicBitmap, long after the caller has freed the original.
+  // soOwned lets the adapter free the copy when all COM references drop.
+  Copy := TMemoryStream.Create;
+  Copy.CopyFrom(Stream, 0);
+  Copy.Position := 0;
+  AdapterStream := TStreamAdapter.Create(Copy, soOwned);
+
   if Failed(FWicFactory.CreateDecoderFromStream(AdapterStream,
     GUID_NULL, 0, Decoder)) then
     Exit;
@@ -1251,6 +1259,7 @@ begin
   New(Info);
   FillChar(Info^, SizeOf(TPixieD2DImage), 0);
   Info.WicSource := Converter;
+  Info.WicStream := AdapterStream;
   Info.ImgWidth := IW;
   Info.ImgHeight := IH;
   Result := TPixieImageHandle(Info);
@@ -1297,6 +1306,7 @@ begin
   Info.SvgDocument := nil;
   Info.D2DBitmap := nil;
   Info.WicSource := nil;
+  Info.WicStream := nil;
   Dispose(Info);
 end;
 
