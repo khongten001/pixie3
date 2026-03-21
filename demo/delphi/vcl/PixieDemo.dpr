@@ -5,7 +5,7 @@ uses
   PixieDemoMain in 'PixieDemoMain.pas' {MainForm};
 
 {$R *.res}
-{$R ..\resources\images.res}
+{$R ..\..\resources\images.res}
 
 begin
   Application.Initialize;

@@ -1,0 +1,95 @@
+object MainForm: TMainForm
+  Left = 300
+  Top = 100
+  Caption = 'Pixie Demo (Delphi FMX)'
+  ClientHeight = 600
+  ClientWidth = 900
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object UrlPanel: TLayout
+    Align = Top
+    Size.Width = 900.000000000000000000
+    Size.Height = 36.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object BtnOpen: TButton
+      Align = Left
+      Margins.Left = 4.000000000000000000
+      Margins.Top = 5.000000000000000000
+      Margins.Bottom = 5.000000000000000000
+      Size.Width = 130.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Text = 'Load HTML from file'
+      OnClick = BtnOpenClick
+    end
+    object BtnSavePdf: TButton
+      Align = Left
+      Margins.Left = 4.000000000000000000
+      Margins.Top = 5.000000000000000000
+      Margins.Bottom = 5.000000000000000000
+      Position.X = 138.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Save as PDF'
+      OnClick = BtnSavePdfClick
+    end
+    object BtnGo: TButton
+      Align = Right
+      Margins.Top = 5.000000000000000000
+      Margins.Right = 4.000000000000000000
+      Margins.Bottom = 5.000000000000000000
+      Size.Width = 50.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'Go'
+      OnClick = BtnGoClick
+    end
+    object UrlEdit: TEdit
+      Align = Client
+      Margins.Left = 8.000000000000000000
+      Margins.Top = 5.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Margins.Bottom = 5.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      TextPrompt = '...or try a simple web-site here'
+      OnKeyDown = UrlEditKeyDown
+    end
+  end
+  object StatusLayout: TLayout
+    Align = Bottom
+    Size.Width = 900.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object StatusLabel1: TLabel
+      Align = Left
+      Size.Width = 200.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.HorzAlign = Leading
+      TextSettings.Font.Size = 11.000000000000000000
+      Text = 'Parse: '#8212
+    end
+    object StatusLabel2: TLabel
+      Align = Left
+      Position.X = 200.000000000000000000
+      Size.Width = 200.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.HorzAlign = Leading
+      TextSettings.Font.Size = 11.000000000000000000
+      Text = 'Paint: '#8212
+    end
+  end
+end
