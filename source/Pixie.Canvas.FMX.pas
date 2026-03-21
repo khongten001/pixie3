@@ -12,7 +12,7 @@ uses
   FMX.Graphics, FMX.Types, FMX.TextLayout,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
-  Pixie.Canvas, Pixie.FontMetrics;
+  Pixie.Canvas, Pixie.FontMetrics, Pixie.SvgRenderer.FMX;
 
 type
   { TPixieFmxFont — font instance with FMX font + metrics }
@@ -123,6 +123,8 @@ type
     function LoadImageFromPixels(Width, Height: Integer;
       Pixels: Pointer; Pitch: Integer): TPixieImageHandle; override;
     function LoadImageFromStream(Stream: TStream): TPixieImageHandle; override;
+    function LoadSvgFromData(Data: Pointer;
+      Size: Integer): TPixieImageHandle; override;
     procedure FreeImage(Handle: TPixieImageHandle); override;
     procedure GetImageSize(Handle: TPixieImageHandle;
       out W, H: Single); override;
@@ -888,6 +890,25 @@ begin
     Exit;
   end;
 
+  Result := TPixieImageHandle(Info);
+end;
+
+function TPixieFmxCanvas.LoadSvgFromData(Data: Pointer;
+  Size: Integer): TPixieImageHandle;
+var
+  Bitmap: TBitmap;
+  Info: TPixieFmxImage;
+begin
+  Result := 0;
+  if (Data = nil) or (Size <= 0) then Exit;
+
+  Bitmap := TPixieSvgCanvasRenderer.RenderToBitmap(Data, Size);
+  if Bitmap = nil then Exit;
+
+  Info := TPixieFmxImage.Create;
+  Info.Bitmap := Bitmap;
+  Info.ImgWidth := Bitmap.Width;
+  Info.ImgHeight := Bitmap.Height;
   Result := TPixieImageHandle(Info);
 end;
 
