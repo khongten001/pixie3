@@ -69,7 +69,6 @@ type
     FWriter: TPixiePdfWriter;
     FFontCache: TPixieTrueTypeFontCache;
     FStream: TMemoryStream;
-    FResourceFonts: AnsiString;
     FResourceExtGState: AnsiString;
     FFonts: TPixieSvgFontInfoList;
     FGsCounter: Integer;
@@ -469,17 +468,17 @@ var
     while (P <= Len) and (S[P] <> ')') do
     begin
       // Skip separators
-      while (P <= Len) and (S[P] in [' ', ',', #9, #10, #13]) do Inc(P);
+      while (P <= Len) and CharInSet(S[P], [' ', ',', #9, #10, #13]) do Inc(P);
       if (P > Len) or (S[P] = ')') then Break;
 
       // Read number
       NumStr := '';
-      if (P <= Len) and (S[P] in ['-', '+']) then
+      if (P <= Len) and CharInSet(S[P], ['-', '+']) then
       begin
         NumStr := NumStr + S[P];
         Inc(P);
       end;
-      while (P <= Len) and (S[P] in ['0'..'9', '.', 'e', 'E']) do
+      while (P <= Len) and CharInSet(S[P], ['0'..'9', '.', 'e', 'E']) do
       begin
         NumStr := NumStr + S[P];
         Inc(P);
@@ -503,12 +502,12 @@ begin
   while P <= Len do
   begin
     // Skip whitespace
-    while (P <= Len) and (S[P] in [' ', ',', #9, #10, #13]) do Inc(P);
+    while (P <= Len) and CharInSet(S[P], [' ', ',', #9, #10, #13]) do Inc(P);
     if P > Len then Break;
 
     // Read function name
     FuncName := '';
-    while (P <= Len) and (S[P] in ['a'..'z', 'A'..'Z']) do
+    while (P <= Len) and CharInSet(S[P], ['a'..'z', 'A'..'Z']) do
     begin
       FuncName := FuncName + S[P];
       Inc(P);
@@ -828,16 +827,16 @@ begin
   while P <= Len do
   begin
     // Skip separators
-    while (P <= Len) and (PointsStr[P] in [' ', ',', #9, #10, #13]) do Inc(P);
+    while (P <= Len) and CharInSet(PointsStr[P], [' ', ',', #9, #10, #13]) do Inc(P);
     if P > Len then Break;
 
     NumStr := '';
-    if (P <= Len) and (PointsStr[P] in ['-', '+']) then
+    if (P <= Len) and CharInSet(PointsStr[P], ['-', '+']) then
     begin
       NumStr := NumStr + PointsStr[P];
       Inc(P);
     end;
-    while (P <= Len) and (PointsStr[P] in ['0'..'9', '.']) do
+    while (P <= Len) and CharInSet(PointsStr[P], ['0'..'9', '.']) do
     begin
       NumStr := NumStr + PointsStr[P];
       Inc(P);
@@ -896,12 +895,12 @@ begin
   while P <= Len do
   begin
     // Skip whitespace and commas
-    while (P <= Len) and (D[P] in [' ', ',', #9, #10, #13]) do Inc(P);
+    while (P <= Len) and CharInSet(D[P], [' ', ',', #9, #10, #13]) do Inc(P);
     if P > Len then Break;
 
     Ch := D[P];
-    if Ch in ['M','m','L','l','H','h','V','v','C','c','S','s',
-              'Q','q','T','t','A','a','Z','z'] then
+    if CharInSet(Ch, ['M','m','L','l','H','h','V','v','C','c','S','s',
+              'Q','q','T','t','A','a','Z','z']) then
     begin
       Cmd.Cmd := AnsiChar(Ch);
       Inc(P);
@@ -911,23 +910,23 @@ begin
       while P <= Len do
       begin
         // Skip whitespace and commas
-        while (P <= Len) and (D[P] in [' ', ',', #9, #10, #13]) do Inc(P);
+        while (P <= Len) and CharInSet(D[P], [' ', ',', #9, #10, #13]) do Inc(P);
         if P > Len then Break;
 
         // Check if next char starts a number or is a new command
-        if D[P] in ['M','m','L','l','H','h','V','v','C','c','S','s',
-                     'Q','q','T','t','A','a','Z','z'] then
+        if CharInSet(D[P], ['M','m','L','l','H','h','V','v','C','c','S','s',
+                     'Q','q','T','t','A','a','Z','z']) then
           Break;
 
         // Read number
         NumStr := '';
-        if (P <= Len) and (D[P] in ['-', '+']) then
+        if (P <= Len) and CharInSet(D[P], ['-', '+']) then
         begin
           NumStr := NumStr + D[P];
           Inc(P);
         end;
         HasDot := False;
-        while (P <= Len) and (D[P] in ['0'..'9', '.', 'e', 'E']) do
+        while (P <= Len) and CharInSet(D[P], ['0'..'9', '.', 'e', 'E']) do
         begin
           // Handle implicit separator on second decimal point
           if (D[P] = '.') then
@@ -1889,7 +1888,7 @@ var
   Parts: array[0..3] of string;
   P, Idx: Integer;
   InitState: TPixieSvgState;
-  FormObj, StreamObj: TPixiePdfObject;
+  FormObj: TPixiePdfObject;
   Buf: TBytes;
   MatrixStr, ResourceStr: AnsiString;
   I: Integer;
@@ -1928,9 +1927,9 @@ begin
       Parts[0] := ''; Parts[1] := ''; Parts[2] := ''; Parts[3] := '';
       while (P <= Length(VbStr)) and (Idx <= 3) do
       begin
-        while (P <= Length(VbStr)) and (VbStr[P] in [' ', ',', #9]) do Inc(P);
+        while (P <= Length(VbStr)) and CharInSet(VbStr[P], [' ', ',', #9]) do Inc(P);
         Parts[Idx] := '';
-        while (P <= Length(VbStr)) and not (VbStr[P] in [' ', ',', #9]) do
+        while (P <= Length(VbStr)) and not CharInSet(VbStr[P], [' ', ',', #9]) do
         begin
           Parts[Idx] := Parts[Idx] + VbStr[P];
           Inc(P);

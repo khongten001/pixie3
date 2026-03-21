@@ -120,11 +120,24 @@ type
 implementation
 
 uses
-  {$IFDEF FPC}LCLType, Clipbrd,{$ELSE}Windows, Vcl.Clipbrd,{$ENDIF}
-  Pixie.StringId, Pixie.Background, Pixie.Canvas,
+  Pixie.Clipboard, Pixie.StringId, Pixie.Background, Pixie.Canvas,
   Pixie.NativeContainer,
   Pixie.Document, Pixie.RenderItem, Pixie.RenderInput,
   Pixie.RenderTable, Pixie.Utf8;
+
+// Virtual key constants — values are the same in LCLType, Windows,
+// and System.UITypes (FPC and Delphi). Defined here to avoid
+// depending on any of those units.
+const
+  VK_BACK   = $08;
+  VK_RETURN = $0D;
+  VK_END    = $23;
+  VK_HOME   = $24;
+  VK_LEFT   = $25;
+  VK_UP     = $26;
+  VK_RIGHT  = $27;
+  VK_DOWN   = $28;
+  VK_DELETE = $2E;
 
 function GetCanvas(Tag: TPixieHtmlTag): TPixieCanvas;
 var
@@ -899,13 +912,13 @@ begin
     Ord('C'):
       if (ssCtrl in Shift) and HasSelection and (not FPassword) then
       begin
-        Clipboard.AsText := GetSelectedText;
+        PixieClipboardSetText(GetSelectedText);
         Result := True;
       end;
     Ord('V'):
       if (ssCtrl in Shift) and (not FReadOnly) then
       begin
-        ClipText := Clipboard.AsText;
+        ClipText := PixieClipboardGetText;
         if not FMultiLine then
         begin
           ClipText := StringReplace(ClipText, #13#10, ' ', [rfReplaceAll]);
@@ -919,7 +932,7 @@ begin
       if (ssCtrl in Shift) and HasSelection and (not FReadOnly) and
          (not FPassword) then
       begin
-        Clipboard.AsText := GetSelectedText;
+        PixieClipboardSetText(GetSelectedText);
         SaveUndo;
         DeleteSelection;
         Result := True;

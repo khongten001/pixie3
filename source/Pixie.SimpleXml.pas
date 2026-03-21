@@ -293,7 +293,7 @@ var
 begin
   Start := P.Pos;
   while (P.Pos <= P.Len) and not
-    (P.Data[P.Pos] in [' ', #9, #10, #13, '/', '>', '=']) do
+    CharInSet(P.Data[P.Pos], [' ', #9, #10, #13, '/', '>', '=']) do
     Inc(P.Pos);
   Result := Copy(P.Data, Start, P.Pos - Start);
 end;
@@ -366,7 +366,6 @@ var
   TextVal: WideString;
   TextNode: TDOMNode;
   ChildEl: TDOMElement;
-  Start: Integer;
   CloseName: string;
 begin
   while not AtEnd(P) do

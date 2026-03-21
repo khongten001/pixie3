@@ -46,9 +46,6 @@ type
     function GetSiblingsBefore: TPixieElementList;
     function FindCounter(CounterNameId: Integer;
       out FoundEl: TPixieElement; out FoundValue: Integer): Boolean;
-    procedure ParseCounterTokens(Tokens: TPixieStringVector;
-      DefaultValue: Integer; TopName: Integer);
-
   public
     procedure SelectAll(const Selector: TPixieCssSelector;
       Res: TPixieElementList); virtual;
@@ -644,7 +641,6 @@ var
   ChildRi: TPixieRenderItem;
   Doc: TPixieDocument;
 begin
-  Result := nil;
   Ret := nil;
   Disp := FCss.Display;
 
@@ -875,32 +871,6 @@ begin
   if FCounterValues = nil then
     FCounterValues := TPixieIntIntMap.Create;
   FCounterValues.AddOrSetValue(CounterNameId, Value);
-end;
-
-procedure TPixieElement.ParseCounterTokens(Tokens: TPixieStringVector;
-  DefaultValue: Integer; TopName: Integer);
-var
-  Pos, Val, Code: Integer;
-  Name: string;
-begin
-  Pos := 0;
-  while Pos < Tokens.Count do
-  begin
-    Name := Tokens[Pos];
-    Val := DefaultValue;
-    if (Pos < Tokens.Count - 1) and PixieIsNumber(Tokens[Pos + 1]) then
-    begin
-      System.Val(Tokens[Pos + 1], Val, Code);
-      Inc(Pos, 2);
-    end
-    else
-      Inc(Pos);
-
-    if TopName = Ord(psid_counter_reset) then
-      ResetCounter(PixieId(Name), Val)
-    else
-      IncrementCounter(PixieId(Name), Val);
-  end;
 end;
 
 // Render tracking

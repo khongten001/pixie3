@@ -60,7 +60,6 @@ type
     function ReadU16(Offset: UInt32): UInt16;
     function ReadI16(Offset: UInt32): Int16;
     function ReadU32(Offset: UInt32): UInt32;
-    function ReadI32(Offset: UInt32): Int32;
     function ReadFixed(Offset: UInt32): Single;
     function FindTable(const Tag: AnsiString;
       out TblOffset, TblLength: UInt32): Boolean;
@@ -153,11 +152,6 @@ begin
             (UInt32(FData[Offset + 1]) shl 16) or
             (UInt32(FData[Offset + 2]) shl 8) or
             UInt32(FData[Offset + 3]);
-end;
-
-function TPixieTrueTypeFont.ReadI32(Offset: UInt32): Int32;
-begin
-  Result := Int32(ReadU32(Offset));
 end;
 
 function TPixieTrueTypeFont.ReadFixed(Offset: UInt32): Single;

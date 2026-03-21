@@ -11,7 +11,7 @@ interface
 
 uses
   SysUtils, Classes, Math, Generics.Collections,
-  {$IFDEF FPC}LCLType, FPImage,{$ELSE}Windows,{$ENDIF}
+  {$IFDEF FPC}LCLType, FPImage,{$ELSE}{$IFDEF MSWINDOWS}Windows,{$ENDIF}{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription, Pixie.CssLength,
   Pixie.Container, Pixie.Canvas;
@@ -159,7 +159,6 @@ implementation
 
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,{$ENDIF}
-  {$IFNDEF FPC}Vcl.Graphics,{$ENDIF}
   Pixie.Url;
 
 // ---------------------------------------------------------------------------
@@ -367,12 +366,6 @@ var
   Colour: TFPColor;
   Dst: PByte;
   A, R, G, B: Byte;
-{$ELSE}
-  WImg: TWICImage;
-  Bmp: TBitmap;
-  Pixels, Src, Dst: PByte;
-  Pitch, X, Y, W, H: Integer;
-  A, R, G, B: Byte;
 {$ENDIF}
 begin
   Result := 0;
@@ -398,8 +391,13 @@ begin
     Exit;
   end;
 
+  // Try canvas-native stream loading (D2D/WIC, FMX)
+  Stream.Position := 0;
+  Result := FCanvas.LoadImageFromStream(Stream);
+  if Result <> 0 then Exit;
+
 {$IFDEF FPC}
-  // Load via FPImage readers directly — bypasses platform bitmap handles
+  // FPC: load via FPImage readers directly — bypasses platform bitmap handles
   // and preserves alpha (GTK2's TBitmap.Canvas.Draw composites against
   // black, destroying transparency)
   Img := TFPMemoryImage.Create(0, 0);
@@ -461,84 +459,15 @@ begin
   finally
     Img.Free;
   end;
-{$ELSE}
-  // Delphi: decode via TWICImage -> extract BGRA pixels
-  WImg := TWICImage.Create;
-  try
-    try
-      Stream.Position := 0;
-      WImg.LoadFromStream(Stream);
-    except
-      Exit;
-    end;
-
-    W := WImg.Width;
-    H := WImg.Height;
-    if (W <= 0) or (H <= 0) then Exit;
-
-    Bmp := TBitmap.Create;
-    try
-      Bmp.PixelFormat := pf32bit;
-      Bmp.SetSize(W, H);
-      Bmp.Canvas.Draw(0, 0, WImg);
-
-      Pitch := W * 4;
-      GetMem(Pixels, Pitch * H);
-      try
-        for Y := 0 to H - 1 do
-        begin
-          Src := Bmp.ScanLine[Y];
-          Dst := Pixels + Y * Pitch;
-          for X := 0 to W - 1 do
-          begin
-            B := Src^; Inc(Src);
-            G := Src^; Inc(Src);
-            R := Src^; Inc(Src);
-            A := Src^; Inc(Src);
-            // GDI does not premultiply — do it for D2D
-            if A = 0 then
-            begin
-              Dst^ := 0; Inc(Dst);
-              Dst^ := 0; Inc(Dst);
-              Dst^ := 0; Inc(Dst);
-              Dst^ := 0; Inc(Dst);
-            end
-            else if A = 255 then
-            begin
-              Dst^ := B; Inc(Dst);
-              Dst^ := G; Inc(Dst);
-              Dst^ := R; Inc(Dst);
-              Dst^ := 255; Inc(Dst);
-            end
-            else
-            begin
-              Dst^ := B * A div 255; Inc(Dst);
-              Dst^ := G * A div 255; Inc(Dst);
-              Dst^ := R * A div 255; Inc(Dst);
-              Dst^ := A; Inc(Dst);
-            end;
-          end;
-        end;
-
-        Result := FCanvas.LoadImageFromPixels(W, H, Pixels, Pitch);
-      finally
-        FreeMem(Pixels);
-      end;
-    finally
-      Bmp.Free;
-    end;
-  finally
-    WImg.Free;
-  end;
 {$ENDIF}
 end;
 
 function TPixieNativeContainer.LoadFromResource(
   const ResName: string): TPixieImageHandle;
+{$IF DEFINED(FPC) OR DEFINED(MSWINDOWS)}
 var
   Stream: TResourceStream;
 begin
-  Result := 0;
   try
     Stream := TResourceStream.Create(HInstance, ResName, RT_RCDATA);
     try
@@ -550,6 +479,11 @@ begin
     Result := 0;
   end;
 end;
+{$ELSE}
+begin
+  Result := 0;
+end;
+{$ENDIF}
 
 function TPixieNativeContainer.ResolvePendingImage(
   const Key: string): TPixieImageHandle;

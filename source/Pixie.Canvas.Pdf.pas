@@ -1439,10 +1439,10 @@ function TPixiePdfCanvas.LoadImage(const Path: string): TPixieImageHandle;
 var
   Stream: TFileStream;
   ImgData: TBytes;
-  ImgObj, SmaskObj: TPixiePdfObject;
+  ImgObj: TPixiePdfObject;
   Info: TPixiePdfImageInfo;
   W, H: Integer;
-  IsJpeg, IsSvg: Boolean;
+  IsJpeg: Boolean;
   SofLen: Integer;
   I: Integer;
 begin

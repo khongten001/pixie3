@@ -208,7 +208,6 @@ type
     FIsForeignContext: Boolean;
     procedure Advance;
     function Peek: Integer;
-    function PeekAt(Offset: Integer): Integer;
     function MatchAhead(const S: string; CaseInsensitive: Boolean): Boolean;
     procedure ConsumeAhead(Len: Integer);
     procedure StartNewTag(IsStart: Boolean);
@@ -292,9 +291,7 @@ type
     // Tag classification
     function IsSpecialTag(const Tag: string): Boolean;
     function IsFormattingTag(const Tag: string): Boolean;
-    function IsVoidTag(const Tag: string): Boolean;
     function IsHeadingTag(const Tag: string): Boolean;
-    function IsRawTextTag(const Tag: string): Boolean;
     // Adoption agency
     procedure AdoptionAgency(const Tag: string);
     // Close tags
@@ -306,7 +303,6 @@ type
     // Foreign content
     function IsMathMlIntegrationPoint(Node: TPixieHtmlNode): Boolean;
     function IsSvgIntegrationPoint(Node: TPixieHtmlNode): Boolean;
-    procedure AdjustSvgTagName(var Tag: string);
     procedure AdjustSvgAttributes(Attrs: TPixieHtmlAttributeList);
     procedure AdjustMathMlAttributes(Attrs: TPixieHtmlAttributeList);
     procedure AdjustForeignAttributes(Attrs: TPixieHtmlAttributeList);
@@ -601,17 +597,6 @@ begin
       Result := Integer(ReadUtf8Char(FInput, TempPos));
     end;
   end
-  else
-    Result := EOF_CHAR;
-end;
-
-function TPixieTokenizer.PeekAt(Offset: Integer): Integer;
-var
-  P: Integer;
-begin
-  P := FPos + Offset;
-  if (P >= 1) and (P <= Length(FInput)) then
-    Result := Ord(FInput[P])
   else
     Result := EOF_CHAR;
 end;
@@ -3257,23 +3242,9 @@ begin
   ]);
 end;
 
-function TPixieTreeBuilder.IsVoidTag(const Tag: string): Boolean;
-begin
-  Result := TagIn(Tag, [
-    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
-    'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr'
-  ]);
-end;
-
 function TPixieTreeBuilder.IsHeadingTag(const Tag: string): Boolean;
 begin
   Result := TagIn(Tag, ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-end;
-
-function TPixieTreeBuilder.IsRawTextTag(const Tag: string): Boolean;
-begin
-  Result := TagIn(Tag, ['script', 'style', 'xmp', 'iframe', 'noembed',
-    'noframes', 'plaintext']);
 end;
 
 // ---- Adoption agency ----
@@ -3585,59 +3556,6 @@ begin
       Exit(True);
   end;
   Result := False;
-end;
-
-procedure TPixieTreeBuilder.AdjustSvgTagName(var Tag: string);
-type
-  TReplacement = record F, T: string; end;
-const
-  Replacements: array[0..35] of TReplacement = (
-    (F: 'altglyph'; T: 'altGlyph'),
-    (F: 'altglyphdef'; T: 'altGlyphDef'),
-    (F: 'altglyphitem'; T: 'altGlyphItem'),
-    (F: 'animatecolor'; T: 'animateColor'),
-    (F: 'animatemotion'; T: 'animateMotion'),
-    (F: 'animatetransform'; T: 'animateTransform'),
-    (F: 'clippath'; T: 'clipPath'),
-    (F: 'feblend'; T: 'feBlend'),
-    (F: 'fecolormatrix'; T: 'feColorMatrix'),
-    (F: 'fecomponenttransfer'; T: 'feComponentTransfer'),
-    (F: 'fecomposite'; T: 'feComposite'),
-    (F: 'feconvolvematrix'; T: 'feConvolveMatrix'),
-    (F: 'fediffuselighting'; T: 'feDiffuseLighting'),
-    (F: 'fedisplacementmap'; T: 'feDisplacementMap'),
-    (F: 'fedistantlight'; T: 'feDistantLight'),
-    (F: 'feflood'; T: 'feFlood'),
-    (F: 'fefunca'; T: 'feFuncA'),
-    (F: 'fefuncb'; T: 'feFuncB'),
-    (F: 'fefuncg'; T: 'feFuncG'),
-    (F: 'fefuncr'; T: 'feFuncR'),
-    (F: 'fegaussianblur'; T: 'feGaussianBlur'),
-    (F: 'feimage'; T: 'feImage'),
-    (F: 'femerge'; T: 'feMerge'),
-    (F: 'femergenode'; T: 'feMergeNode'),
-    (F: 'femorphology'; T: 'feMorphology'),
-    (F: 'feoffset'; T: 'feOffset'),
-    (F: 'fepointlight'; T: 'fePointLight'),
-    (F: 'fespecularlighting'; T: 'feSpecularLighting'),
-    (F: 'fespotlight'; T: 'feSpotLight'),
-    (F: 'fetile'; T: 'feTile'),
-    (F: 'feturbulence'; T: 'feTurbulence'),
-    (F: 'foreignobject'; T: 'foreignObject'),
-    (F: 'glyphref'; T: 'glyphRef'),
-    (F: 'lineargradient'; T: 'linearGradient'),
-    (F: 'radialgradient'; T: 'radialGradient'),
-    (F: 'textpath'; T: 'textPath')
-  );
-var
-  I: Integer;
-begin
-  for I := 0 to High(Replacements) do
-    if Tag = Replacements[I].F then
-    begin
-      Tag := Replacements[I].T;
-      Exit;
-    end;
 end;
 
 procedure TPixieTreeBuilder.AdjustSvgAttributes(Attrs: TPixieHtmlAttributeList);
