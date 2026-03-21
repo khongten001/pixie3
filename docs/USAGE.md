@@ -1,10 +1,20 @@
 # Pixie HTML View — Usage Guide
 
-Pixie is a lightweight HTML/CSS rendering engine for Free Pascal. It provides `TPixieHtmlView`, a Lazarus visual component that renders HTML content with mouse interaction, text selection, focus management, and form controls.
+Pixie is a lightweight HTML/CSS rendering engine for Free Pascal and Delphi. It provides `TPixieHtmlView`, a visual component that renders HTML content with mouse interaction, text selection, focus management, and form controls.
 
 ## Installation
 
-The package is located in `package/Pixie.Package.lpk`. Install it into the Lazarus IDE to add `TPixieHtmlView` to the **Misc** component palette tab.
+### Lazarus (Free Pascal)
+
+The package is located in `package/Pixie.Package.Lazarus.lpk`. Install it into the Lazarus IDE to add `TPixieHtmlView` to the **Additional** component palette tab.
+
+### Delphi (VCL)
+
+Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE and install it. Or add `source/` to the unit search path and use `Pixie.HtmlView.VCL` directly.
+
+### Delphi (FMX)
+
+Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE and install it. Or add `source/` to the unit search path and use `Pixie.HtmlView.FMX` directly. The FMX backend supports Windows, macOS, iOS, and Android.
 
 ## Quick Start
 
@@ -29,13 +39,14 @@ HTML string
   -> Drawing via platform canvas
 ```
 
-Four platform backends are used transparently:
+Five platform backends are used transparently:
 
 | Platform | Drawing | Text | Images |
 |----------|---------|------|--------|
-| Windows  | Direct2D | DirectWrite | WIC |
+| Windows (Lazarus, Delphi VCL) | Direct2D | DirectWrite | WIC |
+| Delphi FMX (Windows, macOS, iOS, Android) | FMX Canvas | FMX TextLayout | FMX Bitmap |
 | Linux (GTK2, GTK3) | Cairo | PangoCairo | FPImage |
-| macOS    | Core Graphics | Core Text | ImageIO |
+| macOS (Lazarus) | Core Graphics | Core Text | ImageIO |
 | Qt5 / Qt6 (any platform) | QPainter | QFontMetrics | QImage |
 
 ## Properties
@@ -129,7 +140,7 @@ The `<img>` element's `src` attribute supports several prefixes:
 | URL | `<img src="https://...">` | Fetched via the `OnFetchUrl` event. |
 | File path | `<img src="/path/to/image.png">` | Loaded directly from disk. |
 
-Supported raster formats: PNG, JPEG, BMP, GIF (all platforms); TIFF and ICO additionally on Windows and macOS for file-based loading. SVG is supported on Windows 10 1703+, macOS 10.15+, and Linux with librsvg installed (see [Known Limitations](#known-limitations)).
+Supported raster formats: PNG, JPEG, BMP, GIF (all platforms); TIFF and ICO additionally on Windows and macOS for file-based loading. SVG is supported on all platforms (see [Known Limitations](#known-limitations) for details).
 
 ## Built-in Keyboard and Mouse Behaviour
 
@@ -479,7 +490,7 @@ Pdf.CustomHeight := 600;      // points
 
 - Conic gradients are rendered as solid colour fills
 - Gradient opacity uses average alpha across all stops rather than per-stop alpha
-- SVG images are not supported in PDF output
+- SVG images in PDF output are rendered as vector Form XObjects (basic shapes and text only)
 - Non-BMP characters (emoji) are not included in font subsets
 - Form controls are rendered but not interactive in PDF output
 
@@ -487,18 +498,20 @@ Pdf.CustomHeight := 600;      // points
 
 ### SVG Support
 
-SVG rendering relies on platform-specific APIs and is not universally available:
+SVG rendering uses the best available method per platform:
 
 | Platform | API Used | Requirement |
 |----------|----------|-------------|
-| Windows | `ID2D1DeviceContext5.DrawSvgDocument` | Windows 10 version 1703 (Creators Update) or later |
-| macOS | CoreSVG (private framework) | macOS 10.15 (Catalina) or later |
+| Windows (Lazarus, Delphi VCL) | `ID2D1DeviceContext5.DrawSvgDocument` | Windows 10 version 1703 (Creators Update) or later |
+| Delphi FMX (Windows, macOS, iOS, Android) | Built-in SVG renderer (rasterised to bitmap) | None |
+| macOS (Lazarus) | CoreSVG (private framework) | macOS 10.15 (Catalina) or later |
 | Linux | librsvg (`librsvg-2.so`) | librsvg must be installed at runtime |
 | Qt5 / Qt6 | Not yet supported | — |
+| PDF export | Built-in SVG-to-PDF (vector Form XObject) | None |
 
-On older systems or without the required libraries, SVG images are silently skipped (no error, but nothing is rendered). Consider providing PNG fallbacks for critical images.
+On platforms without native SVG support (older Windows, Qt), SVG images are silently skipped. Consider providing PNG fallbacks for critical images.
 
-Windows SVG support through Direct2D has additional limitations — it handles simple SVG content but may not render complex SVGs with filters, masks, or advanced path operations correctly.
+The built-in SVG renderer (used by FMX and PDF export) supports rect, circle, ellipse, line, polyline, polygon, path commands (M/L/H/V/C/S/Q/T/A/Z), text, opacity, and transforms. Advanced features like gradients, clipPath, masks, and filters are not yet supported.
 
 ### Conic Gradients
 

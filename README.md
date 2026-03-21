@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  A lightweight HTML/CSS rendering engine for Free Pascal (Lazarus) and Delphi (VCL).
+  A lightweight HTML/CSS rendering engine for Free Pascal (Lazarus) and Delphi (VCL &amp; FMX).
 </p>
 
 <p align="center">
@@ -19,13 +19,14 @@
 
 Pixie is a drop-in visual component (`TPixieHtmlView`) for Lazarus and Delphi that renders HTML and CSS using platform-native graphics. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
 
-It ships with four rendering backends so the same code works across operating systems:
+It ships with five rendering backends so the same code works across operating systems and frameworks:
 
 | Platform | 2D Drawing | Text | Images |
 |----------|-----------|------|--------|
-| Windows | Direct2D | DirectWrite | WIC |
+| Windows (Lazarus, Delphi VCL) | Direct2D | DirectWrite | WIC |
+| Delphi FMX (Windows, macOS, iOS, Android) | FMX Canvas | FMX TextLayout | FMX Bitmap |
 | Linux (GTK2, GTK3) | Cairo | Pango | FPImage + librsvg |
-| macOS | Core Graphics | Core Text | ImageIO |
+| macOS (Lazarus) | Core Graphics | Core Text | ImageIO |
 | Qt5 / Qt6 (any platform) | QPainter | QFontMetrics | QImage |
 
 ## Features
@@ -103,14 +104,27 @@ Or add the package as a dependency without installing:
 
 **Requirements:** Embarcadero Delphi (Windows only, uses Direct2D/DirectWrite backend).
 
-1. Open `package/Pixie.Package.Delphi.dpk` in the Delphi IDE.
+1. Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE.
 2. Right-click the project in the Project Manager and select **Install**.
-3. `TPixieHtmlView` appears on the component palette.
+3. `TPixieHtmlView` appears on the component palette under **Additional**.
 
 Or add the source files directly to your project without installing the package:
 
 1. Add `source/` to your project's unit search path.
 2. Add `Pixie.HtmlView.VCL` to your form's `uses` clause.
+
+### Delphi (FMX)
+
+**Requirements:** Embarcadero Delphi with FireMonkey. Supports Windows, macOS, iOS, and Android.
+
+1. Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE.
+2. Right-click the project in the Project Manager and select **Install**.
+3. `TPixieHtmlView` appears on the component palette under **Additional**.
+
+Or add the source files directly to your project without installing the package:
+
+1. Add `source/` to your project's unit search path.
+2. Add `Pixie.HtmlView.FMX` to your form's `uses` clause.
 
 ## Usage
 
