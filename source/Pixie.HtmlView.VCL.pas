@@ -241,6 +241,8 @@ begin
 
   if (FHtmlLines.Count > 0) and (FCanvas <> nil) then
   begin
+    if PixieIsBinaryString(FHtmlLines.Text) then
+      raise EPixieBinaryContent.Create(SPixieBinaryContent);
     if Assigned(FOnBeforeParse) then
       FOnBeforeParse(Self);
     FContainer.BaseUrl := FBaseUrl;

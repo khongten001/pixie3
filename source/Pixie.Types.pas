@@ -13,6 +13,14 @@ type
   PtrInt = NativeInt;
 {$ENDIF}
 
+const
+  SPixieBinaryContent = 'Binary content';
+
+type
+  EPixieBinaryContent = class(Exception);
+
+function PixieIsBinaryString(const S: string): Boolean;
+
 type
   pixel_t = Single;
   ucode_t = UInt32;
@@ -773,6 +781,25 @@ type
   end;
 
 implementation
+
+function PixieIsBinaryString(const S: string): Boolean;
+var
+  I, Limit: Integer;
+  C: Integer;
+begin
+  Limit := Length(S);
+  if Limit > 4096 then
+    Limit := 4096;
+  for I := 1 to Limit do
+  begin
+    C := Ord(S[I]);
+    if (C < 9) or ((C > 13) and (C < 32)) then
+    begin
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
 
 { TPixieMargins }
 
