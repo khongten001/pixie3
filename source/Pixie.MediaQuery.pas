@@ -345,7 +345,7 @@ begin
           Exit(False);
         Result := True;
       end
-      else if (Val0Type = cssTokenIdent) and (PixieLowerCase(Val0Ident) = 'infinite') then
+      else if (Val0Type = cssTokenIdent) and SameText(Val0Ident, 'infinite') then
       begin
         Val0Number := Infinity;
         Result := True;

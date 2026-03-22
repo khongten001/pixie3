@@ -261,7 +261,7 @@ begin
   Processed := False;
   Rel := GetAttr('rel');
 
-  if PixieLowerCase(Rel) = 'stylesheet' then
+  if SameText(Rel, 'stylesheet') then
   begin
     Href := GetAttr('href');
     if Href <> '' then

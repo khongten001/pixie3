@@ -768,7 +768,7 @@ begin
   Name := ConsumeIdentSequence;
 
   // Special handling for url(
-  if (PixieLowerCase(Name) = 'url') and (ByteAt(FIndex) = Ord('(')) then
+  if SameText(Name, 'url') and (ByteAt(FIndex) = Ord('(')) then
   begin
     Inc(FIndex); // consume '('
     while IsCssWhitespace(ByteAt(FIndex)) do

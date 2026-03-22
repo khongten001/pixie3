@@ -502,7 +502,7 @@ begin
     Tok2 := TokenAt(Result.Value, -1);
     Token := TokenAt(Result.Value, -2);
     if (Tok2 <> nil) and (Token <> nil) and
-       (Tok2.TokenType = cssTokenIdent) and (PixieLowerCase(Tok2.Str) = 'important') and
+       (Tok2.TokenType = cssTokenIdent) and SameText(Tok2.Str, 'important') and
        (Token.TokenType = cssTokenBang) then
     begin
       TokensRemove(Result.Value, -2, 2);

@@ -2886,7 +2886,7 @@ begin
   begin
     Tok := Tokens[I];
     if (Tok.TokenType = cssTokenCvFunction) and
-       (PixieLowerCase(Tok.Str) = 'var') then
+       SameText(Tok.Str, 'var') then
     begin
       // Clone args since we may modify them
       Args := TPixieCssTokenList.Create(True);

@@ -827,22 +827,22 @@ function TPixieDocument.MatchLang(const Lang: string): Boolean;
 var
   DocLang: string;
 begin
-  DocLang := PixieLowerCase(FLang);
+  DocLang := FLang;
   if DocLang = '' then
     Exit(False);
 
-  if PixieLowerCase(Lang) = DocLang then
+  if SameText(Lang, DocLang) then
     Exit(True);
 
   // Check prefix match (e.g. "en" matches "en-US")
   if (Length(Lang) < Length(DocLang)) and
      (DocLang[Length(Lang) + 1] = '-') and
-     (StrLComp(PChar(DocLang), PChar(PixieLowerCase(Lang)), Length(Lang)) = 0) then
+     (StrLIComp(PChar(Lang), PChar(DocLang), Length(Lang)) = 0) then
     Exit(True);
 
   // Check culture match
   if (FCulture <> '') and
-     (PixieLowerCase(Lang) = PixieLowerCase(FCulture)) then
+     SameText(Lang, FCulture) then
     Exit(True);
 
   Result := False;

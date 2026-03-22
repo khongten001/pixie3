@@ -297,7 +297,7 @@ begin
     Exit;
 
   if (Token.TokenType = cssTokenIdent) and
-     (PixieLowerCase(Token.Str) = 'none') then
+     SameText(Token.Str, 'none') then
   begin
     Result := TPixieImage.Create;
     Exit;

@@ -159,11 +159,8 @@ begin
 end;
 
 function IsSupportedSimplePseudoElement(const Name: string): Boolean;
-var
-  Lower: string;
 begin
-  Lower := PixieLowerCase(Name);
-  Result := (Lower = 'before') or (Lower = 'after');
+  Result := SameText(Name, 'before') or SameText(Name, 'after');
 end;
 
 function IsSpecialAttribute(const Name: string): Boolean;
