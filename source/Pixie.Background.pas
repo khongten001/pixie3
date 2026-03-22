@@ -995,7 +995,7 @@ var
   PosXVal, PosYVal: TPixieCssLength;
   ImgLayer: TPixieBackgroundImage;
   ImgSz: TPixieSize;
-  ImgArWidth, ImgArHeight: pixel_t;
+  ImgArWidth, ImgArHeight: TPixiePixel;
   ImgNewSz: TPixieSize;
   NewOriginBox: TPixiePosition;
   AutoAuto: TPixieCssSize;

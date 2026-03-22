@@ -37,7 +37,7 @@ type
     function Predef: Integer;
     function Val: Single;
     function Units: TPixieCssUnits;
-    function CalcPercent(AWidth: pixel_t): pixel_t;
+    function CalcPercent(AWidth: TPixiePixel): TPixiePixel;
     procedure SetValue(AVal: Single; AUnits: TPixieCssUnits);
     procedure SetPredef(AVal: Integer);
     function ToString: string;
@@ -118,14 +118,14 @@ begin
   Result := FUnits;
 end;
 
-function TPixieCssLength.CalcPercent(AWidth: pixel_t): pixel_t;
+function TPixieCssLength.CalcPercent(AWidth: TPixiePixel): TPixiePixel;
 begin
   if not IsPredefined then
   begin
     if FUnits = cssUnitsPercentage then
       Result := AWidth * FValue / 100
     else
-      Result := pixel_t(Val);
+      Result := TPixiePixel(Val);
   end
   else
     Result := 0;

@@ -15,11 +15,11 @@ type
   { TPixieRenderImage }
   TPixieRenderImage = class(TPixieRenderItem)
   protected
-    function CalcMaxHeight(ImageHeight, ContainingBlockHeight: pixel_t): pixel_t;
-    function _Render(X, Y: pixel_t;
+    function CalcMaxHeight(ImageHeight, ContainingBlockHeight: TPixiePixel): TPixiePixel;
+    function _Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      SecondPass: Boolean): pixel_t; override;
+      SecondPass: Boolean): TPixiePixel; override;
   public
     constructor Create(ASrcEl: TPixieElement); override;
     function Clone: TPixieRenderItem; override;
@@ -42,10 +42,10 @@ begin
   Result := TPixieRenderImage.Create(FElement);
 end;
 
-function TPixieRenderImage.CalcMaxHeight(ImageHeight, ContainingBlockHeight: pixel_t): pixel_t;
+function TPixieRenderImage.CalcMaxHeight(ImageHeight, ContainingBlockHeight: TPixiePixel): TPixiePixel;
 var
   Doc: TPixieDocument;
-  CbHeight: pixel_t;
+  CbHeight: TPixiePixel;
 begin
   Assert(SrcEl.GetDocument is TPixieDocument);
   Doc := TPixieDocument(SrcEl.GetDocument);
@@ -56,16 +56,16 @@ begin
   Result := Doc.ToPixels(Css.CssMaxHeight, Css.FontMetrics, CbHeight);
 end;
 
-function TPixieRenderImage._Render(X, Y: pixel_t;
+function TPixieRenderImage._Render(X, Y: TPixiePixel;
   const CbContext: TPixieContainingBlockContext;
   FmtCtx: TPixieFormattingContext;
-  SecondPass: Boolean): pixel_t;
+  SecondPass: Boolean): TPixiePixel;
 var
-  ParentWidth: pixel_t;
+  ParentWidth: TPixiePixel;
   SelfSize: TPixieContainingBlockContext;
   Doc: TPixieDocument;
   Sz: TPixieSize;
-  MaxWidth, MaxHeight: pixel_t;
+  MaxWidth, MaxHeight: TPixiePixel;
   Lh: TPixieCssLineHeight;
 begin
   ParentWidth := CbContext.Width.Value;

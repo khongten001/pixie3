@@ -26,10 +26,10 @@ type
 
     procedure GetText(var Text: string); override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
+      MaxWidth: TPixiePixel); override;
     function IsText: Boolean; override;
     procedure ComputeStyles(Recursive: Boolean = True); override;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
     function DumpGetName: string; override;
@@ -75,7 +75,7 @@ begin
 end;
 
 procedure TPixieElText.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 begin
   Sz := FSize;
 end;
@@ -185,7 +185,7 @@ begin
   FDrawSpaces := FCss.FontMetrics.DrawSpaces;
 end;
 
-procedure TPixieElText.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElText.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   Pos: TPixiePosition;

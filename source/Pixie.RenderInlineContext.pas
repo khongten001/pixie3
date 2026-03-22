@@ -21,7 +21,7 @@ type
   TPixieRenderInlineContext = class(TPixieRenderBlock)
   private
     FLineBoxes: TPixieLineBoxList;
-    FMaxLineWidth: pixel_t;
+    FMaxLineWidth: TPixiePixel;
 
     // Iteration state (FPC has no closures)
     FIterSkipSpaces: Boolean;
@@ -36,14 +36,14 @@ type
       FmtCtx: TPixieFormattingContext);
     function NewBox(Item: TPixieLineBoxItem; var LineCtx: TPixieLineContext;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t;
+      FmtCtx: TPixieFormattingContext): TPixiePixel;
 
     procedure InlineIterCallback(El: TPixieRenderItem;
       ItemType: TPixieIteratorItemType);
   protected
-    function _RenderContent(X, Y: pixel_t; SecondPass: Boolean;
+    function _RenderContent(X, Y: TPixiePixel; SecondPass: Boolean;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t; override;
+      FmtCtx: TPixieFormattingContext): TPixiePixel; override;
     procedure FixLineWidth(Flt: TPixieElementFloat;
       const SelfSize: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext); override;
@@ -51,8 +51,8 @@ type
     constructor Create(ASrcEl: TPixieElement); override;
     destructor Destroy; override;
     function Clone: TPixieRenderItem; override;
-    function GetFirstBaseline: pixel_t; override;
-    function GetLastBaseline: pixel_t; override;
+    function GetFirstBaseline: TPixiePixel; override;
+    function GetLastBaseline: TPixiePixel; override;
     procedure ApplyVerticalAlign; override;
   end;
 
@@ -118,13 +118,13 @@ end;
 
 // --- _RenderContent ---
 
-function TPixieRenderInlineContext._RenderContent(X, Y: pixel_t;
+function TPixieRenderInlineContext._RenderContent(X, Y: TPixiePixel;
   SecondPass: Boolean;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 var
   Ws: TPixieWhiteSpace;
-  OldTop: pixel_t;
+  OldTop: TPixiePixel;
 begin
   FLineBoxes.Clear;
   FMaxLineWidth := 0;
@@ -187,12 +187,12 @@ end;
 function TPixieRenderInlineContext.NewBox(Item: TPixieLineBoxItem;
   var LineCtx: TPixieLineContext;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 var
   Items: TPixieLineBoxItemList;
-  LineTop: pixel_t;
-  FirstLineMargin, TextIndent: pixel_t;
-  SzFont: pixel_t;
+  LineTop: TPixiePixel;
+  FirstLineMargin, TextIndent: TPixiePixel;
+  SzFont: TPixiePixel;
   I: Integer;
 begin
   Items := FinishLastBox(False, SelfSize);
@@ -266,11 +266,11 @@ procedure TPixieRenderInlineContext.PlaceInline(Item: TPixieLineBoxItem;
   FmtCtx: TPixieFormattingContext);
 var
   LineCtx: TPixieLineContext;
-  LineTop: pixel_t;
-  Ret: pixel_t;
-  MinRenderedWidth: pixel_t;
+  LineTop: TPixiePixel;
+  Ret: TPixiePixel;
+  MinRenderedWidth: TPixiePixel;
   AddBox: Boolean;
-  Shift, PrevMargin: pixel_t;
+  Shift, PrevMargin: TPixiePixel;
   Sz: TPixieSize;
 begin
   if Item.GetEl.SrcEl.Css.Display = displayNone then
@@ -383,8 +383,8 @@ var
   ElFront: TPixieRenderItem;
   WasCleared: Boolean;
   Items: TPixieLineBoxItemList;
-  LineTop, LineLeft, LineRight: pixel_t;
-  SzFont: pixel_t;
+  LineTop, LineLeft, LineRight: TPixiePixel;
+  SzFont: TPixiePixel;
   I: Integer;
   Lbi: TPixieLineBoxItem;
 begin
@@ -459,7 +459,7 @@ end;
 
 procedure TPixieRenderInlineContext.ApplyVerticalAlign;
 
-  procedure ShiftInlineBoxes(Parent: TPixieRenderItem; Delta: pixel_t);
+  procedure ShiftInlineBoxes(Parent: TPixieRenderItem; Delta: TPixiePixel);
   var
     J: Integer;
     Child: TPixieRenderItem;
@@ -476,7 +476,7 @@ procedure TPixieRenderInlineContext.ApplyVerticalAlign;
   end;
 
 var
-  Add, ContentHeight: pixel_t;
+  Add, ContentHeight: TPixiePixel;
   I: Integer;
 begin
   if FLineBoxes.Count = 0 then
@@ -510,7 +510,7 @@ end;
 
 // --- Baselines ---
 
-function TPixieRenderInlineContext.GetFirstBaseline: pixel_t;
+function TPixieRenderInlineContext.GetFirstBaseline: TPixiePixel;
 begin
   if FLineBoxes.Count > 0 then
     Result := FLineBoxes[0].Bottom - FLineBoxes[0].Baseline + ContentOffsetTop
@@ -518,7 +518,7 @@ begin
     Result := Height - MarginBottom;
 end;
 
-function TPixieRenderInlineContext.GetLastBaseline: pixel_t;
+function TPixieRenderInlineContext.GetLastBaseline: TPixiePixel;
 var
   Last: TPixieLineBox;
 begin

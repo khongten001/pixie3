@@ -19,16 +19,16 @@ type
   { TPixieRenderBlock }
   TPixieRenderBlock = class(TPixieRenderItem)
   protected
-    function _RenderContent(X, Y: pixel_t; SecondPass: Boolean;
+    function _RenderContent(X, Y: TPixiePixel; SecondPass: Boolean;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t; virtual;
-    function _Render(X, Y: pixel_t;
+      FmtCtx: TPixieFormattingContext): TPixiePixel; virtual;
+    function _Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      SecondPass: Boolean): pixel_t; override;
-    function PlaceFloat(El: TPixieRenderItem; FloatTop: pixel_t;
+      SecondPass: Boolean): TPixiePixel; override;
+    function PlaceFloat(El: TPixieRenderItem; FloatTop: TPixiePixel;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t;
+      FmtCtx: TPixieFormattingContext): TPixiePixel;
     procedure FixLineWidth(Flt: TPixieElementFloat;
       const SelfSize: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext); virtual;
@@ -60,9 +60,9 @@ begin
   Result := TPixieRenderBlock.Create(FElement);
 end;
 
-function TPixieRenderBlock._RenderContent(X, Y: pixel_t; SecondPass: Boolean;
+function TPixieRenderBlock._RenderContent(X, Y: TPixiePixel; SecondPass: Boolean;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 begin
   Result := 0;
 end;
@@ -76,14 +76,14 @@ end;
 
 // --- PlaceFloat ---
 
-function TPixieRenderBlock.PlaceFloat(El: TPixieRenderItem; FloatTop: pixel_t;
+function TPixieRenderBlock.PlaceFloat(El: TPixieRenderItem; FloatTop: TPixiePixel;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 var
-  LineTop, LineLeft, LineRight: pixel_t;
-  MinRenderedWidth: pixel_t;
+  LineTop, LineLeft, LineRight: TPixiePixel;
+  MinRenderedWidth: TPixiePixel;
   Fb: TPixieFloatedBox;
-  NewTop: pixel_t;
+  NewTop: TPixiePixel;
 begin
   Result := 0;
 
@@ -147,15 +147,15 @@ end;
 
 // --- _Render ---
 
-function TPixieRenderBlock._Render(X, Y: pixel_t;
+function TPixieRenderBlock._Render(X, Y: TPixiePixel;
   const CbContext: TPixieContainingBlockContext;
   FmtCtx: TPixieFormattingContext;
-  SecondPass: Boolean): pixel_t;
+  SecondPass: Boolean): TPixiePixel;
 var
   SelfSize: TPixieContainingBlockContext;
-  RetWidth: pixel_t;
+  RetWidth: TPixiePixel;
   RequiresRerender: Boolean;
-  FloatsHeight: pixel_t;
+  FloatsHeight: TPixiePixel;
   ListImage, ListImageBaseUrl: string;
   ImgSz: TPixieSize;
   Doc: TPixieDocument;

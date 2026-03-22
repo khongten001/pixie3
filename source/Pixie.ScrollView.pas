@@ -15,32 +15,32 @@ type
   protected
     FViewport: TPixiePosition;
     FScrollSize: TPixieSize;
-    FLeft: pixel_t;
-    FTop: pixel_t;
+    FLeft: TPixiePixel;
+    FTop: TPixiePixel;
   public
     constructor Create(const AViewport: TPixiePosition;
       const AScrollSize: TPixieSize);
 
-    function GetLeft: pixel_t;
-    function GetTop: pixel_t;
+    function GetLeft: TPixiePixel;
+    function GetTop: TPixiePixel;
 
-    function GetMaxHScroll: pixel_t;
-    function GetMaxVScroll: pixel_t;
+    function GetMaxHScroll: TPixiePixel;
+    function GetMaxVScroll: TPixiePixel;
 
     procedure SetViewport(const AViewport: TPixiePosition;
       const AScrollSize: TPixieSize);
-    function IsHScrollable(DX: pixel_t): Boolean;
-    function IsVScrollable(DY: pixel_t): Boolean;
+    function IsHScrollable(DX: TPixiePixel): Boolean;
+    function IsVScrollable(DY: TPixiePixel): Boolean;
 
-    function HScroll(DX: pixel_t): pixel_t;
-    function VScroll(DY: pixel_t): pixel_t;
+    function HScroll(DX: TPixiePixel): TPixiePixel;
+    function VScroll(DY: TPixiePixel): TPixiePixel;
 
-    function IsPointInside(X, Y: pixel_t): Boolean;
+    function IsPointInside(X, Y: TPixiePixel): Boolean;
   end;
 
 implementation
 
-function Clamp(V, Lo, Hi: pixel_t): pixel_t; inline;
+function Clamp(V, Lo, Hi: TPixiePixel): TPixiePixel; inline;
 begin
   if V < Lo then
     Result := Lo
@@ -60,22 +60,22 @@ begin
   FTop := 0;
 end;
 
-function TPixieScrollView.GetLeft: pixel_t;
+function TPixieScrollView.GetLeft: TPixiePixel;
 begin
   Result := FLeft;
 end;
 
-function TPixieScrollView.GetTop: pixel_t;
+function TPixieScrollView.GetTop: TPixiePixel;
 begin
   Result := FTop;
 end;
 
-function TPixieScrollView.GetMaxHScroll: pixel_t;
+function TPixieScrollView.GetMaxHScroll: TPixiePixel;
 begin
   Result := Max(0, FScrollSize.Width - FViewport.Width);
 end;
 
-function TPixieScrollView.GetMaxVScroll: pixel_t;
+function TPixieScrollView.GetMaxVScroll: TPixiePixel;
 begin
   Result := Max(0, FScrollSize.Height - FViewport.Height);
 end;
@@ -89,23 +89,23 @@ begin
   FTop := Clamp(FTop, 0, GetMaxVScroll);
 end;
 
-function TPixieScrollView.IsHScrollable(DX: pixel_t): Boolean;
+function TPixieScrollView.IsHScrollable(DX: TPixiePixel): Boolean;
 begin
   if FScrollSize.Width = 0 then
     Exit(False);
   Result := FLeft <> Clamp(FLeft + DX, 0, GetMaxHScroll);
 end;
 
-function TPixieScrollView.IsVScrollable(DY: pixel_t): Boolean;
+function TPixieScrollView.IsVScrollable(DY: TPixiePixel): Boolean;
 begin
   if FScrollSize.Height = 0 then
     Exit(False);
   Result := FTop <> Clamp(FTop + DY, 0, GetMaxVScroll);
 end;
 
-function TPixieScrollView.HScroll(DX: pixel_t): pixel_t;
+function TPixieScrollView.HScroll(DX: TPixiePixel): TPixiePixel;
 var
-  NewLeft: pixel_t;
+  NewLeft: TPixiePixel;
 begin
   if FScrollSize.Width = 0 then
     Exit(0);
@@ -114,9 +114,9 @@ begin
   FLeft := NewLeft;
 end;
 
-function TPixieScrollView.VScroll(DY: pixel_t): pixel_t;
+function TPixieScrollView.VScroll(DY: TPixiePixel): TPixiePixel;
 var
-  NewTop: pixel_t;
+  NewTop: TPixiePixel;
 begin
   if FScrollSize.Height = 0 then
     Exit(0);
@@ -125,7 +125,7 @@ begin
   FTop := NewTop;
 end;
 
-function TPixieScrollView.IsPointInside(X, Y: pixel_t): Boolean;
+function TPixieScrollView.IsPointInside(X, Y: TPixiePixel): Boolean;
 begin
   Result := FViewport.IsPointInside(X, Y);
 end;

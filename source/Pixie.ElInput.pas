@@ -26,8 +26,8 @@ type
     function IsReplaced: Boolean; override;
     procedure ParseAttributes; override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+      MaxWidth: TPixiePixel); override;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
     procedure OnClick; override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
@@ -56,8 +56,8 @@ type
     function IsReplaced: Boolean; override;
     procedure ParseAttributes; override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+      MaxWidth: TPixiePixel); override;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
     procedure OnClick; override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
@@ -73,8 +73,8 @@ type
     function IsReplaced: Boolean; override;
     procedure ParseAttributes; override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+      MaxWidth: TPixiePixel); override;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
     procedure OnClick; override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
@@ -148,13 +148,13 @@ begin
 end;
 
 procedure TPixieElCheckbox.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 begin
   Sz.Width := InputIntrinsicSize;
   Sz.Height := InputIntrinsicSize;
 end;
 
-procedure TPixieElCheckbox.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElCheckbox.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   RenderIt: TPixieRenderItem;
@@ -322,13 +322,13 @@ begin
 end;
 
 procedure TPixieElRadio.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 begin
   Sz.Width := InputIntrinsicSize;
   Sz.Height := InputIntrinsicSize;
 end;
 
-procedure TPixieElRadio.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElRadio.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   RenderIt: TPixieRenderItem;
@@ -497,11 +497,11 @@ begin
 end;
 
 procedure TPixieElButton.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 var
   Cv: TPixieCanvas;
   Label_: string;
-  TextW: pixel_t;
+  TextW: TPixiePixel;
 begin
   Label_ := '';
   GetText(Label_);
@@ -519,7 +519,7 @@ begin
   Sz.Height := FCss.FontMetrics.Height;
 end;
 
-procedure TPixieElButton.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElButton.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   RenderIt: TPixieRenderItem;
@@ -528,12 +528,12 @@ var
   Cv: TPixieCanvas;
   FillColor, StrokeColor, TextColor: TPixieWebColor;
   Rad: TPixieBorderRadiuses;
-  BorderW: pixel_t;
+  BorderW: TPixiePixel;
   IsDisabled, IsActive, IsHover: Boolean;
   HasCssBorder, HasCssBg: Boolean;
   Label_: string;
-  TextW, TextX, TextY: pixel_t;
-  BX, BY, BW, BH: pixel_t;
+  TextW, TextX, TextY: TPixiePixel;
+  BX, BY, BW, BH: TPixiePixel;
 begin
   inherited Draw(Hdc, X, Y, Clip, Ri);
 

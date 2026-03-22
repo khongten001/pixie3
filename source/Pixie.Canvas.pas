@@ -71,12 +71,12 @@ type
 
     // Text
     function MeasureText(const Text: string;
-      Handle: TPixieFontHandle): pixel_t; virtual; abstract;
+      Handle: TPixieFontHandle): TPixiePixel; virtual; abstract;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); virtual; abstract;
 
     // Unit conversion
-    function PtToPx(Pt: Single): pixel_t; virtual; abstract;
+    function PtToPx(Pt: Single): TPixiePixel; virtual; abstract;
 
     // Image
     function LoadImage(const Path: string): TPixieImageHandle; virtual; abstract;

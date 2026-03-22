@@ -39,10 +39,10 @@ type
     FImages: TPixieImageCacheMap;
     FPendingImages: TPixiePendingImageMap;
     FBaseUrl: string;
-    FDefaultFontSize: pixel_t;
+    FDefaultFontSize: TPixiePixel;
     FDefaultFontName: string;
-    FViewportWidth: pixel_t;
-    FViewportHeight: pixel_t;
+    FViewportWidth: TPixiePixel;
+    FViewportHeight: TPixiePixel;
     FOnAnchorClick: TPixieAnchorClickEvent;
     FOnElementClick: TPixieElementClickEvent;
     FOnFetchUrl: TPixieFetchUrlEvent;
@@ -66,10 +66,10 @@ type
     property Canvas: TPixieCanvas read FCanvas;
     property Caption: string read FCaption;
     property Cursor: string read FCursor;
-    property DefaultFontSize: pixel_t read FDefaultFontSize write FDefaultFontSize;
+    property DefaultFontSize: TPixiePixel read FDefaultFontSize write FDefaultFontSize;
     property DefaultFontName: string read FDefaultFontName write FDefaultFontName;
-    property ViewportWidth: pixel_t read FViewportWidth write FViewportWidth;
-    property ViewportHeight: pixel_t read FViewportHeight write FViewportHeight;
+    property ViewportWidth: TPixiePixel read FViewportWidth write FViewportWidth;
+    property ViewportHeight: TPixiePixel read FViewportHeight write FViewportHeight;
     property OnAnchorClickEvent: TPixieAnchorClickEvent
       read FOnAnchorClick write FOnAnchorClick;
     property OnElementClickEvent: TPixieElementClickEvent
@@ -87,11 +87,11 @@ type
     function CreateFont(const Descr: TPixieFontDescription; Doc: TObject;
       out Metrics: TPixieFontMetrics): PtrUInt; override;
     procedure DeleteFont(HFont: PtrUInt); override;
-    function TextWidth(const Text: string; HFont: PtrUInt): pixel_t; override;
+    function TextWidth(const Text: string; HFont: PtrUInt): TPixiePixel; override;
     procedure DrawText(Hdc: PtrUInt; const Text: string; HFont: PtrUInt;
       Color: TPixieWebColor; const Pos: TPixiePosition); override;
-    function PtToPx(Pt: Single): pixel_t; override;
-    function GetDefaultFontSize: pixel_t; override;
+    function PtToPx(Pt: Single): TPixiePixel; override;
+    function GetDefaultFontSize: TPixiePixel; override;
     function GetDefaultFontName: string; override;
 
     // Drawing
@@ -137,7 +137,7 @@ type
       Color: TPixieWebColor); override;
 
     // Decoration line
-    procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: pixel_t;
+    procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: TPixiePixel;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
     // Opacity layers
@@ -669,7 +669,7 @@ begin
 end;
 
 function TPixieNativeContainer.TextWidth(const Text: string;
-  HFont: PtrUInt): pixel_t;
+  HFont: PtrUInt): TPixiePixel;
 begin
   Result := FCanvas.MeasureText(Text, TPixieFontHandle(HFont));
 end;
@@ -682,12 +682,12 @@ begin
     Pos.X, Pos.Y, Pos.Width, Pos.Height);
 end;
 
-function TPixieNativeContainer.PtToPx(Pt: Single): pixel_t;
+function TPixieNativeContainer.PtToPx(Pt: Single): TPixiePixel;
 begin
   Result := FCanvas.PtToPx(Pt);
 end;
 
-function TPixieNativeContainer.GetDefaultFontSize: pixel_t;
+function TPixieNativeContainer.GetDefaultFontSize: TPixiePixel;
 begin
   Result := FDefaultFontSize;
 end;
@@ -986,7 +986,7 @@ begin
 end;
 
 procedure TPixieNativeContainer.DrawLine(Hdc: PtrUInt;
-  X1, Y1, X2, Y2: pixel_t; Color: TPixieWebColor;
+  X1, Y1, X2, Y2: TPixiePixel; Color: TPixieWebColor;
   StrokeWidth: Single);
 begin
   FCanvas.DrawLine(X1, Y1, X2, Y2, Color, StrokeWidth);

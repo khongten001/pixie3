@@ -66,8 +66,8 @@ Five platform backends are used transparently:
 | Property | Type | Access | Description |
 |----------|------|--------|-------------|
 | `Document` | `TPixieDocument` | read-only | The parsed DOM document. `nil` if no HTML is loaded. |
-| `ContentHeight` | `pixel_t` | read-only | Total content height in virtual (pre-zoom) pixels. |
-| `ScrollY` | `pixel_t` | read/write | Vertical scroll offset in virtual pixels. |
+| `ContentHeight` | `TPixiePixel` | read-only | Total content height in virtual (pre-zoom) pixels. |
+| `ScrollY` | `TPixiePixel` | read/write | Vertical scroll offset in virtual pixels. |
 
 ## Events
 

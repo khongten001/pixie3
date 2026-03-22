@@ -22,7 +22,7 @@ type
 function PixieIsBinaryString(const S: string): Boolean;
 
 type
-  pixel_t = Single;
+  TPixiePixel = Single;
   ucode_t = UInt32;
 
   // Document mode
@@ -546,9 +546,9 @@ const
   FlexAlignItemsSafe   = $800;
 
   // Border width values
-  BorderWidthThinValue: pixel_t   = 1;
-  BorderWidthMediumValue: pixel_t = 3;
-  BorderWidthThickValue: pixel_t  = 5;
+  BorderWidthThinValue: TPixiePixel   = 1;
+  BorderWidthMediumValue: TPixiePixel = 3;
+  BorderWidthThickValue: TPixiePixel  = 5;
 
   // Keyword strings (semicolon-delimited, same order as enums)
   StyleDisplayStrings = 'none;block;inline;inline-block;inline-table;list-item;table;table-caption;table-cell;table-column;table-column-group;table-footer-group;table-header-group;table-row;table-row-group;inline-text;flex;inline-flex;grid;inline-grid;flow-root';
@@ -601,17 +601,17 @@ const
   BackgroundPositionPercentages: array[TPixieBackgroundPosition] of Single = (0, 100, 0, 100, 50);
 
   // Border width values array
-  BorderWidthValues: array[TPixieBorderWidth] of pixel_t = (1, 3, 5);
+  BorderWidthValues: array[TPixieBorderWidth] of TPixiePixel = (1, 3, 5);
 
 type
   { TPixieMargins }
   TPixieMargins = record
-    Left: pixel_t;
-    Right: pixel_t;
-    Top: pixel_t;
-    Bottom: pixel_t;
-    function Width: pixel_t;
-    function Height: pixel_t;
+    Left: TPixiePixel;
+    Right: TPixiePixel;
+    Top: TPixiePixel;
+    Bottom: TPixiePixel;
+    function Width: TPixiePixel;
+    function Height: TPixiePixel;
     procedure Init;
   end;
 
@@ -624,25 +624,25 @@ type
 
   { TPixieSize }
   TPixieSize = record
-    Width: pixel_t;
-    Height: pixel_t;
-    class function Create(AWidth, AHeight: pixel_t): TPixieSize; static;
+    Width: TPixiePixel;
+    Height: TPixiePixel;
+    class function Create(AWidth, AHeight: TPixiePixel): TPixieSize; static;
   end;
 
   { TPixiePosition }
   TPixiePosition = record
-    X: pixel_t;
-    Y: pixel_t;
-    Width: pixel_t;
-    Height: pixel_t;
-    class function Create(AX, AY, AWidth, AHeight: pixel_t): TPixiePosition; static;
-    function Right: pixel_t;
-    function Bottom: pixel_t;
+    X: TPixiePixel;
+    Y: TPixiePixel;
+    Width: TPixiePixel;
+    Height: TPixiePixel;
+    class function Create(AX, AY, AWidth, AHeight: TPixiePixel): TPixiePosition; static;
+    function Right: TPixiePixel;
+    function Bottom: TPixiePixel;
     function IsEmpty: Boolean;
     function DoesIntersect(const Val: TPixiePosition): Boolean;
     function Intersect(const Src: TPixiePosition): TPixiePosition;
-    function IsPointInside(AX, AY: pixel_t): Boolean;
-    procedure MoveTo(AX, AY: pixel_t);
+    function IsPointInside(AX, AY: TPixiePixel): Boolean;
+    procedure MoveTo(AX, AY: TPixiePixel);
     procedure Clear;
     procedure DoRound;
     procedure AddMargins(const Mg: TPixieMargins);
@@ -651,24 +651,24 @@ type
 
   { TPixieScrollValues }
   TPixieScrollValues = record
-    Dx: pixel_t;
-    Dy: pixel_t;
+    Dx: TPixiePixel;
+    Dy: TPixiePixel;
     ScrollBox: TPixiePosition;
     procedure Init;
   end;
 
   { TPixieFontMetrics }
   TPixieFontMetrics = record
-    FontSize: pixel_t;
-    Height: pixel_t;
-    Ascent: pixel_t;
-    Descent: pixel_t;
-    XHeight: pixel_t;
-    ChWidth: pixel_t;
-    SubShift: pixel_t;
-    SuperShift: pixel_t;
+    FontSize: TPixiePixel;
+    Height: TPixiePixel;
+    Ascent: TPixiePixel;
+    Descent: TPixiePixel;
+    XHeight: TPixiePixel;
+    ChWidth: TPixiePixel;
+    SubShift: TPixiePixel;
+    SuperShift: TPixiePixel;
     DrawSpaces: Boolean;
-    function BaseLine: pixel_t;
+    function BaseLine: TPixiePixel;
   end;
 
   { TPixieFontItem }
@@ -680,22 +680,22 @@ type
   { TPixieMediaFeatures }
   TPixieMediaFeatures = record
     MediaType: TPixieMediaType;
-    Width: pixel_t;
-    Height: pixel_t;
-    DeviceWidth: pixel_t;
-    DeviceHeight: pixel_t;
+    Width: TPixiePixel;
+    Height: TPixiePixel;
+    DeviceWidth: TPixiePixel;
+    DeviceHeight: TPixiePixel;
     Color: Integer;
     ColorIndex: Integer;
     Monochrome: Integer;
-    Resolution: pixel_t;
+    Resolution: TPixiePixel;
     procedure Init;
   end;
 
   { TPixieTypedPixel }
   TPixieTypedPixel = record
-    Value: pixel_t;
+    Value: TPixiePixel;
     ValueType: TPixieCbcValueType;
-    class function Create(AValue: pixel_t; AType: TPixieCbcValueType): TPixieTypedPixel; static;
+    class function Create(AValue: TPixiePixel; AType: TPixieCbcValueType): TPixieTypedPixel; static;
   end;
 
   { TPixieContainingBlockContext }
@@ -710,8 +710,8 @@ type
     ContextIdx: Integer;
     SizeMode: UInt32;
     procedure Init;
-    function NewWidth(W: pixel_t; ASizeMode: UInt32 = SizeModeNormal): TPixieContainingBlockContext;
-    function NewWidthHeight(W, H: pixel_t; ASizeMode: UInt32 = SizeModeNormal): TPixieContainingBlockContext;
+    function NewWidth(W: TPixiePixel; ASizeMode: UInt32 = SizeModeNormal): TPixieContainingBlockContext;
+    function NewWidthHeight(W, H: TPixiePixel; ASizeMode: UInt32 = SizeModeNormal): TPixieContainingBlockContext;
   end;
 
   { TPixieFloatedBox }
@@ -721,53 +721,53 @@ type
     ClearFloats: TPixieElementClear;
     El: Pointer;
     Context: Integer;
-    MinWidth: pixel_t;
+    MinWidth: TPixiePixel;
   end;
 
   { TPixiePixelPixelCache }
   TPixiePixelPixelCache = record
-    Hash: pixel_t;
-    Val: pixel_t;
+    Hash: TPixiePixel;
+    Val: TPixiePixel;
     IsValid: Boolean;
     IsDefault: Boolean;
     procedure Init;
     procedure Invalidate;
-    procedure SetValue(AHash, AVal: pixel_t);
+    procedure SetValue(AHash, AVal: TPixiePixel);
   end;
 
   { TPixieBaseline }
   TPixieBaseline = record
   private
-    FValue: pixel_t;
+    FValue: TPixiePixel;
     FType: TPixieBaselineType;
   public
-    class function Create(AValue: pixel_t; AType: TPixieBaselineType): TPixieBaseline; static;
+    class function Create(AValue: TPixiePixel; AType: TPixieBaselineType): TPixieBaseline; static;
     procedure Init;
-    procedure SetValues(AValue: pixel_t; AType: TPixieBaselineType);
-    function GetOffsetFromTop(AHeight: pixel_t): pixel_t;
-    function GetOffsetFromBottom(AHeight: pixel_t): pixel_t;
-    procedure CalcFromPositions(ATop, ABottom: pixel_t);
-    property Value: pixel_t read FValue write FValue;
+    procedure SetValues(AValue: TPixiePixel; AType: TPixieBaselineType);
+    function GetOffsetFromTop(AHeight: TPixiePixel): TPixiePixel;
+    function GetOffsetFromBottom(AHeight: TPixiePixel): TPixiePixel;
+    procedure CalcFromPositions(ATop, ABottom: TPixiePixel);
+    property Value: TPixiePixel read FValue write FValue;
     property BaselineType: TPixieBaselineType read FType write FType;
   end;
 
   { TPixieDefValue — a value with "is default" tracking }
   TPixieDefValue = record
   private
-    FValue: pixel_t;
+    FValue: TPixiePixel;
     FIsDefault: Boolean;
   public
-    procedure Init(DefVal: pixel_t);
-    procedure Reset(DefVal: pixel_t);
+    procedure Init(DefVal: TPixiePixel);
+    procedure Reset(DefVal: TPixiePixel);
     function IsDefault: Boolean;
-    procedure SetValue(NewVal: pixel_t);
-    function Value: pixel_t;
+    procedure SetValue(NewVal: TPixiePixel);
+    function Value: TPixiePixel;
   end;
 
   // Generic collection types
   TPixieStringVector = TList<string>;
   TPixieIntVector = TList<Integer>;
-  TPixiePixelVector = TList<pixel_t>;
+  TPixiePixelVector = TList<TPixiePixel>;
   TPixieStringMap = TDictionary<string, string>;
   TPixieFontsMap = TDictionary<string, TPixieFontItem>;
   TPixiePositionVector = TList<TPixiePosition>;
@@ -803,12 +803,12 @@ end;
 
 { TPixieMargins }
 
-function TPixieMargins.Width: pixel_t;
+function TPixieMargins.Width: TPixiePixel;
 begin
   Result := Left + Right;
 end;
 
-function TPixieMargins.Height: pixel_t;
+function TPixieMargins.Height: TPixiePixel;
 begin
   Result := Top + Bottom;
 end;
@@ -831,7 +831,7 @@ end;
 
 { TPixieSize }
 
-class function TPixieSize.Create(AWidth, AHeight: pixel_t): TPixieSize;
+class function TPixieSize.Create(AWidth, AHeight: TPixiePixel): TPixieSize;
 begin
   Result.Width := AWidth;
   Result.Height := AHeight;
@@ -839,7 +839,7 @@ end;
 
 { TPixiePosition }
 
-class function TPixiePosition.Create(AX, AY, AWidth, AHeight: pixel_t): TPixiePosition;
+class function TPixiePosition.Create(AX, AY, AWidth, AHeight: TPixiePixel): TPixiePosition;
 begin
   Result.X := AX;
   Result.Y := AY;
@@ -847,12 +847,12 @@ begin
   Result.Height := AHeight;
 end;
 
-function TPixiePosition.Right: pixel_t;
+function TPixiePosition.Right: TPixiePixel;
 begin
   Result := X + Width;
 end;
 
-function TPixiePosition.Bottom: pixel_t;
+function TPixiePosition.Bottom: TPixiePixel;
 begin
   Result := Y + Height;
 end;
@@ -871,7 +871,7 @@ end;
 
 function TPixiePosition.Intersect(const Src: TPixiePosition): TPixiePosition;
 var
-  DestX, DestY, DestX2, DestY2: pixel_t;
+  DestX, DestY, DestX2, DestY2: TPixiePixel;
 begin
   DestX := Max(Src.X, X);
   DestY := Max(Src.Y, Y);
@@ -894,12 +894,12 @@ begin
   end;
 end;
 
-function TPixiePosition.IsPointInside(AX, AY: pixel_t): Boolean;
+function TPixiePosition.IsPointInside(AX, AY: TPixiePixel): Boolean;
 begin
   Result := (AX >= X) and (AX < Right) and (AY >= Y) and (AY < Bottom);
 end;
 
-procedure TPixiePosition.MoveTo(AX, AY: pixel_t);
+procedure TPixiePosition.MoveTo(AX, AY: TPixiePixel);
 begin
   X := AX;
   Y := AY;
@@ -948,7 +948,7 @@ end;
 
 { TPixieFontMetrics }
 
-function TPixieFontMetrics.BaseLine: pixel_t;
+function TPixieFontMetrics.BaseLine: TPixiePixel;
 begin
   Result := Descent;
 end;
@@ -970,7 +970,7 @@ end;
 
 { TPixieTypedPixel }
 
-class function TPixieTypedPixel.Create(AValue: pixel_t; AType: TPixieCbcValueType): TPixieTypedPixel;
+class function TPixieTypedPixel.Create(AValue: TPixiePixel; AType: TPixieCbcValueType): TPixieTypedPixel;
 begin
   Result.Value := AValue;
   Result.ValueType := AType;
@@ -991,7 +991,7 @@ begin
   SizeMode := SizeModeNormal;
 end;
 
-function TPixieContainingBlockContext.NewWidth(W: pixel_t; ASizeMode: UInt32): TPixieContainingBlockContext;
+function TPixieContainingBlockContext.NewWidth(W: TPixiePixel; ASizeMode: UInt32): TPixieContainingBlockContext;
 begin
   Result := Self;
   Result.RenderWidth.Value := W - (Result.Width.Value - Result.RenderWidth.Value);
@@ -999,7 +999,7 @@ begin
   Result.SizeMode := ASizeMode;
 end;
 
-function TPixieContainingBlockContext.NewWidthHeight(W, H: pixel_t; ASizeMode: UInt32): TPixieContainingBlockContext;
+function TPixieContainingBlockContext.NewWidthHeight(W, H: TPixiePixel; ASizeMode: UInt32): TPixieContainingBlockContext;
 begin
   Result := Self;
   Result.RenderWidth.Value := W - (Result.Width.Value - Result.RenderWidth.Value);
@@ -1024,7 +1024,7 @@ begin
   IsDefault := False;
 end;
 
-procedure TPixiePixelPixelCache.SetValue(AHash, AVal: pixel_t);
+procedure TPixiePixelPixelCache.SetValue(AHash, AVal: TPixiePixel);
 begin
   Hash := AHash;
   Val := AVal;
@@ -1033,7 +1033,7 @@ end;
 
 { TPixieBaseline }
 
-class function TPixieBaseline.Create(AValue: pixel_t; AType: TPixieBaselineType): TPixieBaseline;
+class function TPixieBaseline.Create(AValue: TPixiePixel; AType: TPixieBaselineType): TPixieBaseline;
 begin
   Result.FValue := AValue;
   Result.FType := AType;
@@ -1045,13 +1045,13 @@ begin
   FType := btNone;
 end;
 
-procedure TPixieBaseline.SetValues(AValue: pixel_t; AType: TPixieBaselineType);
+procedure TPixieBaseline.SetValues(AValue: TPixiePixel; AType: TPixieBaselineType);
 begin
   FValue := AValue;
   FType := AType;
 end;
 
-function TPixieBaseline.GetOffsetFromTop(AHeight: pixel_t): pixel_t;
+function TPixieBaseline.GetOffsetFromTop(AHeight: TPixiePixel): TPixiePixel;
 begin
   if FType = btTop then
     Result := FValue
@@ -1059,7 +1059,7 @@ begin
     Result := AHeight - FValue;
 end;
 
-function TPixieBaseline.GetOffsetFromBottom(AHeight: pixel_t): pixel_t;
+function TPixieBaseline.GetOffsetFromBottom(AHeight: TPixiePixel): TPixiePixel;
 begin
   if FType = btBottom then
     Result := FValue
@@ -1067,7 +1067,7 @@ begin
     Result := AHeight - FValue;
 end;
 
-procedure TPixieBaseline.CalcFromPositions(ATop, ABottom: pixel_t);
+procedure TPixieBaseline.CalcFromPositions(ATop, ABottom: TPixiePixel);
 begin
   if FType = btTop then
     FValue := -ATop
@@ -1077,13 +1077,13 @@ end;
 
 { TPixieDefValue }
 
-procedure TPixieDefValue.Init(DefVal: pixel_t);
+procedure TPixieDefValue.Init(DefVal: TPixiePixel);
 begin
   FValue := DefVal;
   FIsDefault := True;
 end;
 
-procedure TPixieDefValue.Reset(DefVal: pixel_t);
+procedure TPixieDefValue.Reset(DefVal: TPixiePixel);
 begin
   FValue := DefVal;
   FIsDefault := True;
@@ -1094,13 +1094,13 @@ begin
   Result := FIsDefault;
 end;
 
-procedure TPixieDefValue.SetValue(NewVal: pixel_t);
+procedure TPixieDefValue.SetValue(NewVal: TPixiePixel);
 begin
   FValue := NewVal;
   FIsDefault := False;
 end;
 
-function TPixieDefValue.Value: pixel_t;
+function TPixieDefValue.Value: TPixiePixel;
 begin
   Result := FValue;
 end;

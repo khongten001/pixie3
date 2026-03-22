@@ -18,42 +18,42 @@ type
     FFloatsRight: TPixieFloatedBoxList;
     FCacheLineLeft: TPixiePixelPixelCache;
     FCacheLineRight: TPixiePixelPixelCache;
-    FCurrentTop: pixel_t;
-    FCurrentLeft: pixel_t;
+    FCurrentTop: TPixiePixel;
+    FCurrentLeft: TPixiePixel;
   public
     constructor Create;
     destructor Destroy; override;
 
     // Coordinate translation
-    procedure PushPosition(X, Y: pixel_t);
-    procedure PopPosition(X, Y: pixel_t);
+    procedure PushPosition(X, Y: TPixiePixel);
+    procedure PopPosition(X, Y: TPixiePixel);
 
     // Float management
     procedure AddFloat(const Fb: TPixieFloatedBox);
     procedure ClearFloats(Context: Integer);
 
     // Line queries
-    function GetLineLeft(Y: pixel_t): pixel_t;
-    function GetLineRight(Y, DefRight: pixel_t): pixel_t;
-    procedure GetLineLeftRight(Y, DefRight: pixel_t; out LnLeft, LnRight: pixel_t);
-    function FindNextLineTop(Top, Width, DefRight: pixel_t): pixel_t;
+    function GetLineLeft(Y: TPixiePixel): TPixiePixel;
+    function GetLineRight(Y, DefRight: TPixiePixel): TPixiePixel;
+    procedure GetLineLeftRight(Y, DefRight: TPixiePixel; out LnLeft, LnRight: TPixiePixel);
+    function FindNextLineTop(Top, Width, DefRight: TPixiePixel): TPixiePixel;
 
     // Float height queries
-    function GetFloatsHeight(ElFloat: TPixieElementFloat = efNone): pixel_t;
-    function GetLeftFloatsHeight: pixel_t;
-    function GetRightFloatsHeight: pixel_t;
+    function GetFloatsHeight(ElFloat: TPixieElementFloat = efNone): TPixiePixel;
+    function GetLeftFloatsHeight: TPixiePixel;
+    function GetRightFloatsHeight: TPixiePixel;
 
     // Cleared top
     function GetClearedTop(ClearSide: TPixieElementClear;
-      FloatSide: TPixieElementFloat; LineTop: pixel_t): pixel_t;
+      FloatSide: TPixieElementFloat; LineTop: TPixiePixel): TPixiePixel;
 
     // Update stubs (need render_item in Phase 5 Group 2+)
-    procedure UpdateFloats(Dy: pixel_t; Parent: Pointer);
+    procedure UpdateFloats(Dy: TPixiePixel; Parent: Pointer);
     procedure ApplyRelativeShift(const ContainingBlockSize: TPixieContainingBlockContext);
 
     // Min width queries
-    function FindMinLeft(Y: pixel_t; ContextIdx: Integer): pixel_t;
-    function FindMinRight(Y, Right: pixel_t; ContextIdx: Integer): pixel_t;
+    function FindMinLeft(Y: TPixiePixel; ContextIdx: Integer): TPixiePixel;
+    function FindMinRight(Y, Right: TPixiePixel; ContextIdx: Integer): TPixiePixel;
 
     // Direct access for tests
     property FloatsLeft: TPixieFloatedBoxList read FFloatsLeft;
@@ -85,13 +85,13 @@ begin
   inherited;
 end;
 
-procedure TPixieFormattingContext.PushPosition(X, Y: pixel_t);
+procedure TPixieFormattingContext.PushPosition(X, Y: TPixiePixel);
 begin
   FCurrentLeft := FCurrentLeft + X;
   FCurrentTop := FCurrentTop + Y;
 end;
 
-procedure TPixieFormattingContext.PopPosition(X, Y: pixel_t);
+procedure TPixieFormattingContext.PopPosition(X, Y: TPixiePixel);
 begin
   FCurrentLeft := FCurrentLeft - X;
   FCurrentTop := FCurrentTop - Y;
@@ -174,9 +174,9 @@ begin
   end;
 end;
 
-function TPixieFormattingContext.GetFloatsHeight(ElFloat: TPixieElementFloat): pixel_t;
+function TPixieFormattingContext.GetFloatsHeight(ElFloat: TPixieElementFloat): TPixiePixel;
 var
-  H: pixel_t;
+  H: TPixiePixel;
   I: Integer;
   Fb: TPixieFloatedBox;
   Process: Boolean;
@@ -240,9 +240,9 @@ begin
   Result := H - FCurrentTop;
 end;
 
-function TPixieFormattingContext.GetLeftFloatsHeight: pixel_t;
+function TPixieFormattingContext.GetLeftFloatsHeight: TPixiePixel;
 var
-  H: pixel_t;
+  H: TPixiePixel;
   I: Integer;
 begin
   H := 0;
@@ -254,9 +254,9 @@ begin
   Result := H - FCurrentTop;
 end;
 
-function TPixieFormattingContext.GetRightFloatsHeight: pixel_t;
+function TPixieFormattingContext.GetRightFloatsHeight: TPixiePixel;
 var
-  H: pixel_t;
+  H: TPixiePixel;
   I: Integer;
 begin
   H := 0;
@@ -268,9 +268,9 @@ begin
   Result := H - FCurrentTop;
 end;
 
-function TPixieFormattingContext.GetLineLeft(Y: pixel_t): pixel_t;
+function TPixieFormattingContext.GetLineLeft(Y: TPixiePixel): TPixiePixel;
 var
-  W: pixel_t;
+  W: TPixiePixel;
   I: Integer;
   Fb: TPixieFloatedBox;
 begin
@@ -305,9 +305,9 @@ begin
     Result := W;
 end;
 
-function TPixieFormattingContext.GetLineRight(Y, DefRight: pixel_t): pixel_t;
+function TPixieFormattingContext.GetLineRight(Y, DefRight: TPixiePixel): TPixiePixel;
 var
-  W: pixel_t;
+  W: TPixiePixel;
   I: Integer;
   Fb: TPixieFloatedBox;
 begin
@@ -353,20 +353,20 @@ begin
     Result := W;
 end;
 
-procedure TPixieFormattingContext.GetLineLeftRight(Y, DefRight: pixel_t;
-  out LnLeft, LnRight: pixel_t);
+procedure TPixieFormattingContext.GetLineLeftRight(Y, DefRight: TPixiePixel;
+  out LnLeft, LnRight: TPixiePixel);
 begin
   LnLeft := GetLineLeft(Y);
   LnRight := GetLineRight(Y, DefRight);
 end;
 
-function TPixieFormattingContext.FindNextLineTop(Top, Width, DefRight: pixel_t): pixel_t;
+function TPixieFormattingContext.FindNextLineTop(Top, Width, DefRight: TPixiePixel): TPixiePixel;
 var
-  NewTop: pixel_t;
+  NewTop: TPixiePixel;
   Points: TPixiePixelVector;
   I: Integer;
   Fb: TPixieFloatedBox;
-  Pt, PosLeft, PosRight: pixel_t;
+  Pt, PosLeft, PosRight: TPixiePixel;
 begin
   Top := Top + FCurrentTop;
   DefRight := DefRight + FCurrentLeft;
@@ -424,9 +424,9 @@ begin
 end;
 
 function TPixieFormattingContext.GetClearedTop(ClearSide: TPixieElementClear;
-  FloatSide: TPixieElementFloat; LineTop: pixel_t): pixel_t;
+  FloatSide: TPixieElementFloat; LineTop: TPixiePixel): TPixiePixel;
 var
-  Fh: pixel_t;
+  Fh: TPixiePixel;
 begin
   Result := LineTop;
   case ClearSide of
@@ -460,7 +460,7 @@ begin
   end;
 end;
 
-procedure TPixieFormattingContext.UpdateFloats(Dy: pixel_t; Parent: Pointer);
+procedure TPixieFormattingContext.UpdateFloats(Dy: TPixiePixel; Parent: Pointer);
 var
   I: Integer;
   Fb: TPixieFloatedBox;
@@ -504,9 +504,9 @@ begin
   // Stub — requires render_item.apply_relative_shift (Phase 5 Group 2+)
 end;
 
-function TPixieFormattingContext.FindMinLeft(Y: pixel_t; ContextIdx: Integer): pixel_t;
+function TPixieFormattingContext.FindMinLeft(Y: TPixiePixel; ContextIdx: Integer): TPixiePixel;
 var
-  MinLeft: pixel_t;
+  MinLeft: TPixiePixel;
   I: Integer;
   Fb: TPixieFloatedBox;
 begin
@@ -524,9 +524,9 @@ begin
     Result := MinLeft - FCurrentLeft;
 end;
 
-function TPixieFormattingContext.FindMinRight(Y, Right: pixel_t; ContextIdx: Integer): pixel_t;
+function TPixieFormattingContext.FindMinRight(Y, Right: TPixiePixel; ContextIdx: Integer): TPixiePixel;
 var
-  MinRight: pixel_t;
+  MinRight: TPixiePixel;
   I: Integer;
   Fb: TPixieFloatedBox;
 begin

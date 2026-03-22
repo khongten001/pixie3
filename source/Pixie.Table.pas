@@ -17,31 +17,31 @@ uses
 type
   { TPixieTableRow }
   TPixieTableRow = record
-    Height: pixel_t;
-    BorderTop: pixel_t;
-    BorderBottom: pixel_t;
-    Top: pixel_t;
-    Bottom: pixel_t;
-    MinHeight: pixel_t;
+    Height: TPixiePixel;
+    BorderTop: TPixiePixel;
+    BorderBottom: TPixiePixel;
+    Top: TPixiePixel;
+    Bottom: TPixiePixel;
+    MinHeight: TPixiePixel;
     ElRow: Pointer;
     CssHeight: TPixieCssLength;
     procedure Init;
-    procedure InitWithRow(AHeight: pixel_t; ARow: Pointer;
+    procedure InitWithRow(AHeight: TPixiePixel; ARow: Pointer;
       const ACssHeight: TPixieCssLength);
   end;
 
   { TPixieTableColumn }
   TPixieTableColumn = record
-    MinWidth: pixel_t;
-    MaxWidth: pixel_t;
-    Width: pixel_t;
-    BorderLeft: pixel_t;
-    BorderRight: pixel_t;
-    Left: pixel_t;
-    Right: pixel_t;
+    MinWidth: TPixiePixel;
+    MaxWidth: TPixiePixel;
+    Width: TPixiePixel;
+    BorderLeft: TPixiePixel;
+    BorderRight: TPixiePixel;
+    Left: TPixiePixel;
+    Right: TPixiePixel;
     CssWidth: TPixieCssLength;
     procedure Init;
-    procedure InitWithWidths(AMinW, AMaxW: pixel_t);
+    procedure InitWithWidths(AMinW, AMaxW: TPixiePixel);
   end;
 
   { TPixieTableCell }
@@ -49,12 +49,12 @@ type
     El: Pointer;
     Colspan: Integer;
     Rowspan: Integer;
-    MinWidth: pixel_t;
-    MinHeight: pixel_t;
-    MaxWidth: pixel_t;
-    MaxHeight: pixel_t;
-    Width: pixel_t;
-    Height: pixel_t;
+    MinWidth: TPixiePixel;
+    MinHeight: TPixiePixel;
+    MaxWidth: TPixiePixel;
+    MaxHeight: TPixiePixel;
+    Width: TPixiePixel;
+    Height: TPixiePixel;
     Borders: TPixieMargins;
     CssWidth: TPixieCssLength;
     CssHeight: TPixieCssLength;
@@ -89,14 +89,14 @@ type
     FColumns: TPixieTableColumnList;
     FRows: TPixieTableRowList;
     FCaptions: TPixiePointerList;
-    FTopCaptionsHeight: pixel_t;
-    FBottomCaptionsHeight: pixel_t;
+    FTopCaptionsHeight: TPixiePixel;
+    FBottomCaptionsHeight: TPixiePixel;
 
     function GetColumnField(const Col: TPixieTableColumn;
-      Field: TPixieColumnField): pixel_t;
+      Field: TPixieColumnField): TPixiePixel;
     procedure SetColumnField(var Col: TPixieTableColumn;
-      Field: TPixieColumnField; Val: pixel_t);
-    procedure DistributeWidthByField(AWidth: pixel_t;
+      Field: TPixieColumnField; Val: TPixiePixel);
+    procedure DistributeWidthByField(AWidth: TPixiePixel;
       Start, End_: Integer; Field: TPixieColumnField);
 
   public
@@ -117,24 +117,24 @@ type
     function GetRow(R: Integer): TPixieTableRow;
     procedure SetRow(R: Integer; const ARow: TPixieTableRow);
 
-    procedure DistributeMaxWidth(AWidth: pixel_t; Start, End_: Integer);
-    procedure DistributeMinWidth(AWidth: pixel_t; Start, End_: Integer);
-    procedure DistributeWidth(AWidth: pixel_t; Start, End_: Integer);
-    function CalcTableWidth(BlockWidth: pixel_t; IsAuto: Boolean;
-      out MinTableWidth, MaxTableWidth: pixel_t): pixel_t;
+    procedure DistributeMaxWidth(AWidth: TPixiePixel; Start, End_: Integer);
+    procedure DistributeMinWidth(AWidth: TPixiePixel; Start, End_: Integer);
+    procedure DistributeWidth(AWidth: TPixiePixel; Start, End_: Integer);
+    function CalcTableWidth(BlockWidth: TPixiePixel; IsAuto: Boolean;
+      out MinTableWidth, MaxTableWidth: TPixiePixel): TPixiePixel;
     procedure CalcHorizontalPositions(const TableBorders: TPixieMargins;
-      Bc: TPixieBorderCollapse; BdrSpaceX: pixel_t);
+      Bc: TPixieBorderCollapse; BdrSpaceX: TPixiePixel);
     procedure CalcVerticalPositions(const TableBorders: TPixieMargins;
-      Bc: TPixieBorderCollapse; BdrSpaceY: pixel_t);
-    procedure CalcRowsHeight(BlockHeight, BorderSpacingY: pixel_t);
+      Bc: TPixieBorderCollapse; BdrSpaceY: TPixiePixel);
+    procedure CalcRowsHeight(BlockHeight, BorderSpacingY: TPixiePixel);
 
     function GetCaptions: TPixiePointerList;
 
     property RowsCount: Integer read FRowsCount;
     property ColsCount: Integer read FColsCount;
-    property TopCaptionsHeight: pixel_t read FTopCaptionsHeight
+    property TopCaptionsHeight: TPixiePixel read FTopCaptionsHeight
       write FTopCaptionsHeight;
-    property BottomCaptionsHeight: pixel_t read FBottomCaptionsHeight
+    property BottomCaptionsHeight: TPixiePixel read FBottomCaptionsHeight
       write FBottomCaptionsHeight;
   end;
 
@@ -178,7 +178,7 @@ begin
   CssHeight.SetPredef(0);
 end;
 
-procedure TPixieTableRow.InitWithRow(AHeight: pixel_t; ARow: Pointer;
+procedure TPixieTableRow.InitWithRow(AHeight: TPixiePixel; ARow: Pointer;
   const ACssHeight: TPixieCssLength);
 begin
   Height := AHeight;
@@ -205,7 +205,7 @@ begin
   CssWidth.SetPredef(0);
 end;
 
-procedure TPixieTableColumn.InitWithWidths(AMinW, AMaxW: pixel_t);
+procedure TPixieTableColumn.InitWithWidths(AMinW, AMaxW: TPixiePixel);
 begin
   MinWidth := AMinW;
   MaxWidth := AMaxW;
@@ -446,7 +446,7 @@ begin
 end;
 
 function TPixieTableGrid.GetColumnField(const Col: TPixieTableColumn;
-  Field: TPixieColumnField): pixel_t;
+  Field: TPixieColumnField): TPixiePixel;
 begin
   case Field of
     cfMinWidth: Result := Col.MinWidth;
@@ -458,7 +458,7 @@ begin
 end;
 
 procedure TPixieTableGrid.SetColumnField(var Col: TPixieTableColumn;
-  Field: TPixieColumnField; Val: pixel_t);
+  Field: TPixieColumnField; Val: TPixiePixel);
 begin
   case Field of
     cfMinWidth: Col.MinWidth := Val;
@@ -467,10 +467,10 @@ begin
   end;
 end;
 
-procedure TPixieTableGrid.DistributeWidthByField(AWidth: pixel_t;
+procedure TPixieTableGrid.DistributeWidthByField(AWidth: TPixiePixel;
   Start, End_: Integer; Field: TPixieColumnField);
 var
-  ColsWidth, Add, AddedWidth: pixel_t;
+  ColsWidth, Add, AddedWidth: TPixiePixel;
   Col: Integer;
 begin
   if not ((Start >= 0) and (Start < FColsCount) and
@@ -496,24 +496,24 @@ begin
       GetColumnField(FColumns.Ptr(Start)^, Field) + (AWidth - AddedWidth));
 end;
 
-procedure TPixieTableGrid.DistributeMaxWidth(AWidth: pixel_t;
+procedure TPixieTableGrid.DistributeMaxWidth(AWidth: TPixiePixel;
   Start, End_: Integer);
 begin
   DistributeWidthByField(AWidth, Start, End_, cfMaxWidth);
 end;
 
-procedure TPixieTableGrid.DistributeMinWidth(AWidth: pixel_t;
+procedure TPixieTableGrid.DistributeMinWidth(AWidth: TPixiePixel;
   Start, End_: Integer);
 begin
   DistributeWidthByField(AWidth, Start, End_, cfMinWidth);
 end;
 
-procedure TPixieTableGrid.DistributeWidth(AWidth: pixel_t;
+procedure TPixieTableGrid.DistributeWidth(AWidth: TPixiePixel;
   Start, End_: Integer);
 var
   Step, Col: Integer;
   DistCols: TPixieIntVector;
-  ColsWidth, Add, AddedWidth: pixel_t;
+  ColsWidth, Add, AddedWidth: TPixiePixel;
   ColP: PPixieTableColumn;
 begin
   if not ((Start >= 0) and (Start < FColsCount) and
@@ -605,14 +605,14 @@ begin
   end;
 end;
 
-function TPixieTableGrid.CalcTableWidth(BlockWidth: pixel_t; IsAuto: Boolean;
-  out MinTableWidth, MaxTableWidth: pixel_t): pixel_t;
+function TPixieTableGrid.CalcTableWidth(BlockWidth: TPixiePixel; IsAuto: Boolean;
+  out MinTableWidth, MaxTableWidth: TPixiePixel): TPixiePixel;
 var
-  CurWidth, MaxW, MinW, FixedWidth, Percent, Scale: pixel_t;
+  CurWidth, MaxW, MinW, FixedWidth, Percent, Scale: TPixiePixel;
   Col: Integer;
   ColP: PPixieTableColumn;
   W: TPixieCssLength;
-  Excess, ShrinkableWidth, Reduction: pixel_t;
+  Excess, ShrinkableWidth, Reduction: TPixiePixel;
 begin
   MinTableWidth := 0;
   MaxTableWidth := 0;
@@ -744,10 +744,10 @@ end;
 
 procedure TPixieTableGrid.CalcHorizontalPositions(
   const TableBorders: TPixieMargins; Bc: TPixieBorderCollapse;
-  BdrSpaceX: pixel_t);
+  BdrSpaceX: TPixiePixel);
 var
   I: Integer;
-  L: pixel_t;
+  L: TPixiePixel;
   ColP: PPixieTableColumn;
 begin
   if Bc = bcSeparate then
@@ -780,10 +780,10 @@ end;
 
 procedure TPixieTableGrid.CalcVerticalPositions(
   const TableBorders: TPixieMargins; Bc: TPixieBorderCollapse;
-  BdrSpaceY: pixel_t);
+  BdrSpaceY: TPixiePixel);
 var
   I: Integer;
-  T: pixel_t;
+  T: TPixiePixel;
   RowP: PPixieTableRow;
 begin
   if Bc = bcSeparate then
@@ -815,9 +815,9 @@ begin
 end;
 
 procedure TPixieTableGrid.CalcRowsHeight(BlockHeight,
-  BorderSpacingY: pixel_t);
+  BorderSpacingY: TPixiePixel);
 var
-  MinTableHeight, ExtraHeight, ExtraRowHeight: pixel_t;
+  MinTableHeight, ExtraHeight, ExtraRowHeight: TPixiePixel;
   AutoCount, I: Integer;
   RowP: PPixieTableRow;
 begin
@@ -831,8 +831,8 @@ begin
     begin
       if RowP^.CssHeight.Units <> cssUnitsPercentage then
       begin
-        if RowP^.Height < pixel_t(RowP^.CssHeight.Val) then
-          RowP^.Height := pixel_t(RowP^.CssHeight.Val);
+        if RowP^.Height < TPixiePixel(RowP^.CssHeight.Val) then
+          RowP^.Height := TPixiePixel(RowP^.CssHeight.Val);
       end;
     end;
     RowP^.MinHeight := RowP^.Height;
@@ -866,7 +866,7 @@ begin
     begin
       if AutoCount > 0 then
       begin
-        ExtraRowHeight := ExtraHeight / pixel_t(AutoCount);
+        ExtraRowHeight := ExtraHeight / TPixiePixel(AutoCount);
         for I := 0 to FRows.Count - 1 do
         begin
           if FRows.Ptr(I)^.CssHeight.IsPredefined then

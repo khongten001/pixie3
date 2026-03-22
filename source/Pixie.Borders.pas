@@ -19,7 +19,7 @@ type
 
   { TPixieBorder }
   TPixieBorder = record
-    Width: pixel_t;
+    Width: TPixiePixel;
     Style: TPixieBorderStyle;
     Color: TPixieWebColor;
     procedure Init;
@@ -28,17 +28,17 @@ type
 
   { TPixieBorderRadiuses }
   TPixieBorderRadiuses = record
-    TopLeftX: pixel_t;
-    TopLeftY: pixel_t;
-    TopRightX: pixel_t;
-    TopRightY: pixel_t;
-    BottomRightX: pixel_t;
-    BottomRightY: pixel_t;
-    BottomLeftX: pixel_t;
-    BottomLeftY: pixel_t;
+    TopLeftX: TPixiePixel;
+    TopLeftY: TPixiePixel;
+    TopRightX: TPixiePixel;
+    TopRightY: TPixiePixel;
+    BottomRightX: TPixiePixel;
+    BottomRightY: TPixiePixel;
+    BottomLeftX: TPixiePixel;
+    BottomLeftY: TPixiePixel;
     procedure Init;
     procedure FixValues; overload;
-    procedure FixValues(AWidth, AHeight: pixel_t); overload;
+    procedure FixValues(AWidth, AHeight: TPixiePixel); overload;
     procedure AddMargins(const Mg: TPixieMargins);
     procedure SubMargins(const Mg: TPixieMargins);
   end;
@@ -53,7 +53,7 @@ type
     BottomRightY: TPixieCssLength;
     BottomLeftX: TPixieCssLength;
     BottomLeftY: TPixieCssLength;
-    function CalcPercents(AWidth, AHeight: pixel_t): TPixieBorderRadiuses;
+    function CalcPercents(AWidth, AHeight: TPixiePixel): TPixieBorderRadiuses;
   end;
 
   { TPixieCssBorders }
@@ -103,7 +103,7 @@ end;
 
 procedure TPixieBorder.InitFromCss(const CssBorder: TPixieCssBorder);
 begin
-  Width := pixel_t(CssBorder.Width.Val);
+  Width := TPixiePixel(CssBorder.Width.Val);
   Style := CssBorder.Style;
   Color := CssBorder.Color;
 end;
@@ -134,9 +134,9 @@ begin
   if BottomLeftY < 0 then BottomLeftY := 0;
 end;
 
-procedure TPixieBorderRadiuses.FixValues(AWidth, AHeight: pixel_t);
+procedure TPixieBorderRadiuses.FixValues(AWidth, AHeight: TPixiePixel);
 var
-  HalfWidth, HalfHeight, Factor: pixel_t;
+  HalfWidth, HalfHeight, Factor: TPixiePixel;
 begin
   FixValues;
   HalfWidth := AWidth / 2;
@@ -196,7 +196,7 @@ end;
 
 { TPixieCssBorderRadius }
 
-function TPixieCssBorderRadius.CalcPercents(AWidth, AHeight: pixel_t): TPixieBorderRadiuses;
+function TPixieCssBorderRadius.CalcPercents(AWidth, AHeight: TPixiePixel): TPixieBorderRadiuses;
 begin
   Result.BottomLeftX := BottomLeftX.CalcPercent(AWidth);
   Result.BottomLeftY := BottomLeftY.CalcPercent(AHeight);

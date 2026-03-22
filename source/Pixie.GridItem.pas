@@ -20,8 +20,8 @@ type
     MaxSize: TPixieCssLength; // minmax() max bound
     HasMinmax: Boolean;       // True if minmax() was used
     // Computed (from layout)
-    Base: pixel_t;            // resolved base size in pixels
-    Position: pixel_t;        // start position in pixels
+    Base: TPixiePixel;            // resolved base size in pixels
+    Position: TPixiePixel;        // start position in pixels
   end;
   TPixieGridTrackList = TList<TPixieGridTrack>;
 

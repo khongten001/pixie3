@@ -25,10 +25,10 @@ type
   { TPixieRenderItem }
   TPixieRenderItem = class
   protected
-    function _Render(X, Y: pixel_t;
+    function _Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      SecondPass: Boolean): pixel_t; virtual;
+      SecondPass: Boolean): TPixiePixel; virtual;
 
   public
     FElement: TPixieElement;           // non-owning
@@ -46,18 +46,18 @@ type
     function CalculateContainingBlockContext(
       const CbContext: TPixieContainingBlockContext): TPixieContainingBlockContext;
     procedure CalcCbLength(const Len: TPixieCssLength;
-      PercentBase: pixel_t; var OutValue: TPixieTypedPixel);
+      PercentBase: TPixiePixel; var OutValue: TPixieTypedPixel);
     constructor Create(ASrcEl: TPixieElement); virtual;
     destructor Destroy; override;
 
     // Scroll helpers
-    function GetScrollLeft: pixel_t; inline;
-    function GetScrollTop: pixel_t; inline;
+    function GetScrollLeft: TPixiePixel; inline;
+    function GetScrollTop: TPixiePixel; inline;
     procedure ScrollBox(var Box: TPixiePosition); inline;
-    function HScroll(Dx: pixel_t): pixel_t; inline;
-    function VScroll(Dy: pixel_t): pixel_t; inline;
-    function IsHScrollable(Dx: pixel_t): Boolean; inline;
-    function IsVScrollable(Dy: pixel_t): Boolean; inline;
+    function HScroll(Dx: TPixiePixel): TPixiePixel; inline;
+    function VScroll(Dy: TPixiePixel): TPixiePixel; inline;
+    function IsHScrollable(Dx: TPixiePixel): Boolean; inline;
+    function IsVScrollable(Dy: TPixiePixel): Boolean; inline;
 
     // Tree access
     function GetChildren: TPixieRenderItemList; inline;
@@ -72,34 +72,34 @@ type
     function IsRoot: Boolean; inline;
 
     // Placement helper
-    function CalcPlacement(AX: pixel_t = 0;
-      AY: pixel_t = 0): TPixiePosition; inline;
+    function CalcPlacement(AX: TPixiePixel = 0;
+      AY: TPixiePixel = 0): TPixiePosition; inline;
 
     // Outer box accessors (content + margin + padding + border)
-    function Left: pixel_t; inline;
-    function Right: pixel_t; inline;
-    function Top: pixel_t; inline;
-    function Bottom: pixel_t; inline;
-    function Width: pixel_t; inline;
-    function Height: pixel_t; inline;
+    function Left: TPixiePixel; inline;
+    function Right: TPixiePixel; inline;
+    function Top: TPixiePixel; inline;
+    function Bottom: TPixiePixel; inline;
+    function Width: TPixiePixel; inline;
+    function Height: TPixiePixel; inline;
 
     // Padding accessors
-    function PaddingLeft: pixel_t; inline;
-    function PaddingRight: pixel_t; inline;
-    function PaddingTop: pixel_t; inline;
-    function PaddingBottom: pixel_t; inline;
+    function PaddingLeft: TPixiePixel; inline;
+    function PaddingRight: TPixiePixel; inline;
+    function PaddingTop: TPixiePixel; inline;
+    function PaddingBottom: TPixiePixel; inline;
 
     // Border accessors
-    function BorderLeft: pixel_t; inline;
-    function BorderRight: pixel_t; inline;
-    function BorderTop: pixel_t; inline;
-    function BorderBottom: pixel_t; inline;
+    function BorderLeft: TPixiePixel; inline;
+    function BorderRight: TPixiePixel; inline;
+    function BorderTop: TPixiePixel; inline;
+    function BorderBottom: TPixiePixel; inline;
 
     // Margin accessors
-    function MarginLeft: pixel_t; inline;
-    function MarginRight: pixel_t; inline;
-    function MarginTop: pixel_t; inline;
-    function MarginBottom: pixel_t; inline;
+    function MarginLeft: TPixiePixel; inline;
+    function MarginRight: TPixiePixel; inline;
+    function MarginTop: TPixiePixel; inline;
+    function MarginBottom: TPixiePixel; inline;
 
     // Margins/padding/borders record access
     function GetMargins: TPixieMargins; inline;
@@ -108,28 +108,28 @@ type
     function GetBorders: TPixieMargins; inline;
 
     // Content offset (margin + padding + border)
-    function ContentOffsetTop: pixel_t; inline;
-    function ContentOffsetBottom: pixel_t; inline;
-    function ContentOffsetLeft: pixel_t; inline;
-    function ContentOffsetRight: pixel_t; inline;
-    function ContentOffsetWidth: pixel_t; inline;
-    function ContentOffsetHeight: pixel_t; inline;
+    function ContentOffsetTop: TPixiePixel; inline;
+    function ContentOffsetBottom: TPixiePixel; inline;
+    function ContentOffsetLeft: TPixiePixel; inline;
+    function ContentOffsetRight: TPixiePixel; inline;
+    function ContentOffsetWidth: TPixiePixel; inline;
+    function ContentOffsetHeight: TPixiePixel; inline;
 
     // Render offset (box-sizing aware)
-    function RenderOffsetLeft: pixel_t; inline;
-    function RenderOffsetRight: pixel_t; inline;
-    function RenderOffsetWidth: pixel_t; inline;
-    function RenderOffsetTop: pixel_t; inline;
-    function RenderOffsetBottom: pixel_t; inline;
-    function RenderOffsetHeight: pixel_t; inline;
+    function RenderOffsetLeft: TPixiePixel; inline;
+    function RenderOffsetRight: TPixiePixel; inline;
+    function RenderOffsetWidth: TPixiePixel; inline;
+    function RenderOffsetTop: TPixiePixel; inline;
+    function RenderOffsetBottom: TPixiePixel; inline;
+    function RenderOffsetHeight: TPixiePixel; inline;
 
     // Box sizing adjustment
-    function BoxSizingLeft: pixel_t; inline;
-    function BoxSizingRight: pixel_t; inline;
-    function BoxSizingWidth: pixel_t; inline;
-    function BoxSizingTop: pixel_t; inline;
-    function BoxSizingBottom: pixel_t; inline;
-    function BoxSizingHeight: pixel_t; inline;
+    function BoxSizingLeft: TPixiePixel; inline;
+    function BoxSizingRight: TPixiePixel; inline;
+    function BoxSizingWidth: TPixiePixel; inline;
+    function BoxSizingTop: TPixiePixel; inline;
+    function BoxSizingBottom: TPixiePixel; inline;
+    function BoxSizingHeight: TPixiePixel; inline;
 
     // Collapse helpers
     function CollapseTopMargin: Boolean;
@@ -139,12 +139,12 @@ type
     function IsGridItem: Boolean;
 
     // Core render pipeline
-    function Render(X, Y: pixel_t;
+    function Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      SecondPass: Boolean = False): pixel_t;
-    procedure CalcOutlines(ParentWidth: pixel_t);
-    function CalcAutoMargins(ParentWidth: pixel_t): pixel_t;
+      SecondPass: Boolean = False): TPixiePixel;
+    procedure CalcOutlines(ParentWidth: TPixiePixel);
+    function CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
     procedure ApplyRelativeShift(
       const CbContext: TPixieContainingBlockContext);
 
@@ -159,40 +159,40 @@ type
       El: TPixieRenderItem): TPixiePointF;
 
     // Drawing
-    procedure DrawStackingContext(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure DrawStackingContext(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; WithPositioned: Boolean);
-    procedure DrawChildren(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure DrawChildren(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Flag: TPixieDrawFlag;
       ZIndex: Integer); virtual;
 
     // Hit testing
-    function GetChildByPoint(X, Y, ClientX, ClientY: pixel_t;
+    function GetChildByPoint(X, Y, ClientX, ClientY: TPixiePixel;
       Flag: TPixieDrawFlag; ZIndex: Integer;
       Check: TPixieRenderItemCheckFunc): TPixieElement; virtual;
-    function GetElementByPoint(X, Y, ClientX, ClientY: pixel_t;
+    function GetElementByPoint(X, Y, ClientX, ClientY: TPixiePixel;
       Check: TPixieRenderItemCheckFunc): TPixieElement;
-    function GetTextByPoint(X, Y: pixel_t): TPixieElement; virtual;
-    function GetNearestTextByPoint(X, Y: pixel_t): TPixieElement; virtual;
-    function IsPointInside(X, Y: pixel_t): Boolean;
+    function GetTextByPoint(X, Y: TPixiePixel): TPixieElement; virtual;
+    function GetNearestTextByPoint(X, Y: TPixiePixel): TPixieElement; virtual;
+    function IsPointInside(X, Y: TPixiePixel): Boolean;
 
     // Document size / redraw
     procedure CalcDocumentSize(var Sz: TPixieSize;
-      X: pixel_t = 0; Y: pixel_t = 0);
+      X: TPixiePixel = 0; Y: TPixiePixel = 0);
     procedure GetRedrawBox(var APos: TPixiePosition;
-      X: pixel_t = 0; Y: pixel_t = 0);
+      X: TPixiePixel = 0; Y: TPixiePixel = 0);
     procedure GetRenderingBoxes(Boxes: TPixiePositionVector);
 
     // Virtual methods (stubs/defaults)
     function Init: TPixieRenderItem; virtual;
     procedure ApplyVerticalAlign; virtual;
-    function GetFirstBaseline: pixel_t; virtual;
-    function GetLastBaseline: pixel_t; virtual;
+    function GetFirstBaseline: TPixiePixel; virtual;
+    function GetLastBaseline: TPixiePixel; virtual;
     function Clone: TPixieRenderItem; virtual;
     procedure GetInlineBoxes(Boxes: TPixiePositionVector); virtual;
     procedure AddInlineBox(const Box: TPixiePosition); virtual;
     procedure ClearInlineBoxes; virtual;
-    function GetDrawVerticalOffset: pixel_t; virtual;
-    procedure YShift(Delta: pixel_t); virtual;
+    function GetDrawVerticalOffset: TPixiePixel; virtual;
+    procedure YShift(Delta: TPixiePixel); virtual;
 
     // Debug
     procedure Dump(var Output: string; Indent: Integer = 0);
@@ -256,7 +256,7 @@ end;
 
 // --- Scroll helpers ---
 
-function TPixieRenderItem.GetScrollLeft: pixel_t;
+function TPixieRenderItem.GetScrollLeft: TPixiePixel;
 begin
   if FScrollView <> nil then
     Result := FScrollView.GetLeft
@@ -264,7 +264,7 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.GetScrollTop: pixel_t;
+function TPixieRenderItem.GetScrollTop: TPixiePixel;
 begin
   if FScrollView <> nil then
     Result := FScrollView.GetTop
@@ -281,7 +281,7 @@ begin
   end;
 end;
 
-function TPixieRenderItem.HScroll(Dx: pixel_t): pixel_t;
+function TPixieRenderItem.HScroll(Dx: TPixiePixel): TPixiePixel;
 begin
   if FScrollView <> nil then
     Result := FScrollView.HScroll(Dx)
@@ -289,7 +289,7 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.VScroll(Dy: pixel_t): pixel_t;
+function TPixieRenderItem.VScroll(Dy: TPixiePixel): TPixiePixel;
 begin
   if FScrollView <> nil then
     Result := FScrollView.VScroll(Dy)
@@ -297,7 +297,7 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.IsHScrollable(Dx: pixel_t): Boolean;
+function TPixieRenderItem.IsHScrollable(Dx: TPixiePixel): Boolean;
 begin
   if FScrollView <> nil then
     Result := FScrollView.IsHScrollable(Dx)
@@ -305,7 +305,7 @@ begin
     Result := False;
 end;
 
-function TPixieRenderItem.IsVScrollable(Dy: pixel_t): Boolean;
+function TPixieRenderItem.IsVScrollable(Dy: TPixiePixel): Boolean;
 begin
   if FScrollView <> nil then
     Result := FScrollView.IsVScrollable(Dy)
@@ -361,7 +361,7 @@ begin
   Result := FParent = nil;
 end;
 
-function TPixieRenderItem.CalcPlacement(AX, AY: pixel_t): TPixiePosition;
+function TPixieRenderItem.CalcPlacement(AX, AY: TPixiePixel): TPixiePosition;
 begin
   Result := FPos;
   Result.X := Result.X + AX - GetScrollLeft;
@@ -370,98 +370,98 @@ end;
 
 // --- Outer box accessors ---
 
-function TPixieRenderItem.Left: pixel_t;
+function TPixieRenderItem.Left: TPixiePixel;
 begin
   Result := FPos.X - FMargins.Left - FPadding.Left - FBorders.Left;
 end;
 
-function TPixieRenderItem.Right: pixel_t;
+function TPixieRenderItem.Right: TPixiePixel;
 begin
   Result := Left + Width;
 end;
 
-function TPixieRenderItem.Top: pixel_t;
+function TPixieRenderItem.Top: TPixiePixel;
 begin
   Result := FPos.Y - FMargins.Top - FPadding.Top - FBorders.Top;
 end;
 
-function TPixieRenderItem.Bottom: pixel_t;
+function TPixieRenderItem.Bottom: TPixiePixel;
 begin
   Result := Top + Height;
 end;
 
-function TPixieRenderItem.Width: pixel_t;
+function TPixieRenderItem.Width: TPixiePixel;
 begin
   Result := FPos.Width + FMargins.Width + FPadding.Width + FBorders.Width;
 end;
 
-function TPixieRenderItem.Height: pixel_t;
+function TPixieRenderItem.Height: TPixiePixel;
 begin
   Result := FPos.Height + FMargins.Height + FPadding.Height + FBorders.Height;
 end;
 
 // --- Padding ---
 
-function TPixieRenderItem.PaddingLeft: pixel_t;
+function TPixieRenderItem.PaddingLeft: TPixiePixel;
 begin
   Result := FPadding.Left;
 end;
 
-function TPixieRenderItem.PaddingRight: pixel_t;
+function TPixieRenderItem.PaddingRight: TPixiePixel;
 begin
   Result := FPadding.Right;
 end;
 
-function TPixieRenderItem.PaddingTop: pixel_t;
+function TPixieRenderItem.PaddingTop: TPixiePixel;
 begin
   Result := FPadding.Top;
 end;
 
-function TPixieRenderItem.PaddingBottom: pixel_t;
+function TPixieRenderItem.PaddingBottom: TPixiePixel;
 begin
   Result := FPadding.Bottom;
 end;
 
 // --- Borders ---
 
-function TPixieRenderItem.BorderLeft: pixel_t;
+function TPixieRenderItem.BorderLeft: TPixiePixel;
 begin
   Result := FBorders.Left;
 end;
 
-function TPixieRenderItem.BorderRight: pixel_t;
+function TPixieRenderItem.BorderRight: TPixiePixel;
 begin
   Result := FBorders.Right;
 end;
 
-function TPixieRenderItem.BorderTop: pixel_t;
+function TPixieRenderItem.BorderTop: TPixiePixel;
 begin
   Result := FBorders.Top;
 end;
 
-function TPixieRenderItem.BorderBottom: pixel_t;
+function TPixieRenderItem.BorderBottom: TPixiePixel;
 begin
   Result := FBorders.Bottom;
 end;
 
 // --- Margins ---
 
-function TPixieRenderItem.MarginLeft: pixel_t;
+function TPixieRenderItem.MarginLeft: TPixiePixel;
 begin
   Result := FMargins.Left;
 end;
 
-function TPixieRenderItem.MarginRight: pixel_t;
+function TPixieRenderItem.MarginRight: TPixiePixel;
 begin
   Result := FMargins.Right;
 end;
 
-function TPixieRenderItem.MarginTop: pixel_t;
+function TPixieRenderItem.MarginTop: TPixiePixel;
 begin
   Result := FMargins.Top;
 end;
 
-function TPixieRenderItem.MarginBottom: pixel_t;
+function TPixieRenderItem.MarginBottom: TPixiePixel;
 begin
   Result := FMargins.Bottom;
 end;
@@ -490,39 +490,39 @@ end;
 
 // --- Content offset ---
 
-function TPixieRenderItem.ContentOffsetTop: pixel_t;
+function TPixieRenderItem.ContentOffsetTop: TPixiePixel;
 begin
   Result := FMargins.Top + FPadding.Top + FBorders.Top;
 end;
 
-function TPixieRenderItem.ContentOffsetBottom: pixel_t;
+function TPixieRenderItem.ContentOffsetBottom: TPixiePixel;
 begin
   Result := FMargins.Bottom + FPadding.Bottom + FBorders.Bottom;
 end;
 
-function TPixieRenderItem.ContentOffsetLeft: pixel_t;
+function TPixieRenderItem.ContentOffsetLeft: TPixiePixel;
 begin
   Result := FMargins.Left + FPadding.Left + FBorders.Left;
 end;
 
-function TPixieRenderItem.ContentOffsetRight: pixel_t;
+function TPixieRenderItem.ContentOffsetRight: TPixiePixel;
 begin
   Result := FMargins.Right + FPadding.Right + FBorders.Right;
 end;
 
-function TPixieRenderItem.ContentOffsetWidth: pixel_t;
+function TPixieRenderItem.ContentOffsetWidth: TPixiePixel;
 begin
   Result := ContentOffsetLeft + ContentOffsetRight;
 end;
 
-function TPixieRenderItem.ContentOffsetHeight: pixel_t;
+function TPixieRenderItem.ContentOffsetHeight: TPixiePixel;
 begin
   Result := ContentOffsetTop + ContentOffsetBottom;
 end;
 
 // --- Render offset (box-sizing aware) ---
 
-function TPixieRenderItem.RenderOffsetLeft: pixel_t;
+function TPixieRenderItem.RenderOffsetLeft: TPixiePixel;
 begin
   if Css.BoxSizing = bxContentBox then
     Result := FMargins.Left + FBorders.Left + FPadding.Left
@@ -530,7 +530,7 @@ begin
     Result := FMargins.Left;
 end;
 
-function TPixieRenderItem.RenderOffsetRight: pixel_t;
+function TPixieRenderItem.RenderOffsetRight: TPixiePixel;
 begin
   if Css.BoxSizing = bxContentBox then
     Result := FMargins.Right + FBorders.Right + FPadding.Right
@@ -538,12 +538,12 @@ begin
     Result := FMargins.Right;
 end;
 
-function TPixieRenderItem.RenderOffsetWidth: pixel_t;
+function TPixieRenderItem.RenderOffsetWidth: TPixiePixel;
 begin
   Result := RenderOffsetLeft + RenderOffsetRight;
 end;
 
-function TPixieRenderItem.RenderOffsetTop: pixel_t;
+function TPixieRenderItem.RenderOffsetTop: TPixiePixel;
 begin
   if Css.BoxSizing = bxContentBox then
     Result := FMargins.Top + FBorders.Top + FPadding.Top
@@ -551,7 +551,7 @@ begin
     Result := FMargins.Top;
 end;
 
-function TPixieRenderItem.RenderOffsetBottom: pixel_t;
+function TPixieRenderItem.RenderOffsetBottom: TPixiePixel;
 begin
   if Css.BoxSizing = bxContentBox then
     Result := FMargins.Bottom + FBorders.Bottom + FPadding.Bottom
@@ -559,14 +559,14 @@ begin
     Result := FMargins.Bottom;
 end;
 
-function TPixieRenderItem.RenderOffsetHeight: pixel_t;
+function TPixieRenderItem.RenderOffsetHeight: TPixiePixel;
 begin
   Result := RenderOffsetTop + RenderOffsetBottom;
 end;
 
 // --- Box sizing adjustment ---
 
-function TPixieRenderItem.BoxSizingLeft: pixel_t;
+function TPixieRenderItem.BoxSizingLeft: TPixiePixel;
 begin
   if Css.BoxSizing = bxBorderBox then
     Result := FPadding.Left + FBorders.Left
@@ -574,7 +574,7 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.BoxSizingRight: pixel_t;
+function TPixieRenderItem.BoxSizingRight: TPixiePixel;
 begin
   if Css.BoxSizing = bxBorderBox then
     Result := FPadding.Right + FBorders.Right
@@ -582,12 +582,12 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.BoxSizingWidth: pixel_t;
+function TPixieRenderItem.BoxSizingWidth: TPixiePixel;
 begin
   Result := BoxSizingLeft + BoxSizingRight;
 end;
 
-function TPixieRenderItem.BoxSizingTop: pixel_t;
+function TPixieRenderItem.BoxSizingTop: TPixiePixel;
 begin
   if Css.BoxSizing = bxBorderBox then
     Result := FPadding.Top + FBorders.Top
@@ -595,7 +595,7 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.BoxSizingBottom: pixel_t;
+function TPixieRenderItem.BoxSizingBottom: TPixiePixel;
 begin
   if Css.BoxSizing = bxBorderBox then
     Result := FPadding.Bottom + FBorders.Bottom
@@ -603,7 +603,7 @@ begin
     Result := 0;
 end;
 
-function TPixieRenderItem.BoxSizingHeight: pixel_t;
+function TPixieRenderItem.BoxSizingHeight: TPixiePixel;
 begin
   Result := BoxSizingTop + BoxSizingBottom;
 end;
@@ -671,11 +671,11 @@ end;
 
 // --- Core render pipeline ---
 
-function TPixieRenderItem.Render(X, Y: pixel_t;
+function TPixieRenderItem.Render(X, Y: TPixiePixel;
   const CbContext: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext; SecondPass: Boolean): pixel_t;
+  FmtCtx: TPixieFormattingContext; SecondPass: Boolean): TPixiePixel;
 var
-  CLeft, CTop: pixel_t;
+  CLeft, CTop: TPixiePixel;
   Fmt: TPixieFormattingContext;
 begin
   CalcOutlines(CbContext.Width.Value);
@@ -707,14 +707,14 @@ begin
   end;
 end;
 
-function TPixieRenderItem._Render(X, Y: pixel_t;
+function TPixieRenderItem._Render(X, Y: TPixiePixel;
   const CbContext: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext; SecondPass: Boolean): pixel_t;
+  FmtCtx: TPixieFormattingContext; SecondPass: Boolean): TPixiePixel;
 begin
   Result := 0;
 end;
 
-procedure TPixieRenderItem.CalcOutlines(ParentWidth: pixel_t);
+procedure TPixieRenderItem.CalcOutlines(ParentWidth: TPixiePixel);
 begin
   FPadding.Left   := FElement.Css.CssPadding.Left.CalcPercent(ParentWidth);
   FPadding.Right  := FElement.Css.CssPadding.Right.CalcPercent(ParentWidth);
@@ -732,9 +732,9 @@ begin
   FPadding.Bottom := FElement.Css.CssPadding.Bottom.CalcPercent(ParentWidth);
 end;
 
-function TPixieRenderItem.CalcAutoMargins(ParentWidth: pixel_t): pixel_t;
+function TPixieRenderItem.CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
 var
-  ElWidth: pixel_t;
+  ElWidth: TPixiePixel;
 begin
   Result := 0;
   if ((FElement.Css.Display = displayBlock) or
@@ -933,7 +933,7 @@ end;
 function TPixieRenderItem.ElementStaticOffset(
   El: TPixieRenderItem): TPixiePointF;
 var
-  OffsetX, OffsetY: pixel_t;
+  OffsetX, OffsetY: TPixiePixel;
   CurEl, ThisEl: TPixieRenderItem;
   Doc: TPixieDocument;
 begin
@@ -979,7 +979,7 @@ end;
 
 // Helper for RenderPositioned: clamp height by min/max
 function FixHeightMinMax(El: TPixieRenderItem;
-  AHeight, CbHeight: pixel_t): pixel_t;
+  AHeight, CbHeight: TPixiePixel): TPixiePixel;
 var
   MaxH, MinH, Val: TPixieCssLength;
 begin
@@ -1003,7 +1003,7 @@ end;
 
 // Helper for RenderPositioned: clamp width by min/max
 function FixWidthMinMax(El: TPixieRenderItem;
-  AWidth, CbWidth: pixel_t): pixel_t;
+  AWidth, CbWidth: TPixiePixel): TPixiePixel;
 var
   MaxW, MinW, Val: TPixieCssLength;
 begin
@@ -1037,11 +1037,11 @@ var
   CbSize: TPixieContainingBlockContext;
   CssLeft, CssRight, CssTop, CssBottom: TPixieCssLength;
   ElWidth, ElHeight: TPixieCssLength;
-  ElBottom, ElTop, ElH: pixel_t;
-  ElRight, ElLeft, ElW: pixel_t;
+  ElBottom, ElTop, ElH: TPixiePixel;
+  ElRight, ElLeft, ElW: TPixiePixel;
   StaticOff: TPixiePointF;
-  ElStaticX, ElStaticY: pixel_t;
-  Remained: pixel_t;
+  ElStaticX, ElStaticY: TPixiePixel;
+  Remained: TPixiePixel;
   SavedPos: TPixiePosition;
   FixedPos: TPixiePosition;
 begin
@@ -1454,7 +1454,7 @@ end;
 // --- Drawing ---
 
 procedure TPixieRenderItem.DrawStackingContext(Hdc: PtrUInt;
-  X, Y: pixel_t; Clip: PPixiePosition; WithPositioned: Boolean);
+  X, Y: TPixiePixel; Clip: PPixiePosition; WithPositioned: Boolean);
 var
   I, Idx: Integer;
   ZIndexes: TPixieIntVector;
@@ -1515,14 +1515,14 @@ begin
 end;
 
 procedure TPixieRenderItem.DrawChildren(Hdc: PtrUInt;
-  X, Y: pixel_t; Clip: PPixiePosition; Flag: TPixieDrawFlag;
+  X, Y: TPixiePixel; Clip: PPixiePosition; Flag: TPixieDrawFlag;
   ZIndex: Integer);
 var
   ElPos, ClipBox, BorderBox: TPixiePosition;
   Doc: TPixieDocument;
   Cont: TPixieContainer;
   HasOpacity: Boolean;
-  PseudoShiftX, PseudoShiftY: pixel_t;
+  PseudoShiftX, PseudoShiftY: TPixiePixel;
   Offsets: TPixieCssOffsets;
   I: Integer;
   El: TPixieRenderItem;
@@ -1683,7 +1683,7 @@ end;
 
 // --- Hit testing ---
 
-function TPixieRenderItem.GetChildByPoint(X, Y, ClientX, ClientY: pixel_t;
+function TPixieRenderItem.GetChildByPoint(X, Y, ClientX, ClientY: TPixiePixel;
   Flag: TPixieDrawFlag; ZIndex: Integer;
   Check: TPixieRenderItemCheckFunc): TPixieElement;
 var
@@ -1841,7 +1841,7 @@ begin
   end;
 end;
 
-function TPixieRenderItem.GetElementByPoint(X, Y, ClientX, ClientY: pixel_t;
+function TPixieRenderItem.GetElementByPoint(X, Y, ClientX, ClientY: TPixiePixel;
   Check: TPixieRenderItemCheckFunc): TPixieElement;
 var
   I, Idx: Integer;
@@ -1935,9 +1935,9 @@ begin
   end;
 end;
 
-function TPixieRenderItem.GetTextByPoint(X, Y: pixel_t): TPixieElement;
+function TPixieRenderItem.GetTextByPoint(X, Y: TPixiePixel): TPixieElement;
 var
-  LocalX, LocalY: pixel_t;
+  LocalX, LocalY: TPixiePixel;
   I: Integer;
   El: TPixieRenderItem;
   Ret: TPixieElement;
@@ -1976,14 +1976,14 @@ begin
 end;
 
 function TPixieRenderItem.GetNearestTextByPoint(
-  X, Y: pixel_t): TPixieElement;
+  X, Y: TPixiePixel): TPixieElement;
 var
   Best: TPixieElement;
-  BestDist: pixel_t;
+  BestDist: TPixiePixel;
 
-  procedure Search(Ri: TPixieRenderItem; PX, PY: pixel_t);
+  procedure Search(Ri: TPixieRenderItem; PX, PY: TPixiePixel);
   var
-    LocalX, LocalY, DX, DY, Dist: pixel_t;
+    LocalX, LocalY, DX, DY, Dist: TPixiePixel;
     I: Integer;
     El: TPixieRenderItem;
     P: TPixiePosition;
@@ -2041,7 +2041,7 @@ begin
   Result := Best;
 end;
 
-function TPixieRenderItem.IsPointInside(X, Y: pixel_t): Boolean;
+function TPixieRenderItem.IsPointInside(X, Y: TPixiePixel): Boolean;
 var
   P: TPixiePosition;
   Boxes: TPixiePositionVector;
@@ -2090,7 +2090,7 @@ end;
 // --- Document size / redraw ---
 
 procedure TPixieRenderItem.CalcDocumentSize(var Sz: TPixieSize;
-  X: pixel_t; Y: pixel_t);
+  X: TPixiePixel; Y: TPixiePixel);
 var
   I: Integer;
   ChildSize: TPixieSize;
@@ -2154,9 +2154,9 @@ begin
 end;
 
 procedure TPixieRenderItem.GetRedrawBox(var APos: TPixiePosition;
-  X: pixel_t; Y: pixel_t);
+  X: TPixiePixel; Y: TPixiePixel);
 var
-  PLeft, PRight, PTop, PBottom: pixel_t;
+  PLeft, PRight, PTop, PBottom: TPixiePixel;
   I: Integer;
 begin
   if IsVisible then
@@ -2186,7 +2186,7 @@ procedure TPixieRenderItem.GetRenderingBoxes(Boxes: TPixiePositionVector);
 var
   P: TPixiePosition;
   CurEl: TPixieRenderItem;
-  AddX, AddY: pixel_t;
+  AddX, AddY: TPixiePixel;
   I: Integer;
   Doc: TPixieDocument;
   Cont: TPixieContainer;
@@ -2257,7 +2257,7 @@ end;
 // --- Containing block context ---
 
 procedure TPixieRenderItem.CalcCbLength(const Len: TPixieCssLength;
-  PercentBase: pixel_t; var OutValue: TPixieTypedPixel);
+  PercentBase: TPixiePixel; var OutValue: TPixieTypedPixel);
 var
   Doc: TPixieDocument;
 begin
@@ -2418,12 +2418,12 @@ begin
   // no-op in base class
 end;
 
-function TPixieRenderItem.GetFirstBaseline: pixel_t;
+function TPixieRenderItem.GetFirstBaseline: TPixiePixel;
 begin
   Result := Height - MarginBottom;
 end;
 
-function TPixieRenderItem.GetLastBaseline: pixel_t;
+function TPixieRenderItem.GetLastBaseline: TPixiePixel;
 begin
   Result := Height - MarginBottom;
 end;
@@ -2448,12 +2448,12 @@ begin
   // no-op
 end;
 
-function TPixieRenderItem.GetDrawVerticalOffset: pixel_t;
+function TPixieRenderItem.GetDrawVerticalOffset: TPixiePixel;
 begin
   Result := 0;
 end;
 
-procedure TPixieRenderItem.YShift(Delta: pixel_t);
+procedure TPixieRenderItem.YShift(Delta: TPixiePixel);
 begin
   FPos.Y := FPos.Y + Delta;
 end;

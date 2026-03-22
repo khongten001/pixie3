@@ -19,26 +19,26 @@ type
   TPixieRenderTable = class(TPixieRenderItem)
   protected
     FGrid: TPixieTableGrid;
-    FBorderSpacingX: pixel_t;
-    FBorderSpacingY: pixel_t;
-    function _Render(X, Y: pixel_t;
+    FBorderSpacingX: TPixiePixel;
+    FBorderSpacingY: TPixiePixel;
+    function _Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      SecondPass: Boolean): pixel_t; override;
+      SecondPass: Boolean): TPixiePixel; override;
   public
     constructor Create(ASrcEl: TPixieElement); override;
     destructor Destroy; override;
     function Clone: TPixieRenderItem; override;
     function Init: TPixieRenderItem; override;
-    procedure DrawChildren(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure DrawChildren(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Flag: TPixieDrawFlag;
       ZIndex: Integer); override;
-    function GetChildByPoint(X, Y, ClientX, ClientY: pixel_t;
+    function GetChildByPoint(X, Y, ClientX, ClientY: TPixiePixel;
       Flag: TPixieDrawFlag; ZIndex: Integer;
       Check: TPixieRenderItemCheckFunc): TPixieElement; override;
-    function GetTextByPoint(X, Y: pixel_t): TPixieElement; override;
-    function GetNearestTextByPoint(X, Y: pixel_t): TPixieElement; override;
-    function GetDrawVerticalOffset: pixel_t; override;
+    function GetTextByPoint(X, Y: TPixiePixel): TPixieElement; override;
+    function GetNearestTextByPoint(X, Y: TPixiePixel): TPixieElement; override;
+    function GetDrawVerticalOffset: TPixiePixel; override;
   end;
 
   { TPixieRenderTablePart — thead/tbody/tfoot }
@@ -184,30 +184,30 @@ end;
 
 // --- _Render ---
 
-function TPixieRenderTable._Render(X, Y: pixel_t;
+function TPixieRenderTable._Render(X, Y: TPixiePixel;
   const CbContext: TPixieContainingBlockContext;
   FmtCtx: TPixieFormattingContext;
-  SecondPass: Boolean): pixel_t;
+  SecondPass: Boolean): TPixiePixel;
 var
   SelfSize: TPixieContainingBlockContext;
-  TableWidthSpacing: pixel_t;
+  TableWidthSpacing: TPixiePixel;
   Col, Row: Integer;
   Cell: PPixieTableCell;
-  CellWidth: pixel_t;
+  CellWidth: TPixiePixel;
   SpanCol, SpanRow: Integer;
-  MinTotalWidth, MaxTotalWidth: pixel_t;
-  TableWidth, MinTableWidth, MaxTableWidth: pixel_t;
+  MinTotalWidth, MaxTotalWidth: TPixiePixel;
+  TableWidth, MinTableWidth, MaxTableWidth: TPixiePixel;
   RowSpanFound: Boolean;
-  H: pixel_t;
-  TableHeightSpacing: pixel_t;
-  BlockHeight, MinHeight, MinimumTableHeight: pixel_t;
-  TableHeight: pixel_t;
-  TopCaptions, BottomCaptions: pixel_t;
+  H: TPixiePixel;
+  TableHeightSpacing: TPixiePixel;
+  BlockHeight, MinHeight, MinimumTableHeight: TPixiePixel;
+  TableHeight: TPixiePixel;
+  TopCaptions, BottomCaptions: TPixiePixel;
   I: Integer;
   Caption: TPixieRenderItem;
   ColRec: TPixieTableColumn;
   RowRec: TPixieTableRow;
-  RowTopY, RowWidth, CellMinH: pixel_t;
+  RowTopY, RowWidth, CellMinH: TPixiePixel;
   J: Integer;
   Part, FirstTr, LastTr: TPixieRenderItem;
 begin
@@ -387,7 +387,7 @@ begin
         if (not Cell^.CssHeight.IsPredefined) and
            (Cell^.CssHeight.Units <> cssUnitsPercentage) then
         begin
-          CellMinH := pixel_t(Cell^.CssHeight.Val);
+          CellMinH := TPixiePixel(Cell^.CssHeight.Val);
           // For content-box, add padding+border to get border-box equivalent
           if TPixieRenderItem(Cell^.El).Css.BoxSizing <> bxBorderBox then
             CellMinH := CellMinH +
@@ -627,7 +627,7 @@ end;
 
 // --- DrawChildren ---
 
-procedure TPixieRenderTable.DrawChildren(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieRenderTable.DrawChildren(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Flag: TPixieDrawFlag;
   ZIndex: Integer);
 var
@@ -688,11 +688,11 @@ end;
 // directly, bypassing the tbody/tr hierarchy, because cell FPos is relative
 // to the table content area.
 
-function TPixieRenderTable.GetChildByPoint(X, Y, ClientX, ClientY: pixel_t;
+function TPixieRenderTable.GetChildByPoint(X, Y, ClientX, ClientY: TPixiePixel;
   Flag: TPixieDrawFlag; ZIndex: Integer;
   Check: TPixieRenderItemCheckFunc): TPixieElement;
 var
-  LocalX, LocalY: pixel_t;
+  LocalX, LocalY: TPixiePixel;
   Row, Col, I: Integer;
   Cell: PPixieTableCell;
   Caption: TPixieRenderItem;
@@ -747,9 +747,9 @@ end;
 // The generic implementation walks tbody -> tr -> td and over-subtracts
 // coordinates at each level, returning wrong text nodes.
 
-function TPixieRenderTable.GetTextByPoint(X, Y: pixel_t): TPixieElement;
+function TPixieRenderTable.GetTextByPoint(X, Y: TPixiePixel): TPixieElement;
 var
-  LocalX, LocalY: pixel_t;
+  LocalX, LocalY: TPixiePixel;
   Row, Col, I: Integer;
   Cell: PPixieTableCell;
   Caption: TPixieRenderItem;
@@ -797,14 +797,14 @@ end;
 // search, computing distances in table-local coordinates.
 
 function TPixieRenderTable.GetNearestTextByPoint(
-  X, Y: pixel_t): TPixieElement;
+  X, Y: TPixiePixel): TPixieElement;
 var
   Best: TPixieElement;
-  BestDist: pixel_t;
+  BestDist: TPixiePixel;
 
-  procedure Search(Ri: TPixieRenderItem; PX, PY: pixel_t);
+  procedure Search(Ri: TPixieRenderItem; PX, PY: TPixiePixel);
   var
-    LocalX, LocalY, DX, DY, Dist: pixel_t;
+    LocalX, LocalY, DX, DY, Dist: TPixiePixel;
     I: Integer;
     El: TPixieRenderItem;
     P: TPixiePosition;
@@ -845,7 +845,7 @@ var
   end;
 
 var
-  LocalX, LocalY: pixel_t;
+  LocalX, LocalY: TPixiePixel;
   Row, Col, I: Integer;
   Cell: PPixieTableCell;
   Caption: TPixieRenderItem;
@@ -887,7 +887,7 @@ end;
 
 // --- GetDrawVerticalOffset ---
 
-function TPixieRenderTable.GetDrawVerticalOffset: pixel_t;
+function TPixieRenderTable.GetDrawVerticalOffset: TPixiePixel;
 begin
   if FGrid <> nil then
     Result := FGrid.TopCaptionsHeight

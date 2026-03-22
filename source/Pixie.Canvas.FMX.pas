@@ -111,12 +111,12 @@ type
 
     // Text
     function MeasureText(const Text: string;
-      Handle: TPixieFontHandle): pixel_t; override;
+      Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
 
     // Units
-    function PtToPx(Pt: Single): pixel_t; override;
+    function PtToPx(Pt: Single): TPixiePixel; override;
 
     // Images
     function LoadImage(const Path: string): TPixieImageHandle; override;
@@ -779,7 +779,7 @@ end;
 // ---------------------------------------------------------------------------
 
 function TPixieFmxCanvas.MeasureText(const Text: string;
-  Handle: TPixieFontHandle): pixel_t;
+  Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: TPixieFmxFont;
 begin
@@ -830,7 +830,7 @@ begin
     TTextAlign.Leading, TTextAlign.Leading);
 end;
 
-function TPixieFmxCanvas.PtToPx(Pt: Single): pixel_t;
+function TPixieFmxCanvas.PtToPx(Pt: Single): TPixiePixel;
 begin
   Result := Trunc(Pt * 96.0 / 72.0);
 end;

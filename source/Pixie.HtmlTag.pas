@@ -130,12 +130,12 @@ type
     procedure ResetStyle; override;
     procedure ParseAttributes; override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
+      MaxWidth: TPixiePixel); override;
     procedure AddStyle(const AStyle: TPixieStyle); override;
 
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
-    procedure DrawBackground(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure DrawBackground(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
 
     function IsNthChild(El: TPixieElement; Num, Off: Integer;
@@ -1405,7 +1405,7 @@ begin
 end;
 
 procedure TPixieHtmlTag.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 begin
   Sz.Height := 0;
   if FCss.Display = displayBlock then
@@ -1422,7 +1422,7 @@ end;
 
 // Draw (stub for Phase 4 — full implementation in Phase 5)
 
-procedure TPixieHtmlTag.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieHtmlTag.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   Pos, BorderBox: TPixiePosition;
@@ -1468,12 +1468,12 @@ begin
   end;
 end;
 
-procedure TPixieHtmlTag.DrawBackground(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieHtmlTag.DrawBackground(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   Pos, BorderBox, ContentBox: TPixiePosition;
   RiObj: TPixieRenderItem;
-  VOffset: pixel_t;
+  VOffset: TPixiePixel;
   Bg: TPixieBackground;
   NumLayers, I: Integer;
   Layer: TPixieBackgroundLayer;
@@ -1485,7 +1485,7 @@ var
   CssBdr: TPixieCssBorders;
   J: Integer;
   DecColor: TPixieWebColor;
-  DecY: pixel_t;
+  DecY: TPixiePixel;
 begin
   Assert(TObject(Ri) is TPixieRenderItem);
   Assert(FDoc is TPixieDocument);
@@ -2060,8 +2060,8 @@ var
   ImgSz: TPixieSize;
   Doc: TPixieDocument;
   RiObj: TPixieRenderItem;
-  LnHeight, SzFont: pixel_t;
-  LiBaseline, TwSpace, Tw: pixel_t;
+  LnHeight, SzFont: TPixiePixel;
+  LiBaseline, TwSpace, Tw: TPixiePixel;
   MarkerText: string;
   TextPos: TPixiePosition;
 begin

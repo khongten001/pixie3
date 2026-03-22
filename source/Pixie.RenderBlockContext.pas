@@ -17,14 +17,14 @@ type
   { TPixieRenderBlockContext }
   TPixieRenderBlockContext = class(TPixieRenderBlock)
   protected
-    function _RenderContent(X, Y: pixel_t; SecondPass: Boolean;
+    function _RenderContent(X, Y: TPixiePixel; SecondPass: Boolean;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t; override;
+      FmtCtx: TPixieFormattingContext): TPixiePixel; override;
   public
     constructor Create(ASrcEl: TPixieElement); override;
     function Clone: TPixieRenderItem; override;
-    function GetFirstBaseline: pixel_t; override;
-    function GetLastBaseline: pixel_t; override;
+    function GetFirstBaseline: TPixiePixel; override;
+    function GetLastBaseline: TPixiePixel; override;
   end;
 
 implementation
@@ -44,25 +44,25 @@ begin
   Result := TPixieRenderBlockContext.Create(FElement);
 end;
 
-function TPixieRenderBlockContext._RenderContent(X, Y: pixel_t;
+function TPixieRenderBlockContext._RenderContent(X, Y: TPixiePixel;
   SecondPass: Boolean;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 var
   ElPosition: TPixieElementPosition;
-  RetWidth, ChildTop, LastMargin: pixel_t;
+  RetWidth, ChildTop, LastMargin: TPixiePixel;
   IsFirst: Boolean;
   I: Integer;
   El: TPixieRenderItem;
   ElCss: TPixieCssProperties;
   ChildMargins: TPixieMargins;
   LastMarginEl: TPixieRenderItem;
-  ChildX, ChildWidth, LineRight, TopMargin: pixel_t;
-  LineLeft: pixel_t;
-  Rw: pixel_t;
-  MinRenderedWidth: pixel_t;
-  NewTop, LnLeft, LnRight: pixel_t;
-  AutoMargin: pixel_t;
+  ChildX, ChildWidth, LineRight, TopMargin: TPixiePixel;
+  LineLeft: TPixiePixel;
+  Rw: TPixiePixel;
+  MinRenderedWidth: TPixiePixel;
+  NewTop, LnLeft, LnRight: TPixiePixel;
+  AutoMargin: TPixiePixel;
 begin
   RetWidth := 0;
   ChildTop := 0;
@@ -212,7 +212,7 @@ begin
   Result := RetWidth;
 end;
 
-function TPixieRenderBlockContext.GetFirstBaseline: pixel_t;
+function TPixieRenderBlockContext.GetFirstBaseline: TPixiePixel;
 var
   Item: TPixieRenderItem;
 begin
@@ -222,7 +222,7 @@ begin
   Result := ContentOffsetTop + Item.Top + Item.GetFirstBaseline;
 end;
 
-function TPixieRenderBlockContext.GetLastBaseline: pixel_t;
+function TPixieRenderBlockContext.GetLastBaseline: TPixiePixel;
 var
   Item: TPixieRenderItem;
 begin

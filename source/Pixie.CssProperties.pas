@@ -17,7 +17,7 @@ uses
   Pixie.FontDescription, Pixie.Background;
 
 const
-  FontSizeTable: array[0..7, 0..6] of pixel_t = (
+  FontSizeTable: array[0..7, 0..6] of TPixiePixel = (
     ( 9,  9,  9,  9, 11, 14, 18),
     ( 9,  9,  9, 10, 12, 15, 20),
     ( 9,  9,  9, 11, 13, 17, 22),
@@ -32,7 +32,7 @@ type
   { TPixieCssLineHeight }
   TPixieCssLineHeight = record
     CssValue: TPixieCssLength;
-    ComputedValue: pixel_t;
+    ComputedValue: TPixiePixel;
   end;
 
   { TPixieCssProperties }
@@ -136,8 +136,8 @@ type
     // Special accessors
     function GetZIndex: Integer;
     procedure SetZIndex(Value: Integer);
-    function GetFontSize: pixel_t;
-    procedure SetFontSize(Value: pixel_t);
+    function GetFontSize: TPixiePixel;
+    procedure SetFontSize(Value: TPixiePixel);
     function GetCssLineHeight: TPixieCssLength;
     procedure SetCssLineHeight(const Value: TPixieCssLength);
   public
@@ -257,7 +257,7 @@ type
 
     // Special converted accessors
     property ZIndex: Integer read GetZIndex write SetZIndex;
-    property FontSize: pixel_t read GetFontSize write SetFontSize;
+    property FontSize: TPixiePixel read GetFontSize write SetFontSize;
   end;
 
 implementation
@@ -271,14 +271,14 @@ type
   // Context for CSS unit conversion within Compute
   TComputeContext = record
     Cont: TPixieContainer;
-    RootFontSize: pixel_t;
+    RootFontSize: TPixiePixel;
     Media: TPixieMediaFeatures;
   end;
   PComputeContext = ^TComputeContext;
 
 // Local CSS unit conversion — converts length to pixels using context
 function CtxToPixels(const Val: TPixieCssLength;
-  const Metrics: TPixieFontMetrics; const Ctx: TComputeContext): pixel_t;
+  const Metrics: TPixieFontMetrics; const Ctx: TComputeContext): TPixiePixel;
 begin
   if Val.IsPredefined then
     Exit(0);
@@ -326,7 +326,7 @@ end;
 procedure CtxCvtUnits(var Val: TPixieCssLength;
   const Metrics: TPixieFontMetrics; const Ctx: TComputeContext);
 var
-  Px: pixel_t;
+  Px: TPixiePixel;
 begin
   if Val.IsPredefined then Exit;
   if Val.Units in [cssUnitsPx, cssUnitsPercentage, cssUnitsNone, cssUnitsFr] then Exit;
@@ -467,12 +467,12 @@ begin
   FZIndex.SetValue(Value, cssUnitsNone);
 end;
 
-function TPixieCssProperties.GetFontSize: pixel_t;
+function TPixieCssProperties.GetFontSize: TPixiePixel;
 begin
-  Result := pixel_t(FCssFontSize.Val);
+  Result := TPixiePixel(FCssFontSize.Val);
 end;
 
-procedure TPixieCssProperties.SetFontSize(Value: pixel_t);
+procedure TPixieCssProperties.SetFontSize(Value: TPixiePixel);
 begin
   FCssFontSize.SetValue(Value, cssUnitsNone);
 end;
@@ -525,7 +525,7 @@ procedure TPixieCssProperties.SnapBorderWidth(var Width: TPixieCssLength;
   Doc: TObject);
 var
   Ctx: TComputeContext;
-  Px: pixel_t;
+  Px: TPixiePixel;
 begin
   if Width.IsPredefined or (Width.Units = cssUnitsPercentage) then
     Exit;
@@ -557,7 +557,7 @@ var
   Tag: TPixieHtmlTag;
   Ctx: TComputeContext;
   Sz: TPixieCssLength;
-  ParentSz, DocFontSize, FS: pixel_t;
+  ParentSz, DocFontSize, FS: TPixiePixel;
   ElParent: TPixieElement;
   IdxInTable: Integer;
   PropagateDecoration: Boolean;
@@ -984,7 +984,7 @@ var
   Ctx: TComputeContext;
   AutoLen: TPixieCssLength;
   ZeroLen: TPixieCssLength;
-  FS: pixel_t;
+  FS: TPixiePixel;
 begin
   Assert(El is TPixieHtmlTag);
   Tag := TPixieHtmlTag(El);
@@ -1287,7 +1287,7 @@ begin
   if FLineHeight.CssValue.IsPredefined then
     FLineHeight.ComputedValue := FFontMetrics.Height
   else if FLineHeight.CssValue.Units = cssUnitsNone then
-    FLineHeight.ComputedValue := pixel_t(FLineHeight.CssValue.Val * FS)
+    FLineHeight.ComputedValue := TPixiePixel(FLineHeight.CssValue.Val * FS)
   else
   begin
     FLineHeight.ComputedValue := CtxToPixels(FLineHeight.CssValue,

@@ -16,11 +16,11 @@ uses
 type
   { TPixieLineContext }
   TPixieLineContext = record
-    CalculatedTop: pixel_t;
-    Top: pixel_t;
-    Left: pixel_t;
-    Right: pixel_t;
-    function Width: pixel_t;
+    CalculatedTop: TPixiePixel;
+    Top: TPixiePixel;
+    Left: TPixiePixel;
+    Right: TPixiePixel;
+    function Width: TPixiePixel;
     procedure FixTop;
     procedure Init;
   end;
@@ -40,31 +40,31 @@ type
   TPixieLineBoxItem = class
   protected
     FElement: TPixieRenderItem;       // not owned
-    FRenderedMinWidth: pixel_t;
-    FItemsTop: pixel_t;
-    FItemsBottom: pixel_t;
+    FRenderedMinWidth: TPixiePixel;
+    FItemsTop: TPixiePixel;
+    FItemsBottom: TPixiePixel;
   public
     constructor Create(AElement: TPixieRenderItem);
     function GetEl: TPixieRenderItem;
     function GetItemType: TPixieLineBoxItemType; virtual;
 
     function Pos: PPixiePosition; virtual;
-    procedure PlaceTo(X, Y: pixel_t); virtual;
-    function Width: pixel_t; virtual;
-    function Height: pixel_t; virtual;
-    function Top: pixel_t; virtual;
-    function Bottom: pixel_t; virtual;
-    function Right: pixel_t; virtual;
-    function Left: pixel_t; virtual;
-    procedure YShift(Delta: pixel_t); virtual;
+    procedure PlaceTo(X, Y: TPixiePixel); virtual;
+    function Width: TPixiePixel; virtual;
+    function Height: TPixiePixel; virtual;
+    function Top: TPixiePixel; virtual;
+    function Bottom: TPixiePixel; virtual;
+    function Right: TPixiePixel; virtual;
+    function Left: TPixiePixel; virtual;
+    procedure YShift(Delta: TPixiePixel); virtual;
 
-    function GetRenderedMinWidth: pixel_t; virtual;
-    procedure SetRenderedMinWidth(Value: pixel_t); virtual;
+    function GetRenderedMinWidth: TPixiePixel; virtual;
+    procedure SetRenderedMinWidth(Value: TPixiePixel); virtual;
 
     procedure ResetItemsHeight;
-    procedure AddItemHeight(ItemTop, ItemBottom: pixel_t);
-    function GetItemsTop: pixel_t;
-    function GetItemsBottom: pixel_t;
+    procedure AddItemHeight(ItemTop, ItemBottom: TPixiePixel);
+    function GetItemsTop: TPixiePixel;
+    function GetItemsBottom: TPixiePixel;
   end;
 
   { TPixieLbiStart — inline start marker }
@@ -75,15 +75,15 @@ type
     constructor Create(AElement: TPixieRenderItem);
     function GetItemType: TPixieLineBoxItemType; override;
     function Pos: PPixiePosition; override;
-    procedure PlaceTo(X, Y: pixel_t); override;
-    function Width: pixel_t; override;
-    function Height: pixel_t; override;
-    function Top: pixel_t; override;
-    function Bottom: pixel_t; override;
-    function Right: pixel_t; override;
-    function Left: pixel_t; override;
-    function GetRenderedMinWidth: pixel_t; override;
-    procedure YShift(Delta: pixel_t); override;
+    procedure PlaceTo(X, Y: TPixiePixel); override;
+    function Width: TPixiePixel; override;
+    function Height: TPixiePixel; override;
+    function Top: TPixiePixel; override;
+    function Bottom: TPixiePixel; override;
+    function Right: TPixiePixel; override;
+    function Left: TPixiePixel; override;
+    function GetRenderedMinWidth: TPixiePixel; override;
+    procedure YShift(Delta: TPixiePixel); override;
   end;
 
   { TPixieLbiEnd — inline end marker }
@@ -91,10 +91,10 @@ type
   public
     constructor Create(AElement: TPixieRenderItem);
     function GetItemType: TPixieLineBoxItemType; override;
-    procedure PlaceTo(X, Y: pixel_t); override;
-    function Right: pixel_t; override;
-    function Left: pixel_t; override;
-    procedure YShift(Delta: pixel_t); override;
+    procedure PlaceTo(X, Y: TPixiePixel); override;
+    function Right: TPixiePixel; override;
+    function Left: TPixiePixel; override;
+    procedure YShift(Delta: TPixiePixel); override;
   end;
 
   { TPixieLbiContinue — inline continue marker (zero width) }
@@ -102,54 +102,54 @@ type
   public
     constructor Create(AElement: TPixieRenderItem);
     function GetItemType: TPixieLineBoxItemType; override;
-    procedure PlaceTo(X, Y: pixel_t); override;
-    function Right: pixel_t; override;
-    function Left: pixel_t; override;
-    function Width: pixel_t; override;
+    procedure PlaceTo(X, Y: TPixiePixel); override;
+    function Right: TPixiePixel; override;
+    function Left: TPixiePixel; override;
+    function Width: TPixiePixel; override;
   end;
 
   { TPixieLineBox }
   TPixieLineBox = class
   private
-    FTop: pixel_t;
-    FLeft: pixel_t;
-    FRight: pixel_t;
-    FHeight: pixel_t;
-    FWidth: pixel_t;
+    FTop: TPixiePixel;
+    FLeft: TPixiePixel;
+    FRight: TPixiePixel;
+    FHeight: TPixiePixel;
+    FWidth: TPixiePixel;
     FDefaultLineHeight: TPixieCssLineHeight;
     FFontMetrics: TPixieFontMetrics;
-    FBaseline: pixel_t;
+    FBaseline: TPixiePixel;
     FTextAlign: TPixieTextAlign;
-    FMinWidth: pixel_t;
+    FMinWidth: TPixiePixel;
     FItems: TPixieLineBoxItemList;
 
     function HaveLastSpace: Boolean;
     function IsBreakOnly: Boolean;
   public
-    constructor Create(ATop, ALeft, ARight: pixel_t;
+    constructor Create(ATop, ALeft, ARight: TPixiePixel;
       const ALineHeight: TPixieCssLineHeight;
       const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign);
     destructor Destroy; override;
 
-    function Bottom: pixel_t;
-    function Top: pixel_t;
-    function Right: pixel_t;
-    function Left: pixel_t;
-    function Height: pixel_t;
-    function Width: pixel_t;
-    function LineRight: pixel_t;
-    function MinWidth: pixel_t;
-    function Baseline: pixel_t;
-    function TopMargin: pixel_t;
-    function BottomMargin: pixel_t;
+    function Bottom: TPixiePixel;
+    function Top: TPixiePixel;
+    function Right: TPixiePixel;
+    function Left: TPixiePixel;
+    function Height: TPixiePixel;
+    function Width: TPixiePixel;
+    function LineRight: TPixiePixel;
+    function MinWidth: TPixiePixel;
+    function Baseline: TPixiePixel;
+    function TopMargin: TPixiePixel;
+    function BottomMargin: TPixiePixel;
 
     procedure AddItem(Item: TPixieLineBoxItem);
     function CanHold(Item: TPixieLineBoxItem; Ws: TPixieWhiteSpace): Boolean;
     function IsEmpty: Boolean;
-    procedure YShift(Delta: pixel_t);
+    procedure YShift(Delta: TPixiePixel);
     function Finish(LastBox: Boolean;
       const CbContext: TPixieContainingBlockContext): TPixieLineBoxItemList;
-    function NewWidth(ALeft, ARight: pixel_t): TPixieLineBoxItemList;
+    function NewWidth(ALeft, ARight: TPixiePixel): TPixieLineBoxItemList;
     function GetLastTextPart: TPixieRenderItem;
     function GetFirstTextPart: TPixieRenderItem;
 
@@ -162,21 +162,21 @@ implementation
 
 type
   TVaContext = record
-    LineHeight: pixel_t;
-    Baseline: pixel_t;
+    LineHeight: TPixiePixel;
+    Baseline: TPixiePixel;
     Fm: TPixieFontMetrics;
     StartLbi: TPixieLineBoxItem;
   end;
   TVaContextList = TList<TVaContext>;
 
   TItemsDimensions = record
-    Top: pixel_t;
-    Bottom: pixel_t;
+    Top: TPixiePixel;
+    Bottom: TPixiePixel;
     Count: Integer;
-    MaxHeight: pixel_t;
+    MaxHeight: TPixiePixel;
     procedure Init;
     procedure AddItem(Item: TPixieLineBoxItem);
-    function Height: pixel_t;
+    function Height: TPixiePixel;
   end;
 
   TInlineItemBox = record
@@ -201,14 +201,14 @@ begin
   Inc(Count);
 end;
 
-function TItemsDimensions.Height: pixel_t;
+function TItemsDimensions.Height: TPixiePixel;
 begin
   Result := Bottom - Top;
 end;
 
 function CalcVaBaseline(const Current: TVaContext;
   Va: TPixieVerticalAlign; const NewFont: TPixieFontMetrics;
-  ATop, ABottom: pixel_t): pixel_t;
+  ATop, ABottom: TPixiePixel): TPixiePixel;
 begin
   case Va of
     vaSuper:
@@ -235,7 +235,7 @@ end;
 // TPixieLineContext
 // ============================================================
 
-function TPixieLineContext.Width: pixel_t;
+function TPixieLineContext.Width: TPixiePixel;
 begin
   Result := Right - Left;
 end;
@@ -281,53 +281,53 @@ begin
   Result := @FElement.FPos;
 end;
 
-procedure TPixieLineBoxItem.PlaceTo(X, Y: pixel_t);
+procedure TPixieLineBoxItem.PlaceTo(X, Y: TPixiePixel);
 begin
   FElement.FPos.X := X + FElement.ContentOffsetLeft;
   FElement.FPos.Y := Y + FElement.ContentOffsetTop;
 end;
 
-function TPixieLineBoxItem.Width: pixel_t;
+function TPixieLineBoxItem.Width: TPixiePixel;
 begin
   Result := FElement.Width;
 end;
 
-function TPixieLineBoxItem.Height: pixel_t;
+function TPixieLineBoxItem.Height: TPixiePixel;
 begin
   Result := FElement.Height;
 end;
 
-function TPixieLineBoxItem.Top: pixel_t;
+function TPixieLineBoxItem.Top: TPixiePixel;
 begin
   Result := FElement.Top;
 end;
 
-function TPixieLineBoxItem.Bottom: pixel_t;
+function TPixieLineBoxItem.Bottom: TPixiePixel;
 begin
   Result := FElement.Bottom;
 end;
 
-function TPixieLineBoxItem.Right: pixel_t;
+function TPixieLineBoxItem.Right: TPixiePixel;
 begin
   Result := FElement.Right;
 end;
 
-function TPixieLineBoxItem.Left: pixel_t;
+function TPixieLineBoxItem.Left: TPixiePixel;
 begin
   Result := FElement.Left;
 end;
 
-procedure TPixieLineBoxItem.YShift(Delta: pixel_t);
+procedure TPixieLineBoxItem.YShift(Delta: TPixiePixel);
 begin
   FElement.YShift(Delta);
 end;
 
-function TPixieLineBoxItem.GetRenderedMinWidth: pixel_t;
+function TPixieLineBoxItem.GetRenderedMinWidth: TPixiePixel;
 begin
   Result := FRenderedMinWidth;
 end;
 
-procedure TPixieLineBoxItem.SetRenderedMinWidth(Value: pixel_t);
+procedure TPixieLineBoxItem.SetRenderedMinWidth(Value: TPixiePixel);
 begin
   FRenderedMinWidth := Value;
 end;
@@ -338,18 +338,18 @@ begin
   FItemsBottom := 0;
 end;
 
-procedure TPixieLineBoxItem.AddItemHeight(ItemTop, ItemBottom: pixel_t);
+procedure TPixieLineBoxItem.AddItemHeight(ItemTop, ItemBottom: TPixiePixel);
 begin
   FItemsTop := Min(FItemsTop, ItemTop);
   FItemsBottom := Max(FItemsBottom, ItemBottom);
 end;
 
-function TPixieLineBoxItem.GetItemsTop: pixel_t;
+function TPixieLineBoxItem.GetItemsTop: TPixiePixel;
 begin
   Result := FItemsTop;
 end;
 
-function TPixieLineBoxItem.GetItemsBottom: pixel_t;
+function TPixieLineBoxItem.GetItemsBottom: TPixiePixel;
 begin
   Result := FItemsBottom;
 end;
@@ -376,48 +376,48 @@ begin
   Result := @FPos;
 end;
 
-procedure TPixieLbiStart.PlaceTo(X, Y: pixel_t);
+procedure TPixieLbiStart.PlaceTo(X, Y: TPixiePixel);
 begin
   FPos.X := X + FElement.ContentOffsetLeft;
   FPos.Y := Y;
 end;
 
-function TPixieLbiStart.Width: pixel_t;
+function TPixieLbiStart.Width: TPixiePixel;
 begin
   Result := FPos.Width;
 end;
 
-function TPixieLbiStart.Height: pixel_t;
+function TPixieLbiStart.Height: TPixiePixel;
 begin
   Result := FPos.Height;
 end;
 
-function TPixieLbiStart.Top: pixel_t;
+function TPixieLbiStart.Top: TPixiePixel;
 begin
   Result := FPos.Y;
 end;
 
-function TPixieLbiStart.Bottom: pixel_t;
+function TPixieLbiStart.Bottom: TPixiePixel;
 begin
   Result := FPos.Y + FPos.Height;
 end;
 
-function TPixieLbiStart.Right: pixel_t;
+function TPixieLbiStart.Right: TPixiePixel;
 begin
   Result := FPos.X;
 end;
 
-function TPixieLbiStart.Left: pixel_t;
+function TPixieLbiStart.Left: TPixiePixel;
 begin
   Result := FPos.X - FElement.ContentOffsetLeft;
 end;
 
-function TPixieLbiStart.GetRenderedMinWidth: pixel_t;
+function TPixieLbiStart.GetRenderedMinWidth: TPixiePixel;
 begin
   Result := Width;
 end;
 
-procedure TPixieLbiStart.YShift(Delta: pixel_t);
+procedure TPixieLbiStart.YShift(Delta: TPixiePixel);
 begin
   // Shift only the marker's own position, not the element's inline boxes.
   // Inline elements that span multiple lines have start/continue markers
@@ -443,23 +443,23 @@ begin
   Result := lbiInlineEnd;
 end;
 
-procedure TPixieLbiEnd.PlaceTo(X, Y: pixel_t);
+procedure TPixieLbiEnd.PlaceTo(X, Y: TPixiePixel);
 begin
   FPos.X := X;
   FPos.Y := Y;
 end;
 
-function TPixieLbiEnd.Right: pixel_t;
+function TPixieLbiEnd.Right: TPixiePixel;
 begin
   Result := FPos.X + FPos.Width;
 end;
 
-function TPixieLbiEnd.Left: pixel_t;
+function TPixieLbiEnd.Left: TPixiePixel;
 begin
   Result := FPos.X;
 end;
 
-procedure TPixieLbiEnd.YShift(Delta: pixel_t);
+procedure TPixieLbiEnd.YShift(Delta: TPixiePixel);
 begin
   // no-op: end markers don't shift
 end;
@@ -481,23 +481,23 @@ begin
   Result := lbiInlineContinue;
 end;
 
-procedure TPixieLbiContinue.PlaceTo(X, Y: pixel_t);
+procedure TPixieLbiContinue.PlaceTo(X, Y: TPixiePixel);
 begin
   FPos.X := X;
   FPos.Y := Y;
 end;
 
-function TPixieLbiContinue.Right: pixel_t;
+function TPixieLbiContinue.Right: TPixiePixel;
 begin
   Result := FPos.X;
 end;
 
-function TPixieLbiContinue.Left: pixel_t;
+function TPixieLbiContinue.Left: TPixiePixel;
 begin
   Result := FPos.X;
 end;
 
-function TPixieLbiContinue.Width: pixel_t;
+function TPixieLbiContinue.Width: TPixiePixel;
 begin
   Result := 0;
 end;
@@ -506,7 +506,7 @@ end;
 // TPixieLineBox
 // ============================================================
 
-constructor TPixieLineBox.Create(ATop, ALeft, ARight: pixel_t;
+constructor TPixieLineBox.Create(ATop, ALeft, ARight: TPixiePixel;
   const ALineHeight: TPixieCssLineHeight;
   const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign);
 begin
@@ -530,57 +530,57 @@ begin
   inherited Destroy;
 end;
 
-function TPixieLineBox.Bottom: pixel_t;
+function TPixieLineBox.Bottom: TPixiePixel;
 begin
   Result := FTop + FHeight;
 end;
 
-function TPixieLineBox.Top: pixel_t;
+function TPixieLineBox.Top: TPixiePixel;
 begin
   Result := FTop;
 end;
 
-function TPixieLineBox.Right: pixel_t;
+function TPixieLineBox.Right: TPixiePixel;
 begin
   Result := FLeft + FWidth;
 end;
 
-function TPixieLineBox.Left: pixel_t;
+function TPixieLineBox.Left: TPixiePixel;
 begin
   Result := FLeft;
 end;
 
-function TPixieLineBox.Height: pixel_t;
+function TPixieLineBox.Height: TPixiePixel;
 begin
   Result := FHeight;
 end;
 
-function TPixieLineBox.Width: pixel_t;
+function TPixieLineBox.Width: TPixiePixel;
 begin
   Result := FWidth;
 end;
 
-function TPixieLineBox.LineRight: pixel_t;
+function TPixieLineBox.LineRight: TPixiePixel;
 begin
   Result := FRight;
 end;
 
-function TPixieLineBox.MinWidth: pixel_t;
+function TPixieLineBox.MinWidth: TPixiePixel;
 begin
   Result := FMinWidth;
 end;
 
-function TPixieLineBox.Baseline: pixel_t;
+function TPixieLineBox.Baseline: TPixiePixel;
 begin
   Result := FBaseline;
 end;
 
-function TPixieLineBox.TopMargin: pixel_t;
+function TPixieLineBox.TopMargin: TPixiePixel;
 begin
   Result := 0;
 end;
 
-function TPixieLineBox.BottomMargin: pixel_t;
+function TPixieLineBox.BottomMargin: TPixiePixel;
 begin
   Result := 0;
 end;
@@ -722,7 +722,7 @@ end;
 
 // --- YShift ---
 
-procedure TPixieLineBox.YShift(Delta: pixel_t);
+procedure TPixieLineBox.YShift(Delta: TPixiePixel);
 var
   I: Integer;
 begin
@@ -755,9 +755,9 @@ end;
 
 // --- NewWidth ---
 
-function TPixieLineBox.NewWidth(ALeft, ARight: pixel_t): TPixieLineBoxItemList;
+function TPixieLineBox.NewWidth(ALeft, ARight: TPixiePixel): TPixieLineBoxItemList;
 var
-  AddX: pixel_t;
+  AddX: TPixiePixel;
   I, RemoveFrom: Integer;
   RetItems: TPixieLineBoxItemList;
 begin
@@ -809,20 +809,20 @@ function TPixieLineBox.Finish(LastBox: Boolean;
 var
   RetItems: TPixieLineBoxItemList;
   I, J, Counter: Integer;
-  SpacingX: pixel_t;
-  ShiftX: pixel_t;
+  SpacingX: TPixiePixel;
+  ShiftX: TPixiePixel;
   Offj, Cixx: Single;
   HasLineHeight: Boolean;
-  LineHeightVal: pixel_t;
+  LineHeightVal: TPixiePixel;
   CurrentContext: TVaContext;
   Contexts: TVaContextList;
   LineMaxHeight, TopAlignedMaxHeight, BottomAlignedMaxHeight,
     InlineBoxesDims: TItemsDimensions;
-  Bl, ContentOffset, TopShift: pixel_t;
+  Bl, ContentOffset, TopShift: TPixiePixel;
   IsTopBottomBox, Ignore: Boolean;
-  TopDownHeight: pixel_t;
-  Diff1, Diff2: pixel_t;
-  TopShiftCorrection: pixel_t;
+  TopDownHeight: TPixiePixel;
+  Diff1, Diff2: TPixiePixel;
+  TopShiftCorrection: TPixiePixel;
   Inlines: TInlineItemBoxList;
   InlBox: TInlineItemBox;
   Lbi: TPixieLineBoxItem;

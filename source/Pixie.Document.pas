@@ -59,8 +59,8 @@ type
 
     // Focus state
     FFocusedElement: TPixieElement;
-    FLastMouseX: pixel_t;
-    FLastMouseY: pixel_t;
+    FLastMouseX: TPixiePixel;
+    FLastMouseY: TPixiePixel;
     FOnChange: TPixieDocumentChangeEvent;
 
     // Update batching
@@ -102,13 +102,13 @@ type
 
     // Unit conversion
     procedure CvtUnits(var Val: TPixieCssLength;
-      const Metrics: TPixieFontMetrics; Size: pixel_t);
+      const Metrics: TPixieFontMetrics; Size: TPixiePixel);
     function ToPixels(const Val: TPixieCssLength;
-      const Metrics: TPixieFontMetrics; Size: pixel_t): pixel_t;
+      const Metrics: TPixieFontMetrics; Size: TPixiePixel): TPixiePixel;
 
     // Document size
-    function Width: pixel_t;
-    function Height: pixel_t;
+    function Width: TPixiePixel;
+    function Height: TPixiePixel;
 
     // CSS management
     procedure AddStylesheet(const Str, BaseUrl, Media: string);
@@ -125,18 +125,18 @@ type
     procedure AddTabular(Ri: TObject);
 
     // Rendering (Phase 5 stubs)
-    function Render(MaxWidth: pixel_t): pixel_t;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+    function Render(MaxWidth: TPixiePixel): TPixiePixel;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition);
 
     // Mouse events (Phase 5 stubs)
-    function OnMouseOver(X, Y, ClientX, ClientY: pixel_t;
+    function OnMouseOver(X, Y, ClientX, ClientY: TPixiePixel;
       RedrawBoxes: TPixiePositionVector): Boolean;
     function OnMouseLeave(
       RedrawBoxes: TPixiePositionVector): Boolean;
-    function OnLButtonDown(X, Y, ClientX, ClientY: pixel_t;
+    function OnLButtonDown(X, Y, ClientX, ClientY: TPixiePixel;
       RedrawBoxes: TPixiePositionVector): Boolean;
-    function OnLButtonUp(X, Y, ClientX, ClientY: pixel_t;
+    function OnLButtonUp(X, Y, ClientX, ClientY: TPixiePixel;
       RedrawBoxes: TPixiePositionVector): Boolean;
 
     // Table fix-up (Phase 5 stub)
@@ -154,13 +154,13 @@ type
     function FocusNext: Boolean;
     function FocusPrev: Boolean;
     function DispatchDblClick: Boolean;
-    function DispatchMouseDrag(X, Y: pixel_t): Boolean;
-    function DispatchMouseWheel(X, Y: pixel_t;
+    function DispatchMouseDrag(X, Y: TPixiePixel): Boolean;
+    function DispatchMouseWheel(X, Y: TPixiePixel;
       Delta: Integer): Boolean;
-    function GetFocusedCaretPos(out X, Y, H: pixel_t): Boolean;
+    function GetFocusedCaretPos(out X, Y, H: TPixiePixel): Boolean;
     property ActiveElement: TPixieElement read FActiveElement;
-    property LastMouseX: pixel_t read FLastMouseX;
-    property LastMouseY: pixel_t read FLastMouseY;
+    property LastMouseX: TPixiePixel read FLastMouseX;
+    property LastMouseY: TPixiePixel read FLastMouseY;
 
     // DOM mutation API
     function CreateTextNode(const AText: string): TPixieElement;
@@ -182,9 +182,9 @@ type
       read FOnChange write FOnChange;
 
     // Text selection
-    procedure SelectionStart(X, Y, ClientX, ClientY: pixel_t);
-    function SelectionMove(X, Y, ClientX, ClientY: pixel_t): Boolean;
-    function SelectWord(X, Y: pixel_t): Boolean;
+    procedure SelectionStart(X, Y, ClientX, ClientY: TPixiePixel);
+    function SelectionMove(X, Y, ClientX, ClientY: TPixiePixel): Boolean;
+    function SelectWord(X, Y: TPixiePixel): Boolean;
     procedure SelectionEnd;
     procedure ClearSelection;
     function HasSelection: Boolean;
@@ -571,12 +571,12 @@ begin
   Result := FRoot;
 end;
 
-function TPixieDocument.Width: pixel_t;
+function TPixieDocument.Width: TPixiePixel;
 begin
   Result := FSize.Width;
 end;
 
-function TPixieDocument.Height: pixel_t;
+function TPixieDocument.Height: TPixiePixel;
 begin
   Result := FSize.Height;
 end;
@@ -633,7 +633,7 @@ end;
 // --- Unit Conversion ---
 
 function TPixieDocument.ToPixels(const Val: TPixieCssLength;
-  const Metrics: TPixieFontMetrics; Size: pixel_t): pixel_t;
+  const Metrics: TPixieFontMetrics; Size: TPixiePixel): TPixiePixel;
 begin
   if Val.IsPredefined then
     Exit(0);
@@ -703,7 +703,7 @@ begin
 end;
 
 procedure TPixieDocument.CvtUnits(var Val: TPixieCssLength;
-  const Metrics: TPixieFontMetrics; Size: pixel_t);
+  const Metrics: TPixieFontMetrics; Size: TPixiePixel);
 begin
   if Val.IsPredefined then
     Exit;
@@ -878,7 +878,7 @@ end;
 
 // --- Rendering (Phase 5 stubs) ---
 
-function TPixieDocument.Render(MaxWidth: pixel_t): pixel_t;
+function TPixieDocument.Render(MaxWidth: TPixiePixel): TPixiePixel;
 var
   Viewport: TPixiePosition;
   CbContext: TPixieContainingBlockContext;
@@ -909,7 +909,7 @@ begin
   Ri.CalcDocumentSize(FSize);
 end;
 
-procedure TPixieDocument.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieDocument.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition);
 var
   Ri: TPixieRenderItem;
@@ -923,7 +923,7 @@ begin
   end;
 end;
 
-function TPixieDocument.OnMouseOver(X, Y, ClientX, ClientY: pixel_t;
+function TPixieDocument.OnMouseOver(X, Y, ClientX, ClientY: TPixiePixel;
   RedrawBoxes: TPixiePositionVector): Boolean;
 var
   OverEl, El, Walk: TPixieElement;
@@ -1039,7 +1039,7 @@ begin
 end;
 
 function TPixieDocument.OnLButtonDown(
-  X, Y, ClientX, ClientY: pixel_t;
+  X, Y, ClientX, ClientY: TPixiePixel;
   RedrawBoxes: TPixiePositionVector): Boolean;
 var
   OverEl: TPixieElement;
@@ -1072,7 +1072,7 @@ begin
 end;
 
 function TPixieDocument.OnLButtonUp(
-  X, Y, ClientX, ClientY: pixel_t;
+  X, Y, ClientX, ClientY: TPixiePixel;
   RedrawBoxes: TPixiePositionVector): Boolean;
 var
   OverEl, Walker: TPixieElement;
@@ -1390,7 +1390,7 @@ begin
   Result := FFocusedElement;
 end;
 
-function TPixieDocument.GetFocusedCaretPos(out X, Y, H: pixel_t): Boolean;
+function TPixieDocument.GetFocusedCaretPos(out X, Y, H: TPixiePixel): Boolean;
 begin
   if FFocusedElement is TPixieElTextBase then
     Result := TPixieElTextBase(FFocusedElement).GetCaretDocPos(X, Y, H)
@@ -1479,7 +1479,7 @@ begin
 end;
 
 function TPixieDocument.DispatchMouseDrag(
-  X, Y: pixel_t): Boolean;
+  X, Y: TPixiePixel): Boolean;
 begin
   if FFocusedElement <> nil then
     Result := FFocusedElement.OnMouseDrag(X, Y)
@@ -1488,7 +1488,7 @@ begin
 end;
 
 function TPixieDocument.DispatchMouseWheel(
-  X, Y: pixel_t; Delta: Integer): Boolean;
+  X, Y: TPixiePixel; Delta: Integer): Boolean;
 var
   El: TPixieElement;
 begin
@@ -1504,7 +1504,7 @@ end;
 // --- Text selection ---
 
 procedure TPixieDocument.SelectionStart(
-  X, Y, ClientX, ClientY: pixel_t);
+  X, Y, ClientX, ClientY: TPixiePixel);
 var
   El: TPixieElement;
 begin
@@ -1522,7 +1522,7 @@ begin
 end;
 
 function TPixieDocument.SelectionMove(
-  X, Y, ClientX, ClientY: pixel_t): Boolean;
+  X, Y, ClientX, ClientY: TPixiePixel): Boolean;
 var
   El: TPixieElement;
 begin
@@ -1544,7 +1544,7 @@ begin
   end;
 end;
 
-function TPixieDocument.SelectWord(X, Y: pixel_t): Boolean;
+function TPixieDocument.SelectWord(X, Y: TPixiePixel): Boolean;
 var
   El: TPixieElement;
 begin

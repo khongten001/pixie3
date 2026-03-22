@@ -24,7 +24,7 @@ type
   TPixiePdfFontInfo = class
     TtFont: TPixieTrueTypeFont;
     FamilyName: string;
-    FontSize: pixel_t;
+    FontSize: TPixiePixel;
     DecorationLine: Integer;
     PdfName: AnsiString;      // e.g. /F1
     Type0ObjId: Integer;      // PDF object id for the Type0 font
@@ -152,10 +152,10 @@ type
       out Metrics: TPixieFontMetrics): TPixieFontHandle; override;
     procedure DeleteFont(Handle: TPixieFontHandle); override;
     function MeasureText(const Text: string;
-      Handle: TPixieFontHandle): pixel_t; override;
+      Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
-    function PtToPx(Pt: Single): pixel_t; override;
+    function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
     function LoadImageFromPixels(Width, Height: Integer;
@@ -1269,7 +1269,7 @@ begin
 end;
 
 function TPixiePdfCanvas.MeasureText(const Text: string;
-  Handle: TPixieFontHandle): pixel_t;
+  Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: TPixiePdfFontInfo;
   Scale: Single;
@@ -1350,7 +1350,7 @@ begin
   // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
 end;
 
-function TPixiePdfCanvas.PtToPx(Pt: Single): pixel_t;
+function TPixiePdfCanvas.PtToPx(Pt: Single): TPixiePixel;
 begin
   Result := Trunc(Pt * 96.0 / 72.0);
 end;

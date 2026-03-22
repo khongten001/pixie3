@@ -23,13 +23,13 @@ type
     FCaretPos: Integer;       // byte position 0..Length(FValue)
     FSelStart: Integer;       // selection start (-1 = no selection)
     FSelEnd: Integer;         // selection end
-    FScrollX: pixel_t;        // horizontal scroll offset
+    FScrollX: TPixiePixel;        // horizontal scroll offset
     FPassword: Boolean;       // show bullets
     FPlaceholder: string;     // placeholder text
     FReadOnly: Boolean;
     FMaxLength: Integer;      // -1 = unlimited
     FMultiLine: Boolean;
-    FScrollY: pixel_t;        // vertical scroll (textarea)
+    FScrollY: TPixiePixel;        // vertical scroll (textarea)
     FCaretMoved: Boolean;     // AdjustScroll needed
     FUndoValue: string;       // previous value for Ctrl+Z
     FUndoCaret: Integer;      // previous caret position
@@ -59,11 +59,11 @@ type
     function GetLineText(Line: Integer): string;
 
     // Coordinate mapping
-    function DocToLocal(DocX, DocY: pixel_t;
-      out LocalX, LocalY: pixel_t): Boolean;
-    function ClickToCaret(RelX, RelY: pixel_t): Integer;
-    function CaretToPixelXY(out PxX, PxY: pixel_t): Boolean;
-    procedure AdjustScroll(ContentW, ContentH: pixel_t);
+    function DocToLocal(DocX, DocY: TPixiePixel;
+      out LocalX, LocalY: TPixiePixel): Boolean;
+    function ClickToCaret(RelX, RelY: TPixiePixel): Integer;
+    function CaretToPixelXY(out PxX, PxY: TPixiePixel): Boolean;
+    procedure AdjustScroll(ContentW, ContentH: TPixiePixel);
 
     // Drawing
     procedure DrawContent(Cv: TObject; P: TPixiePosition;
@@ -73,13 +73,13 @@ type
 
     function IsReplaced: Boolean; override;
     procedure ParseAttributes; override;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
     procedure OnClick; override;
     function OnLButtonDown: Boolean; override;
     function OnLButtonDblClick: Boolean; override;
-    function OnMouseDrag(X, Y: pixel_t): Boolean; override;
+    function OnMouseDrag(X, Y: TPixiePixel): Boolean; override;
 
     // Focus and keyboard
     procedure OnFocus; override;
@@ -88,7 +88,7 @@ type
     function OnUTF8KeyPress(const UTF8Char: string): Boolean; override;
     function IsFocusable: Boolean; override;
 
-    function GetCaretDocPos(out X, Y, H: pixel_t): Boolean;
+    function GetCaretDocPos(out X, Y, H: TPixiePixel): Boolean;
 
     property Value: string read FValue write FValue;
   end;
@@ -99,7 +99,7 @@ type
   public
     procedure ParseAttributes; override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
+      MaxWidth: TPixiePixel); override;
     function DumpGetName: string; override;
   end;
 
@@ -113,7 +113,7 @@ type
     constructor Create(ADoc: TObject);
     procedure ParseAttributes; override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
+      MaxWidth: TPixiePixel); override;
     function OnKeyDown(Key: Word; Shift: TShiftState): Boolean; override;
     function OnMouseWheel(Delta: Integer): Boolean; override;
     function DumpGetName: string; override;
@@ -337,8 +337,8 @@ end;
 // Coordinate mapping
 // ---------------------------------------------------------------------------
 
-function TPixieElTextBase.DocToLocal(DocX, DocY: pixel_t;
-  out LocalX, LocalY: pixel_t): Boolean;
+function TPixieElTextBase.DocToLocal(DocX, DocY: TPixiePixel;
+  out LocalX, LocalY: TPixiePixel): Boolean;
 var
   Ri, Cur: TPixieRenderItem;
   Chain: array of TPixieRenderItem;
@@ -390,11 +390,11 @@ begin
 end;
 
 function TPixieElTextBase.CaretToPixelXY(
-  out PxX, PxY: pixel_t): Boolean;
+  out PxX, PxY: TPixiePixel): Boolean;
 var
   Cv: TPixieCanvas;
   Line, Col, I, CharCount: Integer;
-  LineH: pixel_t;
+  LineH: TPixiePixel;
   LineStr: string;
   ColText: string;
 begin
@@ -433,9 +433,9 @@ begin
   Result := True;
 end;
 
-function TPixieElTextBase.GetCaretDocPos(out X, Y, H: pixel_t): Boolean;
+function TPixieElTextBase.GetCaretDocPos(out X, Y, H: TPixiePixel): Boolean;
 var
-  PxX, PxY: pixel_t;
+  PxX, PxY: TPixiePixel;
   Ri, Cur: TPixieRenderItem;
 begin
   Result := CaretToPixelXY(PxX, PxY);
@@ -463,14 +463,14 @@ begin
 end;
 
 function TPixieElTextBase.ClickToCaret(
-  RelX, RelY: pixel_t): Integer;
+  RelX, RelY: TPixiePixel): Integer;
 var
   Cv: TPixieCanvas;
-  LineH: pixel_t;
+  LineH: TPixiePixel;
   TargetLine, NumLines: Integer;
   LineStr: string;
   LS, I, BestPos, Len: Integer;
-  MeasW, BestDist, Dist, AdjX: pixel_t;
+  MeasW, BestDist, Dist, AdjX: TPixiePixel;
 begin
   Cv := GetCanvas(Self);
   if Cv = nil then
@@ -528,10 +528,10 @@ begin
     Result := LS + BestPos;
 end;
 
-procedure TPixieElTextBase.AdjustScroll(ContentW, ContentH: pixel_t);
+procedure TPixieElTextBase.AdjustScroll(ContentW, ContentH: TPixiePixel);
 var
-  PxX, PxY: pixel_t;
-  LineH, Margin: pixel_t;
+  PxX, PxY: TPixiePixel;
+  LineH, Margin: TPixiePixel;
 begin
   if not CaretToPixelXY(PxX, PxY) then
     Exit;
@@ -1000,7 +1000,7 @@ end;
 function TPixieElTextBase.OnLButtonDown: Boolean;
 var
   Doc: TPixieDocument;
-  LocalX, LocalY: pixel_t;
+  LocalX, LocalY: TPixiePixel;
 begin
   Result := inherited OnLButtonDown;
   if IsDisabled then
@@ -1024,9 +1024,9 @@ begin
   Result := HasSelection;
 end;
 
-function TPixieElTextBase.OnMouseDrag(X, Y: pixel_t): Boolean;
+function TPixieElTextBase.OnMouseDrag(X, Y: TPixiePixel): Boolean;
 var
-  LocalX, LocalY: pixel_t;
+  LocalX, LocalY: TPixiePixel;
   NewPos: Integer;
 begin
   Result := False;
@@ -1060,9 +1060,9 @@ procedure TPixieElTextBase.DrawContent(Cv: TObject;
 var
   Canvas: TPixieCanvas;
   Cont: TPixieNativeContainer;
-  BX, BY, BW, BH: pixel_t;
-  BorderW: pixel_t;
-  LineH: pixel_t;
+  BX, BY, BW, BH: TPixiePixel;
+  BorderW: TPixiePixel;
+  LineH: TPixiePixel;
   BorderColor, BgColor, TextColor, PlaceholderColor: TPixieWebColor;
   FocusColor: TPixieWebColor;
   SelColor, SelTextColor: TPixieWebColor;
@@ -1070,14 +1070,14 @@ var
   ClipPos: TPixiePosition;
   ShowCaret: Boolean;
   NoRadius: TPixieBorderRadiuses;
-  CaretPxX, CaretPxY: pixel_t;
+  CaretPxX, CaretPxY: TPixiePixel;
   HasCssBorder: Boolean;
   // Multiline vars
   NumLines, L: Integer;
   LineStr: string;
   LS, LE: Integer;
   SelLo, SelHi: Integer;
-  SelStartPx, SelEndPx, LineY: pixel_t;
+  SelStartPx, SelEndPx, LineY: TPixiePixel;
   SelLineStart, SelLineEnd: Integer;
   // Single-line vars
   Disp: string;
@@ -1305,7 +1305,7 @@ begin
   Canvas.RestoreState;
 end;
 
-procedure TPixieElTextBase.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElTextBase.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   RenderIt: TPixieRenderItem;
@@ -1369,7 +1369,7 @@ begin
 end;
 
 procedure TPixieElTextInput.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 var
   Cv: TPixieCanvas;
   SizeAttr: string;
@@ -1447,7 +1447,7 @@ begin
 end;
 
 procedure TPixieElTextArea.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 var
   Cv: TPixieCanvas;
 begin
@@ -1469,9 +1469,9 @@ var
   Cv: TPixieCanvas;
   CurLineText: string;
   TargetLineText: string;
-  CurXPx, TestPx: pixel_t;
+  CurXPx, TestPx: TPixiePixel;
   I, BestPos: Integer;
-  BestDist, Dist: pixel_t;
+  BestDist, Dist: TPixiePixel;
   IsShift: Boolean;
 begin
   IsShift := ssShift in Shift;
@@ -1595,7 +1595,7 @@ end;
 function TPixieElTextArea.OnMouseWheel(Delta: Integer): Boolean;
 var
   Ri: TPixieRenderItem;
-  LineH, ContentH, VisibleH, MaxScroll: pixel_t;
+  LineH, ContentH, VisibleH, MaxScroll: TPixiePixel;
   Steps: Integer;
 begin
   Result := False;

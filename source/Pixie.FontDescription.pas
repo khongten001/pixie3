@@ -11,7 +11,7 @@ type
   { TPixieFontDescription }
   TPixieFontDescription = record
     Family: string;
-    Size: pixel_t;
+    Size: TPixiePixel;
     Style: TPixieFontStyle;
     Weight: Integer;
     DecorationLine: Integer;

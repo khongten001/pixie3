@@ -26,21 +26,21 @@ type
     procedure CollectItems;
     procedure DetermineExplicitGrid;
     procedure AutoPlace;
-    procedure ResolveColumnTracks(ContainerWidth: pixel_t);
+    procedure ResolveColumnTracks(ContainerWidth: TPixiePixel);
     procedure RenderItemsAtColumnWidths(
       const SelfSize: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext);
-    procedure ResolveRowTracks(ContainerHeight: pixel_t; HeightIsAuto: Boolean);
+    procedure ResolveRowTracks(ContainerHeight: TPixiePixel; HeightIsAuto: Boolean);
     procedure PositionItems;
 
-    function TrackPosition(Tracks: TPixieGridTrackList; Index: Integer): pixel_t;
-    function TrackSpanSize(Tracks: TPixieGridTrackList; Start, End_: Integer): pixel_t;
-    function GapVal(const Gap: TPixieCssLength): pixel_t;
+    function TrackPosition(Tracks: TPixieGridTrackList; Index: Integer): TPixiePixel;
+    function TrackSpanSize(Tracks: TPixieGridTrackList; Start, End_: Integer): TPixiePixel;
+    function GapVal(const Gap: TPixieCssLength): TPixiePixel;
 
   protected
-    function _RenderContent(X, Y: pixel_t; SecondPass: Boolean;
+    function _RenderContent(X, Y: TPixiePixel; SecondPass: Boolean;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t; override;
+      FmtCtx: TPixieFormattingContext): TPixiePixel; override;
   public
     constructor Create(ASrcEl: TPixieElement); override;
     destructor Destroy; override;
@@ -191,7 +191,7 @@ end;
 
 // --- Helpers ---
 
-function TPixieRenderGrid.GapVal(const Gap: TPixieCssLength): pixel_t;
+function TPixieRenderGrid.GapVal(const Gap: TPixieCssLength): TPixiePixel;
 begin
   if Gap.IsPredefined or (Gap.Val < 0) then
     Result := 0
@@ -200,7 +200,7 @@ begin
 end;
 
 function TPixieRenderGrid.TrackPosition(Tracks: TPixieGridTrackList;
-  Index: Integer): pixel_t;
+  Index: Integer): TPixiePixel;
 begin
   if (Index >= 0) and (Index < Tracks.Count) then
     Result := Tracks[Index].Position
@@ -211,10 +211,10 @@ begin
 end;
 
 function TPixieRenderGrid.TrackSpanSize(Tracks: TPixieGridTrackList;
-  Start, End_: Integer): pixel_t;
+  Start, End_: Integer): TPixiePixel;
 var
   I: Integer;
-  Gap: pixel_t;
+  Gap: TPixiePixel;
 begin
   Result := 0;
   if Tracks = FColTracks then
@@ -617,12 +617,12 @@ end;
 
 // --- Track sizing ---
 
-procedure TPixieRenderGrid.ResolveColumnTracks(ContainerWidth: pixel_t);
+procedure TPixieRenderGrid.ResolveColumnTracks(ContainerWidth: TPixiePixel);
 var
   I, J: Integer;
   T: TPixieGridTrack;
-  TotalFixed, TotalFr, FrSpace, Pos, Gap: pixel_t;
-  TotalGaps: pixel_t;
+  TotalFixed, TotalFr, FrSpace, Pos, Gap: TPixiePixel;
+  TotalGaps: TPixiePixel;
 begin
   Gap := GapVal(Css.ColumnGap);
   TotalGaps := 0;
@@ -772,7 +772,7 @@ var
   I, J: Integer;
   Item: TPixieGridItem;
   Ri: TPixieRenderItem;
-  ColWidth: pixel_t;
+  ColWidth: TPixiePixel;
   T: TPixieGridTrack;
 begin
   // First pass: render items to determine content-based track sizes.
@@ -847,13 +847,13 @@ begin
   end;
 end;
 
-procedure TPixieRenderGrid.ResolveRowTracks(ContainerHeight: pixel_t;
+procedure TPixieRenderGrid.ResolveRowTracks(ContainerHeight: TPixiePixel;
   HeightIsAuto: Boolean);
 var
   I: Integer;
   T: TPixieGridTrack;
-  TotalFixed, TotalFr, FrSpace, Pos, Gap: pixel_t;
-  TotalGaps: pixel_t;
+  TotalFixed, TotalFr, FrSpace, Pos, Gap: TPixiePixel;
+  TotalGaps: TPixiePixel;
 begin
   Gap := GapVal(Css.RowGap);
   TotalGaps := 0;
@@ -932,8 +932,8 @@ var
   I: Integer;
   Item: TPixieGridItem;
   Ri: TPixieRenderItem;
-  CellX, CellY, CellW, CellH: pixel_t;
-  ItemW, ItemH: pixel_t;
+  CellX, CellY, CellW, CellH: TPixiePixel;
+  ItemW, ItemH: TPixiePixel;
   AlignI, JustifyI: Integer;
 begin
   for I := 0 to FItems.Count - 1 do
@@ -989,19 +989,19 @@ end;
 
 // --- _RenderContent ---
 
-function TPixieRenderGrid._RenderContent(X, Y: pixel_t;
+function TPixieRenderGrid._RenderContent(X, Y: TPixiePixel;
   SecondPass: Boolean;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 var
-  ContainerWidth, ContainerHeight: pixel_t;
+  ContainerWidth, ContainerHeight: TPixiePixel;
   HeightIsAuto: Boolean;
-  TotalHeight, RetWidth: pixel_t;
+  TotalHeight, RetWidth: TPixiePixel;
   I: Integer;
   T: TPixieGridTrack;
   Ri: TPixieRenderItem;
   Item: TPixieGridItem;
-  CellW, CellH: pixel_t;
+  CellW, CellH: TPixiePixel;
   Mode: UInt32;
   JustifyI: Integer;
 begin

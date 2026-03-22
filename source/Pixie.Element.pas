@@ -137,7 +137,7 @@ type
     function OnKeyDown(Key: Word; Shift: TShiftState): Boolean; virtual;
     function OnUTF8KeyPress(const UTF8Char: string): Boolean; virtual;
     function IsFocusable: Boolean; virtual;
-    function OnMouseDrag(X, Y: pixel_t): Boolean; virtual;
+    function OnMouseDrag(X, Y: TPixiePixel): Boolean; virtual;
     function OnMouseWheel(Delta: Integer): Boolean; virtual;
 
     procedure GetText(var Text: string); virtual;
@@ -145,11 +145,11 @@ type
     procedure SetTextContent(const AText: string); virtual;
     procedure ParseAttributes; virtual;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); virtual;
+      MaxWidth: TPixiePixel); virtual;
     procedure AddStyle(const AStyle: TPixieStyle); virtual;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); virtual;
-    procedure DrawBackground(Hdc: PtrUInt; X, Y: pixel_t;
+    procedure DrawBackground(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); virtual;
 
     function IsNthChild(El: TPixieElement; Num, Off: Integer;
@@ -560,7 +560,7 @@ begin
   Result := False;
 end;
 
-function TPixieElement.OnMouseDrag(X, Y: pixel_t): Boolean;
+function TPixieElement.OnMouseDrag(X, Y: TPixiePixel): Boolean;
 begin
   Result := False;
 end;
@@ -590,7 +590,7 @@ begin
 end;
 
 procedure TPixieElement.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 begin
 end;
 
@@ -598,12 +598,12 @@ procedure TPixieElement.AddStyle(const AStyle: TPixieStyle);
 begin
 end;
 
-procedure TPixieElement.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElement.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 begin
 end;
 
-procedure TPixieElement.DrawBackground(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElement.DrawBackground(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 begin
 end;

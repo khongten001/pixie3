@@ -33,8 +33,8 @@ type
     FBaseUrl: string;
     FUserCss: string;
     FNeedsLayout: Boolean;
-    FScrollY: pixel_t;
-    FContentHeight: pixel_t;
+    FScrollY: TPixiePixel;
+    FContentHeight: TPixiePixel;
     FZoom: Double;
     FOnAnchorClick: TPixieAnchorClickEvent;
     FOnElementClick: TPixieElementClickEvent;
@@ -42,7 +42,7 @@ type
     FRedrawBoxes: TPixiePositionVector;
     FDragging: Boolean;
     FScrollDragging: Boolean;
-    FScrollDragOffset: pixel_t;
+    FScrollDragOffset: TPixiePixel;
     FCaretTimer: TTimer;
     FLastMouseX: Single;
     FLastMouseY: Single;
@@ -104,8 +104,8 @@ type
     procedure UnregisterImage(const Name: string);
 
     property Document: TPixieDocument read FDocument;
-    property ContentHeight: pixel_t read FContentHeight;
-    property ScrollY: pixel_t read FScrollY write FScrollY;
+    property ContentHeight: TPixiePixel read FContentHeight;
+    property ScrollY: TPixiePixel read FScrollY write FScrollY;
   published
     property Html: TStrings read FHtmlLines write SetHtmlLines;
     property BaseUrl: string read FBaseUrl write SetBaseUrl;
@@ -288,7 +288,7 @@ end;
 
 function TPixieHtmlView.GetTargetClausePointF: TPointF;
 var
-  DocX, DocY, H: pixel_t;
+  DocX, DocY, H: TPixiePixel;
 begin
   Result := TPointF.Zero;
   if (FDocument <> nil) and FDocument.GetFocusedCaretPos(DocX, DocY, H) then
@@ -322,7 +322,7 @@ end;
 
 function TPixieHtmlView.GetSelectionRect: TRectF;
 var
-  DocX, DocY, H: pixel_t;
+  DocX, DocY, H: TPixiePixel;
 begin
   if (FDocument <> nil) and FDocument.GetFocusedCaretPos(DocX, DocY, H) then
   begin
@@ -487,7 +487,7 @@ var
   BgColor: TPixieWebColor;
   LayoutWidth: Integer;
   ViewW, ViewH: Single;
-  BarW, BarMargin, TrackH, ThumbH, ThumbX, ThumbY, MaxScroll: pixel_t;
+  BarW, BarMargin, TrackH, ThumbH, ThumbX, ThumbY, MaxScroll: TPixiePixel;
   IndicatorColor: TPixieWebColor;
   IndicatorRadius: TPixieBorderRadiuses;
 begin
@@ -643,7 +643,7 @@ end;
 procedure TPixieHtmlView.KeyDown(var Key: Word; var KeyChar: WideChar;
   Shift: TShiftState);
 var
-  NewScroll, MaxScroll, ViewH: pixel_t;
+  NewScroll, MaxScroll, ViewH: TPixiePixel;
   S: string;
   CtrlDown: Boolean;
 begin
@@ -756,7 +756,7 @@ procedure TPixieHtmlView.MouseDown(Button: TMouseButton;
 var
   Vx, Vy: Integer;
   InputFocused: Boolean;
-  ViewH, TrackH, ThumbH, ThumbY, MaxScroll, NewScroll: pixel_t;
+  ViewH, TrackH, ThumbH, ThumbY, MaxScroll, NewScroll: TPixiePixel;
 begin
   inherited MouseDown(Button, Shift, X, Y);
   SetFocus;
@@ -846,7 +846,7 @@ end;
 procedure TPixieHtmlView.MouseMove(Shift: TShiftState; X, Y: Single);
 var
   Vx, Vy: Integer;
-  ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: pixel_t;
+  ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: TPixiePixel;
 begin
   inherited MouseMove(Shift, X, Y);
   if FScrollDragging then
@@ -932,8 +932,8 @@ end;
 procedure TPixieHtmlView.MouseWheel(Shift: TShiftState;
   WheelDelta: Integer; var Handled: Boolean);
 var
-  NewScroll: pixel_t;
-  MaxScroll: pixel_t;
+  NewScroll: TPixiePixel;
+  MaxScroll: TPixiePixel;
   NewZoom: Double;
   CtrlDown: Boolean;
 begin

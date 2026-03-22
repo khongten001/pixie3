@@ -24,10 +24,10 @@ type
     procedure AddInlineBox(const Box: TPixiePosition); override;
     procedure ClearInlineBoxes; override;
 
-    function GetFirstBaseline: pixel_t; override;
-    function GetLastBaseline: pixel_t; override;
+    function GetFirstBaseline: TPixiePixel; override;
+    function GetLastBaseline: TPixiePixel; override;
 
-    procedure YShift(Delta: pixel_t); override;
+    procedure YShift(Delta: TPixiePixel); override;
   end;
 
 implementation
@@ -70,17 +70,17 @@ begin
   FBoxes.Clear;
 end;
 
-function TPixieRenderInline.GetFirstBaseline: pixel_t;
+function TPixieRenderInline.GetFirstBaseline: TPixiePixel;
 begin
   Result := SrcEl.Css.FontMetrics.Height - SrcEl.Css.FontMetrics.BaseLine;
 end;
 
-function TPixieRenderInline.GetLastBaseline: pixel_t;
+function TPixieRenderInline.GetLastBaseline: TPixiePixel;
 begin
   Result := SrcEl.Css.FontMetrics.Height - SrcEl.Css.FontMetrics.BaseLine;
 end;
 
-procedure TPixieRenderInline.YShift(Delta: pixel_t);
+procedure TPixieRenderInline.YShift(Delta: TPixiePixel);
 var
   I: Integer;
   Tmp: TPixiePosition;

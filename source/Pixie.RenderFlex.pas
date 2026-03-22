@@ -24,19 +24,19 @@ type
 
     function GetLines(const SelfSize: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      IsRowDirection: Boolean; ContainerMainSize: pixel_t;
+      IsRowDirection: Boolean; ContainerMainSize: TPixiePixel;
       SingleLine: Boolean): TPixieFlexLineList;
   protected
-    function _RenderContent(X, Y: pixel_t; SecondPass: Boolean;
+    function _RenderContent(X, Y: TPixiePixel; SecondPass: Boolean;
       const SelfSize: TPixieContainingBlockContext;
-      FmtCtx: TPixieFormattingContext): pixel_t; override;
+      FmtCtx: TPixieFormattingContext): TPixiePixel; override;
   public
     constructor Create(ASrcEl: TPixieElement); override;
     destructor Destroy; override;
     function Clone: TPixieRenderItem; override;
     function Init: TPixieRenderItem; override;
-    function GetFirstBaseline: pixel_t; override;
-    function GetLastBaseline: pixel_t; override;
+    function GetFirstBaseline: TPixiePixel; override;
+    function GetLastBaseline: TPixiePixel; override;
   end;
 
 implementation
@@ -216,24 +216,24 @@ end;
 
 // --- _RenderContent ---
 
-function TPixieRenderFlex._RenderContent(X, Y: pixel_t;
+function TPixieRenderFlex._RenderContent(X, Y: TPixiePixel;
   SecondPass: Boolean;
   const SelfSize: TPixieContainingBlockContext;
-  FmtCtx: TPixieFormattingContext): pixel_t;
+  FmtCtx: TPixieFormattingContext): TPixiePixel;
 var
   IsRowDirection, Reverse, SingleLine, FitContainer: Boolean;
-  ContainerMainSize: pixel_t;
-  SumCrossSize, SumMainSize, RetWidth: pixel_t;
-  FreeCrossSize: pixel_t;
+  ContainerMainSize: TPixiePixel;
+  SumCrossSize, SumMainSize, RetWidth: TPixiePixel;
+  FreeCrossSize: TPixiePixel;
   IsWrapReverse: Boolean;
   AlignContent: TPixieFlexAlignContent;
   JustifyContent: TPixieFlexJustifyContent;
-  LinePos, AddBeforeLine, AddAfterLine: pixel_t;
-  Add: pixel_t;
-  CrossGap: pixel_t;
+  LinePos, AddBeforeLine, AddAfterLine: TPixiePixel;
+  Add: TPixiePixel;
+  CrossGap: TPixiePixel;
   I: Integer;
   Ln: TPixieFlexLine;
-  ItemHeight: pixel_t;
+  ItemHeight: TPixiePixel;
 begin
   // Determine direction
   IsRowDirection := True;
@@ -455,7 +455,7 @@ end;
 
 function TPixieRenderFlex.GetLines(const SelfSize: TPixieContainingBlockContext;
   FmtCtx: TPixieFormattingContext;
-  IsRowDirection: Boolean; ContainerMainSize: pixel_t;
+  IsRowDirection: Boolean; ContainerMainSize: TPixiePixel;
   SingleLine: Boolean): TPixieFlexLineList;
 var
   ReverseMain, ReverseCross: Boolean;
@@ -469,7 +469,7 @@ var
   PrevOrderSet: Boolean;
   Items: TPixieFlexItemList;
   J, MinIdx: Integer;
-  MainGap: pixel_t;
+  MainGap: TPixiePixel;
 begin
   ReverseCross := Css.FlexWrap = fwrWrapReverse;
 
@@ -576,7 +576,7 @@ end;
 
 // --- Baselines ---
 
-function TPixieRenderFlex.GetFirstBaseline: pixel_t;
+function TPixieRenderFlex.GetFirstBaseline: TPixiePixel;
 var
   FirstLine: TPixieFlexLine;
 begin
@@ -603,7 +603,7 @@ begin
   Result := Height;
 end;
 
-function TPixieRenderFlex.GetLastBaseline: pixel_t;
+function TPixieRenderFlex.GetLastBaseline: TPixiePixel;
 var
   FirstLine: TPixieFlexLine;
 begin

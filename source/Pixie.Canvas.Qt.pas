@@ -100,10 +100,10 @@ type
       out Metrics: TPixieFontMetrics): TPixieFontHandle; override;
     procedure DeleteFont(Handle: TPixieFontHandle); override;
     function MeasureText(const Text: string;
-      Handle: TPixieFontHandle): pixel_t; override;
+      Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
-    function PtToPx(Pt: Single): pixel_t; override;
+    function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
     function LoadImageFromPixels(Width, Height: Integer;
@@ -847,7 +847,7 @@ begin
 end;
 
 function TPixieQtCanvas.MeasureText(const Text: string;
-  Handle: TPixieFontHandle): pixel_t;
+  Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: TPixieQtFont;
   WStr: WideString;
@@ -891,7 +891,7 @@ begin
   QPainter_drawText(FPainter, PQtPointF(@Pt), @WStr);
 end;
 
-function TPixieQtCanvas.PtToPx(Pt: Single): pixel_t;
+function TPixieQtCanvas.PtToPx(Pt: Single): TPixiePixel;
 begin
   Result := Trunc(Pt * 96.0 / 72.0);
 end;

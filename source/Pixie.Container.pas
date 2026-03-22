@@ -42,11 +42,11 @@ type
     function CreateFont(const Descr: TPixieFontDescription; Doc: TObject;
       out Metrics: TPixieFontMetrics): PtrUInt; virtual; abstract;
     procedure DeleteFont(HFont: PtrUInt); virtual; abstract;
-    function TextWidth(const Text: string; HFont: PtrUInt): pixel_t; virtual; abstract;
+    function TextWidth(const Text: string; HFont: PtrUInt): TPixiePixel; virtual; abstract;
     procedure DrawText(Hdc: PtrUInt; const Text: string; HFont: PtrUInt;
       Color: TPixieWebColor; const Pos: TPixiePosition); virtual; abstract;
-    function PtToPx(Pt: Single): pixel_t; virtual; abstract;
-    function GetDefaultFontSize: pixel_t; virtual; abstract;
+    function PtToPx(Pt: Single): TPixiePixel; virtual; abstract;
+    function GetDefaultFontSize: TPixiePixel; virtual; abstract;
     function GetDefaultFontName: string; virtual; abstract;
 
     // Drawing
@@ -116,7 +116,7 @@ type
       Color: TPixieWebColor); virtual;
 
     // Decoration line
-    procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: pixel_t;
+    procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: TPixiePixel;
       Color: TPixieWebColor; StrokeWidth: Single); virtual;
 
   end;
@@ -150,7 +150,7 @@ begin
 end;
 
 procedure TPixieContainer.DrawLine(Hdc: PtrUInt;
-  X1, Y1, X2, Y2: pixel_t; Color: TPixieWebColor;
+  X1, Y1, X2, Y2: TPixiePixel; Color: TPixieWebColor;
   StrokeWidth: Single);
 begin
   // No-op default

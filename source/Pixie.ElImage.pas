@@ -26,8 +26,8 @@ type
     procedure ParseAttributes; override;
     procedure ComputeStyles(Recursive: Boolean = True); override;
     procedure GetContentSize(var Sz: TPixieSize;
-      MaxWidth: pixel_t); override;
-    procedure Draw(Hdc: PtrUInt; X, Y: pixel_t;
+      MaxWidth: TPixiePixel); override;
+    procedure Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
       Clip: PPixiePosition; Ri: Pointer); override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
     function DumpGetName: string; override;
@@ -89,7 +89,7 @@ begin
 end;
 
 procedure TPixieElImage.GetContentSize(var Sz: TPixieSize;
-  MaxWidth: pixel_t);
+  MaxWidth: TPixiePixel);
 var
   Cont: TPixieContainer;
 begin
@@ -108,7 +108,7 @@ begin
   end;
 end;
 
-procedure TPixieElImage.Draw(Hdc: PtrUInt; X, Y: pixel_t;
+procedure TPixieElImage.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
   RenderIt: TPixieRenderItem;

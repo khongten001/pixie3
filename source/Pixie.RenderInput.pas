@@ -15,10 +15,10 @@ type
   { TPixieRenderInput }
   TPixieRenderInput = class(TPixieRenderItem)
   protected
-    function _Render(X, Y: pixel_t;
+    function _Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
       FmtCtx: TPixieFormattingContext;
-      SecondPass: Boolean): pixel_t; override;
+      SecondPass: Boolean): TPixiePixel; override;
   public
     constructor Create(ASrcEl: TPixieElement); override;
     function Clone: TPixieRenderItem; override;
@@ -41,12 +41,12 @@ begin
   Result := TPixieRenderInput.Create(FElement);
 end;
 
-function TPixieRenderInput._Render(X, Y: pixel_t;
+function TPixieRenderInput._Render(X, Y: TPixiePixel;
   const CbContext: TPixieContainingBlockContext;
   FmtCtx: TPixieFormattingContext;
-  SecondPass: Boolean): pixel_t;
+  SecondPass: Boolean): TPixiePixel;
 var
-  ParentWidth: pixel_t;
+  ParentWidth: TPixiePixel;
   SelfSize: TPixieContainingBlockContext;
   Sz: TPixieSize;
 begin
