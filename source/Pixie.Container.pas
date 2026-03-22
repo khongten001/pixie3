@@ -115,6 +115,10 @@ type
     procedure DrawHighlight(Hdc: PtrUInt; const Pos: TPixiePosition;
       Color: TPixieWebColor); virtual;
 
+    // Decoration line
+    procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: pixel_t;
+      Color: TPixieWebColor; StrokeWidth: Single); virtual;
+
   end;
 
 implementation
@@ -141,6 +145,13 @@ end;
 
 procedure TPixieContainer.DrawHighlight(Hdc: PtrUInt;
   const Pos: TPixiePosition; Color: TPixieWebColor);
+begin
+  // No-op default
+end;
+
+procedure TPixieContainer.DrawLine(Hdc: PtrUInt;
+  X1, Y1, X2, Y2: pixel_t; Color: TPixieWebColor;
+  StrokeWidth: Single);
 begin
   // No-op default
 end;

@@ -136,6 +136,10 @@ type
     procedure DrawHighlight(Hdc: PtrUInt; const Pos: TPixiePosition;
       Color: TPixieWebColor); override;
 
+    // Decoration line
+    procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: pixel_t;
+      Color: TPixieWebColor; StrokeWidth: Single); override;
+
     // Opacity layers
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
@@ -978,6 +982,13 @@ procedure TPixieNativeContainer.DrawHighlight(Hdc: PtrUInt;
   const Pos: TPixiePosition; Color: TPixieWebColor);
 begin
   FCanvas.FillRect(Pos.X, Pos.Y, Pos.Width, Pos.Height, Color);
+end;
+
+procedure TPixieNativeContainer.DrawLine(Hdc: PtrUInt;
+  X1, Y1, X2, Y2: pixel_t; Color: TPixieWebColor;
+  StrokeWidth: Single);
+begin
+  FCanvas.DrawLine(X1, Y1, X2, Y2, Color, StrokeWidth);
 end;
 
 // ---------------------------------------------------------------------------

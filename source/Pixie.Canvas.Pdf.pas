@@ -1305,12 +1305,11 @@ procedure TPixiePdfCanvas.DrawText(const Text: string;
   X, Y, W, H: Single);
 var
   Info: TPixiePdfFontInfo;
-  Scale, PtSize, TextY, LineY: Single;
+  Scale, PtSize, TextY: Single;
   I, Len: Integer;
   Codepoint: UInt32;
   GlyphId: UInt16;
   HexStr: AnsiString;
-  TotalWidth: Single;
 begin
   if Handle = 0 then Exit;
   Info := TPixiePdfFontInfo(Handle);
@@ -1334,7 +1333,6 @@ begin
   HexStr := '<';
   I := 1;
   Len := Length(Text);
-  TotalWidth := 0;
   while I <= Len do
   begin
     Codepoint := ReadUtf8Char(Text, I);
@@ -1343,45 +1341,13 @@ begin
     GlyphId := Info.TtFont.CharToGlyph(Codepoint);
     RegisterFontUsedGlyph(Info, GlyphId, Codepoint);
     HexStr := HexStr + AnsiString(LowerCase(IntToHex(GlyphId, 4)));
-    TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
   end;
   HexStr := HexStr + '>';
 
   EmitLn(HexStr + ' Tj');
   EmitLn('ET');
 
-  // Draw underline
-  if (Info.DecorationLine and TextDecorationLineUnderline) <> 0 then
-  begin
-    LineY := Y + Info.Metrics.Ascent + Info.Metrics.Descent * 0.3;
-    SetPdfColor(Color, False);
-    EmitLn(PdfFloat(PxToPt(1)) + ' w');
-    EmitLn('[] 0 d');
-    EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(LineY)) + ' m ' +
-           PdfFloat(PxToPt(X + TotalWidth)) + ' ' + PdfFloat(PxToY(LineY)) + ' l S');
-  end;
-
-  // Draw strikethrough
-  if (Info.DecorationLine and TextDecorationLineLineThrough) <> 0 then
-  begin
-    LineY := Y + Info.Metrics.Ascent * 0.65;
-    SetPdfColor(Color, False);
-    EmitLn(PdfFloat(PxToPt(1)) + ' w');
-    EmitLn('[] 0 d');
-    EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(LineY)) + ' m ' +
-           PdfFloat(PxToPt(X + TotalWidth)) + ' ' + PdfFloat(PxToY(LineY)) + ' l S');
-  end;
-
-  // Draw overline
-  if (Info.DecorationLine and TextDecorationLineOverline) <> 0 then
-  begin
-    LineY := Y;
-    SetPdfColor(Color, False);
-    EmitLn(PdfFloat(PxToPt(1)) + ' w');
-    EmitLn('[] 0 d');
-    EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(LineY)) + ' m ' +
-           PdfFloat(PxToPt(X + TotalWidth)) + ' ' + PdfFloat(PxToY(LineY)) + ' l S');
-  end;
+  // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
 end;
 
 function TPixiePdfCanvas.PtToPx(Pt: Single): pixel_t;

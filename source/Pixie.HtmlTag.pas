@@ -1484,6 +1484,8 @@ var
   Box: TPixiePosition;
   CssBdr: TPixieCssBorders;
   J: Integer;
+  DecColor: TPixieWebColor;
+  DecY: pixel_t;
 begin
   Assert(TObject(Ri) is TPixieRenderItem);
   Assert(FDoc is TPixieDocument);
@@ -1613,6 +1615,36 @@ begin
               Box.Width, Box.Height);
             Box.DoRound;
             Doc.Container.DrawBorders(Hdc, Borders, Box, False);
+          end;
+
+          // Draw text-decoration lines spanning the full inline box
+          if FCss.TextDecorationLine <> TextDecorationLineNone then
+          begin
+            if FCss.TextDecorationColor.IsCurrentColor then
+              DecColor := FCss.Color
+            else
+              DecColor := FCss.TextDecorationColor;
+            if (FCss.TextDecorationLine and TextDecorationLineUnderline) <> 0 then
+            begin
+              DecY := ContentBox.Y + FCss.FontMetrics.Ascent + 2;
+              Doc.Container.DrawLine(Hdc,
+                ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
+                DecColor, 1);
+            end;
+            if (FCss.TextDecorationLine and TextDecorationLineOverline) <> 0 then
+            begin
+              DecY := ContentBox.Y;
+              Doc.Container.DrawLine(Hdc,
+                ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
+                DecColor, 1);
+            end;
+            if (FCss.TextDecorationLine and TextDecorationLineLineThrough) <> 0 then
+            begin
+              DecY := ContentBox.Y + FCss.FontMetrics.Ascent - FCss.FontMetrics.XHeight / 2;
+              Doc.Container.DrawLine(Hdc,
+                ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
+                DecColor, 1);
+            end;
           end;
         end;
       end;

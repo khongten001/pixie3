@@ -873,20 +873,12 @@ var
   QC: TQColor;
   WStr: WideString;
   Pt: TQtPointF;
-  HasUnderline, HasStrikeOut: Boolean;
 begin
   if (Handle = 0) or (FPainter = nil) then Exit;
   Info := TPixieQtFont(Handle);
   if Info.Handle = nil then Exit;
 
-  // Apply decorations temporarily on the font handle
-  HasUnderline := (Info.DecorationLine and TextDecorationLineUnderline) <> 0;
-  HasStrikeOut := (Info.DecorationLine and TextDecorationLineLineThrough) <> 0;
-
-  if HasUnderline then
-    QFont_setUnderline(Info.Handle, True);
-  if HasStrikeOut then
-    QFont_setStrikeOut(Info.Handle, True);
+  // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
 
   QPainter_setFont(FPainter, Info.Handle);
   MakeColor(Color, QC);
@@ -897,12 +889,6 @@ begin
   Pt.x := X;
   Pt.y := Y + Info.Metrics.Ascent;
   QPainter_drawText(FPainter, PQtPointF(@Pt), @WStr);
-
-  // Reset decorations on the shared font handle
-  if HasUnderline then
-    QFont_setUnderline(Info.Handle, False);
-  if HasStrikeOut then
-    QFont_setStrikeOut(Info.Handle, False);
 end;
 
 function TPixieQtCanvas.PtToPx(Pt: Single): pixel_t;

@@ -941,8 +941,6 @@ procedure TPixieCairoCanvas.DrawText(const Text: string;
 var
   Info: TPixieCairoFont;
   Layout: PPangoLayout;
-  AttrList: PPangoAttrList;
-  Attr: PPangoAttribute;
 begin
   if (Handle = 0) or (FCairo = nil) then Exit;
   Info := TPixieCairoFont(Handle);
@@ -954,27 +952,7 @@ begin
     pango_layout_set_text(Layout, PAnsiChar(Text), -1);
     pango_layout_set_width(Layout, -1);
 
-    // Apply underline and strikethrough via Pango attributes
-    if ((Info.DecorationLine and 1) <> 0) or
-       ((Info.DecorationLine and 4) <> 0) then
-    begin
-      AttrList := pango_attr_list_new;
-
-      if (Info.DecorationLine and 1) <> 0 then
-      begin
-        Attr := pango_attr_underline_new(PANGO_UNDERLINE_SINGLE);
-        pango_attr_list_insert(AttrList, Attr);
-      end;
-
-      if (Info.DecorationLine and 4) <> 0 then
-      begin
-        Attr := pango_attr_strikethrough_new(gboolean(1));
-        pango_attr_list_insert(AttrList, Attr);
-      end;
-
-      pango_layout_set_attributes(Layout, AttrList);
-      pango_attr_list_unref(AttrList);
-    end;
+    // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
 
     SetSourceColor(Color);
     cairo_move_to(FCairo, X, Y);

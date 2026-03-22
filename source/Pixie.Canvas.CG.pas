@@ -913,7 +913,6 @@ var
   Line: CTLineRef;
   CGColor_: CGColorRef;
   Components: array[0..3] of CGFloat;
-  LineY, TextWidth: Single;
 begin
   if (Handle = 0) or (FCG = nil) then Exit;
   Info := TPixieCGFont(Handle);
@@ -965,22 +964,7 @@ begin
           CGContextRestoreGState(FCG);
         end;
 
-        // Draw underline/strikethrough manually
-        if (Info.DecorationLine and TextDecorationLineUnderline) <> 0 then
-        begin
-          SetFillColor(Color);
-          LineY := Y + Info.Metrics.Ascent + 2;
-          TextWidth := CTLineGetTypographicBounds(Line, nil, nil, nil);
-          CGContextFillRect(FCG, CGRectMake(X, LineY, TextWidth, 1));
-        end;
-
-        if (Info.DecorationLine and TextDecorationLineLineThrough) <> 0 then
-        begin
-          SetFillColor(Color);
-          LineY := Y + Info.Metrics.Height / 2;
-          TextWidth := CTLineGetTypographicBounds(Line, nil, nil, nil);
-          CGContextFillRect(FCG, CGRectMake(X, LineY, TextWidth, 1));
-        end;
+        // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
       finally
         CFRelease(Line);
       end;

@@ -136,14 +136,11 @@ end;
 
 function TPixieFontDescription.Hash: string;
 begin
+  // Decoration is not part of font identity — drawn at element level
   Result := Family +
     ':sz=' + FloatToStr(Size) +
     ':st=' + IntToStr(Ord(Style)) +
     ':w=' + IntToStr(Weight) +
-    ':dl=' + IntToStr(DecorationLine) +
-    ':dt=' + DecorationThickness.ToString +
-    ':ds=' + IntToStr(Ord(DecorationStyle)) +
-    ':dc=' + DecorationColor.ToString +
     ':ephs=' + EmphasisStyle +
     ':ephc=' + EmphasisColor.ToString +
     ':ephp=' + IntToStr(EmphasisPosition);

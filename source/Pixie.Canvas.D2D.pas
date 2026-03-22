@@ -986,7 +986,6 @@ var
   Info: PPixieD2DFont;
   WText: WideString;
   Layout: IDWriteTextLayout;
-  TextRange: TDwriteTextRange;
 begin
   if (Handle = 0) or (FTarget = nil) then Exit;
   Info := PPixieD2DFont(Handle);
@@ -997,21 +996,8 @@ begin
     Length(WText), Info.TextFormat, W, H, Layout)) then
     Exit;
 
-  // Apply underline
-  if (Info.DecorationLine and 1) <> 0 then
-  begin
-    TextRange.startPosition := 0;
-    TextRange.length := Length(WText);
-    Layout.SetUnderline(True, TextRange);
-  end;
-
-  // Apply strikethrough
-  if (Info.DecorationLine and 4) <> 0 then
-  begin
-    TextRange.startPosition := 0;
-    TextRange.length := Length(WText);
-    Layout.SetStrikethrough(True, TextRange);
-  end;
+  // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
+  // to produce continuous lines spanning inline boxes including spaces.
 
   FBrush.SetColor(ToColorF(Color));
   FTarget.DrawTextLayout(MakePoint(X, Y), Layout, FBrush,

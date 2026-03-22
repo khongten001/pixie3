@@ -823,11 +823,7 @@ begin
   FCanvas.Font.Size := Info.FmxFont.Size;
   FCanvas.Font.Style := SavedStyle;
 
-  // Add decorations to the canvas font
-  if (Info.DecorationLine and TextDecorationLineUnderline) <> 0 then
-    FCanvas.Font.Style := FCanvas.Font.Style + [TFontStyle.fsUnderline];
-  if (Info.DecorationLine and TextDecorationLineLineThrough) <> 0 then
-    FCanvas.Font.Style := FCanvas.Font.Style + [TFontStyle.fsStrikeOut];
+  // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
 
   R := TRectF.Create(X, Y, X + W, Y + H);
   FCanvas.FillText(R, Text, False, FOpacity, [],
