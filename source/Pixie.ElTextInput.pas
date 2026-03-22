@@ -88,6 +88,8 @@ type
     function OnUTF8KeyPress(const UTF8Char: string): Boolean; override;
     function IsFocusable: Boolean; override;
 
+    function GetCaretDocPos(out X, Y, H: pixel_t): Boolean;
+
     property Value: string read FValue write FValue;
   end;
 
@@ -429,6 +431,35 @@ begin
     PxY := 0;
   end;
   Result := True;
+end;
+
+function TPixieElTextBase.GetCaretDocPos(out X, Y, H: pixel_t): Boolean;
+var
+  PxX, PxY: pixel_t;
+  Ri, Cur: TPixieRenderItem;
+begin
+  Result := CaretToPixelXY(PxX, PxY);
+  if not Result then Exit;
+
+  Ri := TPixieRenderItem(GetRenderItem);
+  if Ri = nil then Exit(False);
+
+  // Accumulate positions from self to root (reverse of DocToLocal)
+  X := PxX;
+  Y := PxY;
+  Cur := Ri;
+  while Cur <> nil do
+  begin
+    if not (Cur is TPixieRenderTablePart) and
+       not (Cur is TPixieRenderTableRow) then
+    begin
+      X := X + Cur.Pos.X;
+      Y := Y + Cur.Pos.Y;
+    end;
+    Cur := Cur.GetParent;
+  end;
+
+  H := FCss.FontMetrics.Height;
 end;
 
 function TPixieElTextBase.ClickToCaret(

@@ -157,6 +157,7 @@ type
     function DispatchMouseDrag(X, Y: pixel_t): Boolean;
     function DispatchMouseWheel(X, Y: pixel_t;
       Delta: Integer): Boolean;
+    function GetFocusedCaretPos(out X, Y, H: pixel_t): Boolean;
     property ActiveElement: TPixieElement read FActiveElement;
     property LastMouseX: pixel_t read FLastMouseX;
     property LastMouseY: pixel_t read FLastMouseY;
@@ -1376,6 +1377,14 @@ end;
 function TPixieDocument.FocusedElement: TPixieElement;
 begin
   Result := FFocusedElement;
+end;
+
+function TPixieDocument.GetFocusedCaretPos(out X, Y, H: pixel_t): Boolean;
+begin
+  if FFocusedElement is TPixieElTextBase then
+    Result := TPixieElTextBase(FFocusedElement).GetCaretDocPos(X, Y, H)
+  else
+    Result := False;
 end;
 
 function TPixieDocument.DispatchKeyDown(Key: Word;

@@ -16,12 +16,13 @@ uses
   {$IF defined(LCLqt5) or defined(LCLqt6)}
     , Pixie.Canvas.Qt
   {$ELSEIF defined(MSWINDOWS)}
-    , Pixie.Canvas.D2D
+    , JwaWinUser, Pixie.Canvas.D2D
   {$ELSEIF defined(DARWIN)}
     , Pixie.Canvas.CG
   {$ELSEIF defined(UNIX)}
     , Pixie.Canvas.Cairo
   {$ENDIF};
+
 
 type
   TPixieAnchorClickEvent = procedure(Sender: TObject;
@@ -69,11 +70,21 @@ type
     procedure DoCaretTimer(Sender: TObject);
     procedure WMEraseBkgnd(var Msg: TLMEraseBkgnd); message LM_ERASEBKGND;
     procedure CMMouseLeave(var Msg: TLMessage); message CM_MOUSELEAVE;
+    {$IFDEF MSWINDOWS}
+    procedure WMIMEStartComposition(var Msg: TLMessage); message WM_IME_STARTCOMPOSITION;
+    {$ENDIF}
+    {$IF defined(LCLqt5) or defined(LCLqt6)}
+    procedure LMIMQuery(var Msg: TLMessage); message LM_IM_QUERY;
+    {$ENDIF}
+    procedure UpdateIMEPosition;
     procedure UpdateCursorFromCss;
   protected
     procedure Loaded; override;
     procedure Paint; override;
     procedure Resize; override;
+    {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+    procedure DoEnter; override;
+    {$ENDIF}
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure UTF8KeyPress(var UTF8Key: TUTF8Char); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
@@ -140,7 +151,16 @@ type
 implementation
 
 uses
-  Clipbrd, Pixie.Element;
+  Clipbrd, Pixie.Element
+  {$IFDEF MSWINDOWS}
+  , Windows, imm
+  {$ENDIF}
+  {$IFDEF LCLGTK2}
+  , Glib2, Gdk2, Gtk2
+  {$ENDIF}
+  {$IFDEF LCLGTK3}
+  , LazGdk3, LazGtk3, LazGLib2, LazGObject2, Gtk3Widgets
+  {$ENDIF};
 
 const
   ssCtrlOS = {$IFDEF DARWIN}ssMeta{$ELSE}ssCtrl{$ENDIF};
@@ -365,6 +385,135 @@ begin
     Self.Cursor := crDefault;
 end;
 
+{$IF defined(LCLGTK2) or defined(LCLGTK3)}
+var
+  PixieGtkIMContext: PGtkIMContext = nil;
+  PixieGtkIMEOwner: TPixieHtmlView = nil;
+{$ENDIF}
+
+// ---------------------------------------------------------------------------
+// IME candidate window positioning
+// ---------------------------------------------------------------------------
+
+procedure TPixieHtmlView.UpdateIMEPosition;
+var
+  DocX, DocY, H: pixel_t;
+  ClientX, ClientY: Integer;
+  {$IFDEF MSWINDOWS}
+  Imc: HIMC;
+  CompForm: COMPOSITIONFORM;
+  {$ENDIF}
+  {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+  Area: TGdkRectangle;
+  {$ENDIF}
+begin
+  if FDocument = nil then Exit;
+  if not FDocument.GetFocusedCaretPos(DocX, DocY, H) then Exit;
+
+  ClientX := Round(DocX * FZoom);
+  ClientY := Round((DocY - FScrollY) * FZoom);
+
+  {$IFDEF MSWINDOWS}
+  Imc := ImmGetContext(Handle);
+  if Imc <> 0 then
+  begin
+    CompForm.dwStyle := CFS_POINT;
+    CompForm.ptCurrentPos.X := ClientX;
+    CompForm.ptCurrentPos.Y := ClientY;
+    ImmSetCompositionWindow(Imc, @CompForm);
+    ImmReleaseContext(Handle, Imc);
+  end;
+  {$ENDIF}
+
+  {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+  if PixieGtkIMContext <> nil then
+  begin
+    Area.x := ClientX;
+    Area.y := ClientY;
+    Area.width := 1;
+    Area.height := Round(H * FZoom);
+    gtk_im_context_set_cursor_location(PixieGtkIMContext, @Area);
+  end;
+  {$ENDIF}
+end;
+
+{$IFDEF MSWINDOWS}
+procedure TPixieHtmlView.WMIMEStartComposition(var Msg: TLMessage);
+begin
+  inherited;
+  UpdateIMEPosition;
+end;
+{$ENDIF}
+
+{$IF defined(LCLqt5) or defined(LCLqt6)}
+procedure TPixieHtmlView.LMIMQuery(var Msg: TLMessage);
+var
+  DocX, DocY, H: pixel_t;
+  P: ^TPoint;
+begin
+  if (Msg.LParam <> 0) and (FDocument <> nil) and
+     FDocument.GetFocusedCaretPos(DocX, DocY, H) then
+  begin
+    P := Pointer(Msg.LParam);
+    P^.X := Round(DocX * FZoom);
+    P^.Y := Round((DocY - FScrollY) * FZoom);
+  end;
+end;
+{$ENDIF}
+
+{$IF defined(LCLGTK2) or defined(LCLGTK3)}
+procedure PixieGtkIMCommitCb(Context: PGtkIMContext; Str: PGChar;
+  Data: Pointer); cdecl;
+var
+  S: string;
+begin
+  if PixieGtkIMEOwner <> nil then
+  begin
+    S := Str;
+    if (PixieGtkIMEOwner.FDocument <> nil) and
+       PixieGtkIMEOwner.FDocument.DispatchUTF8KeyPress(S) then
+    begin
+      PixieGtkIMEOwner.FContainer.CaretVisible := True;
+      PixieGtkIMEOwner.FCaretTimer.Enabled := False;
+      PixieGtkIMEOwner.FCaretTimer.Enabled := True;
+      PixieGtkIMEOwner.Invalidate;
+    end;
+    PixieGtkIMEOwner.UpdateIMEPosition;
+  end;
+end;
+
+procedure TPixieHtmlView.DoEnter;
+var
+  GdkWin: PGdkWindow;
+begin
+  inherited;
+
+  {$IFDEF LCLGTK2}
+  GdkWin := PGtkWidget(PtrUInt(Handle))^.window;
+  {$ELSE}
+  if TGtk3Widget(Handle) = nil then Exit;
+  GdkWin := gtk_widget_get_window(TGtk3Widget(Handle).Widget);
+  {$ENDIF}
+  if GdkWin = nil then Exit;
+
+  if PixieGtkIMContext = nil then
+  begin
+    PixieGtkIMContext := PGtkIMContext(gtk_im_multicontext_new());
+    {$IFDEF LCLGTK2}
+    g_signal_connect(PixieGtkIMContext, 'commit',
+      TGCallback(@PixieGtkIMCommitCb), nil);
+    {$ELSE}
+    g_signal_connect_data(PixieGtkIMContext, 'commit',
+      TGCallback(@PixieGtkIMCommitCb), nil, nil, G_CONNECT_DEFAULT);
+    {$ENDIF}
+  end;
+
+  gtk_im_context_set_client_window(PixieGtkIMContext, GdkWin);
+  gtk_im_context_focus_in(PixieGtkIMContext);
+  PixieGtkIMEOwner := Self;
+end;
+{$ENDIF}
+
 procedure TPixieHtmlView.Loaded;
 begin
   inherited Loaded;
@@ -517,6 +666,7 @@ begin
     FContainer.CaretVisible := True;
     FCaretTimer.Enabled := False;
     FCaretTimer.Enabled := True;
+    UpdateIMEPosition;
     Invalidate;
     Key := 0;
     Exit;
@@ -569,6 +719,7 @@ begin
     FContainer.CaretVisible := True;
     FCaretTimer.Enabled := False;
     FCaretTimer.Enabled := True;
+    UpdateIMEPosition;
     Invalidate;
     UTF8Key := '';
   end;
@@ -637,6 +788,7 @@ begin
       FContainer.CaretVisible := True;
       FCaretTimer.Enabled := False;
       FCaretTimer.Enabled := True;
+      UpdateIMEPosition;
       Invalidate;
     end
     else if (FDocument.ActiveElement <> nil) and

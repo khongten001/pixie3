@@ -62,6 +62,8 @@ type
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMGetDlgCode(var Msg: TWMGetDlgCode); message WM_GETDLGCODE;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
+    procedure WMIMEStartComposition(var Msg: TMessage); message WM_IME_STARTCOMPOSITION;
+    procedure UpdateIMEPosition;
     procedure UpdateCursorFromCss;
     function GetScaleFactor: Single;
   protected
@@ -133,7 +135,7 @@ type
 implementation
 
 uses
-  Vcl.Clipbrd, Pixie.Element;
+  Vcl.Clipbrd, Winapi.Imm, Pixie.Element;
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -378,6 +380,36 @@ begin
     Self.Cursor := crDefault;
 end;
 
+// ---------------------------------------------------------------------------
+// IME candidate window positioning
+// ---------------------------------------------------------------------------
+
+procedure TPixieHtmlView.UpdateIMEPosition;
+var
+  DocX, DocY, H: pixel_t;
+  Imc: HIMC;
+  CompForm: TCompositionForm;
+begin
+  if FDocument = nil then Exit;
+  if not FDocument.GetFocusedCaretPos(DocX, DocY, H) then Exit;
+
+  Imc := ImmGetContext(Handle);
+  if Imc <> 0 then
+  begin
+    CompForm.dwStyle := CFS_POINT;
+    CompForm.ptCurrentPos.X := Round(DocX * FZoom);
+    CompForm.ptCurrentPos.Y := Round((DocY - FScrollY) * FZoom);
+    ImmSetCompositionWindow(Imc, @CompForm);
+    ImmReleaseContext(Handle, Imc);
+  end;
+end;
+
+procedure TPixieHtmlView.WMIMEStartComposition(var Msg: TMessage);
+begin
+  inherited;
+  UpdateIMEPosition;
+end;
+
 procedure TPixieHtmlView.Loaded;
 begin
   inherited Loaded;
@@ -531,6 +563,7 @@ begin
     FContainer.CaretVisible := True;
     FCaretTimer.Enabled := False;
     FCaretTimer.Enabled := True;
+    UpdateIMEPosition;
     Invalidate;
     Key := 0;
     Exit;
@@ -588,6 +621,7 @@ begin
       FContainer.CaretVisible := True;
       FCaretTimer.Enabled := False;
       FCaretTimer.Enabled := True;
+      UpdateIMEPosition;
       Invalidate;
       Key := #0;
     end;
@@ -656,6 +690,7 @@ begin
       FContainer.CaretVisible := True;
       FCaretTimer.Enabled := False;
       FCaretTimer.Enabled := True;
+      UpdateIMEPosition;
       Invalidate;
     end
     else if (FDocument.ActiveElement <> nil) and

@@ -10,6 +10,7 @@ uses
   System.SysUtils, System.Classes, System.Types, System.UITypes,
   System.UIConsts, System.Rtti, System.Math,
   FMX.Controls, FMX.Graphics, FMX.Types, FMX.Platform,
+  FMX.Text, FMX.Forms,
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
   Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext,
@@ -23,7 +24,7 @@ type
 
   { TPixieHtmlView }
 
-  TPixieHtmlView = class(TControl)
+  TPixieHtmlView = class(TControl, ITextInput)
   private
     FDocument: TPixieDocument;
     FContainer: TPixieNativeContainer;
@@ -49,6 +50,7 @@ type
     FOnAfterParse: TNotifyEvent;
     FOnBeforePaint: TNotifyEvent;
     FOnAfterPaint: TNotifyEvent;
+    FTextService: TTextService;
 
     procedure SetHtmlLines(const Value: TStrings);
     procedure SetBaseUrl(const Value: string);
@@ -63,11 +65,26 @@ type
     procedure DoCaretTimer(Sender: TObject);
     procedure UpdateCursorFromCss;
     procedure ClipboardCopy(const S: string);
+
+    // ITextInput
+    function GetTextService: TTextService;
+    function GetTargetClausePointF: TPointF;
+    procedure StartIMEInput;
+    procedure EndIMEInput;
+    procedure IMEStateUpdated;
+    function GetSelection: string;
+    function GetSelectionRect: TRectF;
+    function GetSelectionBounds: TRect;
+    function GetSelectionPointSize: TSizeF;
+    function HasText: Boolean;
   protected
     procedure Loaded; override;
     procedure Paint; override;
     procedure Resize; override;
+    procedure DialogKey(var Key: Word; Shift: TShiftState); override;
     procedure DoMouseLeave; override;
+    procedure DoEnter; override;
+    procedure DoExit; override;
     procedure KeyDown(var Key: Word; var KeyChar: WideChar;
       Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
@@ -164,11 +181,14 @@ end;
 // ---------------------------------------------------------------------------
 
 constructor TPixieHtmlView.Create(AOwner: TComponent);
+var
+  TextSvc: IFMXTextService;
 begin
   FPixieCanvas := nil;
   FContainer := nil;
   FDocument := nil;
   FRedrawBoxes := nil;
+  FTextService := nil;
   FHtmlLines := TStringList.Create;
   FNeedsLayout := True;
   FScrollY := 0;
@@ -187,6 +207,11 @@ begin
   Height := 300;
   CanFocus := True;
 
+  if not (csDesigning in ComponentState) then
+    if TPlatformServices.Current.SupportsPlatformService(
+      IFMXTextService, TextSvc) then
+      FTextService := TextSvc.GetTextServiceClass.Create(Self, False);
+
   FPixieCanvas := TPixieFmxCanvas.Create;
 
   FContainer := TPixieNativeContainer.Create(FPixieCanvas);
@@ -204,6 +229,7 @@ end;
 destructor TPixieHtmlView.Destroy;
 begin
   FreeAndNil(FCaretTimer);
+  FreeAndNil(FTextService);
   FreeAndNil(FDocument);
   FreeAndNil(FContainer);
   FreeAndNil(FPixieCanvas);
@@ -249,6 +275,111 @@ begin
   FPixieCanvas.SetScale(FZoom);
   FNeedsLayout := True;
   Repaint;
+end;
+
+// ---------------------------------------------------------------------------
+// ITextInput
+// ---------------------------------------------------------------------------
+
+function TPixieHtmlView.GetTextService: TTextService;
+begin
+  Result := FTextService;
+end;
+
+function TPixieHtmlView.GetTargetClausePointF: TPointF;
+var
+  DocX, DocY, H: pixel_t;
+begin
+  Result := TPointF.Zero;
+  if (FDocument <> nil) and FDocument.GetFocusedCaretPos(DocX, DocY, H) then
+  begin
+    Result.X := DocX * FZoom;
+    Result.Y := (DocY - FScrollY + H) * FZoom + 2;
+    Result := LocalToAbsolute(Result);
+  end;
+end;
+
+procedure TPixieHtmlView.StartIMEInput;
+begin
+end;
+
+procedure TPixieHtmlView.EndIMEInput;
+begin
+end;
+
+procedure TPixieHtmlView.IMEStateUpdated;
+begin
+  Repaint;
+end;
+
+function TPixieHtmlView.GetSelection: string;
+begin
+  if (FDocument <> nil) and FDocument.HasSelection then
+    Result := FDocument.GetSelectedText
+  else
+    Result := '';
+end;
+
+function TPixieHtmlView.GetSelectionRect: TRectF;
+var
+  DocX, DocY, H: pixel_t;
+begin
+  if (FDocument <> nil) and FDocument.GetFocusedCaretPos(DocX, DocY, H) then
+  begin
+    Result.Left := DocX * FZoom;
+    Result.Top := (DocY - FScrollY) * FZoom;
+    Result.Right := Result.Left + 2;
+    Result.Bottom := Result.Top + H * FZoom;
+  end
+  else
+    Result := TRectF.Empty;
+end;
+
+function TPixieHtmlView.GetSelectionBounds: TRect;
+begin
+  Result := TRect.Create(
+    TPoint.Create(Round(LocalRect.Left), Round(LocalRect.Top)),
+    Round(LocalRect.Width), Round(LocalRect.Height));
+end;
+
+function TPixieHtmlView.GetSelectionPointSize: TSizeF;
+begin
+  Result := TSizeF.Create(LocalRect.Width, LocalRect.Height);
+end;
+
+function TPixieHtmlView.HasText: Boolean;
+begin
+  Result := FDocument <> nil;
+end;
+
+// ---------------------------------------------------------------------------
+// Focus — text service enter/exit for IME
+// ---------------------------------------------------------------------------
+
+procedure TPixieHtmlView.DoEnter;
+var
+  Form: TCommonCustomForm;
+begin
+  inherited;
+  if (FTextService <> nil) and (Root <> nil) and
+     (Root.GetObject is TCommonCustomForm) then
+  begin
+    Form := TCommonCustomForm(Root.GetObject);
+    FTextService.EnterControl(Form.Handle);
+  end;
+end;
+
+procedure TPixieHtmlView.DoExit;
+var
+  Form: TCommonCustomForm;
+begin
+  if (FTextService <> nil) and (Root <> nil) and
+     (Root.GetObject is TCommonCustomForm) then
+  begin
+    Form := TCommonCustomForm(Root.GetObject);
+    FTextService.ExitControl(Form.Handle);
+  end;
+  inherited;
 end;
 
 // ---------------------------------------------------------------------------
@@ -489,6 +620,24 @@ end;
 // Keyboard
 // ---------------------------------------------------------------------------
 
+procedure TPixieHtmlView.DialogKey(var Key: Word; Shift: TShiftState);
+begin
+  if (Key = vkTab) and (FDocument <> nil) then
+  begin
+    if ssShift in Shift then
+      FDocument.FocusPrev
+    else
+      FDocument.FocusNext;
+    FContainer.CaretVisible := True;
+    FCaretTimer.Enabled := False;
+    FCaretTimer.Enabled := True;
+    Repaint;
+    Key := 0;
+    Exit;
+  end;
+  inherited;
+end;
+
 procedure TPixieHtmlView.KeyDown(var Key: Word; var KeyChar: WideChar;
   Shift: TShiftState);
 var
@@ -503,22 +652,6 @@ begin
   {$ELSE}
   CtrlDown := ssCtrl in Shift;
   {$ENDIF}
-
-  // Tab / Shift+Tab cycles focus between focusable elements
-  if (Key = vkTab) and (FDocument <> nil) then
-  begin
-    if ssShift in Shift then
-      FDocument.FocusPrev
-    else
-      FDocument.FocusNext;
-    FContainer.CaretVisible := True;
-    FCaretTimer.Enabled := False;
-    FCaretTimer.Enabled := True;
-    Repaint;
-    Key := 0;
-    KeyChar := #0;
-    Exit;
-  end;
 
   // Dispatch to focused element first
   if (Key <> 0) and (FDocument <> nil) and

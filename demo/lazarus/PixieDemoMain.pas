@@ -81,6 +81,16 @@ var
   ImgPath, SvgPath: string;
   Stream: TFileStream;
 begin
+  Caption := Caption + ' — ' + {$I %FPCTARGETOS%} + ' ' +
+    {$I %FPCTARGETCPU%} + ' ' +
+    {$IF defined(LCLqt6)}'qt6'
+    {$ELSEIF defined(LCLqt5)}'qt5'
+    {$ELSEIF defined(LCLGTK3)}'gtk3'
+    {$ELSEIF defined(LCLGTK2)}'gtk2'
+    {$ELSEIF defined(LCLCocoa)}'cocoa'
+    {$ELSEIF defined(MSWindows)}'win32'
+    {$ELSE}'unknown'
+    {$ENDIF};
   ImgPath := ExtractFilePath(ParamStr(0)) + '..' + PathDelim + 'resources' + PathDelim;
   SvgPath := ImgPath;
   Randomize;
