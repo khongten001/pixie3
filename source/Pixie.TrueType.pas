@@ -587,8 +587,9 @@ end;
 // Glyph subsetting helpers
 // ---------------------------------------------------------------------------
 
-// Range checks off for low-level byte manipulation
+// Range/overflow checks off for low-level byte manipulation
 {$IFOPT R+}{$DEFINE RESTORE_R}{$R-}{$ENDIF}
+{$IFOPT Q+}{$DEFINE RESTORE_Q}{$Q-}{$ENDIF}
 procedure TPixieTrueTypeFont.WriteU16BE(Stream: TMemoryStream; V: UInt16);
 var
   Buf: array[0..1] of Byte;
@@ -627,6 +628,7 @@ begin
   Result := Sum;
 end;
 {$IFDEF RESTORE_R}{$R+}{$UNDEF RESTORE_R}{$ENDIF}
+{$IFDEF RESTORE_Q}{$Q+}{$UNDEF RESTORE_Q}{$ENDIF}
 
 function TPixieTrueTypeFont.GetGlyphDataRange(GlyphId: UInt16;
   out GlyfOff, GlyfLen: UInt32): Boolean;

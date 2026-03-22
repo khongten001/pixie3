@@ -126,6 +126,13 @@ begin
   Result := '/' + S;
 end;
 
+function OctalEscape(V: Byte): AnsiString;
+begin
+  Result := '\' + AnsiChar(Ord('0') + (V div 64)) +
+                  AnsiChar(Ord('0') + (V div 8) mod 8) +
+                  AnsiChar(Ord('0') + V mod 8);
+end;
+
 function PdfString(const S: string): AnsiString;
 var
   I: Integer;
@@ -143,10 +150,10 @@ begin
       if (Ord(C) >= 32) and (Ord(C) <= 126) then
         Result := Result + AnsiChar(C)
       else if Ord(C) <= 255 then
-        Result := Result + AnsiString(Format('\%.3o', [Ord(C)]))
+        Result := Result + OctalEscape(Ord(C))
       else
-        Result := Result + AnsiString(Format('\%.3o\%.3o',
-          [Ord(C) shr 8, Ord(C) and $FF]));
+        Result := Result + OctalEscape(Ord(C) shr 8) +
+                            OctalEscape(Ord(C) and $FF);
     end;
   end;
   Result := Result + ')';
