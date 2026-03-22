@@ -2859,7 +2859,7 @@ begin
   Name := Args[0].Ident;
   if Name = '' then
     Exit(False);
-  if (Length(Name) <= 2) or (Copy(Name, 1, 2) <> '--') then
+  if (Length(Name) <= 2) or (StrLComp(PChar(Name), '--', 2) <> 0) then
     Exit(False);
   // If more args, second must be comma
   if (Args.Count > 1) and (Args[1].TokenType <> cssTokenComma) then

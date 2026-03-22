@@ -173,7 +173,8 @@ uses
 function IsHttpUrl(const Url: string): Boolean;
 begin
   Result := (Length(Url) > 7) and
-    ((Copy(Url, 1, 7) = 'http://') or (Copy(Url, 1, 8) = 'https://'));
+    ((StrLComp(PChar(Url), 'http://', 7) = 0) or
+     (StrLComp(PChar(Url), 'https://', 8) = 0));
 end;
 
 function TPixieNativeContainer.ResolveUrl(

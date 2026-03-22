@@ -837,7 +837,7 @@ begin
   // Check prefix match (e.g. "en" matches "en-US")
   if (Length(Lang) < Length(DocLang)) and
      (DocLang[Length(Lang) + 1] = '-') and
-     (Copy(DocLang, 1, Length(Lang)) = PixieLowerCase(Lang)) then
+     (StrLComp(PChar(DocLang), PChar(PixieLowerCase(Lang)), Length(Lang)) = 0) then
     Exit(True);
 
   // Check culture match

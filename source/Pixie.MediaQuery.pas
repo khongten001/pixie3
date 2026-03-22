@@ -632,7 +632,8 @@ begin
   if Syntax = Ord(psid_plain) then
   begin
     if (Length(MF.Name) > 4) and
-       ((Copy(MF.Name, 1, 4) = 'min-') or (Copy(MF.Name, 1, 4) = 'max-')) then
+       ((StrLComp(PChar(MF.Name), 'min-', 4) = 0) or
+        (StrLComp(PChar(MF.Name), 'max-', 4) = 0)) then
     begin
       RealName := Copy(MF.Name, 5, Length(MF.Name) - 4);
       Mfi := GetMfInfo(RealName);
@@ -642,7 +643,7 @@ begin
         Val0.IdentStr, Val1.TokType, Val1.Number) then
         Exit(False);
       MF.Value := Val0.Number;
-      if Copy(MF.Name, 1, 4) = 'min-' then
+      if StrLComp(PChar(MF.Name), 'min-', 4) = 0 then
         MF.Op := OpGreaterEqual
       else
         MF.Op := OpLessEqual;

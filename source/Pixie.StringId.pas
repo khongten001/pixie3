@@ -434,7 +434,7 @@ begin
   {$ENDIF}
 
   // Strip 'psid_' prefix
-  if (Length(S) > 5) and (Copy(S, 1, 5) = 'psid_') then
+  if (Length(S) > 5) and (StrLComp(PChar(S), 'psid_', 5) = 0) then
     S := Copy(S, 6, Length(S) - 5);
 
   // Replace underscores with hyphens
