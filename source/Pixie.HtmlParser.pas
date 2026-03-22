@@ -3461,8 +3461,10 @@ var
 
   function StartsWith(const S, Prefix: string): Boolean;
   begin
-    Result := (Length(S) >= Length(Prefix)) and
-              (Copy(S, 1, Length(Prefix)) = Prefix);
+    if (Length(S) >= Length(Prefix)) and (Prefix <> '') then
+      Result := StrLComp(PChar(Prefix), PChar(S), Length(Prefix)) = 0
+    else
+      Result := (Prefix = '');
   end;
 
 begin
