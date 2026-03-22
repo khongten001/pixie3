@@ -118,7 +118,7 @@ begin
     end;
   end;
 
-  PixieHtmlView.LoadHtml(
+  PixieHtmlView.LoadFromString(
     '<html><head><style>' +
     'a { color: #0066cc; text-decoration: underline; cursor: pointer; }' +
     'a:hover { color: #ff4400; }' +
@@ -632,7 +632,7 @@ begin
   end;
 
   UrlEdit.Text := ActualUrl;
-  PixieHtmlView.LoadHtml(HtmlText, ActualUrl);
+  PixieHtmlView.LoadFromString(HtmlText, ActualUrl);
 end;
 
 // ---------------------------------------------------------------------------
@@ -655,7 +655,7 @@ begin
       try
         Pdf.Title := Caption;
         try
-          Pdf.SaveToFile(PixieHtmlView.Html.Text, Dlg.FileName);
+          Pdf.SaveToFile(PixieHtmlView.Lines.Text, Dlg.FileName);
           StatusBar.Panels[0].Text := 'PDF saved.';
         except
           on E: Exception do
@@ -675,8 +675,6 @@ end;
 procedure TMainForm.BtnOpenClick(Sender: TObject);
 var
   Dlg: TOpenDialog;
-  HtmlText: string;
-  F: TStringList;
 begin
   Dlg := TOpenDialog.Create(nil);
   try
@@ -684,15 +682,8 @@ begin
     Dlg.Options := Dlg.Options + [ofFileMustExist];
     if Dlg.Execute then
     begin
-      F := TStringList.Create;
-      try
-        F.LoadFromFile(Dlg.FileName);
-        HtmlText := F.Text;
-      finally
-        F.Free;
-      end;
       UrlEdit.Text := '';
-      PixieHtmlView.LoadHtml(HtmlText, ExtractFilePath(Dlg.FileName));
+      PixieHtmlView.LoadFromFile(Dlg.FileName);
     end;
   finally
     Dlg.Free;

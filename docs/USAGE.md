@@ -21,11 +21,11 @@ Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE and install it. Or
 Drop a `TPixieHtmlView` onto a form and load HTML:
 
 ```pascal
-PixieHtmlView1.LoadHtml(
+PixieHtmlView1.LoadFromString(
   '<h1>Hello</h1><p>This is <b>Pixie</b>.</p>');
 ```
 
-Or assign multi-line HTML via the `Html` property in the Object Inspector.
+Or assign multi-line HTML via the `Lines` property in the Object Inspector.
 
 ## Rendering Pipeline
 
@@ -55,7 +55,7 @@ Five platform backends are used transparently:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `Html` | `TStrings` | HTML content. Setting this rebuilds the document. |
+| `Lines` | `TStrings` | HTML content. Setting this rebuilds the document. |
 | `BaseUrl` | `string` | Base URL for resolving relative image/CSS paths. |
 | `UserCss` | `string` | Additional CSS applied after the built-in user-agent stylesheet. |
 | `Zoom` | `Double` | Zoom factor, clamped to 0.25 .. 4.0. Default: 1.0. |
@@ -106,13 +106,29 @@ Callback for loading external resources (images, CSS `@import`). Write the fetch
 
 ## Methods
 
-### LoadHtml
+### LoadFromString
 
 ```pascal
-procedure LoadHtml(const AHtml: string; const ABaseUrl: string = '');
+procedure LoadFromString(const AHtml: string; const ABaseUrl: string = '');
 ```
 
 Sets `BaseUrl`, replaces the HTML content, and rebuilds the document in one call. This is the most common way to load content.
+
+### LoadFromFile
+
+```pascal
+procedure LoadFromFile(const AFileName: string; const ABaseUrl: string = '');
+```
+
+Loads HTML from a file. If `ABaseUrl` is empty, it defaults to the directory containing the file.
+
+### LoadFromStream
+
+```pascal
+procedure LoadFromStream(AStream: TStream; const ABaseUrl: string = '');
+```
+
+Loads HTML from a stream (reads the entire stream as UTF-8 text).
 
 ### RegisterImage / UnregisterImage
 
@@ -413,7 +429,7 @@ var
 begin
   Pdf := TPixiePdfExport.Create;
   try
-    Pdf.SaveToFile(PixieHtmlView1.Html.Text, 'output.pdf');
+    Pdf.SaveToFile(PixieHtmlView1.Lines.Text, 'output.pdf');
   finally
     Pdf.Free;
   end;

@@ -107,7 +107,7 @@ begin
     end;
   end;
 
-  PixieHtmlView.LoadHtml(
+  PixieHtmlView.LoadFromString(
     '<html><head><style>' +
     'a { color: #0066cc; text-decoration: underline; cursor: pointer; }' +
     'a:hover { color: #ff4400; }' +
@@ -622,7 +622,7 @@ begin
   end;
 
   UrlEdit.Text := ActualUrl;
-  PixieHtmlView.LoadHtml(HtmlText, ActualUrl);
+  PixieHtmlView.LoadFromString(HtmlText, ActualUrl);
 end;
 
 // ---------------------------------------------------------------------------
@@ -644,7 +644,7 @@ begin
       Pdf := TPixiePdfExport.Create;
       try
         Pdf.Title := Caption;
-        Pdf.SaveToFile(PixieHtmlView.Html.Text, Dlg.FileName);
+        Pdf.SaveToFile(PixieHtmlView.Lines.Text, Dlg.FileName);
       finally
         Pdf.Free;
       end;
@@ -674,7 +674,7 @@ begin
         F.Free;
       end;
       UrlEdit.Text := '';
-      PixieHtmlView.LoadHtml(HtmlText, ExtractFilePath(Dlg.FileName));
+      PixieHtmlView.LoadFromString(HtmlText, ExtractFilePath(Dlg.FileName));
     end;
   finally
     Dlg.Free;

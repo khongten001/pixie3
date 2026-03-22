@@ -133,7 +133,7 @@ Drop a `TPixieHtmlView` on a form:
 ```pascal
 procedure TForm1.FormCreate(Sender: TObject);
 begin
-  PixieHtmlView1.LoadHtml(
+  PixieHtmlView1.LoadFromString(
     '<h1>Hello, Pixie!</h1>' +
     '<p style="color: steelblue;">Rendering HTML in Pascal.</p>');
 end;
@@ -142,8 +142,7 @@ end;
 Load from a file:
 
 ```pascal
-PixieHtmlView1.BaseUrl := 'file://' + ExtractFilePath(ParamStr(0));
-PixieHtmlView1.Html.LoadFromFile('page.html');
+PixieHtmlView1.LoadFromFile('page.html');
 ```
 
 Handle link clicks:
@@ -166,7 +165,7 @@ begin
   Pdf := TPixiePdfExport.Create;
   try
     Pdf.Title := 'My Document';
-    Pdf.SaveToFile(PixieHtmlView1.Html.Text, 'output.pdf');
+    Pdf.SaveToFile(PixieHtmlView1.Lines.Text, 'output.pdf');
   finally
     Pdf.Free;
   end;

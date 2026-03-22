@@ -29,7 +29,7 @@ type
     FDocument: TPixieDocument;
     FContainer: TPixieNativeContainer;
     FPixieCanvas: TPixieCanvas;
-    FHtmlLines: TStrings;
+    FLines: TStrings;
     FBaseUrl: string;
     FUserCss: string;
     FNeedsLayout: Boolean;
@@ -52,7 +52,7 @@ type
     FOnAfterPaint: TNotifyEvent;
     FTextService: TTextService;
 
-    procedure SetHtmlLines(const Value: TStrings);
+    procedure SetLines(const Value: TStrings);
     procedure SetBaseUrl(const Value: string);
     procedure SetUserCss(const Value: string);
     procedure SetZoom(const Value: Double);
@@ -98,7 +98,10 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    procedure LoadHtml(const AHtml: string;
+    procedure LoadFromString(const AHtml: string;
+      const ABaseUrl: string = '');
+    procedure LoadFromFile(const AFileName: string; const ABaseUrl: string = '');
+    procedure LoadFromStream(AStream: TStream;
       const ABaseUrl: string = '');
     procedure RegisterImage(const Name: string; Stream: TStream);
     procedure UnregisterImage(const Name: string);
@@ -107,7 +110,7 @@ type
     property ContentHeight: TPixiePixel read FContentHeight;
     property ScrollY: TPixiePixel read FScrollY write FScrollY;
   published
-    property Html: TStrings read FHtmlLines write SetHtmlLines;
+    property Lines: TStrings read FLines write SetLines;
     property BaseUrl: string read FBaseUrl write SetBaseUrl;
     property UserCss: string read FUserCss write SetUserCss;
     property Zoom: Double read FZoom write SetZoom;
@@ -189,7 +192,7 @@ begin
   FDocument := nil;
   FRedrawBoxes := nil;
   FTextService := nil;
-  FHtmlLines := TStringList.Create;
+  FLines := TStringList.Create;
   FNeedsLayout := True;
   FScrollY := 0;
   FContentHeight := 0;
@@ -234,7 +237,7 @@ begin
   FreeAndNil(FContainer);
   FreeAndNil(FPixieCanvas);
   FreeAndNil(FRedrawBoxes);
-  FreeAndNil(FHtmlLines);
+  FreeAndNil(FLines);
   inherited Destroy;
 end;
 
@@ -242,9 +245,9 @@ end;
 // Properties
 // ---------------------------------------------------------------------------
 
-procedure TPixieHtmlView.SetHtmlLines(const Value: TStrings);
+procedure TPixieHtmlView.SetLines(const Value: TStrings);
 begin
-  FHtmlLines.Assign(Value);
+  FLines.Assign(Value);
   RebuildDocument;
 end;
 
@@ -389,7 +392,7 @@ end;
 procedure TPixieHtmlView.Loaded;
 begin
   inherited Loaded;
-  if FHtmlLines.Count > 0 then
+  if FLines.Count > 0 then
     RebuildDocument;
 end;
 
@@ -406,16 +409,16 @@ begin
   FDragging := False;
   FScrollDragging := False;
 
-  if (FHtmlLines.Count > 0) and (FPixieCanvas <> nil) then
+  if (FLines.Count > 0) and (FPixieCanvas <> nil) then
   begin
-    if PixieIsBinaryString(FHtmlLines.Text) then
+    if PixieIsBinaryString(FLines.Text) then
       raise EPixieBinaryContent.Create(SPixieBinaryContent);
     if Assigned(FOnBeforeParse) then
       FOnBeforeParse(Self);
     FContainer.BaseUrl := FBaseUrl;
     FContainer.ViewportWidth := Width;
     FContainer.ViewportHeight := Height;
-    FDocument := TPixieDocument.CreateFromString(FHtmlLines.Text, FContainer,
+    FDocument := TPixieDocument.CreateFromString(FLines.Text, FContainer,
       PixieMasterCss, FUserCss);
     FDocument.OnChange := DoDocumentChange;
     if Assigned(FOnAfterParse) then
@@ -425,13 +428,44 @@ begin
   Repaint;
 end;
 
-procedure TPixieHtmlView.LoadHtml(const AHtml: string;
+procedure TPixieHtmlView.LoadFromString(const AHtml: string;
   const ABaseUrl: string);
 begin
   FBaseUrl := ABaseUrl;
   FContainer.BaseUrl := ABaseUrl;
-  FHtmlLines.Text := AHtml;
+  FLines.Text := AHtml;
   RebuildDocument;
+end;
+
+procedure TPixieHtmlView.LoadFromFile(const AFileName: string;
+  const ABaseUrl: string);
+var
+  Sl: TStringList;
+begin
+  Sl := TStringList.Create;
+  try
+    Sl.LoadFromFile(AFileName);
+    if ABaseUrl <> '' then
+      LoadFromString(Sl.Text, ABaseUrl)
+    else
+      LoadFromString(Sl.Text, ExtractFilePath(AFileName));
+  finally
+    Sl.Free;
+  end;
+end;
+
+procedure TPixieHtmlView.LoadFromStream(AStream: TStream;
+  const ABaseUrl: string);
+var
+  Sl: TStringList;
+begin
+  Sl := TStringList.Create;
+  try
+    Sl.LoadFromStream(AStream);
+    LoadFromString(Sl.Text, ABaseUrl);
+  finally
+    Sl.Free;
+  end;
 end;
 
 procedure TPixieHtmlView.DoAnchorClick(Sender: TObject;
