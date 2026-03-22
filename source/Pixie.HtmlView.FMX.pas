@@ -703,6 +703,25 @@ begin
     KeyChar := #0;
   end;
 
+  // Home / End scroll to top / bottom
+  if Key in [vkHome, vkEnd] then
+  begin
+    ViewH := Height / FZoom;
+    MaxScroll := FContentHeight - ViewH;
+    if MaxScroll < 0 then MaxScroll := 0;
+    if Key = vkHome then
+      NewScroll := 0
+    else
+      NewScroll := MaxScroll;
+    if NewScroll <> FScrollY then
+    begin
+      FScrollY := NewScroll;
+      Repaint;
+    end;
+    Key := 0;
+    KeyChar := #0;
+  end;
+
   // Arrow and page keys scroll the viewport
   if Key in [vkUp, vkDown, vkPrior, vkNext] then
   begin

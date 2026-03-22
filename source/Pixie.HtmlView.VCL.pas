@@ -586,6 +586,23 @@ begin
     SetZoom(1.0);
     Key := 0;
   end;
+  // Home / End scroll to top / bottom
+  if Key in [VK_HOME, VK_END] then
+  begin
+    ViewH := ClientHeight / FZoom;
+    MaxScroll := FContentHeight - ViewH;
+    if MaxScroll < 0 then MaxScroll := 0;
+    if Key = VK_HOME then
+      NewScroll := 0
+    else
+      NewScroll := MaxScroll;
+    if NewScroll <> FScrollY then
+    begin
+      FScrollY := NewScroll;
+      Invalidate;
+    end;
+    Key := 0;
+  end;
   // Arrow and page keys scroll the viewport
   if Key in [VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT] then
   begin
