@@ -394,10 +394,21 @@ begin
 
     hntWhitespace:
     begin
-      // Collapse whitespace run into a single space node
-      El := TPixieElSpace.Create(' ', Doc);
-      Doc.RegisterElement(El);
-      Elements.Add(El);
+      // Split whitespace into individual characters so that
+      // newlines are preserved in pre/pre-wrap/pre-line modes
+      if Doc.Container <> nil then
+      begin
+        SplitCtx.Doc := Doc;
+        SplitCtx.Elements := Elements;
+        Doc.Container.SplitText(Node.Text,
+          @TextSplitCallback, @SplitCtx);
+      end
+      else
+      begin
+        El := TPixieElSpace.Create(Node.Text, Doc);
+        Doc.RegisterElement(El);
+        Elements.Add(El);
+      end;
     end;
 
     hntCData:
