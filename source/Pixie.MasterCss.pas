@@ -174,8 +174,6 @@ const
     '  border-bottom-color:black;' +
     '  border-right-color:black;' +
     '  font-size: medium;' +
-    '  font-weight: normal;' +
-    '  font-style: normal;' +
     '}' +
 
     'tbody, tfoot, thead {' +
