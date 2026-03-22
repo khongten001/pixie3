@@ -18,6 +18,7 @@ type
   TPixieElImage = class(TPixieHtmlTag)
   private
     FSrc: string;
+    FAlt: string;
   public
     constructor Create(ADoc: TObject);
 
@@ -55,6 +56,7 @@ var
   Val: string;
 begin
   FSrc := GetAttr('src');
+  FAlt := GetAttr('alt');
 
   Val := GetAttr('width');
   if Val <> '' then
@@ -95,7 +97,15 @@ begin
   Sz.Height := 0;
   Cont := GetDocContainer;
   if Cont <> nil then
+  begin
     Cont.GetImageSize(FSrc, '', Sz);
+    if (Sz.Width = 0) and (Sz.Height = 0) and (FAlt <> '') and
+       (FCss.Font <> 0) then
+    begin
+      Sz.Width := Cont.TextWidth(FAlt, FCss.Font);
+      Sz.Height := FCss.FontMetrics.Height;
+    end;
+  end;
 end;
 
 procedure TPixieElImage.Draw(Hdc: PtrUInt; X, Y: pixel_t;
@@ -105,6 +115,7 @@ var
   P: TPixiePosition;
   Layer: TPixieBackgroundLayer;
   Cont: TPixieContainer;
+  Sz: TPixieSize;
 begin
   inherited Draw(Hdc, X, Y, Clip, Ri);
 
@@ -119,21 +130,36 @@ begin
   if (P.Width <= 0) or (P.Height <= 0) then
     Exit;
 
-  Layer.Init;
-  Layer.ClipBox := P;
-  Layer.OriginBox := P;
-  Layer.BorderBox := P;
-  Layer.BorderBox.X := Layer.BorderBox.X - RenderIt.GetPaddings.Left - RenderIt.GetBorders.Left;
-  Layer.BorderBox.Y := Layer.BorderBox.Y - RenderIt.GetPaddings.Top - RenderIt.GetBorders.Top;
-  Layer.BorderBox.Width := Layer.BorderBox.Width + RenderIt.GetPaddings.Width + RenderIt.GetBorders.Width;
-  Layer.BorderBox.Height := Layer.BorderBox.Height + RenderIt.GetPaddings.Height + RenderIt.GetBorders.Height;
-  Layer.Repeat_ := brNoRepeat;
-  Layer.BorderRadius := FCss.CssBorders.Radius.CalcPercents(
-    Layer.BorderBox.Width, Layer.BorderBox.Height);
-
   Cont := GetDocContainer;
-  if Cont <> nil then
+  if Cont = nil then
+    Exit;
+
+  // Check whether the image is available
+  Sz.Width := 0;
+  Sz.Height := 0;
+  Cont.GetImageSize(FSrc, '', Sz);
+
+  if (Sz.Width > 0) or (Sz.Height > 0) then
+  begin
+    // Image loaded — draw it
+    Layer.Init;
+    Layer.ClipBox := P;
+    Layer.OriginBox := P;
+    Layer.BorderBox := P;
+    Layer.BorderBox.X := Layer.BorderBox.X - RenderIt.GetPaddings.Left - RenderIt.GetBorders.Left;
+    Layer.BorderBox.Y := Layer.BorderBox.Y - RenderIt.GetPaddings.Top - RenderIt.GetBorders.Top;
+    Layer.BorderBox.Width := Layer.BorderBox.Width + RenderIt.GetPaddings.Width + RenderIt.GetBorders.Width;
+    Layer.BorderBox.Height := Layer.BorderBox.Height + RenderIt.GetPaddings.Height + RenderIt.GetBorders.Height;
+    Layer.Repeat_ := brNoRepeat;
+    Layer.BorderRadius := FCss.CssBorders.Radius.CalcPercents(
+      Layer.BorderBox.Width, Layer.BorderBox.Height);
     Cont.DrawImage(Hdc, Layer, FSrc, '');
+  end
+  else if (FAlt <> '') and (FCss.Font <> 0) then
+  begin
+    // Image missing — draw alt text
+    Cont.DrawText(Hdc, FAlt, FCss.Font, FCss.Color, P);
+  end;
 end;
 
 function TPixieElImage.CreateRenderItem(ParentRi: Pointer): Pointer;
