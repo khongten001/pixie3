@@ -128,9 +128,11 @@ end;
 
 function OctalEscape(V: Byte): AnsiString;
 begin
-  Result := '\' + AnsiChar(Ord('0') + (V div 64)) +
-                  AnsiChar(Ord('0') + (V div 8) mod 8) +
-                  AnsiChar(Ord('0') + V mod 8);
+  SetLength(Result, 4);
+  Result[1] := '\';
+  Result[2] := AnsiChar(Ord('0') + (V div 64));
+  Result[3] := AnsiChar(Ord('0') + (V div 8) mod 8);
+  Result[4] := AnsiChar(Ord('0') + V mod 8);
 end;
 
 function PdfString(const S: string): AnsiString;
