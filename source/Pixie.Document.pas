@@ -1636,22 +1636,39 @@ begin
   for I := Lo to Hi do
   begin
     El := FAllElements[I];
-    if El.IsText then
+    if El.IsText and (El.Parent <> nil) and
+       (El.Parent.Css.Display <> displayNone) then
       FSelMap.AddOrSetValue(Pointer(El), True);
   end;
 end;
 
 function TPixieDocument.GetSelectedText: string;
+
+  function FindBlockAncestor(El: TPixieElement): TPixieElement;
+  begin
+    Result := El.Parent;
+    while (Result <> nil) and not Result.IsBlockBox do
+      Result := Result.Parent;
+  end;
+
 var
   I: Integer;
-  El: TPixieElement;
+  El, LastBlock, CurBlock: TPixieElement;
 begin
   Result := '';
+  LastBlock := nil;
   for I := 0 to FAllElements.Count - 1 do
   begin
     El := FAllElements[I];
     if El.IsText and FSelMap.ContainsKey(Pointer(El)) then
+    begin
+      CurBlock := FindBlockAncestor(El);
+      if (LastBlock <> nil) and (CurBlock <> LastBlock) and (Result <> '') and
+         (Result[Length(Result)] <> #10) then
+        Result := Result + #10;
+      LastBlock := CurBlock;
       El.GetText(Result);
+    end;
   end;
 end;
 
