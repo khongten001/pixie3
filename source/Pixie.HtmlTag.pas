@@ -1486,6 +1486,7 @@ var
   J: Integer;
   DecColor: TPixieWebColor;
   DecY: TPixiePixel;
+  HasTextContent: Boolean;
 begin
   Assert(TObject(Ri) is TPixieRenderItem);
   Assert(FDoc is TPixieDocument);
@@ -1618,7 +1619,15 @@ begin
           end;
 
           // Draw text-decoration lines spanning the full inline box
-          if FCss.TextDecorationLine <> TextDecorationLineNone then
+          // Skip decoration when the element contains only replaced elements (e.g. <a><img></a>)
+          HasTextContent := False;
+          for I := 0 to FChildren.Count - 1 do
+            if not FChildren[I].IsReplaced then
+            begin
+              HasTextContent := True;
+              Break;
+            end;
+          if HasTextContent and (FCss.TextDecorationLine <> TextDecorationLineNone) then
           begin
             if FCss.TextDecorationColor.IsCurrentColor then
               DecColor := FCss.Color
