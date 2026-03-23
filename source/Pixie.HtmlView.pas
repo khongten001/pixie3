@@ -11,7 +11,7 @@ uses
   SysUtils, Classes, Controls, Graphics, Forms, ExtCtrls,
   LMessages, LCLType,
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
-  Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
+  Pixie.Html, Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext
   {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
     , Pixie.Canvas.Qt
@@ -319,32 +319,36 @@ end;
 procedure TPixieHtmlView.LoadFromFile(const AFileName: string;
   const ABaseUrl: string);
 var
-  Sl: TStringList;
+  Stream: TFileStream;
+  Bytes: TBytes;
+  Html: string;
 begin
-  Sl := TStringList.Create;
+  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
   try
-    Sl.LoadFromFile(AFileName);
-    if ABaseUrl <> '' then
-      LoadFromString(Sl.Text, ABaseUrl)
-    else
-      LoadFromString(Sl.Text, ExtractFilePath(AFileName));
+    SetLength(Bytes, Stream.Size);
+    if Stream.Size > 0 then
+      Stream.ReadBuffer(Bytes[0], Stream.Size);
   finally
-    Sl.Free;
+    Stream.Free;
   end;
+  Html := PixieDecodeHtmlBytes(Bytes);
+  if ABaseUrl <> '' then
+    LoadFromString(Html, ABaseUrl)
+  else
+    LoadFromString(Html, ExtractFilePath(AFileName));
 end;
 
 procedure TPixieHtmlView.LoadFromStream(AStream: TStream;
   const ABaseUrl: string);
 var
-  Sl: TStringList;
+  Bytes: TBytes;
+  Size: Int64;
 begin
-  Sl := TStringList.Create;
-  try
-    Sl.LoadFromStream(AStream);
-    LoadFromString(Sl.Text, ABaseUrl);
-  finally
-    Sl.Free;
-  end;
+  Size := AStream.Size - AStream.Position;
+  SetLength(Bytes, Size);
+  if Size > 0 then
+    AStream.ReadBuffer(Bytes[0], Size);
+  LoadFromString(PixieDecodeHtmlBytes(Bytes), ABaseUrl);
 end;
 
 procedure TPixieHtmlView.DoAnchorClick(Sender: TObject;
