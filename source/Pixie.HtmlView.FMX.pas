@@ -757,6 +757,17 @@ begin
     end;
   end;
 
+  // Ctrl+A / Cmd+A selects all text
+  if CtrlDown and (Key = vkA) then
+  begin
+    if FDocument <> nil then
+    begin
+      FDocument.SelectAll;
+      InvalidateRect(LocalRect);
+      Key := 0;
+      KeyChar := #0;
+    end;
+  end;
   // Ctrl+C / Cmd+C copies selected text
   if CtrlDown and (Key = vkC) then
   begin

@@ -644,6 +644,16 @@ begin
     Exit;
   end;
 
+  // Ctrl+A selects all text
+  if (ssCtrl in Shift) and (Key = Ord('A')) then
+  begin
+    if FDocument <> nil then
+    begin
+      FDocument.SelectAll;
+      Invalidate;
+      Key := 0;
+    end;
+  end;
   // Ctrl+C copies selected text
   if (ssCtrl in Shift) and (Key = Ord('C')) then
   begin

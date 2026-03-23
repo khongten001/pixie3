@@ -184,6 +184,7 @@ type
     function SelectionMove(X, Y, ClientX, ClientY: TPixiePixel): Boolean;
     function SelectWord(X, Y: TPixiePixel): Boolean;
     procedure SelectionEnd;
+    procedure SelectAll;
     procedure ClearSelection;
     function HasSelection: Boolean;
     function HasRangeSelection: Boolean;
@@ -1560,6 +1561,28 @@ end;
 procedure TPixieDocument.SelectionEnd;
 begin
   FSelecting := False;
+end;
+
+procedure TPixieDocument.SelectAll;
+var
+  I: Integer;
+  First, Last: TPixieElement;
+begin
+  First := nil;
+  Last := nil;
+  for I := 0 to FAllElements.Count - 1 do
+    if FAllElements[I].IsText then
+    begin
+      if First = nil then
+        First := FAllElements[I];
+      Last := FAllElements[I];
+    end;
+  if (First <> nil) and (First <> Last) then
+  begin
+    FSelAnchor := First;
+    FSelFocus := Last;
+    BuildSelectedElements;
+  end;
 end;
 
 procedure TPixieDocument.ClearSelection;

@@ -811,6 +811,16 @@ begin
     Exit;
   end;
 
+  // Ctrl+A (Cmd+A on macOS) selects all text
+  if (ssCtrlOS in Shift) and (Key = Ord('A')) then
+  begin
+    if FDocument <> nil then
+    begin
+      FDocument.SelectAll;
+      Invalidate;
+      Key := 0;
+    end;
+  end;
   // Ctrl+C (Cmd+C on macOS) copies selected text
   if (ssCtrlOS in Shift) and (Key = Ord('C')) then
   begin
