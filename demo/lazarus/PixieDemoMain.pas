@@ -552,20 +552,18 @@ begin
 
     '<h2 style="color: #994422;">Textarea</h2>' +
 
-    '<table style="border-collapse: collapse; margin-bottom: 16px;">' +
-      '<tr style="vertical-align: top;">' +
-        '<td style="padding: 0 16px 0 0;">' +
-          '<div style="margin-bottom: 4px; font-weight: bold; font-size: 13px; color: #555;">Editable</div>' +
-          '<textarea rows="4" cols="35">Dear diary,' + #10 +
-          'Today I rendered HTML without a browser.' + #10 +
-          'It was glorious.</textarea>' +
-        '</td>' +
-        '<td style="padding: 0 16px 0 0;">' +
-          '<div style="margin-bottom: 4px; font-weight: bold; font-size: 13px; color: #555;">With placeholder</div>' +
-          '<textarea rows="4" cols="35" placeholder="Write a comment..."></textarea>' +
-        '</td>' +
-      '</tr>' +
-    '</table>' +
+    '<div style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px;">' +
+      '<div>' +
+        '<div style="margin-bottom: 4px; font-weight: bold; font-size: 13px; color: #555;">Editable</div>' +
+        '<textarea rows="4" cols="35">Dear diary,' + #10 +
+        'Today I rendered HTML without a browser.' + #10 +
+        'It was glorious.</textarea>' +
+      '</div>' +
+      '<div>' +
+        '<div style="margin-bottom: 4px; font-weight: bold; font-size: 13px; color: #555;">With placeholder</div>' +
+        '<textarea rows="4" cols="35" placeholder="Write a comment..."></textarea>' +
+      '</div>' +
+    '</div>' +
 
     // ---- Footer ----
     '<hr style="border: none; border-top: 1px solid #ccc; margin: 16px 0;">' +
