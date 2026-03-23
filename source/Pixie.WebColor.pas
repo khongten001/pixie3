@@ -197,18 +197,19 @@ const
     (Name: 'yellowgreen'; Hex: '9ACD32')
   );
 
-function HexToByte(const S: string): Byte;
+function HexToByte(C1, C2: Integer): Byte; inline;
 begin
-  Result := Byte(PixieDigitValue(Ord(S[1])) * 16 + PixieDigitValue(Ord(S[2])));
+  Result := Byte(PixieDigitValue(C1) * 16 + PixieDigitValue(C2));
 end;
 
 function ParseHexColor(const Hex: string): TPixieWebColor;
 begin
-  Result := TPixieWebColor.Create(HexToByte(Hex[1] + Hex[2]),
-    HexToByte(Hex[3] + Hex[4]),
-    HexToByte(Hex[5] + Hex[6]));
+  Result := TPixieWebColor.Create(
+    HexToByte(Ord(Hex[1]), Ord(Hex[2])),
+    HexToByte(Ord(Hex[3]), Ord(Hex[4])),
+    HexToByte(Ord(Hex[5]), Ord(Hex[6])));
   if Length(Hex) >= 8 then
-    Result.Alpha := HexToByte(Hex[7] + Hex[8]);
+    Result.Alpha := HexToByte(Ord(Hex[7]), Ord(Hex[8]));
 end;
 
 { TPixieWebColor }
@@ -272,43 +273,48 @@ end;
 function PixieParseHashColorString(const S: string; out Color: TPixieWebColor): Boolean;
 var
   Hex: string;
-  Len, I: Integer;
-  R, G, B, A: string;
+  Len, I, Off: Integer;
 begin
   Result := False;
   Hex := S;
 
   // Strip leading '#'
   if (Hex <> '') and (Hex[1] = '#') then
-    Hex := Copy(Hex, 2, Length(Hex) - 1);
-
-  Len := Length(Hex);
-  if not ((Len = 3) or (Len = 4) or (Len = 6) or (Len = 8)) then
-    Exit;
-
-  for I := 1 to Len do
-    if not PixieIsHexDigit(Ord(Hex[I])) then
-      Exit;
-
-  A := 'ff';
-  if (Len = 3) or (Len = 4) then
   begin
-    R := Hex[1] + Hex[1];
-    G := Hex[2] + Hex[2];
-    B := Hex[3] + Hex[3];
-    if Len = 4 then
-      A := Hex[4] + Hex[4];
+    Off := 2;
+    Len := Length(Hex) - 1;
   end
   else
   begin
-    R := Hex[1] + Hex[2];
-    G := Hex[3] + Hex[4];
-    B := Hex[5] + Hex[6];
-    if Len = 8 then
-      A := Hex[7] + Hex[8];
+    Off := 1;
+    Len := Length(Hex);
   end;
 
-  Color := TPixieWebColor.Create(HexToByte(R), HexToByte(G), HexToByte(B), HexToByte(A));
+  if not ((Len = 3) or (Len = 4) or (Len = 6) or (Len = 8)) then
+    Exit;
+
+  for I := Off to Off + Len - 1 do
+    if not PixieIsHexDigit(Ord(Hex[I])) then
+      Exit;
+
+  if (Len = 3) or (Len = 4) then
+  begin
+    Color := TPixieWebColor.Create(
+      HexToByte(Ord(Hex[Off]), Ord(Hex[Off])),
+      HexToByte(Ord(Hex[Off + 1]), Ord(Hex[Off + 1])),
+      HexToByte(Ord(Hex[Off + 2]), Ord(Hex[Off + 2])));
+    if Len = 4 then
+      Color.Alpha := HexToByte(Ord(Hex[Off + 3]), Ord(Hex[Off + 3]));
+  end
+  else
+  begin
+    Color := TPixieWebColor.Create(
+      HexToByte(Ord(Hex[Off]), Ord(Hex[Off + 1])),
+      HexToByte(Ord(Hex[Off + 2]), Ord(Hex[Off + 3])),
+      HexToByte(Ord(Hex[Off + 4]), Ord(Hex[Off + 5])));
+    if Len = 8 then
+      Color.Alpha := HexToByte(Ord(Hex[Off + 6]), Ord(Hex[Off + 7]));
+  end;
   Result := True;
 end;
 
@@ -374,14 +380,16 @@ begin
   begin
     Hex := DefColors[I].Hex;
     if Length(Hex) = 8 then
-      Clr := TPixieWebColor.Create(HexToByte(Hex[1] + Hex[2]),
-        HexToByte(Hex[3] + Hex[4]),
-        HexToByte(Hex[5] + Hex[6]),
-        HexToByte(Hex[7] + Hex[8]))
+      Clr := TPixieWebColor.Create(
+        HexToByte(Ord(Hex[1]), Ord(Hex[2])),
+        HexToByte(Ord(Hex[3]), Ord(Hex[4])),
+        HexToByte(Ord(Hex[5]), Ord(Hex[6])),
+        HexToByte(Ord(Hex[7]), Ord(Hex[8])))
     else
-      Clr := TPixieWebColor.Create(HexToByte(Hex[1] + Hex[2]),
-        HexToByte(Hex[3] + Hex[4]),
-        HexToByte(Hex[5] + Hex[6]));
+      Clr := TPixieWebColor.Create(
+        HexToByte(Ord(Hex[1]), Ord(Hex[2])),
+        HexToByte(Ord(Hex[3]), Ord(Hex[4])),
+        HexToByte(Ord(Hex[5]), Ord(Hex[6])));
     if not ColorMap.ContainsKey(DefColors[I].Name) then
       ColorMap.Add(DefColors[I].Name, Clr);
   end;
