@@ -103,13 +103,20 @@ begin
 end;
 
 procedure AppendUtf8Char(var Str: string; Ch: UInt32);
+var
+  Len: Integer;
 begin
+  Len := Length(Str);
   if Ch <= $7F then
-    Str := Str + Char(Ch)
+  begin
+    SetLength(Str, Len + 1);
+    Str[Len + 1] := Char(Ch);
+  end
   else if Ch <= $7FF then
   begin
-    Str := Str + Char((Ch shr 6) + 192);
-    Str := Str + Char((Ch and 63) + 128);
+    SetLength(Str, Len + 2);
+    Str[Len + 1] := Char((Ch shr 6) + 192);
+    Str[Len + 2] := Char((Ch and 63) + 128);
   end
   else if (Ch >= $D800) and (Ch <= $DFFF) then
   begin
@@ -117,16 +124,18 @@ begin
   end
   else if Ch <= $FFFF then
   begin
-    Str := Str + Char((Ch shr 12) + 224);
-    Str := Str + Char(((Ch shr 6) and 63) + 128);
-    Str := Str + Char((Ch and 63) + 128);
+    SetLength(Str, Len + 3);
+    Str[Len + 1] := Char((Ch shr 12) + 224);
+    Str[Len + 2] := Char(((Ch shr 6) and 63) + 128);
+    Str[Len + 3] := Char((Ch and 63) + 128);
   end
   else if Ch <= $10FFFF then
   begin
-    Str := Str + Char((Ch shr 18) + 240);
-    Str := Str + Char(((Ch shr 12) and 63) + 128);
-    Str := Str + Char(((Ch shr 6) and 63) + 128);
-    Str := Str + Char((Ch and 63) + 128);
+    SetLength(Str, Len + 4);
+    Str[Len + 1] := Char((Ch shr 18) + 240);
+    Str[Len + 2] := Char(((Ch shr 12) and 63) + 128);
+    Str[Len + 3] := Char(((Ch shr 6) and 63) + 128);
+    Str[Len + 4] := Char((Ch and 63) + 128);
   end;
 end;
 
@@ -191,17 +200,24 @@ begin
 end;
 
 procedure AppendUtf8Char(var Str: string; Ch: UInt32);
+var
+  Len: Integer;
 begin
   if (Ch >= $D800) and (Ch <= $DFFF) then
     Exit; // Surrogate: skip (error)
 
+  Len := Length(Str);
   if Ch <= $FFFF then
-    Str := Str + Char(Ch)
+  begin
+    SetLength(Str, Len + 1);
+    Str[Len + 1] := Char(Ch);
+  end
   else if Ch <= $10FFFF then
   begin
     Ch := Ch - $10000;
-    Str := Str + Char($D800 + (Ch shr 10));
-    Str := Str + Char($DC00 + (Ch and $3FF));
+    SetLength(Str, Len + 2);
+    Str[Len + 1] := Char($D800 + (Ch shr 10));
+    Str[Len + 2] := Char($DC00 + (Ch and $3FF));
   end;
 end;
 
