@@ -30,6 +30,11 @@ type
     Data: TMemoryStream;
   end;
   TPixiePendingImageMap = TDictionary<string, TPixiePendingImage>;
+  TPixieCssCacheEntry = record
+    Text: string;
+    BaseUrl: string;
+  end;
+  TPixieCssCache = TDictionary<string, TPixieCssCacheEntry>;
 
   { TPixieNativeContainer }
 
@@ -38,6 +43,7 @@ type
     FCanvas: TPixieCanvas;
     FImages: TPixieImageCacheMap;
     FPendingImages: TPixiePendingImageMap;
+    FCssCache: TPixieCssCache;
     FBaseUrl: string;
     FDefaultFontSize: TPixiePixel;
     FDefaultFontName: string;
@@ -62,6 +68,7 @@ type
 
     procedure RegisterImage(const Name: string; Stream: TStream);
     procedure UnregisterImage(const Name: string);
+    procedure ClearCssCache;
 
     property Canvas: TPixieCanvas read FCanvas;
     property Caption: string read FCaption;
@@ -632,6 +639,7 @@ begin
   FCanvas := ACanvas;
   FImages := TPixieImageCacheMap.Create;
   FPendingImages := TPixiePendingImageMap.Create;
+  FCssCache := TPixieCssCache.Create;
   FDefaultFontSize := 16;
   FDefaultFontName := 'Segoe UI';
   FViewportWidth := 1024;
@@ -649,6 +657,7 @@ begin
   for PendingPair in FPendingImages do
     PendingPair.Value.Data.Free;
   FPendingImages.Free;
+  FCssCache.Free;
   inherited Destroy;
 end;
 
@@ -919,6 +928,11 @@ begin
   end;
 end;
 
+procedure TPixieNativeContainer.ClearCssCache;
+begin
+  FCssCache.Clear;
+end;
+
 procedure TPixieNativeContainer.ImportCss(var Text: string;
   const Url: string; var ABaseUrl: string);
 var
@@ -927,8 +941,17 @@ var
   FetchStream: TMemoryStream;
   Success: Boolean;
   ParsedUrl: TPixieUrl;
+  CacheEntry: TPixieCssCacheEntry;
 begin
   FullPath := ResolveUrl(Url, ABaseUrl);
+
+  // Return cached if available
+  if FCssCache.TryGetValue(FullPath, CacheEntry) then
+  begin
+    Text := CacheEntry.Text;
+    ABaseUrl := CacheEntry.BaseUrl;
+    Exit;
+  end;
 
   // HTTP URL — fetch via event callback
   if IsHttpUrl(FullPath) and Assigned(FOnFetchUrl) then
@@ -956,6 +979,12 @@ begin
     finally
       FetchStream.Free;
     end;
+    if Text <> '' then
+    begin
+      CacheEntry.Text := Text;
+      CacheEntry.BaseUrl := ABaseUrl;
+      FCssCache.Add(FullPath, CacheEntry);
+    end;
     Exit;
   end;
 
@@ -970,6 +999,9 @@ begin
     finally
       Sl.Free;
     end;
+    CacheEntry.Text := Text;
+    CacheEntry.BaseUrl := ABaseUrl;
+    FCssCache.Add(FullPath, CacheEntry);
   end
   else
     Text := '';

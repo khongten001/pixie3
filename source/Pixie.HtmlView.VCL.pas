@@ -266,6 +266,7 @@ procedure TPixieHtmlView.LoadFromString(const AHtml: string;
 begin
   FBaseUrl := ABaseUrl;
   FContainer.BaseUrl := ABaseUrl;
+  FContainer.ClearCssCache;
   FLines.Text := AHtml;
   RebuildDocument;
 end;
