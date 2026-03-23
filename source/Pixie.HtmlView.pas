@@ -13,13 +13,13 @@ uses
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
   Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext
-  {$IF defined(LCLqt5) or defined(LCLqt6)}
+  {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
     , Pixie.Canvas.Qt
-  {$ELSEIF defined(MSWINDOWS)}
+  {$ELSEIF DEFINED(MSWINDOWS)}
     , JwaWinUser, Pixie.Canvas.D2D
-  {$ELSEIF defined(DARWIN)}
+  {$ELSEIF DEFINED(DARWIN)}
     , Pixie.Canvas.CG
-  {$ELSEIF defined(UNIX)}
+  {$ELSEIF DEFINED(UNIX)}
     , Pixie.Canvas.Cairo
   {$ENDIF};
 
@@ -73,8 +73,11 @@ type
     {$IFDEF MSWINDOWS}
     procedure WMIMEStartComposition(var Msg: TLMessage); message WM_IME_STARTCOMPOSITION;
     {$ENDIF}
-    {$IF defined(LCLqt5) or defined(LCLqt6)}
+    {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
     procedure LMIMQuery(var Msg: TLMessage); message LM_IM_QUERY;
+    {$ENDIF}
+    {$IFDEF WITH_GTK2_IM}
+    procedure LMIMComposition(var Msg: TLMessage); message LM_IM_COMPOSITION;
     {$ENDIF}
     procedure UpdateIMEPosition;
     procedure UpdateCursorFromCss;
@@ -82,7 +85,7 @@ type
     procedure Loaded; override;
     procedure Paint; override;
     procedure Resize; override;
-    {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+    {$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
     procedure DoEnter; override;
     procedure DoExit; override;
     {$ENDIF}
@@ -161,6 +164,9 @@ uses
   {$ENDIF}
   {$IFDEF LCLGTK2}
   , Glib2, Gdk2, Gtk2
+  {$IFDEF WITH_GTK2_IM}
+  , Gtk2Globals
+  {$ENDIF}
   {$ENDIF}
   {$IFDEF LCLGTK3}
   , LazGdk3, LazGtk3, LazGLib2, LazGObject2, Gtk3Widgets
@@ -194,13 +200,13 @@ begin
   Height := 300;
   TabStop := True;
 
-  {$IF defined(LCLqt5) or defined(LCLqt6)}
+  {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
   FCanvas := TPixieQtCanvas.Create;
-  {$ELSEIF defined(MSWINDOWS)}
+  {$ELSEIF DEFINED(MSWINDOWS)}
   FCanvas := TPixieD2DCanvas.Create;
-  {$ELSEIF defined(DARWIN)}
+  {$ELSEIF DEFINED(DARWIN)}
   FCanvas := TPixieCGCanvas.Create;
-  {$ELSEIF defined(UNIX)}
+  {$ELSEIF DEFINED(UNIX)}
   FCanvas := TPixieCairoCanvas.Create;
   {$ENDIF}
 
@@ -423,10 +429,12 @@ begin
     Self.Cursor := crDefault;
 end;
 
-{$IF defined(LCLGTK2) or defined(LCLGTK3)}
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
+{$IFNDEF WITH_GTK2_IM}
 var
   PixieGtkIMContext: PGtkIMContext = nil;
   PixieGtkIMEOwner: TPixieHtmlView = nil;
+{$ENDIF}
 {$ENDIF}
 
 // ---------------------------------------------------------------------------
@@ -441,7 +449,7 @@ var
   Imc: HIMC;
   CompForm: COMPOSITIONFORM;
   {$ENDIF}
-  {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+  {$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
   Area: TGdkRectangle;
   {$ENDIF}
 begin
@@ -463,15 +471,18 @@ begin
   end;
   {$ENDIF}
 
-  {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+  {$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
+  Area.x := ClientX;
+  Area.y := ClientY;
+  Area.width := 1;
+  Area.height := Round(H * FZoom);
+  {$IFDEF WITH_GTK2_IM}
+  if im_context <> nil then
+    gtk_im_context_set_cursor_location(im_context, @Area);
+  {$ELSE}
   if PixieGtkIMContext <> nil then
-  begin
-    Area.x := ClientX;
-    Area.y := ClientY;
-    Area.width := 1;
-    Area.height := Round(H * FZoom);
     gtk_im_context_set_cursor_location(PixieGtkIMContext, @Area);
-  end;
+  {$ENDIF}
   {$ENDIF}
 end;
 
@@ -483,7 +494,7 @@ begin
 end;
 {$ENDIF}
 
-{$IF defined(LCLqt5) or defined(LCLqt6)}
+{$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
 procedure TPixieHtmlView.LMIMQuery(var Msg: TLMessage);
 var
   DocX, DocY, H: TPixiePixel;
@@ -499,7 +510,29 @@ begin
 end;
 {$ENDIF}
 
-{$IF defined(LCLGTK2) or defined(LCLGTK3)}
+{$IFDEF WITH_GTK2_IM}
+procedure TPixieHtmlView.LMIMComposition(var Msg: TLMessage);
+var
+  S: string;
+begin
+  if (Msg.WParam and GTK_IM_FLAG_COMMIT) <> 0 then
+  begin
+    S := PChar(Msg.LParam);
+    if (S <> '') and (FDocument <> nil) and
+       FDocument.DispatchUTF8KeyPress(S) then
+    begin
+      FContainer.CaretVisible := True;
+      FCaretTimer.Enabled := False;
+      FCaretTimer.Enabled := True;
+      UpdateIMEPosition;
+      Invalidate;
+    end;
+  end;
+end;
+{$ENDIF}
+
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
+{$IFNDEF WITH_GTK2_IM}
 procedure PixieGtkIMCommitCb(Context: PGtkIMContext; Str: PGChar;
   Data: Pointer); cdecl;
 var
@@ -519,15 +552,21 @@ begin
     PixieGtkIMEOwner.UpdateIMEPosition;
   end;
 end;
+{$ENDIF}
+{$ENDIF}
 
+{$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
 procedure TPixieHtmlView.DoEnter;
+{$IFNDEF WITH_GTK2_IM}
 var
   GdkWin: PGdkWindow;
   ParentForm: TCustomForm;
+{$ENDIF}
 begin
   inherited;
 
-  // Use the parent form's window for set_client_window (CEF4Delphi approach)
+  {$IFNDEF WITH_GTK2_IM}
+  // Stock Lazarus: use own IM context with form's window
   ParentForm := GetParentForm(Self);
   if ParentForm = nil then Exit;
 
@@ -554,16 +593,21 @@ begin
   gtk_im_context_set_client_window(PixieGtkIMContext, GdkWin);
   gtk_im_context_focus_in(PixieGtkIMContext);
   PixieGtkIMEOwner := Self;
+  {$ENDIF}
+
+  UpdateIMEPosition;
 end;
 
 procedure TPixieHtmlView.DoExit;
 begin
+  {$IFNDEF WITH_GTK2_IM}
   if PixieGtkIMContext <> nil then
   begin
     gtk_im_context_focus_out(PixieGtkIMContext);
     gtk_im_context_reset(PixieGtkIMContext);
   end;
   PixieGtkIMEOwner := nil;
+  {$ENDIF}
   inherited;
 end;
 {$ENDIF}
@@ -700,12 +744,6 @@ var
   NewScroll, MaxScroll, ViewH: TPixiePixel;
 begin
   inherited KeyDown(Key, Shift);
-
-  {$IF defined(LCLGTK2) or defined(LCLGTK3)}
-  // Activate IM context on key press so Fcitx/IBus can intercept
-  if PixieGtkIMContext <> nil then
-    gtk_im_context_focus_in(PixieGtkIMContext);
-  {$ENDIF}
 
   // Tab / Shift+Tab cycles focus between focusable elements
   if (Key = VK_TAB) and (FDocument <> nil) then
