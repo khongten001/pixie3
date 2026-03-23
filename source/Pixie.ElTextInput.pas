@@ -34,6 +34,9 @@ type
     FUndoValue: string;       // previous value for Ctrl+Z
     FUndoCaret: Integer;      // previous caret position
     FUndoSaved: Boolean;      // undo snapshot available
+    FWordSelecting: Boolean;  // drag extends by whole words
+    FWordSelStart: Integer;   // anchor word start byte pos
+    FWordSelEnd: Integer;     // anchor word end byte pos
     procedure SaveUndo;
 
     function DisplayText: string;
@@ -47,6 +50,7 @@ type
     procedure MoveCaretEnd(Shift: Boolean);
     procedure SelectAll; reintroduce;
     procedure SelectWordAtCaret;
+    function FindWordBounds(BytePos: Integer; out WS, WE: Integer): Boolean;
     procedure ClearSelection;
     function HasSelection: Boolean;
     function GetSelectedText: string;
@@ -793,15 +797,16 @@ begin
   FSelEnd := Length(FValue);
 end;
 
-procedure TPixieElTextBase.SelectWordAtCaret;
+function TPixieElTextBase.FindWordBounds(BytePos: Integer;
+  out WS, WE: Integer): Boolean;
 
-  function IsBreak(BytePos: Integer): Boolean;
+  function IsBreak(P: Integer): Boolean;
   var
     B: Byte;
   begin
-    if (BytePos < 0) or (BytePos >= Length(FValue)) then
+    if (P < 0) or (P >= Length(FValue)) then
       Exit(True);
-    B := Byte(FValue[BytePos + 1]);
+    B := Byte(FValue[P + 1]);
     if B >= $80 then
       Exit(False);
     Result := (B <= 32) or (B = Ord(',')) or (B = Ord('.')) or
@@ -811,14 +816,15 @@ procedure TPixieElTextBase.SelectWordAtCaret;
   end;
 
 var
-  WS, WE, Prev: Integer;
+  Prev: Integer;
 begin
+  Result := False;
   if Length(FValue) = 0 then Exit;
 
-  WS := FCaretPos;
-  WE := FCaretPos;
+  WS := BytePos;
+  WE := BytePos;
 
-  // If caret is at a break char, try the char before
+  // If at a break char, try the char before
   if IsBreak(WE) then
   begin
     if WS <= 0 then Exit;
@@ -839,7 +845,14 @@ begin
   while (WE < Length(FValue)) and not IsBreak(WE) do
     WE := UTF8NextCharPos(FValue, WE);
 
-  if WS <> WE then
+  Result := WS <> WE;
+end;
+
+procedure TPixieElTextBase.SelectWordAtCaret;
+var
+  WS, WE: Integer;
+begin
+  if FindWordBounds(FCaretPos, WS, WE) then
   begin
     FSelStart := WS;
     FSelEnd := WE;
@@ -1006,6 +1019,7 @@ begin
   if IsDisabled then
     Exit;
 
+  FWordSelecting := False;
   Doc := TPixieDocument(FDoc);
   Doc.SetFocus(Self);
   DocToLocal(Doc.LastMouseX, Doc.LastMouseY, LocalX, LocalY);
@@ -1021,13 +1035,19 @@ begin
   Result := False;
   if IsDisabled then Exit;
   SelectWordAtCaret;
+  if HasSelection then
+  begin
+    FWordSelecting := True;
+    FWordSelStart := FSelStart;
+    FWordSelEnd := FSelEnd;
+  end;
   Result := HasSelection;
 end;
 
 function TPixieElTextBase.OnMouseDrag(X, Y: TPixiePixel): Boolean;
 var
   LocalX, LocalY: TPixiePixel;
-  NewPos: Integer;
+  NewPos, WS, WE: Integer;
 begin
   Result := False;
   if IsDisabled then
@@ -1036,7 +1056,44 @@ begin
   DocToLocal(X, Y, LocalX, LocalY);
   NewPos := ClickToCaret(LocalX, LocalY);
 
-  if NewPos <> FCaretPos then
+  if FWordSelecting then
+  begin
+    // Extend selection by whole words from the anchor word
+    if FindWordBounds(NewPos, WS, WE) then
+    begin
+      if NewPos < FWordSelStart then
+      begin
+        FSelStart := FWordSelEnd;
+        FSelEnd := WS;
+        FCaretPos := WS;
+      end
+      else
+      begin
+        FSelStart := FWordSelStart;
+        FSelEnd := WE;
+        FCaretPos := WE;
+      end;
+    end
+    else
+    begin
+      // Dragged onto a break char — extend to that position
+      if NewPos < FWordSelStart then
+      begin
+        FSelStart := FWordSelEnd;
+        FSelEnd := NewPos;
+        FCaretPos := NewPos;
+      end
+      else
+      begin
+        FSelStart := FWordSelStart;
+        FSelEnd := NewPos;
+        FCaretPos := NewPos;
+      end;
+    end;
+    FCaretMoved := True;
+    Result := True;
+  end
+  else if NewPos <> FCaretPos then
   begin
     FSelEnd := NewPos;
     FCaretPos := NewPos;
