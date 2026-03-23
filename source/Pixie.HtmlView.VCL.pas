@@ -42,6 +42,7 @@ type
     FDragging: Boolean;
     FScrollDragging: Boolean;
     FScrollDragOffset: TPixiePixel;
+    FAnchorScrollTick: UInt64;
     FCaretTimer: TTimer;
     FOnBeforeParse: TNotifyEvent;
     FOnAfterParse: TNotifyEvent;
@@ -138,7 +139,7 @@ type
 implementation
 
 uses
-  Vcl.Clipbrd, Winapi.Imm, Pixie.Element;
+  Vcl.Clipbrd, Winapi.Imm, Pixie.Element, Pixie.RenderItem;
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -308,7 +309,40 @@ end;
 
 procedure TPixieHtmlView.DoAnchorClick(Sender: TObject;
   const Url: string);
+var
+  El: TPixieElement;
+  Ri, Walk: TPixieRenderItem;
+  NewScroll, MaxScroll, ViewH, AbsY: TPixiePixel;
 begin
+  if (Length(Url) > 1) and (Url[1] = '#') then
+  begin
+    El := FDocument.FindAnchorTarget(Copy(Url, 2, MaxInt));
+    if El <> nil then
+    begin
+      Ri := TPixieRenderItem(El.GetRenderItem);
+      if Ri <> nil then
+      begin
+        AbsY := Ri.Pos.Y;
+        Walk := Ri.GetParent;
+        while Walk <> nil do
+        begin
+          AbsY := AbsY + Walk.Pos.Y;
+          Walk := Walk.GetParent;
+        end;
+        ViewH := ClientHeight / FZoom;
+        MaxScroll := FContentHeight - ViewH;
+        if MaxScroll < 0 then MaxScroll := 0;
+        NewScroll := AbsY;
+        if NewScroll > MaxScroll then NewScroll := MaxScroll;
+        if NewScroll < 0 then NewScroll := 0;
+        FScrollY := NewScroll;
+        FAnchorScrollTick := GetTickCount64;
+        Invalidate;
+      end;
+    end;
+    Exit;
+  end;
+
   if Assigned(FOnAnchorClick) then
     FOnAnchorClick(Self, Url);
 end;
@@ -876,6 +910,18 @@ var
 begin
   Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
   if Result then Exit;
+
+  // Suppress wheel inertia after anchor scroll
+  if (FAnchorScrollTick > 0) then
+  begin
+    if (GetTickCount64 - FAnchorScrollTick < 200) then
+    begin
+      FAnchorScrollTick := GetTickCount64;
+      Result := True;
+      Exit;
+    end;
+    FAnchorScrollTick := 0;
+  end;
 
   // Ctrl+wheel zooms
   if ssCtrl in Shift then

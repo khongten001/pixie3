@@ -43,6 +43,7 @@ type
     FDragging: Boolean;
     FScrollDragging: Boolean;
     FScrollDragOffset: TPixiePixel;
+    FAnchorScrollTick: Cardinal;
     FCaretTimer: TTimer;
     FLastMouseX: Single;
     FLastMouseY: Single;
@@ -164,7 +165,7 @@ type
 implementation
 
 uses
-  Pixie.Element, Pixie.Container;
+  Pixie.Element, Pixie.Container, Pixie.RenderItem;
 
 // ---------------------------------------------------------------------------
 // Clipboard helpers via FMX platform services
@@ -475,7 +476,40 @@ end;
 
 procedure TPixieHtmlView.DoAnchorClick(Sender: TObject;
   const Url: string);
+var
+  El: TPixieElement;
+  Ri, Walk: TPixieRenderItem;
+  NewScroll, MaxScroll, ViewH, AbsY: TPixiePixel;
 begin
+  if (Length(Url) > 1) and (Url[1] = '#') then
+  begin
+    El := FDocument.FindAnchorTarget(Copy(Url, 2, MaxInt));
+    if El <> nil then
+    begin
+      Ri := TPixieRenderItem(El.GetRenderItem);
+      if Ri <> nil then
+      begin
+        AbsY := Ri.Pos.Y;
+        Walk := Ri.GetParent;
+        while Walk <> nil do
+        begin
+          AbsY := AbsY + Walk.Pos.Y;
+          Walk := Walk.GetParent;
+        end;
+        ViewH := Height / FZoom;
+        MaxScroll := FContentHeight - ViewH;
+        if MaxScroll < 0 then MaxScroll := 0;
+        NewScroll := AbsY;
+        if NewScroll > MaxScroll then NewScroll := MaxScroll;
+        if NewScroll < 0 then NewScroll := 0;
+        FScrollY := NewScroll;
+        FAnchorScrollTick := TThread.GetTickCount;
+        Repaint;
+      end;
+    end;
+    Exit;
+  end;
+
   if Assigned(FOnAnchorClick) then
     FOnAnchorClick(Self, Url);
 end;
@@ -978,6 +1012,18 @@ var
 begin
   inherited MouseWheel(Shift, WheelDelta, Handled);
   if Handled then Exit;
+
+  // Suppress wheel inertia after anchor scroll
+  if (FAnchorScrollTick > 0) then
+  begin
+    if (TThread.GetTickCount - FAnchorScrollTick < 200) then
+    begin
+      FAnchorScrollTick := TThread.GetTickCount;
+      Handled := True;
+      Exit;
+    end;
+    FAnchorScrollTick := 0;
+  end;
 
   {$IFDEF MACOS}
   CtrlDown := ssCommand in Shift;

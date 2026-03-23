@@ -162,6 +162,7 @@ type
     // DOM mutation API
     function CreateTextNode(const AText: string): TPixieElement;
     function GetElementById(const Id: string): TPixieElement;
+    function FindAnchorTarget(const Name: string): TPixieElement;
     function QuerySelector(
       const Selector: string): TPixieElement;
     function QuerySelectorAll(
@@ -1654,6 +1655,26 @@ begin
   begin
     El := FAllElements[I];
     if El.GetId = IdNum then
+      Exit(El);
+  end;
+  Result := nil;
+end;
+
+function TPixieDocument.FindAnchorTarget(
+  const Name: string): TPixieElement;
+var
+  I: Integer;
+  El: TPixieElement;
+begin
+  // First try id attribute (HTML5 standard)
+  Result := GetElementById(Name);
+  if Result <> nil then
+    Exit;
+  // Fall back to <a name="..."> (legacy HTML)
+  for I := 0 to FAllElements.Count - 1 do
+  begin
+    El := FAllElements[I];
+    if El.GetAttr('name') = Name then
       Exit(El);
   end;
   Result := nil;
