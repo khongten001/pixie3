@@ -326,4 +326,16 @@ begin
   inherited Create(ADoc, False);
 end;
 
+function CreateBeforeAfter(ADoc: TObject;
+  IsBefore: Boolean): TPixieElement;
+begin
+  if IsBefore then
+    Result := TPixieElBefore.Create(ADoc)
+  else
+    Result := TPixieElAfter.Create(ADoc);
+end;
+
+initialization
+  PixieCreateBeforeAfterFunc := CreateBeforeAfter;
+
 end.

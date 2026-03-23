@@ -164,9 +164,9 @@ type
     procedure DrawListMarker(Hdc: PtrUInt;
       const Pos: TPixiePosition; Ri: Pointer);
     function GetListMarkerText(Index: Integer): string;
-    function GetElementBefore(const AStyle: TPixieStyle;
+    function GetElementBefore(
       DoCreate: Boolean): TPixieElement;
-    function GetElementAfter(const AStyle: TPixieStyle;
+    function GetElementAfter(
       DoCreate: Boolean): TPixieElement;
 
     procedure MapToPixelLengthProperty(PropName: Integer;
@@ -195,7 +195,8 @@ type
 implementation
 
 uses
-  Pixie.NumCvt, Pixie.Document, Pixie.ElText, Pixie.RenderItem;
+  Pixie.NumCvt, Pixie.Document, Pixie.ElText, Pixie.ElBeforeAfter,
+  Pixie.RenderItem;
 
 { Helpers }
 
@@ -1029,11 +1030,9 @@ var
              (Sel.Right.Tag <> PixieId('*')));
 
           if (Apply and SelectMatchWithAfter) <> 0 then
-            BeforeAfterEl := GetElementAfter(
-              TPixieStyle(Sel.Style), DoCreate)
+            BeforeAfterEl := GetElementAfter(DoCreate)
           else
-            BeforeAfterEl := GetElementBefore(
-              TPixieStyle(Sel.Style), DoCreate);
+            BeforeAfterEl := GetElementBefore(DoCreate);
 
           if BeforeAfterEl <> nil then
           begin
@@ -1041,9 +1040,7 @@ var
               BeforeAfterEl.AddStyle(TPixieStyle(Sel.Style))
             else
               BeforeAfterEl.Parent.RemoveChild(BeforeAfterEl);
-          end
-          else if not ContentNone then
-            AddStyle(TPixieStyle(Sel.Style));
+          end;
 
           Us.Used := True;
         end
@@ -1192,16 +1189,14 @@ begin
           begin
             if (Apply and SelectMatchWithAfter) <> 0 then
             begin
-              BeforeAfterEl := GetElementAfter(
-                TPixieStyle(USel.Selector.Style), False);
+              BeforeAfterEl := GetElementAfter(False);
               if BeforeAfterEl <> nil then
                 BeforeAfterEl.AddStyle(
                   TPixieStyle(USel.Selector.Style));
             end
             else if (Apply and SelectMatchWithBefore) <> 0 then
             begin
-              BeforeAfterEl := GetElementBefore(
-                TPixieStyle(USel.Selector.Style), False);
+              BeforeAfterEl := GetElementBefore(False);
               if BeforeAfterEl <> nil then
                 BeforeAfterEl.AddStyle(
                   TPixieStyle(USel.Selector.Style));
@@ -1215,16 +1210,14 @@ begin
         end
         else if (Apply and SelectMatchWithAfter) <> 0 then
         begin
-          BeforeAfterEl := GetElementAfter(
-            TPixieStyle(USel.Selector.Style), False);
+          BeforeAfterEl := GetElementAfter(False);
           if BeforeAfterEl <> nil then
             BeforeAfterEl.AddStyle(
               TPixieStyle(USel.Selector.Style));
         end
         else if (Apply and SelectMatchWithBefore) <> 0 then
         begin
-          BeforeAfterEl := GetElementBefore(
-            TPixieStyle(USel.Selector.Style), False);
+          BeforeAfterEl := GetElementBefore(False);
           if BeforeAfterEl <> nil then
             BeforeAfterEl.AddStyle(
               TPixieStyle(USel.Selector.Style));
@@ -1800,18 +1793,18 @@ end;
 
 // Before/after element helpers
 
-function TPixieHtmlTag.GetElementBefore(const AStyle: TPixieStyle;
+function TPixieHtmlTag.GetElementBefore(
   DoCreate: Boolean): TPixieElement;
 begin
   if FChildren.Count > 0 then
     if FChildren[0].GetTag = Ord(psid__tag_before) then
       Exit(FChildren[0]);
   if DoCreate then
-    Exit(AddPseudoBefore(AStyle));
+    Exit(AddPseudoBefore);
   Result := nil;
 end;
 
-function TPixieHtmlTag.GetElementAfter(const AStyle: TPixieStyle;
+function TPixieHtmlTag.GetElementAfter(
   DoCreate: Boolean): TPixieElement;
 begin
   if FChildren.Count > 0 then
@@ -1819,7 +1812,7 @@ begin
        Ord(psid__tag_after) then
       Exit(FChildren[FChildren.Count - 1]);
   if DoCreate then
-    Exit(AddPseudoAfter(AStyle));
+    Exit(AddPseudoAfter);
   Result := nil;
 end;
 

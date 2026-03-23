@@ -39,8 +39,7 @@ type
     FUsedStyles: TPixieUsedSelectorList;
     FCounterValues: TPixieIntIntMap;
 
-    function AddBeforeAfter(AType: Integer;
-      const AStyle: TPixieStyle): TPixieElement;
+    function AddBeforeAfter(IsBefore: Boolean): TPixieElement;
 
   private
     function GetSiblingsBefore: TPixieElementList;
@@ -166,10 +165,8 @@ type
     function CreateRenderItem(ParentRi: Pointer): Pointer; virtual;
 
     // Pseudo-elements
-    function AddPseudoBefore(
-      const AStyle: TPixieStyle): TPixieElement;
-    function AddPseudoAfter(
-      const AStyle: TPixieStyle): TPixieElement;
+    function AddPseudoBefore: TPixieElement;
+    function AddPseudoAfter: TPixieElement;
 
     // Counters
     function GetCounterValue(
@@ -200,6 +197,12 @@ type
     property CounterValues: TPixieIntIntMap
       read FCounterValues;
   end;
+
+  TPixieCreateBeforeAfterFunc = function(ADoc: TObject;
+    IsBefore: Boolean): TPixieElement;
+
+var
+  PixieCreateBeforeAfterFunc: TPixieCreateBeforeAfterFunc;
 
 implementation
 
@@ -698,24 +701,28 @@ end;
 
 // Pseudo-element helpers
 
-function TPixieElement.AddPseudoBefore(
-  const AStyle: TPixieStyle): TPixieElement;
+function TPixieElement.AddPseudoBefore: TPixieElement;
 begin
-  Result := AddBeforeAfter(0, AStyle);
+  Result := AddBeforeAfter(True);
 end;
 
-function TPixieElement.AddPseudoAfter(
-  const AStyle: TPixieStyle): TPixieElement;
+function TPixieElement.AddPseudoAfter: TPixieElement;
 begin
-  Result := AddBeforeAfter(1, AStyle);
+  Result := AddBeforeAfter(False);
 end;
 
-function TPixieElement.AddBeforeAfter(AType: Integer;
-  const AStyle: TPixieStyle): TPixieElement;
+function TPixieElement.AddBeforeAfter(
+  IsBefore: Boolean): TPixieElement;
 begin
-  // Will be implemented properly when Pixie.ElBeforeAfter is available.
-  // Phase 4 step 6 will complete this; for now return nil.
-  Result := nil;
+  if not Assigned(PixieCreateBeforeAfterFunc) then
+    Exit(nil);
+  Result := PixieCreateBeforeAfterFunc(FDoc, IsBefore);
+  if Result = nil then
+    Exit;
+  if IsBefore and (FChildren.Count > 0) then
+    InsertBefore(Result, FChildren[0])
+  else
+    AppendChild(Result);
 end;
 
 // Counter implementation
