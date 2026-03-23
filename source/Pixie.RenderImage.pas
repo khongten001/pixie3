@@ -154,6 +154,26 @@ begin
     else
       FPos.Height := Sz.Height;
   end
+  else if (SrcEl.Css.CssHeight.Units = cssUnitsPercentage) and
+    (CbContext.Height.ValueType = cbcAuto) then
+  begin
+    // Width set, height is percentage but containing block height is auto
+    // — treat height as auto per CSS spec for replaced elements
+    FPos.Width := SrcEl.Css.CssWidth.CalcPercent(ParentWidth);
+
+    // check for max-width
+    if not SrcEl.Css.CssMaxWidth.IsPredefined then
+    begin
+      MaxWidth := Doc.ToPixels(Css.CssMaxWidth, Css.FontMetrics, ParentWidth);
+      if FPos.Width > MaxWidth then
+        FPos.Width := MaxWidth;
+    end;
+
+    if Sz.Width <> 0 then
+      FPos.Height := FPos.Width * Sz.Height / Sz.Width
+    else
+      FPos.Height := Sz.Height;
+  end
   else
   begin
     // Both set
