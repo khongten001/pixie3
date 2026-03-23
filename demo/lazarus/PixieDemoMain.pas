@@ -83,12 +83,12 @@ var
 begin
   Caption := Caption + ' — ' + {$I %FPCTARGETOS%} + ' ' +
     {$I %FPCTARGETCPU%} + ' ' +
-    {$IF defined(LCLqt6)}'qt6'
-    {$ELSEIF defined(LCLqt5)}'qt5'
-    {$ELSEIF defined(LCLGTK3)}'gtk3'
-    {$ELSEIF defined(LCLGTK2)}'gtk2'
-    {$ELSEIF defined(LCLCocoa)}'cocoa'
-    {$ELSEIF defined(MSWindows)}'win32'
+    {$IF DEFINED(LCLqt6)}'qt6'
+    {$ELSEIF DEFINED(LCLqt5)}'qt5'
+    {$ELSEIF DEFINED(LCLGTK3)}'gtk3'
+    {$ELSEIF DEFINED(LCLGTK2)}'gtk2'
+    {$ELSEIF DEFINED(LCLCocoa)}'cocoa'
+    {$ELSEIF DEFINED(MSWindows)}'win32'
     {$ELSE}'unknown'
     {$ENDIF};
   ImgPath := ExtractFilePath(ParamStr(0)) + '..' + PathDelim + 'resources' + PathDelim;
