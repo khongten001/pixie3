@@ -84,6 +84,7 @@ type
     procedure Resize; override;
     {$IF defined(LCLGTK2) or defined(LCLGTK3)}
     procedure DoEnter; override;
+    procedure DoExit; override;
     {$ENDIF}
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure UTF8KeyPress(var UTF8Key: TUTF8Char); override;
@@ -522,14 +523,19 @@ end;
 procedure TPixieHtmlView.DoEnter;
 var
   GdkWin: PGdkWindow;
+  ParentForm: TCustomForm;
 begin
   inherited;
 
+  // Use the parent form's window for set_client_window (CEF4Delphi approach)
+  ParentForm := GetParentForm(Self);
+  if ParentForm = nil then Exit;
+
   {$IFDEF LCLGTK2}
-  GdkWin := PGtkWidget(PtrUInt(Handle))^.window;
+  GdkWin := PGtkWidget(ParentForm.Handle)^.window;
   {$ELSE}
-  if TGtk3Widget(Handle) = nil then Exit;
-  GdkWin := gtk_widget_get_window(TGtk3Widget(Handle).Widget);
+  if TGtk3Widget(ParentForm.Handle) = nil then Exit;
+  GdkWin := gtk_widget_get_window(TGtk3Widget(ParentForm.Handle).Widget);
   {$ENDIF}
   if GdkWin = nil then Exit;
 
@@ -548,6 +554,17 @@ begin
   gtk_im_context_set_client_window(PixieGtkIMContext, GdkWin);
   gtk_im_context_focus_in(PixieGtkIMContext);
   PixieGtkIMEOwner := Self;
+end;
+
+procedure TPixieHtmlView.DoExit;
+begin
+  if PixieGtkIMContext <> nil then
+  begin
+    gtk_im_context_focus_out(PixieGtkIMContext);
+    gtk_im_context_reset(PixieGtkIMContext);
+  end;
+  PixieGtkIMEOwner := nil;
+  inherited;
 end;
 {$ENDIF}
 
@@ -683,6 +700,12 @@ var
   NewScroll, MaxScroll, ViewH: TPixiePixel;
 begin
   inherited KeyDown(Key, Shift);
+
+  {$IF defined(LCLGTK2) or defined(LCLGTK3)}
+  // Activate IM context on key press so Fcitx/IBus can intercept
+  if PixieGtkIMContext <> nil then
+    gtk_im_context_focus_in(PixieGtkIMContext);
+  {$ENDIF}
 
   // Tab / Shift+Tab cycles focus between focusable elements
   if (Key = VK_TAB) and (FDocument <> nil) then
