@@ -655,8 +655,6 @@ end;
 procedure TMainForm.BtnOpenClick(Sender: TObject);
 var
   Dlg: TOpenDialog;
-  HtmlText: string;
-  F: TStringList;
 begin
   Dlg := TOpenDialog.Create(nil);
   try
@@ -664,15 +662,8 @@ begin
     Dlg.Options := Dlg.Options + [ofFileMustExist];
     if Dlg.Execute then
     begin
-      F := TStringList.Create;
-      try
-        F.LoadFromFile(Dlg.FileName);
-        HtmlText := F.Text;
-      finally
-        F.Free;
-      end;
       UrlEdit.Text := '';
-      PixieHtmlView.LoadFromString(HtmlText, ExtractFilePath(Dlg.FileName));
+      PixieHtmlView.LoadFromFile(Dlg.FileName);
     end;
   finally
     Dlg.Free;

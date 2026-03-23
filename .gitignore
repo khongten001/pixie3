@@ -19,6 +19,10 @@ demo/delphi/Win64/
 backup/
 *.~*
 
+# Build scripts
+*.sh
+*.bat
+
 # Build output
 demo/bin/
 *.exe
