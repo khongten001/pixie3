@@ -647,12 +647,15 @@ end;
 procedure TPixieHtmlView.Resize;
 begin
   inherited Resize;
-  FNeedsLayout := True;
   if FContainer <> nil then
   begin
     FContainer.ViewportWidth := ClientWidth;
     FContainer.ViewportHeight := ClientHeight;
   end;
+  if (FDocument <> nil) and FDocument.CheckMediaChanged then
+    RebuildDocument
+  else
+    FNeedsLayout := True;
   Invalidate;
 end;
 

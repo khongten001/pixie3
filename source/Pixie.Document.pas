@@ -49,7 +49,6 @@ type
     FFixedBoxes: TPixiePositionVector;
     FOverElement: TPixieElement;
     FActiveElement: TPixieElement;
-    FMediaLists: TPixieMediaQueryListListObjList;
     FMedia: TPixieMediaFeatures;
     FLang: string;
     FCulture: string;
@@ -76,8 +75,6 @@ type
 
     function AddFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): PtrUInt;
-    function UpdateMediaLists(
-      const Features: TPixieMediaFeatures): Boolean;
     procedure BuildSelectedElements;
 
   public
@@ -116,7 +113,7 @@ type
       Attrs: TPixieStringMap): TPixieElement;
 
     // Media queries
-    procedure AddMediaList(List: TPixieMediaQueryListList);
+    function CheckMediaChanged: Boolean;
     function MatchLang(const Lang: string): Boolean;
 
     // Render tree access
@@ -218,7 +215,6 @@ begin
   FMasterCss := TPixieStylesheet.Create;
   FUserCss := TPixieStylesheet.Create;
   FFixedBoxes := TPixiePositionVector.Create;
-  FMediaLists := TPixieMediaQueryListListObjList.Create(False);
   FTabularElements := TPixiePointerList.Create;
   FAllElements := TPixieElementList.Create(True); // owns elements
   FSelMap := TPixieSelectionSet.Create;
@@ -262,7 +258,6 @@ begin
   FSelMap.Free;
   FAllElements.Free;
   FTabularElements.Free;
-  FMediaLists.Free;
   FFixedBoxes.Free;
   FUserCss.Free;
   FMasterCss.Free;
@@ -530,7 +525,9 @@ begin
       Doc.FStyles.SortSelectors;
 
       // Apply media features
-      Doc.UpdateMediaLists(Doc.FMedia);
+      Doc.FMasterCss.ApplyMediaFeatures(Doc.FMedia);
+      Doc.FStyles.ApplyMediaFeatures(Doc.FMedia);
+      Doc.FUserCss.ApplyMediaFeatures(Doc.FMedia);
 
       // Apply parsed styles
       Doc.FRoot.ApplyStylesheet(Doc.FStyles);
@@ -816,22 +813,18 @@ end;
 
 // --- Media Queries ---
 
-procedure TPixieDocument.AddMediaList(
-  List: TPixieMediaQueryListList);
-begin
-  if (List <> nil) and (FMediaLists.IndexOf(List) < 0) then
-    FMediaLists.Add(List);
-end;
-
-function TPixieDocument.UpdateMediaLists(
-  const Features: TPixieMediaFeatures): Boolean;
+function TPixieDocument.CheckMediaChanged: Boolean;
 var
-  I: Integer;
+  NewMedia: TPixieMediaFeatures;
 begin
   Result := False;
-  for I := 0 to FMediaLists.Count - 1 do
-    if FMediaLists[I].ApplyMediaFeatures(Features) then
-      Result := True;
+  if FContainer = nil then
+    Exit;
+
+  FContainer.GetMediaFeatures(NewMedia);
+  Result := FStyles.WouldMediaChange(FMedia, NewMedia) or
+            FMasterCss.WouldMediaChange(FMedia, NewMedia) or
+            FUserCss.WouldMediaChange(FMedia, NewMedia);
 end;
 
 function TPixieDocument.MatchLang(const Lang: string): Boolean;
@@ -1885,7 +1878,6 @@ begin
   FStyles.Free;
   FStyles := TPixieStylesheet.Create;
   FCss.Clear;
-  FMediaLists.Clear;
 
   // 7. Re-apply master CSS
   FRoot.SetPseudoClass(Ord(psid_root), True);
@@ -1917,7 +1909,9 @@ begin
   // 10. Apply media features
   if FContainer <> nil then
     FContainer.GetMediaFeatures(FMedia);
-  UpdateMediaLists(FMedia);
+  FMasterCss.ApplyMediaFeatures(FMedia);
+  FStyles.ApplyMediaFeatures(FMedia);
+  FUserCss.ApplyMediaFeatures(FMedia);
 
   // 11. Apply document styles
   FRoot.ApplyStylesheet(FStyles);

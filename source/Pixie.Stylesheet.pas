@@ -61,6 +61,11 @@ type
     function GetCandidatesById(Id: Integer): TPixieCssSelectorList;
     function GetUniversalCandidates: TPixieCssSelectorList;
 
+    procedure ApplyMediaFeatures(
+      const Features: TPixieMediaFeatures);
+    function WouldMediaChange(
+      const OldFeatures, NewFeatures: TPixieMediaFeatures): Boolean;
+
     property Selectors: TPixieCssSelectorList read FSelectors;
     property IsIndexed: Boolean read FIsIndexed;
   end;
@@ -211,6 +216,15 @@ var
   I: Integer;
   RuleName: Integer;
 begin
+  // Register external media query (e.g. <style media="...">) for tracking
+  if (Media <> nil) and (FMediaQueries.IndexOf(Media) < 0) then
+  begin
+    Media.Lists.OwnsObjects := False;
+    for I := 0 to Media.Lists.Count - 1 do
+      FMqLists.Add(Media.Lists[I]);
+    FMediaQueries.Add(Media);
+  end;
+
   Rules := PixieCssParseStylesheet(Tokens, TopLevel);
   try
     for I := 0 to Rules.Count - 1 do
@@ -408,6 +422,44 @@ begin
   end;
 
   BuildIndex;
+end;
+
+procedure TPixieStylesheet.ApplyMediaFeatures(
+  const Features: TPixieMediaFeatures);
+var
+  I: Integer;
+begin
+  for I := 0 to FMediaQueries.Count - 1 do
+    FMediaQueries[I].ApplyMediaFeatures(Features);
+end;
+
+function TPixieStylesheet.WouldMediaChange(
+  const OldFeatures, NewFeatures: TPixieMediaFeatures): Boolean;
+var
+  I: Integer;
+  OldMatch, NewMatch: Boolean;
+  MqLL: TPixieMediaQueryListList;
+  J: Integer;
+begin
+  Result := False;
+  for I := 0 to FMediaQueries.Count - 1 do
+  begin
+    MqLL := FMediaQueries[I];
+    OldMatch := True;
+    NewMatch := True;
+    for J := 0 to MqLL.Lists.Count - 1 do
+    begin
+      if not MqLL.Lists[J].Check(OldFeatures) then
+        OldMatch := False;
+      if not MqLL.Lists[J].Check(NewFeatures) then
+        NewMatch := False;
+    end;
+    if OldMatch <> NewMatch then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
 end;
 
 end.
