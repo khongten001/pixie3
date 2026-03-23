@@ -765,17 +765,52 @@ procedure TPixieNativeContainer.DrawImage(Hdc: PtrUInt;
 var
   Handle: TPixieImageHandle;
   R: TPixieBorderRadiuses;
+  TileW, TileH: Single;
+  RepeatX, RepeatY: Boolean;
+  Col, Row, StartCol, StartRow, EndCol, EndRow: Integer;
 begin
   Handle := GetCachedImage(Url, ABaseUrl);
   if Handle = 0 then Exit;
+
+  TileW := Layer.OriginBox.Width;
+  TileH := Layer.OriginBox.Height;
+  if (TileW <= 0) or (TileH <= 0) then Exit;
+
+  RepeatX := Layer.Repeat_ in [brRepeat, brRepeatX];
+  RepeatY := Layer.Repeat_ in [brRepeat, brRepeatY];
+
+  if RepeatX then
+  begin
+    StartCol := Floor((Layer.ClipBox.X - Layer.OriginBox.X) / TileW);
+    EndCol := Ceil((Layer.ClipBox.X + Layer.ClipBox.Width - Layer.OriginBox.X) / TileW) - 1;
+  end
+  else
+  begin
+    StartCol := 0;
+    EndCol := 0;
+  end;
+
+  if RepeatY then
+  begin
+    StartRow := Floor((Layer.ClipBox.Y - Layer.OriginBox.Y) / TileH);
+    EndRow := Ceil((Layer.ClipBox.Y + Layer.ClipBox.Height - Layer.OriginBox.Y) / TileH) - 1;
+  end
+  else
+  begin
+    StartRow := 0;
+    EndRow := 0;
+  end;
 
   R := Layer.BorderRadius;
   FCanvas.SaveState;
   try
     FCanvas.SetClipRect(Layer.ClipBox, R);
-    FCanvas.DrawImage(Handle,
-      Layer.OriginBox.X, Layer.OriginBox.Y,
-      Layer.OriginBox.Width, Layer.OriginBox.Height);
+    for Row := StartRow to EndRow do
+      for Col := StartCol to EndCol do
+        FCanvas.DrawImage(Handle,
+          Layer.OriginBox.X + Col * TileW,
+          Layer.OriginBox.Y + Row * TileH,
+          TileW, TileH);
   finally
     FCanvas.RestoreState;
   end;
