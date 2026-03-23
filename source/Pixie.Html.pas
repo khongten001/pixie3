@@ -17,11 +17,8 @@ function PixieMatch(const Str: string; Index: Integer; const Substr: string): Bo
 function PixieValueIndex(const Val, Strings: string; DefValue: Integer = -1; Delim: Char = ';'): Integer;
 function PixieIndexValue(Index: Integer; const Strings: string; Delim: Char = ';'): string;
 function PixieValueInList(const Val, Strings: string; Delim: Char = ';'): Boolean;
-function PixieCompareAt(const S: string; Start, Len: Integer; const Val: string): Boolean;
 function PixieStrEqualNoCase(const S, LowerVal: string): Boolean;
-function PixieFindCloseBracket(const S: string; Off: Integer; OpenB: Char = '('; CloseB: Char = ')'): Integer;
 procedure PixieSplitString(const Str: string; Tokens: TPixieStringVector; const Delims: string = PixieWhitespace; const DelimsPreserve: string = ''; const Quote: string = '"');
-procedure PixieJoinString(var Str: string; Tokens: TPixieStringVector; const Delims: string);
 
 function PixieIsWhitespace(C: Integer): Boolean; inline;
 function PixieIsAlpha(C: Integer): Boolean; inline;
@@ -31,7 +28,6 @@ function PixieDigitValue(C: Integer): Integer; inline;
 function PixieIsSurrogate(C: Integer): Boolean; inline;
 function PixieToLower(C: Integer): Integer; inline;
 
-function PixieIsNumber(const Str: string; AllowDot: Boolean = True): Boolean;
 function PixieDecodeHtmlBytes(const Bytes: TBytes): string;
 
 implementation
@@ -130,6 +126,18 @@ begin
   Result := True;
 end;
 
+function PixieCompareAt(const S: string; Start, Len: Integer; const Val: string): Boolean;
+var
+  I: Integer;
+begin
+  if Len <> Length(Val) then
+    Exit(False);
+  for I := 1 to Len do
+    if S[Start + I - 1] <> Val[I] then
+      Exit(False);
+  Result := True;
+end;
+
 function PixieValueIndex(const Val, Strings: string; DefValue: Integer; Delim: Char): Integer;
 var
   Idx, Start, ItemEnd, ItemLen, ValLen, StrLen: Integer;
@@ -180,18 +188,6 @@ end;
 function PixieValueInList(const Val, Strings: string; Delim: Char): Boolean;
 begin
   Result := PixieValueIndex(Val, Strings, -1, Delim) >= 0;
-end;
-
-function PixieCompareAt(const S: string; Start, Len: Integer; const Val: string): Boolean;
-var
-  I: Integer;
-begin
-  if Len <> Length(Val) then
-    Exit(False);
-  for I := 1 to Len do
-    if S[Start + I - 1] <> Val[I] then
-      Exit(False);
-  Result := True;
 end;
 
 function PixieStrEqualNoCase(const S, LowerVal: string): Boolean;
@@ -347,19 +343,6 @@ begin
   end;
 end;
 
-procedure PixieJoinString(var Str: string; Tokens: TPixieStringVector; const Delims: string);
-var
-  I: Integer;
-begin
-  Str := '';
-  for I := 0 to Tokens.Count - 1 do
-  begin
-    if I > 0 then
-      Str := Str + Delims;
-    Str := Str + Tokens[I];
-  end;
-end;
-
 function PixieIsWhitespace(C: Integer): Boolean;
 begin
   Result := (C = Ord(' ')) or (C = 9) or (C = 10) or (C = 13) or (C = 12);
@@ -399,18 +382,6 @@ begin
     Result := C + 32
   else
     Result := C;
-end;
-
-function PixieIsNumber(const Str: string; AllowDot: Boolean): Boolean;
-var
-  I: Integer;
-begin
-  if Str = '' then
-    Exit(False);
-  for I := 1 to Length(Str) do
-    if not (PixieIsDigit(Ord(Str[I])) or (AllowDot and (Str[I] = '.'))) then
-      Exit(False);
-  Result := True;
 end;
 
 // Detect charset from HTML using the spec prescan algorithm
