@@ -72,6 +72,7 @@ type
     FSelFocus: TPixieElement;
     FSelecting: Boolean;
     FSelMap: TPixieSelectionSet;
+    FWordSelAnchor: TPixieElement;
 
     function AddFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): PtrUInt;
@@ -182,6 +183,7 @@ type
     // Text selection
     procedure SelectionStart(X, Y, ClientX, ClientY: TPixiePixel);
     function SelectionMove(X, Y, ClientX, ClientY: TPixiePixel): Boolean;
+    function SelectionMoveWord(X, Y, ClientX, ClientY: TPixiePixel): Boolean;
     function SelectWord(X, Y: TPixiePixel): Boolean;
     procedure SelectionEnd;
     procedure SelectAll;
@@ -232,6 +234,7 @@ begin
   FSelAnchor := nil;
   FSelFocus := nil;
   FSelecting := False;
+  FWordSelAnchor := nil;
 end;
 
 destructor TPixieDocument.Destroy;
@@ -1349,6 +1352,7 @@ begin
   if FFocusedElement = El then FFocusedElement := nil;
   if FSelAnchor = El then FSelAnchor := nil;
   if FSelFocus = El then FSelFocus := nil;
+  if FWordSelAnchor = El then FWordSelAnchor := nil;
 
   // Remove from FAllElements and free
   Idx := FAllElements.IndexOf(El);
@@ -1539,6 +1543,49 @@ begin
   end;
 end;
 
+function TPixieDocument.SelectionMoveWord(
+  X, Y, ClientX, ClientY: TPixiePixel): Boolean;
+var
+  El: TPixieElement;
+  AnchorIdx, ElIdx: Integer;
+begin
+  Result := False;
+  if (not FSelecting) or (FWordSelAnchor = nil) then
+    Exit;
+  if (FRoot = nil) or (FRootRender = nil) then
+    Exit;
+
+  El := TPixieRenderItem(FRootRender).GetTextByPoint(X, Y);
+  if El = nil then
+    El := TPixieRenderItem(FRootRender).GetNearestTextByPoint(X, Y);
+  if El = nil then
+    Exit;
+
+  AnchorIdx := FAllElements.IndexOf(FWordSelAnchor);
+  ElIdx := FAllElements.IndexOf(El);
+  if (AnchorIdx < 0) or (ElIdx < 0) then
+    Exit;
+
+  if ElIdx < AnchorIdx then
+  begin
+    FSelAnchor := El;
+    FSelFocus := FWordSelAnchor;
+  end
+  else if ElIdx > AnchorIdx then
+  begin
+    FSelAnchor := FWordSelAnchor;
+    FSelFocus := El;
+  end
+  else
+  begin
+    FSelAnchor := FWordSelAnchor;
+    FSelFocus := FWordSelAnchor;
+  end;
+
+  BuildSelectedElements;
+  Result := True;
+end;
+
 function TPixieDocument.SelectWord(X, Y: TPixiePixel): Boolean;
 var
   El: TPixieElement;
@@ -1553,6 +1600,8 @@ begin
     ClearSelection;
     FSelAnchor := El;
     FSelFocus := El;
+    FWordSelAnchor := El;
+    FSelecting := True;
     FSelMap.AddOrSetValue(Pointer(El), True);
     Result := True;
   end;
@@ -1591,6 +1640,7 @@ begin
   FSelAnchor := nil;
   FSelFocus := nil;
   FSelecting := False;
+  FWordSelAnchor := nil;
 end;
 
 function TPixieDocument.HasSelection: Boolean;
@@ -1912,6 +1962,7 @@ begin
   FSelAnchor := nil;
   FSelFocus := nil;
   FSelecting := False;
+  FWordSelAnchor := nil;
   FSelMap.Clear;
 
   // 4. Remove and free ::before/::after pseudo-elements

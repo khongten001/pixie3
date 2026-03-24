@@ -62,6 +62,7 @@ type
     FOnFetchUrl: TPixieFetchUrlEvent;
     FRedrawBoxes: TPixiePositionVector;
     FDragging: Boolean;
+    FWordDragging: Boolean;
     FScrollDragging: Boolean;
     FScrollDragOffset: TPixiePixel;
     FAnchorScrollTick: UInt64;
@@ -211,6 +212,7 @@ begin
   FContentHeight := 0;
   FZoom := 1.0;
   FDragging := False;
+  FWordDragging := False;
   FScrollDragging := False;
 
   FContainer := TPixieNativeContainer.Create(FCanvas);
@@ -289,6 +291,7 @@ begin
   FContentHeight := 0;
   FNeedsLayout := True;
   FDragging := False;
+  FWordDragging := False;
   FScrollDragging := False;
 
   if (FLines.Count > 0) and (FCanvas <> nil) then
@@ -754,10 +757,15 @@ begin
     if IsDouble then
     begin
       if FDocument.SelectWord(Vx, Vy + FScrollY) then
+      begin
+        FWordDragging := True;
+        FDragging := True;
         Invalidate;
+      end;
     end
     else
     begin
+      FWordDragging := False;
       FDocument.SelectionStart(Vx, Vy + FScrollY, Vx, Vy);
       FDragging := True;
     end;
@@ -813,7 +821,12 @@ begin
       end
       else
       begin
-        if FDocument.SelectionMove(Vx, Vy + FScrollY, Vx, Vy) then
+        if FWordDragging then
+        begin
+          if FDocument.SelectionMoveWord(Vx, Vy + FScrollY, Vx, Vy) then
+            Invalidate;
+        end
+        else if FDocument.SelectionMove(Vx, Vy + FScrollY, Vx, Vy) then
           Invalidate;
       end;
     end;
@@ -834,6 +847,7 @@ begin
     Vx := Round(X / GetEffectiveScale);
     Vy := Round(Y / GetEffectiveScale);
     FDragging := False;
+    FWordDragging := False;
     FDocument.SelectionEnd;
     if FDocument.HasSelection then
       Invalidate
