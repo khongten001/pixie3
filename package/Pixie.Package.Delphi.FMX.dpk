@@ -93,6 +93,7 @@ contains
   Pixie.Canvas.FMX in '..\source\Pixie.Canvas.FMX.pas',
   Pixie.NativeContainer in '..\source\Pixie.NativeContainer.pas',
   Pixie.TrueType in '..\source\Pixie.TrueType.pas',
+  Pixie.HtmlView.Base in '..\source\Pixie.HtmlView.Base.pas',
   Pixie.HtmlView.FMX in '..\source\Pixie.HtmlView.FMX.pas',
   Pixie.Register.Delphi.FMX in 'Pixie.Register.Delphi.FMX.pas';
 

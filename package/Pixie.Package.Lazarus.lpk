@@ -133,6 +133,10 @@
         <UnitName Value="Pixie.HtmlTag"/>
       </Item>
       <Item>
+        <Filename Value="../source/Pixie.HtmlView.Base.pas"/>
+        <UnitName Value="Pixie.HtmlView.Base"/>
+      </Item>
+      <Item>
         <Filename Value="../source/Pixie.HtmlView.pas"/>
         <UnitName Value="Pixie.HtmlView"/>
       </Item>

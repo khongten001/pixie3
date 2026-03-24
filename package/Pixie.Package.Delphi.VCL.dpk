@@ -89,6 +89,7 @@ contains
   Pixie.D2DHeaders in '..\source\Pixie.D2DHeaders.pas',
   Pixie.Canvas.D2D in '..\source\Pixie.Canvas.D2D.pas',
   Pixie.NativeContainer in '..\source\Pixie.NativeContainer.pas',
+  Pixie.HtmlView.Base in '..\source\Pixie.HtmlView.Base.pas',
   Pixie.HtmlView.VCL in '..\source\Pixie.HtmlView.VCL.pas',
   Pixie.Register.Delphi.VCL in 'Pixie.Register.Delphi.VCL.pas';
 
