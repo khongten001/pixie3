@@ -735,6 +735,7 @@ end;
 function TPixieRenderItem.CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
 var
   ElWidth: TPixiePixel;
+  CenterByParent: Boolean;
 begin
   Result := 0;
   if ((FElement.Css.Display = displayBlock) or
@@ -742,8 +743,15 @@ begin
      (FElement.Css.ElPosition <> epAbsolute) and
      (FElement.Css.Float_ = efNone) then
   begin
-    if FElement.Css.CssMargins.Left.IsPredefined and
-       FElement.Css.CssMargins.Right.IsPredefined then
+    // Tables inherit centering from parent text-align: center.
+    // Browsers implement this via non-standard text-align values
+    // (-webkit-center / -moz-center) that center block children.
+    // We achieve the same by treating the table as margin:auto.
+    CenterByParent := (FElement.Css.Display = displayTable) and
+      (FElement.Parent <> nil) and
+      (FElement.Parent.Css.TextAlign = taCenter);
+    if (FElement.Css.CssMargins.Left.IsPredefined and
+       FElement.Css.CssMargins.Right.IsPredefined) or CenterByParent then
     begin
       ElWidth := FPos.Width + FBorders.Left + FBorders.Right +
         FPadding.Left + FPadding.Right;

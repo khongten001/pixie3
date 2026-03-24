@@ -86,6 +86,13 @@ begin
   if Val <> '' then
     FStyle.AddProperty(Ord(psid_background_color), Val);
 
+  Val := GetAttr('align');
+  if SameText(Val, 'center') then
+  begin
+    FStyle.AddProperty(Ord(psid_margin_left), 'auto');
+    FStyle.AddProperty(Ord(psid_margin_right), 'auto');
+  end;
+
   inherited ParseAttributes;
 end;
 
