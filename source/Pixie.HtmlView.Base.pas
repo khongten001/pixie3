@@ -11,6 +11,9 @@ interface
 
 uses
   SysUtils, Classes,
+  {$IFDEF FPC}ExtCtrls,{$ENDIF}
+  {$IFDEF FRAMEWORK_FMX}FMX.Types,{$ENDIF}
+  {$IFDEF FRAMEWORK_VCL}Vcl.ExtCtrls,{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
   Pixie.Html, Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext;
@@ -95,6 +98,12 @@ type
     FWordDragging: Boolean;
     FScrollDragging: Boolean;
     FScrollDragOffset: TPixiePixel;
+    FAutoScrollTimer: TTimer;
+    FAutoScrollDY: TPixiePixel;
+    FAutoScrollSpeed: Integer;
+    FAutoScrollAccel: Integer;
+    FLastDragVx: Integer;
+    FLastDragVy: Integer;
     FAnchorScrollTick: UInt64;
     FOnBeforeParse: TNotifyEvent;
     FOnAfterParse: TNotifyEvent;
@@ -115,6 +124,10 @@ type
     procedure UpdateCursorFromCss;
     procedure ResetCaret;
     procedure Invalidate;
+    procedure DoAutoScrollTimer(Sender: TObject);
+    procedure UpdateAutoScroll(Vy: Integer; ViewH: TPixiePixel;
+      DeltaX: Integer);
+    procedure StopAutoScroll;
   public
     // Host callbacks — set by concrete class in its constructor
     Owner: TObject;
@@ -167,6 +180,7 @@ type
     property ContentHeight: TPixiePixel read FContentHeight;
     property ScrollY: TPixiePixel read FScrollY write FScrollY;
     property NeedsLayout: Boolean read FNeedsLayout write FNeedsLayout;
+    property AutoScrollSpeed: Integer read FAutoScrollSpeed write FAutoScrollSpeed;
     property OnAnchorClick: TPixieAnchorClickEvent
       read FOnAnchorClick write FOnAnchorClick;
     property OnElementClick: TPixieElementClickEvent
@@ -292,6 +306,104 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// Auto-scroll during drag selection
+// ---------------------------------------------------------------------------
+
+const
+  AutoScrollEdge = 10;
+  AutoScrollAccelThreshold = 3;
+  AutoScrollAccelMax = 3;
+
+procedure TPixieHtmlViewCore.UpdateAutoScroll(Vy: Integer;
+  ViewH: TPixiePixel; DeltaX: Integer);
+var
+  Dir: Integer;
+begin
+  if ViewH <= AutoScrollEdge * 2 then
+    Exit;
+  if Vy < AutoScrollEdge then
+    Dir := -1
+  else if Vy > Round(ViewH) - AutoScrollEdge then
+    Dir := 1
+  else
+  begin
+    StopAutoScroll;
+    Exit;
+  end;
+
+  // Horizontal jiggling accelerates scroll speed
+  if DeltaX >= AutoScrollAccelThreshold then
+  begin
+    if FAutoScrollAccel < AutoScrollAccelMax then
+      Inc(FAutoScrollAccel);
+  end;
+
+  FAutoScrollDY := FAutoScrollSpeed * (1 + FAutoScrollAccel) * Dir;
+  if not FAutoScrollTimer.Enabled then
+    FAutoScrollTimer.Enabled := True;
+end;
+
+procedure TPixieHtmlViewCore.StopAutoScroll;
+begin
+  if FAutoScrollTimer.Enabled then
+    FAutoScrollTimer.Enabled := False;
+  FAutoScrollDY := 0;
+  FAutoScrollAccel := 0;
+end;
+
+procedure TPixieHtmlViewCore.DoAutoScrollTimer(Sender: TObject);
+var
+  NewScroll, MaxScroll, ViewH: TPixiePixel;
+begin
+  if (FDocument = nil) or not FDragging then
+  begin
+    StopAutoScroll;
+    Exit;
+  end;
+
+  ViewH := OnHostGetViewHeight / GetEffectiveScale;
+  MaxScroll := FContentHeight - ViewH;
+  if MaxScroll < 0 then MaxScroll := 0;
+
+  NewScroll := FScrollY + FAutoScrollDY;
+  if NewScroll < 0 then NewScroll := 0;
+  if NewScroll > MaxScroll then NewScroll := MaxScroll;
+
+  if NewScroll = FScrollY then
+  begin
+    StopAutoScroll;
+    Exit;
+  end;
+
+  FScrollY := NewScroll;
+
+  // Decay acceleration each tick — must keep jiggling to maintain speed
+  if FAutoScrollAccel > 0 then
+  begin
+    Dec(FAutoScrollAccel);
+    if FAutoScrollDY > 0 then
+      FAutoScrollDY := FAutoScrollSpeed * (1 + FAutoScrollAccel)
+    else
+      FAutoScrollDY := -FAutoScrollSpeed * (1 + FAutoScrollAccel);
+  end;
+
+  // Update selection at last known mouse position with new scroll offset
+  if (FDocument.FocusedElement <> nil) and
+     FDocument.FocusedElement.IsFocusable then
+  begin
+    FDocument.DispatchMouseDrag(FLastDragVx, FLastDragVy + FScrollY);
+  end
+  else if FWordDragging then
+    FDocument.SelectionMoveWord(FLastDragVx, FLastDragVy + FScrollY,
+      FLastDragVx, FLastDragVy)
+  else
+    FDocument.SelectionMove(FLastDragVx, FLastDragVy + FScrollY,
+      FLastDragVx, FLastDragVy);
+
+  Invalidate;
+end;
+
+// ---------------------------------------------------------------------------
 // Construction
 // ---------------------------------------------------------------------------
 
@@ -310,6 +422,11 @@ begin
   FDragging := False;
   FWordDragging := False;
   FScrollDragging := False;
+  FAutoScrollSpeed := 20;
+  FAutoScrollTimer := TTimer.Create(nil);
+  FAutoScrollTimer.Interval := 50;
+  FAutoScrollTimer.OnTimer := DoAutoScrollTimer;
+  FAutoScrollTimer.Enabled := False;
   FScrollbar := TPixieScrollbarSettings.Create;
   FScrollbar.OnChanged := Invalidate;
 
@@ -322,6 +439,7 @@ end;
 
 destructor TPixieHtmlViewCore.Destroy;
 begin
+  FreeAndNil(FAutoScrollTimer);
   FreeAndNil(FDocument);
   FreeAndNil(FContainer);
   FreeAndNil(FCanvas);
@@ -389,6 +507,7 @@ begin
   FScrollY := 0;
   FContentHeight := 0;
   FNeedsLayout := True;
+  StopAutoScroll;
   FDragging := False;
   FWordDragging := False;
   FScrollDragging := False;
@@ -882,7 +1001,7 @@ end;
 
 procedure TPixieHtmlViewCore.HandleMouseMove(X, Y: Integer);
 var
-  Vx, Vy: Integer;
+  Vx, Vy, DeltaX: Integer;
   ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: TPixiePixel;
 begin
   if FScrollDragging then
@@ -923,6 +1042,11 @@ begin
     UpdateCursorFromCss;
     if FDragging then
     begin
+      DeltaX := Abs(Vx - FLastDragVx);
+      FLastDragVx := Vx;
+      FLastDragVy := Vy;
+      UpdateAutoScroll(Vy, OnHostGetViewHeight / GetEffectiveScale,
+        DeltaX);
       if (FDocument.FocusedElement <> nil) and
          FDocument.FocusedElement.IsFocusable then
       begin
@@ -956,6 +1080,7 @@ begin
   begin
     Vx := Round(X / GetEffectiveScale);
     Vy := Round(Y / GetEffectiveScale);
+    StopAutoScroll;
     FDragging := False;
     FWordDragging := False;
     FDocument.SelectionEnd;
@@ -973,6 +1098,7 @@ end;
 
 procedure TPixieHtmlViewCore.HandleMouseLeave;
 begin
+  StopAutoScroll;
   if FDocument <> nil then
   begin
     FRedrawBoxes.Clear;

@@ -58,6 +58,8 @@ type
     function GetZoom: Double;
     procedure SetZoom(const Value: Double);
     function GetScrollbar: TPixieScrollbarSettings;
+    function GetAutoScrollSpeed: Integer;
+    procedure SetAutoScrollSpeed(Value: Integer);
     function GetOnAnchorClick: TPixieAnchorClickEvent;
     procedure SetOnAnchorClick(Value: TPixieAnchorClickEvent);
     function GetOnElementClick: TPixieElementClickEvent;
@@ -102,6 +104,8 @@ type
     property Scrollbar: TPixieScrollbarSettings read GetScrollbar;
     property ContentHeight: TPixiePixel read GetContentHeight;
     property ScrollY: TPixiePixel read GetScrollY write SetScrollY;
+    property AutoScrollSpeed: Integer read GetAutoScrollSpeed
+      write SetAutoScrollSpeed;
   published
     property TabOrder;
     property TabStop;
@@ -324,6 +328,16 @@ end;
 procedure TPixieHtmlView.SetZoom(const Value: Double);
 begin
   FCore.Zoom := Value;
+end;
+
+function TPixieHtmlView.GetAutoScrollSpeed: Integer;
+begin
+  Result := FCore.AutoScrollSpeed;
+end;
+
+procedure TPixieHtmlView.SetAutoScrollSpeed(Value: Integer);
+begin
+  FCore.AutoScrollSpeed := Value;
 end;
 
 function TPixieHtmlView.GetOnAnchorClick: TPixieAnchorClickEvent;
