@@ -771,8 +771,8 @@ begin
       if I > 0 then
         L := L - Min(FColumns[I - 1].BorderRight, FColumns[I].BorderLeft);
       ColP := FColumns.Ptr(I);
-      ColP^.Left := L;
-      ColP^.Right := ColP^.Left + ColP^.Width;
+      ColP^.Left := Round(L);
+      ColP^.Right := Round(L + ColP^.Width);
       L := ColP^.Right;
     end;
   end;
@@ -807,8 +807,8 @@ begin
       if I > 0 then
         T := T - Min(FRows[I - 1].BorderBottom, FRows[I].BorderTop);
       RowP := FRows.Ptr(I);
-      RowP^.Top := T;
-      RowP^.Bottom := RowP^.Top + RowP^.Height;
+      RowP^.Top := Round(T);
+      RowP^.Bottom := Round(T + RowP^.Height);
       T := RowP^.Bottom;
     end;
   end;
