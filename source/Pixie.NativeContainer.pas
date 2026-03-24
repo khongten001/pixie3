@@ -768,6 +768,7 @@ var
   TileW, TileH: Single;
   RepeatX, RepeatY: Boolean;
   Col, Row, StartCol, StartRow, EndCol, EndRow: Integer;
+  DrawX, DrawY, DrawW, DrawH: Single;
 begin
   Handle := GetCachedImage(Url, ABaseUrl);
   if Handle = 0 then Exit;
@@ -807,10 +808,14 @@ begin
     FCanvas.SetClipRect(Layer.ClipBox, R);
     for Row := StartRow to EndRow do
       for Col := StartCol to EndCol do
-        FCanvas.DrawImage(Handle,
-          Layer.OriginBox.X + Col * TileW,
-          Layer.OriginBox.Y + Row * TileH,
-          TileW, TileH);
+      begin
+        // Snap to pixels and overlap by 1px to prevent D2D interpolation gaps
+        DrawX := Floor(Layer.OriginBox.X + Col * TileW);
+        DrawY := Floor(Layer.OriginBox.Y + Row * TileH);
+        DrawW := Floor(Layer.OriginBox.X + (Col + 1) * TileW) - DrawX + 1;
+        DrawH := Floor(Layer.OriginBox.Y + (Row + 1) * TileH) - DrawY + 1;
+        FCanvas.DrawImage(Handle, DrawX, DrawY, DrawW, DrawH);
+      end;
   finally
     FCanvas.RestoreState;
   end;
