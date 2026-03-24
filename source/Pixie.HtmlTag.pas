@@ -1618,7 +1618,8 @@ begin
           // Skip decoration when the element contains only replaced elements (e.g. <a><img></a>)
           HasTextContent := False;
           for I := 0 to FChildren.Count - 1 do
-            if not FChildren[I].IsReplaced then
+            if not FChildren[I].IsReplaced and
+               not FChildren[I].IsSpace then
             begin
               HasTextContent := True;
               Break;
