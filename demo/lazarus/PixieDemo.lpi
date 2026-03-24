@@ -21,7 +21,7 @@
           </Target>
           <SearchPaths>
             <OtherUnitFiles Value="../../source;../../package"/>
-            <UnitOutputDirectory Value="$Env(TEMP)/pixie-units/$(TargetCPU)-$(TargetOS)"/>
+            <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
             <SyntaxOptions>
@@ -53,7 +53,7 @@
           </Target>
           <SearchPaths>
             <OtherUnitFiles Value="../../source;../../package"/>
-            <UnitOutputDirectory Value="$Env(TEMP)/pixie-units/$(TargetCPU)-$(TargetOS)"/>
+            <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
             <SyntaxOptions>
@@ -109,7 +109,7 @@
     </Target>
     <SearchPaths>
       <OtherUnitFiles Value="../../source;../../package"/>
-      <UnitOutputDirectory Value="$Env(TEMP)/pixie-units/$(TargetCPU)-$(TargetOS)"/>
+      <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
       <SyntaxOptions>

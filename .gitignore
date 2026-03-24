@@ -25,6 +25,7 @@ backup/
 
 # Build output
 demo/bin/
+demo/lib/
 *.exe
 *.dll
 *.so
