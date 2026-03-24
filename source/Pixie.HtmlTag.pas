@@ -1519,6 +1519,7 @@ begin
           begin
             Layer.ClipBox := Clip^;
             Layer.BorderBox := Clip^;
+            Layer.OriginBox := Clip^;
           end;
 
           Layer.BorderBox.DoRound;
