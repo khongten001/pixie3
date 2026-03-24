@@ -211,7 +211,7 @@ begin
     begin
       Assert(FDoc is TPixieDocument);
       Doc := TPixieDocument(FDoc);
-      if Doc.IsSelected(Self) then
+      if Doc.IsSelected(Self) and (not IsSpace) then
         Doc.Container.DrawHighlight(Hdc, Pos, PixieSelectionColor);
       HFont := ElParent.Css.Font;
       if HFont <> 0 then
