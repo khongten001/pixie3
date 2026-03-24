@@ -847,8 +847,8 @@ begin
       Exit;
     end;
 
-    // Recurse into children
-    if Child.FChildren.Count > 0 then
+    // Recurse into inline children only (block/float children handle their own layout)
+    if (Child.FChildren.Count > 0) and (Child.SrcEl.Css.Display = displayInline) then
     begin
       ChildSplit := Child.SplitInlines;
       if ChildSplit.Before <> nil then

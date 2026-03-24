@@ -1169,6 +1169,7 @@ begin
       FChildren[I].RefreshStyles;
 
   FStyle.Clear;
+  ParseAttributes;
 
   if FUsedStyles = nil then
     FUsedStyles := TPixieUsedSelectorList.Create;
