@@ -743,13 +743,11 @@ begin
      (FElement.Css.ElPosition <> epAbsolute) and
      (FElement.Css.Float_ = efNone) then
   begin
-    // Tables inherit centering from parent text-align: center.
-    // Browsers implement this via non-standard text-align values
-    // (-webkit-center / -moz-center) that center block children.
-    // We achieve the same by treating the table as margin:auto.
-    CenterByParent := (FElement.Css.Display = displayTable) and
-      (FElement.Parent <> nil) and
-      (FElement.Parent.Css.TextAlign = taCenter);
+    // Browsers use -webkit-center / -moz-center to center block children
+    // when align="center" is used. We map this to taBlockCenter and then
+    // treat the child as margin:auto.
+    CenterByParent := (FElement.Parent <> nil) and
+      (FElement.Parent.Css.TextAlign = taBlockCenter);
     if (FElement.Css.CssMargins.Left.IsPredefined and
        FElement.Css.CssMargins.Right.IsPredefined) or CenterByParent then
     begin

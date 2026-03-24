@@ -276,12 +276,13 @@ type
   );
 
   // Text align
-  // 'left;right;center;justify'
+  // 'left;right;center;justify;-webkit-center'
   TPixieTextAlign = (
     taLeft,
     taRight,
     taCenter,
-    taJustify
+    taJustify,
+    taBlockCenter
   );
 
   // Text transform
@@ -571,7 +572,8 @@ const
   BackgroundBoxStrings = 'border-box;padding-box;content-box';
   BackgroundPositionStrings = 'left;right;top;bottom;center';
   ElementPositionStrings = 'static;relative;absolute;fixed';
-  TextAlignStrings = 'left;right;center;justify';
+  SPixieBlockCenter = '-webkit-center';
+  TextAlignStrings = 'left;right;center;justify;' + SPixieBlockCenter;
   TextTransformStrings = 'none;capitalize;uppercase;lowercase';
   WhiteSpaceStrings = 'normal;nowrap;pre;pre-line;pre-wrap';
   OverflowWrapStrings = 'normal;break-word;anywhere';

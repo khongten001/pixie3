@@ -563,25 +563,43 @@ begin
   // Position tr render items (FPos relative to table content area)
   if (FGrid.ColsCount > 0) and (FGrid.RowsCount > 0) then
   begin
-    // Row width = sum of column widths (includes cell borders in collapsed mode)
-    RowWidth := 0;
-    for Col := 0 to FGrid.ColsCount - 1 do
-      RowWidth := RowWidth + FGrid.GetColumn(Col).Width;
-
-    // Stack rows — RowRec.Height is the border-box height of cells in that row
-    // (in collapsed mode, borders are shared with cells, not added on top)
-    RowTopY := TopCaptions;
-    for Row := 0 to FGrid.RowsCount - 1 do
+    if SrcEl.Css.BorderCollapse = bcSeparate then
     begin
-      RowRec := FGrid.GetRow(Row);
-      if RowRec.ElRow <> nil then
+      // In separate mode, rows are inset by border-spacing from the table edge.
+      // Use grid positions which already account for border-spacing.
+      RowWidth := FGrid.GetColumn(FGrid.ColsCount - 1).Right -
+        FGrid.GetColumn(0).Left;
+      for Row := 0 to FGrid.RowsCount - 1 do
       begin
-        TPixieRenderItem(RowRec.ElRow).FPos.X := 0;
-        TPixieRenderItem(RowRec.ElRow).FPos.Y := RowTopY;
-        TPixieRenderItem(RowRec.ElRow).FPos.Width := RowWidth;
-        TPixieRenderItem(RowRec.ElRow).FPos.Height := RowRec.Height;
+        RowRec := FGrid.GetRow(Row);
+        if RowRec.ElRow <> nil then
+        begin
+          TPixieRenderItem(RowRec.ElRow).FPos.X := FBorderSpacingX;
+          TPixieRenderItem(RowRec.ElRow).FPos.Y := TopCaptions + RowRec.Top;
+          TPixieRenderItem(RowRec.ElRow).FPos.Width := RowWidth;
+          TPixieRenderItem(RowRec.ElRow).FPos.Height := RowRec.Height;
+        end;
       end;
-      RowTopY := RowTopY + RowRec.Height;
+    end
+    else
+    begin
+      // Collapsed mode: sum of column widths, stacked from top
+      RowWidth := 0;
+      for Col := 0 to FGrid.ColsCount - 1 do
+        RowWidth := RowWidth + FGrid.GetColumn(Col).Width;
+      RowTopY := TopCaptions;
+      for Row := 0 to FGrid.RowsCount - 1 do
+      begin
+        RowRec := FGrid.GetRow(Row);
+        if RowRec.ElRow <> nil then
+        begin
+          TPixieRenderItem(RowRec.ElRow).FPos.X := 0;
+          TPixieRenderItem(RowRec.ElRow).FPos.Y := RowTopY;
+          TPixieRenderItem(RowRec.ElRow).FPos.Width := RowWidth;
+          TPixieRenderItem(RowRec.ElRow).FPos.Height := RowRec.Height;
+        end;
+        RowTopY := RowTopY + RowRec.Height;
+      end;
     end;
   end;
 

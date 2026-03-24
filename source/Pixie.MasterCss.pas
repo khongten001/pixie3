@@ -67,7 +67,7 @@ const
     '}' +
 
     'center {' +
-    '  text-align:center;' +
+    '  text-align:-webkit-center;' +
     '  display:block;' +
     '}' +
 

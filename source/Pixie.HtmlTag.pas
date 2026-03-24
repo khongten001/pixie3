@@ -177,6 +177,7 @@ type
       const AttrValue: string);
     procedure MapToDimensionPropertyIgnoreZero(PropName: Integer;
       const AttrValue: string);
+    procedure MapAlignToTextAlign(const AttrValue: string);
 
   private
     procedure HandleCounterProperties;
@@ -2026,6 +2027,14 @@ begin
   finally
     Tokens.Free;
   end;
+end;
+
+procedure TPixieHtmlTag.MapAlignToTextAlign(const AttrValue: string);
+begin
+  if SameText(AttrValue, 'center') then
+    FStyle.AddProperty(Ord(psid_text_align), SPixieBlockCenter)
+  else
+    FStyle.AddProperty(Ord(psid_text_align), AttrValue);
 end;
 
 // List marker text

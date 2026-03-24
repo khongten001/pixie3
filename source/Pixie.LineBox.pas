@@ -909,7 +909,7 @@ begin
     taRight:
       if FWidth < (FRight - FLeft) then
         ShiftX := (FRight - FLeft) - FWidth;
-    taCenter:
+    taCenter, taBlockCenter:
       if FWidth < (FRight - FLeft) then
         ShiftX := ((FRight - FLeft) - FWidth) / 2;
     taJustify:

@@ -113,7 +113,7 @@ begin
 
   Val := GetAttr('align');
   if Val <> '' then
-    FStyle.AddProperty(Ord(psid_text_align), Val);
+    MapAlignToTextAlign(Val);
 
   Val := GetAttr('valign');
   if Val <> '' then
@@ -155,7 +155,7 @@ begin
 
   Val := GetAttr('align');
   if Val <> '' then
-    FStyle.AddProperty(Ord(psid_text_align), Val);
+    MapAlignToTextAlign(Val);
 
   Val := GetAttr('valign');
   if Val <> '' then

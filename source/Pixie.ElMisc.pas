@@ -173,7 +173,7 @@ var
 begin
   Val := GetAttr('align');
   if Val <> '' then
-    FStyle.AddProperty(Ord(psid_text_align), Val);
+    MapAlignToTextAlign(Val);
   inherited ParseAttributes;
 end;
 
@@ -190,7 +190,7 @@ var
 begin
   Val := GetAttr('align');
   if Val <> '' then
-    FStyle.AddProperty(Ord(psid_text_align), Val);
+    MapAlignToTextAlign(Val);
   inherited ParseAttributes;
 end;
 
