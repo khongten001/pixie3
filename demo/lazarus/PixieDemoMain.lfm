@@ -90,6 +90,7 @@ object MainForm: TMainForm
     Top = 36
     Width = 800
     Align = alClient
+    BorderStyle = bsSingle
     Color = clWhite
     OnAnchorClick = ViewAnchorClick
     OnElementClick = ViewElementClick

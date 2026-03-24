@@ -22,8 +22,10 @@ type
   private
     FCore: TPixieHtmlViewCore;
     FCaretTimer: TTimer;
+    FBorderStyle: TBorderStyle;
 
     procedure DoCaretTimer(Sender: TObject);
+    procedure SetBorderStyle(Value: TBorderStyle);
     procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMGetDlgCode(var Msg: TWMGetDlgCode); message WM_GETDLGCODE;
     procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
@@ -77,6 +79,7 @@ type
     function GetOnScrollChanged: TNotifyEvent;
     procedure SetOnScrollChanged(Value: TNotifyEvent);
   protected
+    procedure CreateParams(var Params: TCreateParams); override;
     procedure Loaded; override;
     procedure Paint; override;
     procedure Resize; override;
@@ -109,6 +112,8 @@ type
     property AutoScrollSpeed: Integer read GetAutoScrollSpeed
       write SetAutoScrollSpeed;
   published
+    property BorderStyle: TBorderStyle read FBorderStyle
+      write SetBorderStyle default bsSingle;
     property TabOrder;
     property TabStop;
     property Lines: TStrings read GetLines write SetLines;
@@ -165,6 +170,7 @@ begin
   FCore := nil;
   inherited Create(AOwner);
   ControlStyle := ControlStyle + [csOpaque];
+  FBorderStyle := bsSingle;
   Color := clWhite;
   Width := 400;
   Height := 300;
@@ -195,6 +201,26 @@ begin
   FreeAndNil(FCaretTimer);
   FreeAndNil(FCore);
   inherited Destroy;
+end;
+
+// ---------------------------------------------------------------------------
+// Border style
+// ---------------------------------------------------------------------------
+
+procedure TPixieHtmlView.SetBorderStyle(Value: TBorderStyle);
+begin
+  if FBorderStyle <> Value then
+  begin
+    FBorderStyle := Value;
+    RecreateWnd;
+  end;
+end;
+
+procedure TPixieHtmlView.CreateParams(var Params: TCreateParams);
+begin
+  inherited CreateParams(Params);
+  if FBorderStyle = bsSingle then
+    Params.ExStyle := Params.ExStyle or WS_EX_CLIENTEDGE;
 end;
 
 // ---------------------------------------------------------------------------

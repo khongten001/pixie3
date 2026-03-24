@@ -128,6 +128,7 @@ type
       write SetAutoScrollSpeed;
   published
     property BorderSpacing;
+    property BorderStyle default bsSingle;
     property TabOrder;
     property TabStop;
     property Lines: TStrings read GetLines write SetLines;
@@ -201,6 +202,7 @@ begin
   FCore := nil;
   inherited Create(AOwner);
   ControlStyle := ControlStyle + [csOpaque];
+  BorderStyle := bsSingle;
   Color := clWhite;
   Width := 400;
   Height := 300;
