@@ -156,7 +156,7 @@ begin
   begin
     // PDF text strings with non-PDFDocEncoding chars must use
     // UTF-16BE with a BOM prefix (PDF spec ISO 32000-1 7.9.2.2)
-    U := {$IFDEF FPC}UnicodeString(S){$ELSE}S{$ENDIF};
+    U := {$IFDEF FPC}UTF8Decode(S){$ELSE}S{$ENDIF};
     Result := '<FEFF';
     for I := 1 to Length(U) do
     begin
