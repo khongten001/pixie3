@@ -97,6 +97,8 @@ type
     procedure EmitBezierEllipse(CX, CY, RX, RY: Single);
     procedure RegisterFontUsedGlyph(Info: TPixiePdfFontInfo;
       GlyphId: UInt16; Codepoint: UInt32);
+    function FindFallbackFontInfo(Primary: TPixiePdfFontInfo;
+      Codepoint: UInt32): TPixiePdfFontInfo;
     function BuildType2Function(const C0, C1: TPixieWebColor): TPixiePdfObject;
     function BuildColorFunction(
       ColorPoints: TPixieColorPointList): TPixiePdfObject;
@@ -548,6 +550,92 @@ procedure TPixiePdfCanvas.RegisterFontUsedGlyph(Info: TPixiePdfFontInfo;
 begin
   if not Info.UsedGlyphs.ContainsKey(GlyphId) then
     Info.UsedGlyphs.Add(GlyphId, Codepoint);
+end;
+
+function TPixiePdfCanvas.FindFallbackFontInfo(Primary: TPixiePdfFontInfo;
+  Codepoint: UInt32): TPixiePdfFontInfo;
+const
+  FallbackFamilies: array[0..6] of string = (
+    {$IFDEF MSWINDOWS}
+    'Microsoft YaHei',   // Chinese
+    'Yu Gothic',         // Japanese
+    'Malgun Gothic',     // Korean
+    'Arial Unicode MS',  // Broad coverage
+    'Segoe UI Symbol',   // Symbols
+    'Segoe UI Emoji',    // Emoji
+    'Noto Sans'          // Cross-platform
+    {$ENDIF}
+    {$IFDEF LINUX}
+    'Noto Sans CJK SC',
+    'Noto Sans CJK JP',
+    'Noto Sans CJK KR',
+    'WenQuanYi Micro Hei',
+    'Noto Sans',
+    'DejaVu Sans',
+    'Liberation Sans'
+    {$ENDIF}
+    {$IFDEF DARWIN}
+    'PingFang SC',
+    'Hiragino Sans',
+    'Apple SD Gothic Neo',
+    'Arial Unicode MS',
+    'Noto Sans CJK SC',
+    'Helvetica Neue',
+    'Noto Sans'
+    {$ENDIF}
+  );
+var
+  I, J: Integer;
+  TtFont: TPixieTrueTypeFont;
+  Scale: Single;
+  SpaceGlyph: UInt16;
+begin
+  // Check if any already-loaded fallback font has this glyph
+  for I := 0 to FFonts.Count - 1 do
+  begin
+    Result := FFonts[I];
+    if (Result.TtFont <> nil) and (Result.TtFont <> Primary.TtFont) and
+       (Abs(Result.FontSize - Primary.FontSize) < 0.01) and
+       (Result.TtFont.CharToGlyph(Codepoint) <> 0) then
+      Exit;
+  end;
+
+  // Try each fallback family
+  for J := Low(FallbackFamilies) to High(FallbackFamilies) do
+  begin
+    TtFont := FindOrCreateFont(FallbackFamilies[J], 400, False);
+    if (TtFont <> nil) and (TtFont <> Primary.TtFont) and
+       (TtFont.CharToGlyph(Codepoint) <> 0) then
+    begin
+      // Create a new TPixiePdfFontInfo for this fallback
+      Result := TPixiePdfFontInfo.Create;
+      Result.TtFont := TtFont;
+      Result.FamilyName := FallbackFamilies[J];
+      Result.FontSize := Primary.FontSize;
+      Result.DecorationLine := Primary.DecorationLine;
+      Result.PdfName := AllocFontName;
+
+      Scale := Primary.FontSize / TtFont.UnitsPerEm;
+      Result.Metrics := Primary.Metrics;
+      Result.Metrics.Ascent := TtFont.Ascent * Scale;
+      Result.Metrics.Descent := Abs(TtFont.Descent) * Scale;
+      Result.Metrics.Height := Result.Metrics.Ascent + Result.Metrics.Descent;
+      if TtFont.XHeight > 0 then
+        Result.Metrics.XHeight := TtFont.XHeight * Scale
+      else
+        Result.Metrics.XHeight := Result.Metrics.Ascent * 0.53;
+      SpaceGlyph := TtFont.CharToGlyph(Ord('0'));
+      if SpaceGlyph <> 0 then
+        Result.Metrics.ChWidth := TtFont.GetGlyphWidth(SpaceGlyph) * Scale
+      else
+        Result.Metrics.ChWidth := Primary.FontSize * 0.5;
+
+      FFonts.Add(Result);
+      Exit;
+    end;
+  end;
+
+  Result := nil;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1271,7 +1359,7 @@ end;
 function TPixiePdfCanvas.MeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
-  Info: TPixiePdfFontInfo;
+  Info, Fallback: TPixiePdfFontInfo;
   Scale: Single;
   I, Len: Integer;
   Codepoint: UInt32;
@@ -1294,6 +1382,17 @@ begin
     if Codepoint = 0 then Break;
 
     GlyphId := Info.TtFont.CharToGlyph(Codepoint);
+    if GlyphId = 0 then
+    begin
+      Fallback := FindFallbackFontInfo(Info, Codepoint);
+      if Fallback <> nil then
+      begin
+        GlyphId := Fallback.TtFont.CharToGlyph(Codepoint);
+        TotalWidth := TotalWidth + Fallback.TtFont.GetGlyphWidth(GlyphId) *
+          (Fallback.FontSize / Fallback.TtFont.UnitsPerEm);
+        Continue;
+      end;
+    end;
     TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
   end;
 
@@ -1303,34 +1402,44 @@ end;
 procedure TPixiePdfCanvas.DrawText(const Text: string;
   Handle: TPixieFontHandle; Color: TPixieWebColor;
   X, Y, W, H: Single);
+
+  procedure FlushRun(RunFont: TPixiePdfFontInfo; const Hex: AnsiString;
+    RunStartX, BaselineY: Single);
+  var
+    Pt: Single;
+  begin
+    if Hex = '' then Exit;
+    Pt := RunFont.FontSize * 72.0 / 96.0;
+    EmitLn('BT');
+    EmitLn('/' + RunFont.PdfName + ' ' + PdfFloat(Pt) + ' Tf');
+    EmitLn(PdfFloat(PxToPt(RunStartX)) + ' ' +
+      PdfFloat(PxToY(BaselineY)) + ' Td');
+    EmitLn('<' + Hex + '> Tj');
+    EmitLn('ET');
+  end;
+
 var
-  Info: TPixiePdfFontInfo;
-  Scale, PtSize, TextY: Single;
+  Info, CurFont, Fallback: TPixiePdfFontInfo;
+  Scale, TextY, CurX, RunStartX, GlyphW: Single;
   I, Len: Integer;
   Codepoint: UInt32;
   GlyphId: UInt16;
   HexStr: AnsiString;
+  UseFont: TPixiePdfFontInfo;
 begin
   if Handle = 0 then Exit;
   Info := TPixiePdfFontInfo(Handle);
   if Info.TtFont = nil then Exit;
 
-
-
-  PtSize := Info.FontSize * 72.0 / 96.0;
-
-  // PDF text matrix: position at baseline
-  // Baseline = Y + ascent (in Pixie px coords)
   Scale := Info.FontSize / Info.TtFont.UnitsPerEm;
   TextY := Y + Info.TtFont.Ascent * Scale;
 
   SetPdfColor(Color, True);
-  EmitLn('BT');
-  EmitLn('/' + Info.PdfName + ' ' + PdfFloat(PtSize) + ' Tf');
-  EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(TextY)) + ' Td');
 
-  // Emit glyph IDs as hex string
-  HexStr := '<';
+  CurFont := Info;
+  CurX := X;
+  RunStartX := X;
+  HexStr := '';
   I := 1;
   Len := Length(Text);
   while I <= Len do
@@ -1338,16 +1447,39 @@ begin
     Codepoint := ReadUtf8Char(Text, I);
     if Codepoint = 0 then Break;
 
+    // Determine which font to use for this character
     GlyphId := Info.TtFont.CharToGlyph(Codepoint);
-    RegisterFontUsedGlyph(Info, GlyphId, Codepoint);
+    if (GlyphId = 0) then
+    begin
+      Fallback := FindFallbackFontInfo(Info, Codepoint);
+      if Fallback <> nil then
+        UseFont := Fallback
+      else
+        UseFont := Info;
+    end
+    else
+      UseFont := Info;
+
+    // Font changed — flush the accumulated run
+    if UseFont <> CurFont then
+    begin
+      FlushRun(CurFont, HexStr, RunStartX, TextY);
+      HexStr := '';
+      RunStartX := CurX;
+      CurFont := UseFont;
+    end;
+
+    // Get glyph from the active font
+    GlyphId := CurFont.TtFont.CharToGlyph(Codepoint);
+    RegisterFontUsedGlyph(CurFont, GlyphId, Codepoint);
+    GlyphW := CurFont.TtFont.GetGlyphWidth(GlyphId) *
+      (CurFont.FontSize / CurFont.TtFont.UnitsPerEm);
     HexStr := HexStr + AnsiString(LowerCase(IntToHex(GlyphId, 4)));
+    CurX := CurX + GlyphW;
   end;
-  HexStr := HexStr + '>';
 
-  EmitLn(HexStr + ' Tj');
-  EmitLn('ET');
-
-  // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
+  // Flush remaining run
+  FlushRun(CurFont, HexStr, RunStartX, TextY);
 end;
 
 function TPixiePdfCanvas.PtToPx(Pt: Single): TPixiePixel;
