@@ -109,11 +109,14 @@ type
     FOnAfterParse: TNotifyEvent;
     FOnBeforePaint: TNotifyEvent;
     FOnAfterPaint: TNotifyEvent;
+    FOnScrollChanged: TNotifyEvent;
 
     procedure SetLines(const Value: TStrings);
     procedure SetBaseUrl(const Value: string);
     procedure SetUserCss(const Value: string);
     procedure SetZoom(const Value: Double);
+    procedure SetScrollY(Value: TPixiePixel);
+    procedure DoScrollChanged;
     function GetEffectiveScale: Double;
     procedure RebuildDocument;
     procedure DoAnchorClick(Sender: TObject; const Url: string);
@@ -178,7 +181,7 @@ type
     property Zoom: Double read FZoom write SetZoom;
     property Scrollbar: TPixieScrollbarSettings read FScrollbar;
     property ContentHeight: TPixiePixel read FContentHeight;
-    property ScrollY: TPixiePixel read FScrollY write FScrollY;
+    property ScrollY: TPixiePixel read FScrollY write SetScrollY;
     property NeedsLayout: Boolean read FNeedsLayout write FNeedsLayout;
     property AutoScrollSpeed: Integer read FAutoScrollSpeed write FAutoScrollSpeed;
     property OnAnchorClick: TPixieAnchorClickEvent
@@ -195,6 +198,8 @@ type
       read FOnBeforePaint write FOnBeforePaint;
     property OnAfterPaint: TNotifyEvent
       read FOnAfterPaint write FOnAfterPaint;
+    property OnScrollChanged: TNotifyEvent
+      read FOnScrollChanged write FOnScrollChanged;
   end;
 
 implementation
@@ -375,7 +380,7 @@ begin
     Exit;
   end;
 
-  FScrollY := NewScroll;
+  SetScrollY(NewScroll);
 
   // Decay acceleration each tick — must keep jiggling to maintain speed
   if FAutoScrollAccel > 0 then
@@ -495,6 +500,19 @@ begin
     Result := Result * OnHostGetScaleFactor();
 end;
 
+procedure TPixieHtmlViewCore.SetScrollY(Value: TPixiePixel);
+begin
+  if FScrollY = Value then Exit;
+  FScrollY := Value;
+  DoScrollChanged;
+end;
+
+procedure TPixieHtmlViewCore.DoScrollChanged;
+begin
+  if Assigned(FOnScrollChanged) then
+    FOnScrollChanged(Owner);
+end;
+
 // ---------------------------------------------------------------------------
 // Document management
 // ---------------------------------------------------------------------------
@@ -504,8 +522,12 @@ var
   W, H: Integer;
 begin
   FreeAndNil(FDocument);
-  FScrollY := 0;
-  FContentHeight := 0;
+  if (FScrollY <> 0) or (FContentHeight <> 0) then
+  begin
+    FScrollY := 0;
+    FContentHeight := 0;
+    DoScrollChanged;
+  end;
   FNeedsLayout := True;
   StopAutoScroll;
   FDragging := False;
@@ -606,7 +628,7 @@ begin
         NewScroll := AbsY;
         if NewScroll > MaxScroll then NewScroll := MaxScroll;
         if NewScroll < 0 then NewScroll := 0;
-        FScrollY := NewScroll;
+        SetScrollY(NewScroll);
         if Assigned(OnHostGetTickCount) then
           FAnchorScrollTick := OnHostGetTickCount;
         Invalidate;
@@ -676,6 +698,7 @@ var
   BgColor: TPixieWebColor;
   LayoutWidth: Integer;
   ViewW, ViewH: Single;
+  OldContentHeight: TPixiePixel;
   BarW, BarMargin, TrackH, ThumbH, ThumbX, ThumbY, MaxScroll: TPixiePixel;
   IndicatorRadius: TPixieBorderRadiuses;
 begin
@@ -693,8 +716,11 @@ begin
     begin
       FContainer.ViewportWidth := LayoutWidth;
       FContainer.ViewportHeight := Round(ViewH);
+      OldContentHeight := FContentHeight;
       FDocument.Render(LayoutWidth);
       FContentHeight := FDocument.Height;
+      if FContentHeight <> OldContentHeight then
+        DoScrollChanged;
       FNeedsLayout := False;
     end;
 
@@ -856,7 +882,7 @@ begin
       NewScroll := MaxScroll;
     if NewScroll <> FScrollY then
     begin
-      FScrollY := NewScroll;
+      SetScrollY(NewScroll);
       Invalidate;
     end;
     Exit(True);
@@ -879,7 +905,7 @@ begin
     if NewScroll > MaxScroll then NewScroll := MaxScroll;
     if NewScroll <> FScrollY then
     begin
-      FScrollY := NewScroll;
+      SetScrollY(NewScroll);
       Invalidate;
     end;
     Exit(True);
@@ -921,7 +947,7 @@ begin
   ViewW := OnHostGetViewWidth / GetEffectiveScale;
   ViewH := OnHostGetViewHeight / GetEffectiveScale;
   BarMargin := FScrollbar.Margin;
-  if (FContentHeight > ViewH) and
+  if FScrollbar.AlwaysVisible and (FContentHeight > ViewH) and
      (Vx >= Round(ViewW) - FScrollbar.Width - BarMargin * 2) then
   begin
     TrackH := ViewH - BarMargin * 2;
@@ -946,7 +972,7 @@ begin
         NewScroll := FScrollY + ViewH;
       if NewScroll < 0 then NewScroll := 0;
       if NewScroll > MaxScroll then NewScroll := MaxScroll;
-      FScrollY := NewScroll;
+      SetScrollY(NewScroll);
     end;
     Invalidate;
     Exit;
@@ -1026,7 +1052,7 @@ begin
     if NewScroll > MaxScroll then NewScroll := MaxScroll;
     if NewScroll <> FScrollY then
     begin
-      FScrollY := NewScroll;
+      SetScrollY(NewScroll);
       Invalidate;
     end;
     Exit;
@@ -1162,7 +1188,7 @@ begin
 
   if NewScroll <> FScrollY then
   begin
-    FScrollY := NewScroll;
+    SetScrollY(NewScroll);
     Invalidate;
   end;
   Result := True;

@@ -89,6 +89,8 @@ type
     procedure SetOnBeforePaint(Value: TNotifyEvent);
     function GetOnAfterPaint: TNotifyEvent;
     procedure SetOnAfterPaint(Value: TNotifyEvent);
+    function GetOnScrollChanged: TNotifyEvent;
+    procedure SetOnScrollChanged(Value: TNotifyEvent);
   protected
     procedure Loaded; override;
     procedure Paint; override;
@@ -146,6 +148,8 @@ type
       read GetOnBeforePaint write SetOnBeforePaint;
     property OnAfterPaint: TNotifyEvent
       read GetOnAfterPaint write SetOnAfterPaint;
+    property OnScrollChanged: TNotifyEvent
+      read GetOnScrollChanged write SetOnScrollChanged;
 
     property Align;
     property Anchors;
@@ -466,6 +470,16 @@ end;
 procedure TPixieHtmlView.SetOnAfterPaint(Value: TNotifyEvent);
 begin
   FCore.OnAfterPaint := Value;
+end;
+
+function TPixieHtmlView.GetOnScrollChanged: TNotifyEvent;
+begin
+  Result := FCore.OnScrollChanged;
+end;
+
+procedure TPixieHtmlView.SetOnScrollChanged(Value: TNotifyEvent);
+begin
+  FCore.OnScrollChanged := Value;
 end;
 
 // ---------------------------------------------------------------------------
