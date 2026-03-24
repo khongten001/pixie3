@@ -43,6 +43,35 @@ type
   TPixieHostCopyText  = procedure(const Text: string) of object;
   TPixieHostGetTick   = function: UInt64 of object;
 
+  { TPixieScrollbarSettings }
+
+  TPixieScrollbarSettings = class
+  private
+    FWidth: Integer;
+    FMargin: Integer;
+    FMinThumbHeight: Integer;
+    FThumbColor: TPixieWebColor;
+    FTrackColor: TPixieWebColor;
+    FAlwaysVisible: Boolean;
+    FOnChanged: TPixieHostNotify;
+    procedure SetWidth(Value: Integer);
+    procedure SetMargin(Value: Integer);
+    procedure SetMinThumbHeight(Value: Integer);
+    procedure SetThumbColor(const Value: TPixieWebColor);
+    procedure SetTrackColor(const Value: TPixieWebColor);
+    procedure SetAlwaysVisible(Value: Boolean);
+    procedure Changed;
+  public
+    constructor Create;
+    property Width: Integer read FWidth write SetWidth;
+    property Margin: Integer read FMargin write SetMargin;
+    property MinThumbHeight: Integer read FMinThumbHeight write SetMinThumbHeight;
+    property ThumbColor: TPixieWebColor read FThumbColor write SetThumbColor;
+    property TrackColor: TPixieWebColor read FTrackColor write SetTrackColor;
+    property AlwaysVisible: Boolean read FAlwaysVisible write SetAlwaysVisible;
+    property OnChanged: TPixieHostNotify read FOnChanged write FOnChanged;
+  end;
+
   { TPixieHtmlViewCore }
 
   TPixieHtmlViewCore = class
@@ -61,6 +90,7 @@ type
     FOnElementClick: TPixieElementClickEvent;
     FOnFetchUrl: TPixieFetchUrlEvent;
     FRedrawBoxes: TPixiePositionVector;
+    FScrollbar: TPixieScrollbarSettings;
     FDragging: Boolean;
     FWordDragging: Boolean;
     FScrollDragging: Boolean;
@@ -133,6 +163,7 @@ type
     property BaseUrl: string read FBaseUrl write SetBaseUrl;
     property UserCss: string read FUserCss write SetUserCss;
     property Zoom: Double read FZoom write SetZoom;
+    property Scrollbar: TPixieScrollbarSettings read FScrollbar;
     property ContentHeight: TPixiePixel read FContentHeight;
     property ScrollY: TPixiePixel read FScrollY write FScrollY;
     property NeedsLayout: Boolean read FNeedsLayout write FNeedsLayout;
@@ -156,6 +187,71 @@ implementation
 
 uses
   Pixie.Element, Pixie.RenderItem;
+
+// ---------------------------------------------------------------------------
+// TPixieScrollbarSettings
+// ---------------------------------------------------------------------------
+
+constructor TPixieScrollbarSettings.Create;
+begin
+  inherited Create;
+  FWidth := 4;
+  FMargin := 2;
+  FMinThumbHeight := 16;
+  FThumbColor := TPixieWebColor.Create(128, 128, 128, 160);
+  FTrackColor := TPixieWebColor.Create(0, 0, 0, 0);
+  FAlwaysVisible := True;
+end;
+
+procedure TPixieScrollbarSettings.Changed;
+begin
+  if Assigned(FOnChanged) then
+    FOnChanged;
+end;
+
+procedure TPixieScrollbarSettings.SetWidth(Value: Integer);
+begin
+  if FWidth = Value then Exit;
+  FWidth := Value;
+  Changed;
+end;
+
+procedure TPixieScrollbarSettings.SetMargin(Value: Integer);
+begin
+  if FMargin = Value then Exit;
+  FMargin := Value;
+  Changed;
+end;
+
+procedure TPixieScrollbarSettings.SetMinThumbHeight(Value: Integer);
+begin
+  if FMinThumbHeight = Value then Exit;
+  FMinThumbHeight := Value;
+  Changed;
+end;
+
+procedure TPixieScrollbarSettings.SetThumbColor(const Value: TPixieWebColor);
+begin
+  if (FThumbColor.Red = Value.Red) and (FThumbColor.Green = Value.Green) and
+     (FThumbColor.Blue = Value.Blue) and (FThumbColor.Alpha = Value.Alpha) then Exit;
+  FThumbColor := Value;
+  Changed;
+end;
+
+procedure TPixieScrollbarSettings.SetTrackColor(const Value: TPixieWebColor);
+begin
+  if (FTrackColor.Red = Value.Red) and (FTrackColor.Green = Value.Green) and
+     (FTrackColor.Blue = Value.Blue) and (FTrackColor.Alpha = Value.Alpha) then Exit;
+  FTrackColor := Value;
+  Changed;
+end;
+
+procedure TPixieScrollbarSettings.SetAlwaysVisible(Value: Boolean);
+begin
+  if FAlwaysVisible = Value then Exit;
+  FAlwaysVisible := Value;
+  Changed;
+end;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -214,6 +310,8 @@ begin
   FDragging := False;
   FWordDragging := False;
   FScrollDragging := False;
+  FScrollbar := TPixieScrollbarSettings.Create;
+  FScrollbar.OnChanged := Invalidate;
 
   FContainer := TPixieNativeContainer.Create(FCanvas);
   FContainer.OnAnchorClickEvent := DoAnchorClick;
@@ -228,6 +326,7 @@ begin
   FreeAndNil(FContainer);
   FreeAndNil(FCanvas);
   FreeAndNil(FRedrawBoxes);
+  FreeAndNil(FScrollbar);
   FreeAndNil(FLines);
   inherited Destroy;
 end;
@@ -459,7 +558,6 @@ var
   LayoutWidth: Integer;
   ViewW, ViewH: Single;
   BarW, BarMargin, TrackH, ThumbH, ThumbX, ThumbY, MaxScroll: TPixiePixel;
-  IndicatorColor: TPixieWebColor;
   IndicatorRadius: TPixieBorderRadiuses;
 begin
   if Assigned(FOnBeforePaint) then
@@ -489,13 +587,14 @@ begin
       ClipPos := TPixiePosition.Create(0, 0, ViewW, ViewH);
       FDocument.Draw(0, 0, -FScrollY, @ClipPos);
 
-      if FContentHeight > ViewH then
+      if (FContentHeight > ViewH) and FScrollbar.AlwaysVisible then
       begin
-        BarW := 4;
-        BarMargin := 2;
+        BarW := FScrollbar.Width;
+        BarMargin := FScrollbar.Margin;
         TrackH := ViewH - BarMargin * 2;
         ThumbH := TrackH * (ViewH / FContentHeight);
-        if ThumbH < 16 then ThumbH := 16;
+        if ThumbH < FScrollbar.MinThumbHeight then
+          ThumbH := FScrollbar.MinThumbHeight;
         MaxScroll := FContentHeight - ViewH;
         if MaxScroll > 0 then
           ThumbY := BarMargin + (FScrollY / MaxScroll) * (TrackH - ThumbH)
@@ -503,6 +602,12 @@ begin
           ThumbY := BarMargin;
         ThumbX := ViewW - BarW - BarMargin;
 
+        // Draw track background
+        if FScrollbar.TrackColor.Alpha > 0 then
+          FCanvas.FillRect(ThumbX, BarMargin, BarW, TrackH,
+            FScrollbar.TrackColor);
+
+        // Draw thumb
         IndicatorRadius.TopLeftX := BarW / 2;
         IndicatorRadius.TopLeftY := BarW / 2;
         IndicatorRadius.TopRightX := BarW / 2;
@@ -511,9 +616,8 @@ begin
         IndicatorRadius.BottomRightY := BarW / 2;
         IndicatorRadius.BottomLeftX := BarW / 2;
         IndicatorRadius.BottomLeftY := BarW / 2;
-        IndicatorColor := TPixieWebColor.Create(128, 128, 128, 160);
         FCanvas.FillRoundedRect(ThumbX, ThumbY, BarW, ThumbH,
-          IndicatorRadius, IndicatorColor);
+          IndicatorRadius, FScrollbar.ThumbColor);
       end;
     end;
   finally
@@ -685,7 +789,8 @@ procedure TPixieHtmlViewCore.HandleMouseDown(IsLeft, IsDouble: Boolean;
 var
   Vx, Vy: Integer;
   InputFocused: Boolean;
-  ViewH, ViewW, TrackH, ThumbH, ThumbY, MaxScroll, NewScroll: TPixiePixel;
+  ViewH, ViewW, BarMargin, TrackH, ThumbH, ThumbY, MaxScroll,
+    NewScroll: TPixiePixel;
 begin
   if Assigned(OnHostSetFocus) then OnHostSetFocus;
   if not IsLeft or (FDocument = nil) then Exit;
@@ -696,16 +801,19 @@ begin
   // Scrollbar interaction
   ViewW := OnHostGetViewWidth / GetEffectiveScale;
   ViewH := OnHostGetViewHeight / GetEffectiveScale;
-  if (FContentHeight > ViewH) and (Vx >= Round(ViewW) - 12) then
+  BarMargin := FScrollbar.Margin;
+  if (FContentHeight > ViewH) and
+     (Vx >= Round(ViewW) - FScrollbar.Width - BarMargin * 2) then
   begin
-    TrackH := ViewH - 4;
+    TrackH := ViewH - BarMargin * 2;
     ThumbH := TrackH * (ViewH / FContentHeight);
-    if ThumbH < 16 then ThumbH := 16;
+    if ThumbH < FScrollbar.MinThumbHeight then
+      ThumbH := FScrollbar.MinThumbHeight;
     MaxScroll := FContentHeight - ViewH;
     if MaxScroll > 0 then
-      ThumbY := 2 + (FScrollY / MaxScroll) * (TrackH - ThumbH)
+      ThumbY := BarMargin + (FScrollY / MaxScroll) * (TrackH - ThumbH)
     else
-      ThumbY := 2;
+      ThumbY := BarMargin;
     if (Vy >= ThumbY) and (Vy < ThumbY + ThumbH) then
     begin
       FScrollDragging := True;
@@ -781,16 +889,18 @@ begin
   begin
     Vy := Round(Y / GetEffectiveScale);
     ViewH := OnHostGetViewHeight / GetEffectiveScale;
-    TrackH := ViewH - 4;
+    TrackH := ViewH - FScrollbar.Margin * 2;
     ThumbH := TrackH * (ViewH / FContentHeight);
-    if ThumbH < 16 then ThumbH := 16;
+    if ThumbH < FScrollbar.MinThumbHeight then
+      ThumbH := FScrollbar.MinThumbHeight;
     MaxScroll := FContentHeight - ViewH;
     NewThumbY := Vy - FScrollDragOffset;
-    if NewThumbY < 2 then NewThumbY := 2;
-    if NewThumbY > 2 + TrackH - ThumbH then
-      NewThumbY := 2 + TrackH - ThumbH;
+    if NewThumbY < FScrollbar.Margin then
+      NewThumbY := FScrollbar.Margin;
+    if NewThumbY > FScrollbar.Margin + TrackH - ThumbH then
+      NewThumbY := FScrollbar.Margin + TrackH - ThumbH;
     if TrackH > ThumbH then
-      NewScroll := (NewThumbY - 2) / (TrackH - ThumbH) * MaxScroll
+      NewScroll := (NewThumbY - FScrollbar.Margin) / (TrackH - ThumbH) * MaxScroll
     else
       NewScroll := 0;
     if NewScroll < 0 then NewScroll := 0;

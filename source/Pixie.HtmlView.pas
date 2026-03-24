@@ -72,6 +72,7 @@ type
     procedure SetUserCss(const Value: string);
     function GetZoom: Double;
     procedure SetZoom(const Value: Double);
+    function GetScrollbar: TPixieScrollbarSettings;
     function GetOnAnchorClick: TPixieAnchorClickEvent;
     procedure SetOnAnchorClick(Value: TPixieAnchorClickEvent);
     function GetOnElementClick: TPixieElementClickEvent;
@@ -116,6 +117,7 @@ type
     procedure UnregisterImage(const Name: string);
 
     property Document: TPixieDocument read GetDocument;
+    property Scrollbar: TPixieScrollbarSettings read GetScrollbar;
     property ContentHeight: TPixiePixel read GetContentHeight;
     property ScrollY: TPixiePixel read GetScrollY write SetScrollY;
   published
@@ -370,6 +372,11 @@ end;
 function TPixieHtmlView.GetZoom: Double;
 begin
   Result := FCore.Zoom;
+end;
+
+function TPixieHtmlView.GetScrollbar: TPixieScrollbarSettings;
+begin
+  Result := FCore.Scrollbar;
 end;
 
 procedure TPixieHtmlView.SetZoom(const Value: Double);
