@@ -267,8 +267,20 @@ begin
 end;
 
 function TPixieHtmlView.HostGetScaleFactor: Single;
+{$IFDEF MSWINDOWS}
+var
+  F: TCustomForm;
+{$ENDIF}
 begin
+  {$IFDEF MSWINDOWS}
+  F := GetParentForm(Self);
+  if F <> nil then
+    Result := F.PixelsPerInch / 96
+  else
+    Result := Screen.PixelsPerInch / 96;
+  {$ELSE}
   Result := GetCanvasScaleFactor;
+  {$ENDIF}
 end;
 
 function TPixieHtmlView.HostGetBackgroundColor: TPixieWebColor;

@@ -427,24 +427,13 @@ end;
 
 function TPixieHtmlView.GetScaleFactor: Single;
 var
-  Wnd: HWND;
-  Dpi: UINT;
-  GetDpiForWindowProc: function(AWnd: HWND): UINT; stdcall;
+  F: TCustomForm;
 begin
-  Result := 1.0;
-  Wnd := Handle;
-  if Wnd = 0 then Exit;
-
-  GetDpiForWindowProc := GetProcAddress(GetModuleHandle('user32.dll'),
-    'GetDpiForWindow');
-  if Assigned(GetDpiForWindowProc) then
-  begin
-    Dpi := GetDpiForWindowProc(Wnd);
-    if Dpi > 0 then
-      Result := Dpi / 96.0;
-  end
-  else if Screen.PixelsPerInch <> 96 then
-    Result := Screen.PixelsPerInch / 96.0;
+  F := GetParentForm(Self);
+  if F <> nil then
+    Result := F.PixelsPerInch / 96
+  else
+    Result := 1.0;
 end;
 
 // ---------------------------------------------------------------------------

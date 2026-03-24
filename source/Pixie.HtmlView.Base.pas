@@ -74,6 +74,7 @@ type
     procedure SetBaseUrl(const Value: string);
     procedure SetUserCss(const Value: string);
     procedure SetZoom(const Value: Double);
+    function GetEffectiveScale: Double;
     procedure RebuildDocument;
     procedure DoAnchorClick(Sender: TObject; const Url: string);
     function DoElementClick(Sender: TObject; El: TObject): Boolean;
@@ -263,9 +264,16 @@ begin
   if NewZoom > 4.0 then NewZoom := 4.0;
   if FZoom = NewZoom then Exit;
   FZoom := NewZoom;
-  FCanvas.SetScale(FZoom);
+  FCanvas.SetScale(GetEffectiveScale);
   FNeedsLayout := True;
   Invalidate;
+end;
+
+function TPixieHtmlViewCore.GetEffectiveScale: Double;
+begin
+  Result := FZoom;
+  if Assigned(OnHostGetScaleFactor) then
+    Result := Result * OnHostGetScaleFactor();
 end;
 
 // ---------------------------------------------------------------------------
@@ -371,7 +379,7 @@ begin
           AbsY := AbsY + Walk.Pos.Y;
           Walk := Walk.GetParent;
         end;
-        ViewH := OnHostGetViewHeight / FZoom;
+        ViewH := OnHostGetViewHeight / GetEffectiveScale;
         MaxScroll := FContentHeight - ViewH;
         if MaxScroll < 0 then MaxScroll := 0;
         NewScroll := AbsY;
@@ -454,10 +462,11 @@ begin
   if Assigned(FOnBeforePaint) then
     FOnBeforePaint(Owner);
 
+  FCanvas.SetScale(GetEffectiveScale);
   FCanvas.BeginPaint(ACanvasHandle);
   try
-    ViewW := OnHostGetViewWidth / FZoom;
-    ViewH := OnHostGetViewHeight / FZoom;
+    ViewW := OnHostGetViewWidth / GetEffectiveScale;
+    ViewH := OnHostGetViewHeight / GetEffectiveScale;
     LayoutWidth := Round(ViewW);
 
     if FNeedsLayout and (FDocument <> nil) then
@@ -612,7 +621,7 @@ begin
   // Home / End scroll to top / bottom
   if Key in [pxVK_HOME, pxVK_END] then
   begin
-    ViewH := OnHostGetViewHeight / FZoom;
+    ViewH := OnHostGetViewHeight / GetEffectiveScale;
     MaxScroll := FContentHeight - ViewH;
     if MaxScroll < 0 then MaxScroll := 0;
     if Key = pxVK_HOME then
@@ -630,7 +639,7 @@ begin
   // Arrow and page keys scroll the viewport
   if Key in [pxVK_UP, pxVK_DOWN, pxVK_PRIOR, pxVK_NEXT] then
   begin
-    ViewH := OnHostGetViewHeight / FZoom;
+    ViewH := OnHostGetViewHeight / GetEffectiveScale;
     MaxScroll := FContentHeight - ViewH;
     if MaxScroll < 0 then MaxScroll := 0;
     NewScroll := FScrollY;
@@ -678,12 +687,12 @@ begin
   if Assigned(OnHostSetFocus) then OnHostSetFocus;
   if not IsLeft or (FDocument = nil) then Exit;
 
-  Vx := Round(X / FZoom);
-  Vy := Round(Y / FZoom);
+  Vx := Round(X / GetEffectiveScale);
+  Vy := Round(Y / GetEffectiveScale);
 
   // Scrollbar interaction
-  ViewW := OnHostGetViewWidth / FZoom;
-  ViewH := OnHostGetViewHeight / FZoom;
+  ViewW := OnHostGetViewWidth / GetEffectiveScale;
+  ViewH := OnHostGetViewHeight / GetEffectiveScale;
   if (FContentHeight > ViewH) and (Vx >= Round(ViewW) - 12) then
   begin
     TrackH := ViewH - 4;
@@ -762,8 +771,8 @@ var
 begin
   if FScrollDragging then
   begin
-    Vy := Round(Y / FZoom);
-    ViewH := OnHostGetViewHeight / FZoom;
+    Vy := Round(Y / GetEffectiveScale);
+    ViewH := OnHostGetViewHeight / GetEffectiveScale;
     TrackH := ViewH - 4;
     ThumbH := TrackH * (ViewH / FContentHeight);
     if ThumbH < 16 then ThumbH := 16;
@@ -787,8 +796,8 @@ begin
   end;
   if FDocument <> nil then
   begin
-    Vx := Round(X / FZoom);
-    Vy := Round(Y / FZoom);
+    Vx := Round(X / GetEffectiveScale);
+    Vy := Round(Y / GetEffectiveScale);
     FRedrawBoxes.Clear;
     if FDocument.OnMouseOver(Vx, Vy + FScrollY, Vx, Vy,
       FRedrawBoxes) then
@@ -822,8 +831,8 @@ begin
   end;
   if IsLeft and (FDocument <> nil) then
   begin
-    Vx := Round(X / FZoom);
-    Vy := Round(Y / FZoom);
+    Vx := Round(X / GetEffectiveScale);
+    Vy := Round(Y / GetEffectiveScale);
     FDragging := False;
     FDocument.SelectionEnd;
     if FDocument.HasSelection then
@@ -894,7 +903,7 @@ begin
     end;
   end;
 
-  MaxScroll := FContentHeight - OnHostGetViewHeight / FZoom;
+  MaxScroll := FContentHeight - OnHostGetViewHeight / GetEffectiveScale;
   if MaxScroll < 0 then MaxScroll := 0;
 
   NewScroll := FScrollY - (WheelDelta / 120) * 40;
