@@ -63,6 +63,8 @@ var
   MinRenderedWidth: TPixiePixel;
   NewTop, LnLeft, LnRight: TPixiePixel;
   AutoMargin: TPixiePixel;
+  SavedChildTop: TPixiePixel;
+  SelfCollapsed: TPixiePixel;
 begin
   RetWidth := 0;
   ChildTop := 0;
@@ -123,6 +125,7 @@ begin
         end;
 
         // Collapse top margin
+        SavedChildTop := ChildTop;
         ChildMargins := El.GetMargins;
         if IsFirst and CollapseTopMargin then
         begin
@@ -183,10 +186,28 @@ begin
           RetWidth := Rw;
 
         FMargins.Top := TopMargin;
-        ChildTop := ChildTop + El.Height;
-        LastMargin := ChildMargins.Bottom;
-        LastMarginEl := El;
-        IsFirst := False;
+
+        // Self-collapsing elements: zero content, padding, and borders.
+        // Their top and bottom margins collapse through each other and
+        // merge with the adjacent sibling margins (CSS2 8.3.1).
+        if (El.FPos.Height = 0) and
+           (El.FPadding.Height = 0) and
+           (El.FBorders.Height = 0) then
+        begin
+          ChildTop := SavedChildTop;
+          SelfCollapsed := ChildMargins.Top;
+          if ChildMargins.Bottom > SelfCollapsed then
+            SelfCollapsed := ChildMargins.Bottom;
+          if SelfCollapsed > LastMargin then
+            LastMargin := SelfCollapsed;
+        end
+        else
+        begin
+          ChildTop := ChildTop + El.Height;
+          LastMargin := ChildMargins.Bottom;
+          LastMarginEl := El;
+          IsFirst := False;
+        end;
 
         if ElCss.ElPosition = epRelative then
           El.ApplyRelativeShift(SelfSize);
