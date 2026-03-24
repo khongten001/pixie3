@@ -70,9 +70,17 @@ type
     // Selection state
     FSelAnchor: TPixieElement;
     FSelFocus: TPixieElement;
+    FSelAnchorOffset: Integer;
+    FSelFocusOffset: Integer;
+    FSelAnchorIdx: Integer;
+    FSelFocusIdx: Integer;
     FSelecting: Boolean;
     FSelMap: TPixieSelectionSet;
     FWordSelAnchor: TPixieElement;
+
+    function RenderAbsoluteX(Ri: Pointer): TPixiePixel;
+    function ComputeTextOffset(El: TPixieElement;
+      X: TPixiePixel): Integer;
 
     function AddFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): PtrUInt;
@@ -191,6 +199,8 @@ type
     function HasSelection: Boolean;
     function HasRangeSelection: Boolean;
     function IsSelected(El: TPixieElement): Boolean;
+    function IsSelectedPartial(El: TPixieElement;
+      out StartOff, EndOff: Integer): Boolean;
     function GetSelectedText: string;
   end;
 
@@ -233,6 +243,10 @@ begin
   FFocusedElement := nil;
   FSelAnchor := nil;
   FSelFocus := nil;
+  FSelAnchorOffset := 0;
+  FSelFocusOffset := 0;
+  FSelAnchorIdx := -1;
+  FSelFocusIdx := -1;
   FSelecting := False;
   FWordSelAnchor := nil;
 end;
@@ -1502,6 +1516,40 @@ end;
 
 // --- Text selection ---
 
+function TPixieDocument.RenderAbsoluteX(Ri: Pointer): TPixiePixel;
+var
+  P: TPixieRenderItem;
+begin
+  Result := 0;
+  P := TPixieRenderItem(Ri);
+  while P <> nil do
+  begin
+    Result := Result + P.FPos.X - P.GetScrollLeft;
+    P := P.FParent;
+  end;
+end;
+
+function TPixieDocument.ComputeTextOffset(
+  El: TPixieElement; X: TPixiePixel): Integer;
+var
+  Ri: TPixieRenderItem;
+  LocalX: TPixiePixel;
+  HFont: PtrUInt;
+begin
+  Result := 0;
+  Ri := TPixieRenderItem(El.GetRenderItem);
+  if (Ri <> nil) and (El.Parent <> nil) then
+  begin
+    HFont := El.Parent.Css.Font;
+    if HFont <> 0 then
+    begin
+      LocalX := X - RenderAbsoluteX(Ri);
+      Result := FContainer.TextOffsetAtX(
+        El.GetDisplayText, HFont, LocalX);
+    end;
+  end;
+end;
+
 procedure TPixieDocument.SelectionStart(
   X, Y, ClientX, ClientY: TPixiePixel);
 var
@@ -1516,14 +1564,20 @@ begin
 
   FSelAnchor := El;
   FSelFocus := nil;
+  FSelAnchorOffset := 0;
+  FSelFocusOffset := 0;
   FSelMap.Clear;
   FSelecting := True;
+
+  if El <> nil then
+    FSelAnchorOffset := ComputeTextOffset(El, X);
 end;
 
 function TPixieDocument.SelectionMove(
   X, Y, ClientX, ClientY: TPixiePixel): Boolean;
 var
   El: TPixieElement;
+  NewOffset: Integer;
 begin
   Result := False;
   if (not FSelecting) or (FSelAnchor = nil) then
@@ -1535,11 +1589,17 @@ begin
   if El = nil then
     El := TPixieRenderItem(FRootRender).GetNearestTextByPoint(X, Y);
 
-  if (El <> nil) and (El <> FSelFocus) then
+  if El <> nil then
   begin
-    FSelFocus := El;
-    BuildSelectedElements;
-    Result := True;
+    NewOffset := ComputeTextOffset(El, X);
+
+    if (El <> FSelFocus) or (NewOffset <> FSelFocusOffset) then
+    begin
+      FSelFocus := El;
+      FSelFocusOffset := NewOffset;
+      BuildSelectedElements;
+      Result := True;
+    end;
   end;
 end;
 
@@ -1582,6 +1642,9 @@ begin
     FSelFocus := FWordSelAnchor;
   end;
 
+  FSelAnchorOffset := 0;
+  FSelFocusOffset := Length(FSelFocus.GetDisplayText);
+
   BuildSelectedElements;
   Result := True;
 end;
@@ -1600,6 +1663,8 @@ begin
     ClearSelection;
     FSelAnchor := El;
     FSelFocus := El;
+    FSelAnchorOffset := 0;
+    FSelFocusOffset := Length(El.GetDisplayText);
     FWordSelAnchor := El;
     FSelecting := True;
     FSelMap.AddOrSetValue(Pointer(El), True);
@@ -1630,6 +1695,8 @@ begin
   begin
     FSelAnchor := First;
     FSelFocus := Last;
+    FSelAnchorOffset := 0;
+    FSelFocusOffset := Length(Last.GetDisplayText);
     BuildSelectedElements;
   end;
 end;
@@ -1639,6 +1706,10 @@ begin
   FSelMap.Clear;
   FSelAnchor := nil;
   FSelFocus := nil;
+  FSelAnchorOffset := 0;
+  FSelFocusOffset := 0;
+  FSelAnchorIdx := -1;
+  FSelFocusIdx := -1;
   FSelecting := False;
   FWordSelAnchor := nil;
 end;
@@ -1650,12 +1721,98 @@ end;
 
 function TPixieDocument.HasRangeSelection: Boolean;
 begin
-  Result := (FSelMap.Count > 0) and (FSelAnchor <> FSelFocus);
+  Result := (FSelMap.Count > 0) and
+    ((FSelAnchor <> FSelFocus) or (FSelAnchorOffset <> FSelFocusOffset));
 end;
 
 function TPixieDocument.IsSelected(El: TPixieElement): Boolean;
 begin
   Result := FSelMap.ContainsKey(Pointer(El));
+end;
+
+function TPixieDocument.IsSelectedPartial(El: TPixieElement;
+  out StartOff, EndOff: Integer): Boolean;
+var
+  TxtLen: Integer;
+  IsFirst, IsLast: Boolean;
+begin
+  Result := False;
+  StartOff := 0;
+  EndOff := 0;
+  if not FSelMap.ContainsKey(Pointer(El)) then
+    Exit;
+  if (FSelAnchor = nil) or (FSelFocus = nil) then
+    Exit;
+
+  if FSelAnchor = FSelFocus then
+  begin
+    // Same node — partial within it
+    if El = FSelAnchor then
+    begin
+      StartOff := FSelAnchorOffset;
+      EndOff := FSelFocusOffset;
+      if StartOff > EndOff then
+      begin
+        StartOff := FSelFocusOffset;
+        EndOff := FSelAnchorOffset;
+      end;
+      Result := StartOff <> EndOff;
+    end
+    else
+    begin
+      TxtLen := Length(El.GetDisplayText);
+      StartOff := 0;
+      EndOff := TxtLen;
+      Result := TxtLen > 0;
+    end;
+    Exit;
+  end;
+
+  // Use pointer comparison + cached indices to determine role.
+  // FSelMap contains exactly elements in [Lo..Hi], so any element
+  // that is neither anchor nor focus is an interior node.
+  if FSelAnchorIdx <= FSelFocusIdx then
+  begin
+    IsFirst := (El = FSelAnchor);
+    IsLast := (El = FSelFocus);
+  end
+  else
+  begin
+    IsFirst := (El = FSelFocus);
+    IsLast := (El = FSelAnchor);
+  end;
+
+  if IsFirst and IsLast then
+  begin
+    // Anchor and focus are the same but we already handled that above,
+    // so this means El matched both — treat as full selection
+    StartOff := 0;
+    EndOff := Length(El.GetDisplayText);
+  end
+  else if IsFirst then
+  begin
+    if FSelAnchorIdx <= FSelFocusIdx then
+      StartOff := FSelAnchorOffset
+    else
+      StartOff := FSelFocusOffset;
+    EndOff := Length(El.GetDisplayText);
+  end
+  else if IsLast then
+  begin
+    StartOff := 0;
+    if FSelAnchorIdx <= FSelFocusIdx then
+      EndOff := FSelFocusOffset
+    else
+      EndOff := FSelAnchorOffset;
+  end
+  else
+  begin
+    // Interior node — fully selected
+    StartOff := 0;
+    EndOff := Length(El.GetDisplayText);
+  end;
+
+  Result := StartOff < EndOff;
 end;
 
 procedure TPixieDocument.BuildSelectedElements;
@@ -1671,6 +1828,10 @@ begin
   IdxF := FAllElements.IndexOf(FSelFocus);
   if (IdxA < 0) or (IdxF < 0) then
     Exit;
+
+  // Cache indices for O(1) lookups in IsSelectedPartial
+  FSelAnchorIdx := IdxA;
+  FSelFocusIdx := IdxF;
 
   if IdxA <= IdxF then
   begin
@@ -1702,22 +1863,27 @@ function TPixieDocument.GetSelectedText: string;
   end;
 
 var
-  I: Integer;
+  I, StartOff, EndOff: Integer;
   El, LastBlock, CurBlock: TPixieElement;
+  Txt: string;
 begin
   Result := '';
   LastBlock := nil;
   for I := 0 to FAllElements.Count - 1 do
   begin
     El := FAllElements[I];
-    if El.IsText and FSelMap.ContainsKey(Pointer(El)) then
+    if El.IsText and IsSelectedPartial(El, StartOff, EndOff) then
     begin
       CurBlock := FindBlockAncestor(El);
       if (LastBlock <> nil) and (CurBlock <> LastBlock) and (Result <> '') and
          (Result[Length(Result)] <> #10) then
         Result := Result + #10;
       LastBlock := CurBlock;
-      El.GetText(Result);
+      Txt := El.GetDisplayText;
+      if (StartOff = 0) and (EndOff >= Length(Txt)) then
+        El.GetText(Result)
+      else
+        Result := Result + Copy(Txt, StartOff + 1, EndOff - StartOff);
     end;
   end;
 end;
@@ -1961,6 +2127,10 @@ begin
   FFocusedElement := nil;
   FSelAnchor := nil;
   FSelFocus := nil;
+  FSelAnchorOffset := 0;
+  FSelFocusOffset := 0;
+  FSelAnchorIdx := -1;
+  FSelFocusIdx := -1;
   FSelecting := False;
   FWordSelAnchor := nil;
   FSelMap.Clear;

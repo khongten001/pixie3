@@ -25,6 +25,7 @@ type
     constructor Create(const AText: string; ADoc: TObject);
 
     procedure GetText(var Text: string); override;
+    function GetDisplayText: string; override;
     procedure GetContentSize(var Sz: TPixieSize;
       MaxWidth: TPixiePixel); override;
     function IsText: Boolean; override;
@@ -72,6 +73,14 @@ end;
 procedure TPixieElText.GetText(var Text: string);
 begin
   Text := Text + FText;
+end;
+
+function TPixieElText.GetDisplayText: string;
+begin
+  if FUseTransformed then
+    Result := FTransformedText
+  else
+    Result := FText;
 end;
 
 procedure TPixieElText.GetContentSize(var Sz: TPixieSize;
@@ -188,12 +197,14 @@ end;
 procedure TPixieElText.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
-  Pos: TPixiePosition;
+  Pos, HlPos: TPixiePosition;
   ElParent: TPixieElement;
   Doc: TPixieDocument;
   HFont: PtrUInt;
   Color: TPixieWebColor;
   Txt: string;
+  StartOff, EndOff: Integer;
+  HlX1, HlX2: TPixiePixel;
 begin
   if IsWhiteSpace and (not FDrawSpaces) then
     Exit;
@@ -211,16 +222,31 @@ begin
     begin
       Assert(FDoc is TPixieDocument);
       Doc := TPixieDocument(FDoc);
-      if Doc.IsSelected(Self) and (not IsSpace) then
-        Doc.Container.DrawHighlight(Hdc, Pos, PixieSelectionColor);
       HFont := ElParent.Css.Font;
       if HFont <> 0 then
       begin
+        Txt := GetDisplayText;
+        if Doc.IsSelectedPartial(Self, StartOff, EndOff) and
+           (not IsSpace) then
+        begin
+          if (StartOff = 0) and (EndOff >= Length(Txt)) then
+            Doc.Container.DrawHighlight(Hdc, Pos, PixieSelectionColor)
+          else
+          begin
+            if StartOff > 0 then
+              HlX1 := Doc.Container.TextWidth(
+                Copy(Txt, 1, StartOff), HFont)
+            else
+              HlX1 := 0;
+            HlX2 := Doc.Container.TextWidth(
+              Copy(Txt, 1, EndOff), HFont);
+            HlPos := Pos;
+            HlPos.X := Pos.X + HlX1;
+            HlPos.Width := HlX2 - HlX1;
+            Doc.Container.DrawHighlight(Hdc, HlPos, PixieSelectionColor);
+          end;
+        end;
         Color := ElParent.Css.Color;
-        if FUseTransformed then
-          Txt := FTransformedText
-        else
-          Txt := FText;
         Doc.Container.DrawText(Hdc, Txt, HFont, Color, Pos);
       end;
     end;

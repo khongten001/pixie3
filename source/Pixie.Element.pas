@@ -140,6 +140,7 @@ type
     function OnMouseWheel(Delta: Integer): Boolean; virtual;
 
     procedure GetText(var Text: string); virtual;
+    function GetDisplayText: string; virtual;
     function GetTextContent: string; virtual;
     procedure SetTextContent(const AText: string); virtual;
     procedure ParseAttributes; virtual;
@@ -575,6 +576,11 @@ end;
 
 procedure TPixieElement.GetText(var Text: string);
 begin
+end;
+
+function TPixieElement.GetDisplayText: string;
+begin
+  Result := '';
 end;
 
 function TPixieElement.GetTextContent: string;

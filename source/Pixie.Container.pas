@@ -119,6 +119,10 @@ type
     procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: TPixiePixel;
       Color: TPixieWebColor; StrokeWidth: Single); virtual;
 
+    // Text offset helper (converts pixel X to byte offset in UTF-8 text)
+    function TextOffsetAtX(const Text: string; HFont: PtrUInt;
+      X: TPixiePixel): Integer;
+
   end;
 
 implementation
@@ -154,6 +158,32 @@ procedure TPixieContainer.DrawLine(Hdc: PtrUInt;
   StrokeWidth: Single);
 begin
   // No-op default
+end;
+
+function TPixieContainer.TextOffsetAtX(const Text: string;
+  HFont: PtrUInt; X: TPixiePixel): Integer;
+var
+  I, Len, BestPos: Integer;
+  MeasW, BestDist, Dist: TPixiePixel;
+begin
+  Len := Length(Text);
+  BestPos := 0;
+  BestDist := Abs(X);
+
+  I := 1;
+  while I <= Len do
+  begin
+    ReadUtf8Char(Text, I); // advances I past next character
+    MeasW := TextWidth(Copy(Text, 1, I - 1), HFont);
+    Dist := Abs(X - MeasW);
+    if Dist < BestDist then
+    begin
+      BestDist := Dist;
+      BestPos := I - 1;
+    end;
+  end;
+
+  Result := BestPos;
 end;
 
 procedure TPixieContainer.SplitText(const Text: string;
