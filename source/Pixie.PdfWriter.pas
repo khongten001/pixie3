@@ -139,26 +139,48 @@ function PdfString(const S: string): AnsiString;
 var
   I: Integer;
   C: Char;
+  NeedsUnicode: Boolean;
+  U: UnicodeString;
+  W: Word;
 begin
-  Result := '(';
+  // Check whether the string contains non-ASCII characters
+  NeedsUnicode := False;
   for I := 1 to Length(S) do
-  begin
-    C := S[I];
-    case C of
-      '(': Result := Result + '\(';
-      ')': Result := Result + '\)';
-      '\': Result := Result + '\\';
-    else
-      if (Ord(C) >= 32) and (Ord(C) <= 126) then
-        Result := Result + AnsiChar(C)
-      else if Ord(C) <= 255 then
-        Result := Result + OctalEscape(Ord(C))
-      else
-        Result := Result + OctalEscape(Ord(C) shr 8) +
-                            OctalEscape(Ord(C) and $FF);
+    if Ord(S[I]) > 127 then
+    begin
+      NeedsUnicode := True;
+      Break;
     end;
+
+  if NeedsUnicode then
+  begin
+    // PDF text strings with non-PDFDocEncoding chars must use
+    // UTF-16BE with a BOM prefix (PDF spec ISO 32000-1 7.9.2.2)
+    U := {$IFDEF FPC}UnicodeString(S){$ELSE}S{$ENDIF};
+    Result := '<FEFF';
+    for I := 1 to Length(U) do
+    begin
+      W := Ord(U[I]);
+      Result := Result + AnsiString(IntToHex(W, 4));
+    end;
+    Result := Result + '>';
+  end
+  else
+  begin
+    Result := '(';
+    for I := 1 to Length(S) do
+    begin
+      C := S[I];
+      case C of
+        '(': Result := Result + '\(';
+        ')': Result := Result + '\)';
+        '\': Result := Result + '\\';
+      else
+        Result := Result + AnsiChar(C);
+      end;
+    end;
+    Result := Result + ')';
   end;
-  Result := Result + ')';
 end;
 
 function PdfHexString(const S: AnsiString): AnsiString;
