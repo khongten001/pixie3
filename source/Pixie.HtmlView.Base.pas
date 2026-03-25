@@ -541,8 +541,8 @@ begin
     if Assigned(FOnBeforeParse) then
       FOnBeforeParse(Owner);
     FContainer.BaseUrl := FBaseUrl;
-    W := Round(OnHostGetViewWidth());
-    H := Round(OnHostGetViewHeight());
+    W := Round(OnHostGetViewWidth() / GetEffectiveScale);
+    H := Round(OnHostGetViewHeight() / GetEffectiveScale);
     FContainer.ViewportWidth := W;
     FContainer.ViewportHeight := H;
     FDocument := TPixieDocument.CreateFromString(FLines.Text, FContainer,
@@ -781,8 +781,8 @@ procedure TPixieHtmlViewCore.HandleResize;
 var
   W, H: Integer;
 begin
-  W := Round(OnHostGetViewWidth());
-  H := Round(OnHostGetViewHeight());
+  W := Round(OnHostGetViewWidth() / GetEffectiveScale);
+  H := Round(OnHostGetViewHeight() / GetEffectiveScale);
   if FContainer <> nil then
   begin
     FContainer.ViewportWidth := W;
