@@ -229,7 +229,8 @@ type
     cssUnitsVmax,
     cssUnitsRem,
     cssUnitsCh,
-    cssUnitsFr
+    cssUnitsFr,
+    cssUnitsCalc
   );
 
   // Background attachment

@@ -329,7 +329,7 @@ var
   Px: TPixiePixel;
 begin
   if Val.IsPredefined then Exit;
-  if Val.Units in [cssUnitsPx, cssUnitsPercentage, cssUnitsNone, cssUnitsFr] then Exit;
+  if Val.Units in [cssUnitsPx, cssUnitsPercentage, cssUnitsNone, cssUnitsFr, cssUnitsCalc] then Exit;
   Px := CtxToPixels(Val, Metrics, Ctx);
   Val.SetValue(Px, cssUnitsPx);
 end;

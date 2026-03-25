@@ -572,6 +572,229 @@ begin
   end;
 end;
 
+// --- calc() expression evaluator ---
+// Evaluates calc() into a dual-value form: absolutePx + percentCoeff.
+// Supports +, -, *, / with correct precedence.
+// Phase 1: px, %, pt, in, cm, mm, pc only (no em/rem/vw/vh).
+
+type
+  TCalcValue = record
+    Px: Single;
+    Pct: Single;
+  end;
+
+function CalcTokenToValue(Tok: TPixieCssToken; out V: TCalcValue): Boolean;
+var
+  UnitStr: string;
+begin
+  Result := False;
+  V.Px := 0;
+  V.Pct := 0;
+  if Tok = nil then Exit;
+
+  if Tok.TokenType = cssTokenPercentage then
+  begin
+    V.Pct := Tok.Number;
+    Exit(True);
+  end;
+
+  if Tok.TokenType = cssTokenNumber then
+  begin
+    if Tok.Number = 0 then
+      Exit(True); // zero is valid
+    // Unitless non-zero: only valid as multiplier, handled by caller
+    V.Px := Tok.Number;
+    Exit(True);
+  end;
+
+  if Tok.TokenType = cssTokenDimension then
+  begin
+    UnitStr := PixieLowerCase(Tok.Str);
+    if UnitStr = 'px' then
+      V.Px := Tok.Number
+    else if UnitStr = 'pt' then
+      V.Px := Tok.Number * 96 / 72
+    else if UnitStr = 'in' then
+      V.Px := Tok.Number * 96
+    else if UnitStr = 'cm' then
+      V.Px := Tok.Number * 96 / 2.54
+    else if UnitStr = 'mm' then
+      V.Px := Tok.Number * 96 / 25.4
+    else if UnitStr = 'pc' then
+      V.Px := Tok.Number * 96 / 6
+    else
+      Exit(False); // em, rem, vw, vh etc. not supported in Phase 1
+    Exit(True);
+  end;
+end;
+
+function PixieParseCalcExpression(Tokens: TPixieCssTokenList;
+  out Len: TPixieCssLength): Boolean; forward;
+
+function EvalCalcSum(Tokens: TPixieCssTokenList; var Pos: Integer;
+  out V: TCalcValue): Boolean; forward;
+
+function EvalCalcValue(Tokens: TPixieCssTokenList; var Pos: Integer;
+  out V: TCalcValue): Boolean;
+var
+  Tok: TPixieCssToken;
+  InnerPos: Integer;
+begin
+  Result := False;
+  // Skip whitespace
+  while (Pos < Tokens.Count) and (Tokens[Pos].TokenType = cssTokenWhitespace) do
+    Inc(Pos);
+  if Pos >= Tokens.Count then Exit;
+
+  Tok := Tokens[Pos];
+
+  // Nested calc()
+  if (Tok.TokenType = cssTokenCvFunction) and
+     (PixieLowerCase(Tok.Str) = 'calc') then
+  begin
+    InnerPos := 0;
+    Result := EvalCalcSum(Tok.Value, InnerPos, V);
+    if Result then
+      Inc(Pos);
+    Exit;
+  end;
+
+  // Parenthesized sub-expression
+  if Tok.TokenType = cssTokenRoundBlock then
+  begin
+    InnerPos := 0;
+    Result := EvalCalcSum(Tok.Value, InnerPos, V);
+    if Result then
+      Inc(Pos);
+    Exit;
+  end;
+
+  // Simple value
+  Result := CalcTokenToValue(Tok, V);
+  if Result then
+    Inc(Pos);
+end;
+
+function EvalCalcProduct(Tokens: TPixieCssTokenList; var Pos: Integer;
+  out V: TCalcValue): Boolean;
+var
+  Right: TCalcValue;
+  Op: Integer;
+begin
+  Result := EvalCalcValue(Tokens, Pos, V);
+  if not Result then Exit;
+
+  while Pos < Tokens.Count do
+  begin
+    // Skip whitespace
+    while (Pos < Tokens.Count) and (Tokens[Pos].TokenType = cssTokenWhitespace) do
+      Inc(Pos);
+    if Pos >= Tokens.Count then Break;
+
+    Op := Tokens[Pos].TokenType;
+    if (Op <> Ord('*')) and (Op <> Ord('/')) then
+      Break;
+    Inc(Pos);
+
+    if not EvalCalcValue(Tokens, Pos, Right) then
+      Exit(False);
+
+    if Op = Ord('*') then
+    begin
+      // One operand must be unitless (plain number with no percentage)
+      if (V.Pct = 0) and (Right.Pct = 0) then
+        V.Px := V.Px * Right.Px
+      else if V.Pct = 0 then
+      begin
+        // Left is plain number, right has units
+        Right.Px := Right.Px * V.Px;
+        Right.Pct := Right.Pct * V.Px;
+        V := Right;
+      end
+      else
+      begin
+        // Left has units, right should be plain number
+        V.Px := V.Px * Right.Px;
+        V.Pct := V.Pct * Right.Px;
+      end;
+    end
+    else // division
+    begin
+      if Right.Px = 0 then
+        Exit(False); // division by zero
+      if Right.Pct <> 0 then
+        Exit(False); // can't divide by percentage
+      V.Px := V.Px / Right.Px;
+      V.Pct := V.Pct / Right.Px;
+    end;
+  end;
+end;
+
+function EvalCalcSum(Tokens: TPixieCssTokenList; var Pos: Integer;
+  out V: TCalcValue): Boolean;
+var
+  Right: TCalcValue;
+  Op: Integer;
+  SavePos: Integer;
+begin
+  // Skip leading whitespace
+  while (Pos < Tokens.Count) and (Tokens[Pos].TokenType = cssTokenWhitespace) do
+    Inc(Pos);
+
+  Result := EvalCalcProduct(Tokens, Pos, V);
+  if not Result then Exit;
+
+  while Pos < Tokens.Count do
+  begin
+    // + and - must be surrounded by whitespace per CSS spec
+    // Pattern: WS op WS
+    SavePos := Pos;
+    while (Pos < Tokens.Count) and (Tokens[Pos].TokenType = cssTokenWhitespace) do
+      Inc(Pos);
+    if Pos >= Tokens.Count then Break;
+
+    Op := Tokens[Pos].TokenType;
+    if (Op <> Ord('+')) and (Op <> Ord('-')) then
+    begin
+      Pos := SavePos; // not an operator, put back
+      Break;
+    end;
+    Inc(Pos);
+
+    // Skip whitespace after operator
+    while (Pos < Tokens.Count) and (Tokens[Pos].TokenType = cssTokenWhitespace) do
+      Inc(Pos);
+
+    if not EvalCalcProduct(Tokens, Pos, Right) then
+      Exit(False);
+
+    if Op = Ord('+') then
+    begin
+      V.Px := V.Px + Right.Px;
+      V.Pct := V.Pct + Right.Pct;
+    end
+    else
+    begin
+      V.Px := V.Px - Right.Px;
+      V.Pct := V.Pct - Right.Pct;
+    end;
+  end;
+end;
+
+function PixieParseCalcExpression(Tokens: TPixieCssTokenList;
+  out Len: TPixieCssLength): Boolean;
+var
+  V: TCalcValue;
+  Pos: Integer;
+begin
+  Result := False;
+  if (Tokens = nil) or (Tokens.Count = 0) then Exit;
+  Pos := 0;
+  if not EvalCalcSum(Tokens, Pos, V) then Exit;
+  Len := TPixieCssLength.CreateCalc(V.Px, V.Pct);
+  Result := True;
+end;
+
 function PixieParseCssLength(Token: TPixieCssToken; out Len: TPixieCssLength;
   Options: Integer; const Keywords: string): Boolean;
 var
@@ -645,6 +868,15 @@ begin
       Exit;
     Len := TPixieCssLength.Create(Token.Number, TPixieCssUnits(UnitIdx + 1));
     Exit(True);
+  end;
+
+  // Try calc() function
+  if (Token.TokenType = cssTokenCvFunction) and
+     ((Options and fLengthPercentage) <> 0) and
+     (PixieLowerCase(Token.Str) = 'calc') then
+  begin
+    if PixieParseCalcExpression(Token.Value, Len) then
+      Exit(True);
   end;
 end;
 

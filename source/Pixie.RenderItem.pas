@@ -2269,7 +2269,15 @@ var
 begin
   if not Len.IsPredefined then
   begin
-    if Len.Units = cssUnitsPercentage then
+    if Len.Units = cssUnitsCalc then
+    begin
+      OutValue.Value := Len.CalcPercent(PercentBase);
+      if Len.CalcPercentCoeff <> 0 then
+        OutValue.ValueType := cbcPercentage
+      else
+        OutValue.ValueType := cbcAbsolute;
+    end
+    else if Len.Units = cssUnitsPercentage then
     begin
       OutValue.Value := Len.CalcPercent(PercentBase);
       OutValue.ValueType := cbcPercentage;
