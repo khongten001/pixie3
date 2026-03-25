@@ -85,6 +85,7 @@ begin
     {$I %FPCTARGETCPU%} + ' ' +
     {$IF DEFINED(LCLqt6)}'qt6'
     {$ELSEIF DEFINED(LCLqt5)}'qt5'
+    {$ELSEIF DEFINED(LCLqt)}'qt4'
     {$ELSEIF DEFINED(LCLGTK3)}'gtk3'
     {$ELSEIF DEFINED(LCLGTK2)}'gtk2'
     {$ELSEIF DEFINED(LCLCocoa)}'cocoa'

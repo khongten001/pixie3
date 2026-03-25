@@ -13,7 +13,7 @@ uses
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
   Pixie.HtmlView.Base
-  {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
+  {$IF DEFINED(LCLqt) or DEFINED(LCLqt5) or DEFINED(LCLqt6)}
     , Pixie.Canvas.Qt
   {$ELSEIF DEFINED(MSWINDOWS)}
     , JwaWinUser, Pixie.Canvas.D2D
@@ -38,7 +38,7 @@ type
     {$IFDEF MSWINDOWS}
     procedure WMIMEStartComposition(var Msg: TLMessage); message WM_IME_STARTCOMPOSITION;
     {$ENDIF}
-    {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
+    {$IF DEFINED(LCLqt) or DEFINED(LCLqt5) or DEFINED(LCLqt6)}
     procedure LMIMQuery(var Msg: TLMessage); message LM_IM_QUERY;
     {$ENDIF}
     {$IFDEF WITH_GTK2_IM}
@@ -209,7 +209,7 @@ begin
   TabStop := True;
 
   PxCanvas := nil;
-  {$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
+  {$IF DEFINED(LCLqt) or DEFINED(LCLqt5) or DEFINED(LCLqt6)}
   PxCanvas := TPixieQtCanvas.Create;
   {$ELSEIF DEFINED(MSWINDOWS)}
   PxCanvas := TPixieD2DCanvas.Create;
@@ -597,7 +597,7 @@ begin
 end;
 {$ENDIF}
 
-{$IF DEFINED(LCLqt5) or DEFINED(LCLqt6)}
+{$IF DEFINED(LCLqt) or DEFINED(LCLqt5) or DEFINED(LCLqt6)}
 procedure TPixieHtmlView.LMIMQuery(var Msg: TLMessage);
 var
   DocX, DocY, H: TPixiePixel;

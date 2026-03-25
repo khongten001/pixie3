@@ -9,6 +9,7 @@ interface
 
 uses
   SysUtils, Classes, Math,
+  {$IFDEF LCLqt} qt4, {$ENDIF}
   {$IFDEF LCLqt5} qt5, {$ENDIF}
   {$IFDEF LCLqt6} qt6, {$ENDIF}
   qtobjects,
@@ -142,8 +143,8 @@ begin
   Result := True;
 end;
 
-{$IFDEF LCLqt5}
-// Qt5 uses a 0..99 weight scale; CSS/Qt6 uses 100..900.
+{$IF DEFINED(LCLqt) OR DEFINED(LCLqt5)}
+// Qt4/Qt5 use a 0..99 weight scale; Qt6/CSS uses 100..900.
 // Map standard CSS breakpoints to Qt5 equivalents.
 function CssWeightToQt5(W: Integer): Integer;
 const
@@ -806,7 +807,7 @@ begin
   QFont_setPixelSize(FontH, Round(Descr.Size));
 
   // Set weight (Qt5 and Qt6 use different scales)
-  {$IFDEF LCLqt5}
+  {$IF DEFINED(LCLqt) OR DEFINED(LCLqt5)}
   QFont_setWeight(FontH, CssWeightToQt5(Descr.Weight));
   {$ENDIF}
   {$IFDEF LCLqt6}
