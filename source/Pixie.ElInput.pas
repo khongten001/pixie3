@@ -81,6 +81,13 @@ type
     function DumpGetName: string; override;
   end;
 
+  { TPixieElInputButton — <input type="submit|button|reset"> }
+
+  TPixieElInputButton = class(TPixieElButton)
+  public
+    procedure GetText(var Text: string); override;
+  end;
+
 implementation
 
 uses
@@ -671,6 +678,25 @@ end;
 function TPixieElButton.DumpGetName: string;
 begin
   Result := 'button';
+end;
+
+{ TPixieElInputButton }
+
+procedure TPixieElInputButton.GetText(var Text: string);
+var
+  Val: string;
+begin
+  Val := GetAttr('value');
+  if Val <> '' then
+    Text := Text + Val
+  else
+  begin
+    Val := GetAttr('type');
+    if SameText(Val, 'reset') then
+      Text := Text + 'Reset'
+    else if not SameText(Val, 'button') then
+      Text := Text + 'Submit';
+  end;
 end;
 
 end.

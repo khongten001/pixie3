@@ -69,6 +69,22 @@ type
     procedure ParseAttributes; override;
   end;
 
+  { TPixieElOl }
+
+  TPixieElOl = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElUl }
+
+  TPixieElUl = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
   { TPixieElBase }
 
   TPixieElBase = class(TPixieHtmlTag)
@@ -314,6 +330,64 @@ begin
   Cont := GetDocContainer;
   if Cont <> nil then
     Cont.SetCaption(Txt);
+  inherited ParseAttributes;
+end;
+
+{ TPixieElOl }
+
+constructor TPixieElOl.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElOl.ParseAttributes;
+var
+  Val: string;
+begin
+  Val := GetAttr('type');
+  if Val <> '' then
+  begin
+    if Val = '1' then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'decimal')
+    else if Val = 'a' then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'lower-alpha')
+    else if Val = 'A' then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'upper-alpha')
+    else if Val = 'i' then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'lower-roman')
+    else if Val = 'I' then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'upper-roman');
+  end;
+  Val := GetAttr('align');
+  if Val <> '' then
+    MapAlignToTextAlign(Val);
+  inherited ParseAttributes;
+end;
+
+{ TPixieElUl }
+
+constructor TPixieElUl.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElUl.ParseAttributes;
+var
+  Val: string;
+begin
+  Val := GetAttr('type');
+  if Val <> '' then
+  begin
+    if SameText(Val, 'disc') then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'disc')
+    else if SameText(Val, 'circle') then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'circle')
+    else if SameText(Val, 'square') then
+      FStyle.AddProperty(Ord(psid_list_style_type), 'square');
+  end;
+  Val := GetAttr('align');
+  if Val <> '' then
+    MapAlignToTextAlign(Val);
   inherited ParseAttributes;
 end;
 

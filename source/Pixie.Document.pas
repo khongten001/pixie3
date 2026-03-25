@@ -212,7 +212,7 @@ uses
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.CssSelector,
   Pixie.HtmlTag,
   Pixie.ElText, Pixie.ElImage, Pixie.ElInput, Pixie.ElTextInput,
-  Pixie.ElTable, Pixie.ElAnchor, Pixie.ElMisc,
+  Pixie.ElTable, Pixie.ElAnchor, Pixie.ElMisc, Pixie.ElDetails,
   Pixie.ElBeforeAfter,
   Pixie.RenderItem, Pixie.RenderBlock,
   Pixie.RenderInline, Pixie.RenderTable;
@@ -791,6 +791,14 @@ begin
       El := TPixieElScript.Create(Self)
     else if TagName = 'font' then
       El := TPixieElFont.Create(Self)
+    else if TagName = 'ol' then
+      El := TPixieElOl.Create(Self)
+    else if TagName = 'ul' then
+      El := TPixieElUl.Create(Self)
+    else if TagName = 'details' then
+      El := TPixieElDetails.Create(Self)
+    else if TagName = 'summary' then
+      El := TPixieElSummary.Create(Self)
     else if TagName = 'label' then
       El := TPixieElLabel.Create(Self)
     else if TagName = 'button' then
@@ -811,6 +819,9 @@ begin
       else if (InputType = '') or (InputType = 'text') or
               (InputType = 'password') then
         El := TPixieElTextInput.Create(Self)
+      else if (InputType = 'submit') or (InputType = 'button') or
+              (InputType = 'reset') then
+        El := TPixieElInputButton.Create(Self)
       else
         El := TPixieHtmlTag.Create(Self);
     end
@@ -1205,7 +1216,10 @@ begin
     while CurIdx < ElPtr.FChildren.Count do
     begin
       Child := ElPtr.FChildren[CurIdx];
-      if Child.SrcEl.Css.Display <> Disp then
+      if (Child.SrcEl.Css.Display <> Disp) and
+         not ((Disp = displayTableRowGroup) and
+              (Child.SrcEl.Css.Display in
+                [displayTableHeaderGroup, displayTableFooterGroup])) then
       begin
         if (not Child.SrcEl.IsTableSkip) or
            (Child.SrcEl.IsTableSkip and (Tmp.Count > 0)) then
@@ -1245,6 +1259,9 @@ begin
   ParentRi := ElPtr.GetParent;
   if ParentRi = nil then Exit;
   if ParentRi.SrcEl.Css.Display = Disp then Exit;
+  if (Disp = displayTableRowGroup) and
+     (ParentRi.SrcEl.Css.Display in
+       [displayTableHeaderGroup, displayTableFooterGroup]) then Exit;
 
   // Find this element in parent's children
   ThisIdx := ParentRi.FChildren.IndexOf(ElPtr);

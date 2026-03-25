@@ -69,6 +69,10 @@
         <UnitName Value="Pixie.ElBeforeAfter"/>
       </Item>
       <Item>
+        <Filename Value="../source/Pixie.ElDetails.pas"/>
+        <UnitName Value="Pixie.ElDetails"/>
+      </Item>
+      <Item>
         <Filename Value="../source/Pixie.Element.pas"/>
         <UnitName Value="Pixie.Element"/>
       </Item>

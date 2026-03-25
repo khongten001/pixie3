@@ -62,6 +62,7 @@ contains
   Pixie.ElTable in '..\source\Pixie.ElTable.pas',
   Pixie.ElAnchor in '..\source\Pixie.ElAnchor.pas',
   Pixie.ElMisc in '..\source\Pixie.ElMisc.pas',
+  Pixie.ElDetails in '..\source\Pixie.ElDetails.pas',
   Pixie.ElBeforeAfter in '..\source\Pixie.ElBeforeAfter.pas',
   Pixie.ElInput in '..\source\Pixie.ElInput.pas',
   Pixie.ElTextInput in '..\source\Pixie.ElTextInput.pas',
