@@ -1292,7 +1292,7 @@ begin
   begin
     FLineHeight.ComputedValue := CtxToPixels(FLineHeight.CssValue,
       FFontMetrics, Ctx);
-    FLineHeight.CssValue.SetValue(FLineHeight.ComputedValue, cssUnitsNone);
+    FLineHeight.CssValue.SetValue(FLineHeight.ComputedValue, cssUnitsPx);
   end;
 
   // 17. List style
