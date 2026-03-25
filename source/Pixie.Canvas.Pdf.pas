@@ -108,7 +108,7 @@ type
     procedure FinalizeFonts;
     procedure FinalizePageResources;
     {$IFDEF FPC}
-    function LoadImageFPImage(const Path: string): TPixieImageHandle;
+    function LoadImageFPImage(const Data: TBytes): TPixieImageHandle;
     {$ENDIF}
   public
     constructor Create(AWriter: TPixiePdfWriter;
@@ -1502,9 +1502,10 @@ end;
 
 {$IFDEF FPC}
 function TPixiePdfCanvas.LoadImageFPImage(
-  const Path: string): TPixieImageHandle;
+  const Data: TBytes): TPixieImageHandle;
 var
   Img: TFPMemoryImage;
+  Stream: TBytesStream;
   X, Y, W, H: Integer;
   C: TFPColor;
   Pixels: TBytes;
@@ -1513,10 +1514,15 @@ begin
   Result := 0;
   Img := TFPMemoryImage.Create(0, 0);
   try
+    Stream := TBytesStream.Create(Data);
     try
-      Img.LoadFromFile(Path);
-    except
-      Exit;
+      try
+        Img.LoadFromStream(Stream);
+      except
+        Exit;
+      end;
+    finally
+      Stream.Free;
     end;
     W := Img.Width;
     H := Img.Height;
@@ -1544,6 +1550,7 @@ end;
 
 function TPixiePdfCanvas.LoadImage(const Path: string): TPixieImageHandle;
 var
+  Resolved: string;
   Stream: TFileStream;
   ImgData: TBytes;
   ImgObj: TPixiePdfObject;
@@ -1554,17 +1561,18 @@ var
   I: Integer;
 begin
   Result := 0;
-  if not FileExists(Path) then Exit;
+  Resolved := ExpandFileName(Path);
+  if not FileExists(Resolved) then Exit;
 
   // Detect SVG by file extension
-  if LowerCase(ExtractFileExt(Path)) = '.svg' then
+  if LowerCase(ExtractFileExt(Resolved)) = '.svg' then
   begin
     try
-      Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+      Stream := TFileStream.Create(Resolved, fmOpenRead or fmShareDenyNone);
       try
         if Stream.Size < 4 then Exit;
         SetLength(ImgData, Stream.Size);
-        Stream.Read(ImgData[0], Length(ImgData));
+        Stream.ReadBuffer(ImgData[0], Length(ImgData));
       finally
         Stream.Free;
       end;
@@ -1576,19 +1584,17 @@ begin
   end;
 
   try
-    Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+    Stream := TFileStream.Create(Resolved, fmOpenRead or fmShareDenyNone);
     try
       if Stream.Size < 4 then Exit;
       SetLength(ImgData, Stream.Size);
-      Stream.Read(ImgData[0], Length(ImgData));
+      Stream.ReadBuffer(ImgData[0], Length(ImgData));
     finally
       Stream.Free;
     end;
   except
     Exit;
   end;
-
-  if Length(ImgData) < 4 then Exit;
 
   // Detect JPEG by FF D8 FF header
   IsJpeg := (ImgData[0] = $FF) and (ImgData[1] = $D8) and (ImgData[2] = $FF);
@@ -1642,7 +1648,7 @@ begin
   else
   begin
     // Decode PNG/BMP/GIF via FPImage and create from raw pixels
-    Result := LoadImageFPImage(Path);
+    Result := LoadImageFPImage(ImgData);
   end
   {$ENDIF}
   ;
