@@ -124,7 +124,8 @@ type
     procedure DrawRect(X, Y, W, H: Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
     procedure DrawLine(X1, Y1, X2, Y2: Single;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
@@ -894,8 +895,7 @@ begin
   Metrics.FontSize := Descr.Size;
   Metrics.ChWidth := Descr.Size * 0.6;
   Metrics.DrawSpaces := True;
-  Metrics.SubShift := 0;
-  Metrics.SuperShift := 0;
+  Metrics.CalcShifts;
   Info.Metrics := Metrics;
 
   Result := TPixieFontHandle(Info);
@@ -1306,14 +1306,31 @@ begin
 end;
 
 procedure TPixieCairoCanvas.DrawLine(X1, Y1, X2, Y2: Single;
-  Color: TPixieWebColor; StrokeWidth: Single);
+  Color: TPixieWebColor; StrokeWidth: Single;
+  Style: TPixieTextDecorationStyle);
+var
+  Dashes: array[0..1] of Double;
 begin
   if (FCairo = nil) or (Color.Alpha = 0) then Exit;
   SetSourceColor(Color);
   cairo_set_line_width(FCairo, StrokeWidth);
+  if Style = tdsDotted then
+  begin
+    Dashes[0] := StrokeWidth;
+    Dashes[1] := StrokeWidth * 2;
+    cairo_set_dash(FCairo, @Dashes[0], 2, 0);
+  end
+  else if Style = tdsDashed then
+  begin
+    Dashes[0] := StrokeWidth * 3;
+    Dashes[1] := StrokeWidth * 2;
+    cairo_set_dash(FCairo, @Dashes[0], 2, 0);
+  end;
   cairo_move_to(FCairo, X1, Y1);
   cairo_line_to(FCairo, X2, Y2);
   cairo_stroke(FCairo);
+  if Style in [tdsDotted, tdsDashed] then
+    cairo_set_dash(FCairo, nil, 0, 0);
 end;
 
 procedure TPixieCairoCanvas.StrokePolyline(const Points: array of Single;

@@ -175,7 +175,8 @@ type
     procedure DrawRect(X, Y, W, H: Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
     procedure DrawLine(X1, Y1, X2, Y2: Single;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
@@ -1822,12 +1823,21 @@ begin
 end;
 
 procedure TPixiePdfCanvas.DrawLine(X1, Y1, X2, Y2: Single;
-  Color: TPixieWebColor; StrokeWidth: Single);
+  Color: TPixieWebColor; StrokeWidth: Single;
+  Style: TPixieTextDecorationStyle);
+var
+  PtW: Single;
 begin
   if Color.Alpha = 0 then Exit;
   SetPdfColor(Color, False);
-  EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
-  EmitLn('[] 0 d');
+  PtW := PxToPt(StrokeWidth);
+  EmitLn(PdfFloat(PtW) + ' w');
+  if Style = tdsDotted then
+    EmitLn('[' + PdfFloat(PtW) + ' ' + PdfFloat(PtW * 2) + '] 0 d')
+  else if Style = tdsDashed then
+    EmitLn('[' + PdfFloat(PtW * 3) + ' ' + PdfFloat(PtW * 2) + '] 0 d')
+  else
+    EmitLn('[] 0 d');
   EmitLn(PdfFloat(PxToPt(X1)) + ' ' + PdfFloat(PxToY(Y1)) + ' m ' +
          PdfFloat(PxToPt(X2)) + ' ' + PdfFloat(PxToY(Y2)) + ' l S');
 end;

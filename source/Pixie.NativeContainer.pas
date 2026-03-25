@@ -145,7 +145,8 @@ type
 
     // Decoration line
     procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: TPixiePixel;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
 
     // Opacity layers
     procedure PushOpacity(AOpacity: Single); override;
@@ -1059,9 +1060,9 @@ end;
 
 procedure TPixieNativeContainer.DrawLine(Hdc: PtrUInt;
   X1, Y1, X2, Y2: TPixiePixel; Color: TPixieWebColor;
-  StrokeWidth: Single);
+  StrokeWidth: Single; Style: TPixieTextDecorationStyle);
 begin
-  FCanvas.DrawLine(X1, Y1, X2, Y2, Color, StrokeWidth);
+  FCanvas.DrawLine(X1, Y1, X2, Y2, Color, StrokeWidth, Style);
 end;
 
 // ---------------------------------------------------------------------------

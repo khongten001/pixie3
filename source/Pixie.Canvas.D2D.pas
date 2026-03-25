@@ -128,7 +128,8 @@ type
     procedure DrawRect(X, Y, W, H: Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
     procedure DrawLine(X1, Y1, X2, Y2: Single;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
@@ -931,8 +932,7 @@ begin
   Metrics.FontSize := Descr.Size;
   Metrics.ChWidth := Descr.Size * 0.6;
   Metrics.DrawSpaces := True;
-  Metrics.SubShift := 0;
-  Metrics.SuperShift := 0;
+  Metrics.CalcShifts;
   Info.Metrics := Metrics;
 
   Result := TPixieFontHandle(Info);
@@ -1398,12 +1398,36 @@ begin
 end;
 
 procedure TPixieD2DCanvas.DrawLine(X1, Y1, X2, Y2: Single;
-  Color: TPixieWebColor; StrokeWidth: Single);
+  Color: TPixieWebColor; StrokeWidth: Single;
+  Style: TPixieTextDecorationStyle);
+var
+  StrokeProps: TD2d1StrokeStyleProperties;
+  StrokeStyle: ID2D1StrokeStyle;
 begin
   if (FTarget = nil) or (Color.Alpha = 0) then Exit;
   FBrush.SetColor(ToColorF(Color));
-  FTarget.DrawLine(MakePoint(X1, Y1), MakePoint(X2, Y2),
-    FBrush, StrokeWidth, nil);
+  if Style in [tdsDotted, tdsDashed] then
+  begin
+    StrokeProps.startCap := D2D1_CAP_STYLE_ROUND;
+    StrokeProps.endCap := D2D1_CAP_STYLE_ROUND;
+    StrokeProps.dashCap := D2D1_CAP_STYLE_ROUND;
+    StrokeProps.lineJoin := D2D1_LINE_JOIN_ROUND;
+    StrokeProps.miterLimit := 1;
+    if Style = tdsDotted then
+      StrokeProps.dashStyle := D2D1_DASH_STYLE_DOT
+    else
+      StrokeProps.dashStyle := D2D1_DASH_STYLE_DASH;
+    StrokeProps.dashOffset := 0;
+    if Succeeded(FFactory.CreateStrokeStyle(StrokeProps, nil, 0, StrokeStyle)) then
+      FTarget.DrawLine(MakePoint(X1, Y1), MakePoint(X2, Y2),
+        FBrush, StrokeWidth, StrokeStyle)
+    else
+      FTarget.DrawLine(MakePoint(X1, Y1), MakePoint(X2, Y2),
+        FBrush, StrokeWidth, nil);
+  end
+  else
+    FTarget.DrawLine(MakePoint(X1, Y1), MakePoint(X2, Y2),
+      FBrush, StrokeWidth, nil);
 end;
 
 procedure TPixieD2DCanvas.StrokePolyline(const Points: array of Single;

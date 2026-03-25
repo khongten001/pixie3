@@ -117,7 +117,8 @@ type
 
     // Decoration line
     procedure DrawLine(Hdc: PtrUInt; X1, Y1, X2, Y2: TPixiePixel;
-      Color: TPixieWebColor; StrokeWidth: Single); virtual;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); virtual;
 
     // Text offset helper (converts pixel X to byte offset in UTF-8 text)
     function TextOffsetAtX(const Text: string; HFont: PtrUInt;
@@ -155,7 +156,7 @@ end;
 
 procedure TPixieContainer.DrawLine(Hdc: PtrUInt;
   X1, Y1, X2, Y2: TPixiePixel; Color: TPixieWebColor;
-  StrokeWidth: Single);
+  StrokeWidth: Single; Style: TPixieTextDecorationStyle);
 begin
   // No-op default
 end;

@@ -139,7 +139,8 @@ type
     procedure DrawRect(X, Y, W, H: Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
     procedure DrawLine(X1, Y1, X2, Y2: Single;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
@@ -761,8 +762,7 @@ begin
   Metrics.FontSize := Descr.Size;
   Metrics.ChWidth := Descr.Size * 0.6;
   Metrics.DrawSpaces := True;
-  Metrics.SubShift := 0;
-  Metrics.SuperShift := 0;
+  Metrics.CalcShifts;
   Info.Metrics := Metrics;
 
   Result := TPixieFontHandle(Info);
@@ -1024,13 +1024,19 @@ begin
 end;
 
 procedure TPixieFmxCanvas.DrawLine(X1, Y1, X2, Y2: Single;
-  Color: TPixieWebColor; StrokeWidth: Single);
+  Color: TPixieWebColor; StrokeWidth: Single;
+  Style: TPixieTextDecorationStyle);
 begin
   if (FCanvas = nil) or (Color.Alpha = 0) then Exit;
   FStrokeBrush.Kind := TBrushKind.Solid;
   FStrokeBrush.Color := ToAlphaColor(Color);
   FStrokeBrush.Thickness := StrokeWidth;
-  FStrokeBrush.Dash := TStrokeDash.Solid;
+  case Style of
+    tdsDotted: FStrokeBrush.Dash := TStrokeDash.Dot;
+    tdsDashed: FStrokeBrush.Dash := TStrokeDash.Dash;
+  else
+    FStrokeBrush.Dash := TStrokeDash.Solid;
+  end;
   FCanvas.DrawLine(PointF(X1, Y1), PointF(X2, Y2), FOpacity, FStrokeBrush);
 end;
 

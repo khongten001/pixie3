@@ -119,7 +119,8 @@ type
     procedure DrawRect(X, Y, W, H: Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
     procedure DrawLine(X1, Y1, X2, Y2: Single;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
@@ -841,8 +842,7 @@ begin
   Metrics.FontSize := Descr.Size;
   Metrics.ChWidth := Descr.Size * 0.6;
   Metrics.DrawSpaces := True;
-  Metrics.SubShift := 0;
-  Metrics.SuperShift := 0;
+  Metrics.CalcShifts;
   Info.Metrics := Metrics;
 
   Result := TPixieFontHandle(Info);
@@ -1265,15 +1265,32 @@ begin
 end;
 
 procedure TPixieCGCanvas.DrawLine(X1, Y1, X2, Y2: Single;
-  Color: TPixieWebColor; StrokeWidth: Single);
+  Color: TPixieWebColor; StrokeWidth: Single;
+  Style: TPixieTextDecorationStyle);
+var
+  Dashes: array[0..1] of CGFloat;
 begin
   if (FCG = nil) or (Color.Alpha = 0) then Exit;
   SetStrokeColor(Color);
   CGContextSetLineWidth(FCG, StrokeWidth);
+  if Style = tdsDotted then
+  begin
+    Dashes[0] := StrokeWidth;
+    Dashes[1] := StrokeWidth * 2;
+    CGContextSetLineDash(FCG, 0, @Dashes[0], 2);
+  end
+  else if Style = tdsDashed then
+  begin
+    Dashes[0] := StrokeWidth * 3;
+    Dashes[1] := StrokeWidth * 2;
+    CGContextSetLineDash(FCG, 0, @Dashes[0], 2);
+  end;
   CGContextBeginPath(FCG);
   CGContextMoveToPoint(FCG, X1, Y1);
   CGContextAddLineToPoint(FCG, X2, Y2);
   CGContextStrokePath(FCG);
+  if Style in [tdsDotted, tdsDashed] then
+    CGContextSetLineDash(FCG, 0, nil, 0);
 end;
 
 procedure TPixieCGCanvas.StrokePolyline(const Points: array of Single;

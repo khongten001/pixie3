@@ -671,6 +671,7 @@ type
     SuperShift: TPixiePixel;
     DrawSpaces: Boolean;
     function BaseLine: TPixiePixel;
+    procedure CalcShifts;
   end;
 
   { TPixieFontItem }
@@ -953,6 +954,12 @@ end;
 function TPixieFontMetrics.BaseLine: TPixiePixel;
 begin
   Result := Descent;
+end;
+
+procedure TPixieFontMetrics.CalcShifts;
+begin
+  SubShift := Ascent * 0.25;
+  SuperShift := Ascent * 0.35;
 end;
 
 { TPixieMediaFeatures }

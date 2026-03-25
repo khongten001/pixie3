@@ -121,7 +121,8 @@ type
     procedure DrawRect(X, Y, W, H: Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
     procedure DrawLine(X1, Y1, X2, Y2: Single;
-      Color: TPixieWebColor; StrokeWidth: Single); override;
+      Color: TPixieWebColor; StrokeWidth: Single;
+      Style: TPixieTextDecorationStyle = tdsSolid); override;
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
@@ -833,8 +834,7 @@ begin
   if Metrics.ChWidth = 0 then
     Metrics.ChWidth := Descr.Size * 0.6;
   Metrics.DrawSpaces := True;
-  Metrics.SubShift := 0;
-  Metrics.SuperShift := 0;
+  Metrics.CalcShifts;
   Info.Metrics := Metrics;
 
   Result := TPixieFontHandle(Info);
@@ -1154,11 +1154,13 @@ begin
 end;
 
 procedure TPixieQtCanvas.DrawLine(X1, Y1, X2, Y2: Single;
-  Color: TPixieWebColor; StrokeWidth: Single);
+  Color: TPixieWebColor; StrokeWidth: Single;
+  Style: TPixieTextDecorationStyle);
 var
   QC: TQColor;
   Pen: QPenH;
   P1, P2: TQtPointF;
+  Dashes: TQRealArray;
 begin
   if (FPainter = nil) or (Color.Alpha = 0) then Exit;
   MakeColor(Color, QC);
@@ -1166,6 +1168,21 @@ begin
   Pen := QPen_Create(@QC);
   try
     QPen_setWidthF(Pen, StrokeWidth);
+    if Style = tdsDotted then
+    begin
+      SetLength(Dashes, 2);
+      Dashes[0] := 1;
+      Dashes[1] := 2;
+      QPen_setDashPattern(Pen, @Dashes);
+      QPen_setCapStyle(Pen, QtRoundCap);
+    end
+    else if Style = tdsDashed then
+    begin
+      SetLength(Dashes, 2);
+      Dashes[0] := 3;
+      Dashes[1] := 2;
+      QPen_setDashPattern(Pen, @Dashes);
+    end;
     QPainter_setPen(FPainter, Pen);
     P1.x := X1; P1.y := Y1;
     P2.x := X2; P2.y := Y2;

@@ -1635,21 +1635,21 @@ begin
               DecY := ContentBox.Y + FCss.FontMetrics.Ascent + 2;
               Doc.Container.DrawLine(Hdc,
                 ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
-                DecColor, 1);
+                DecColor, 1, FCss.TextDecorationStyle);
             end;
             if (FCss.TextDecorationLine and TextDecorationLineOverline) <> 0 then
             begin
               DecY := ContentBox.Y;
               Doc.Container.DrawLine(Hdc,
                 ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
-                DecColor, 1);
+                DecColor, 1, FCss.TextDecorationStyle);
             end;
             if (FCss.TextDecorationLine and TextDecorationLineLineThrough) <> 0 then
             begin
               DecY := ContentBox.Y + FCss.FontMetrics.Ascent - FCss.FontMetrics.XHeight / 2;
               Doc.Container.DrawLine(Hdc,
                 ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
-                DecColor, 1);
+                DecColor, 1, FCss.TextDecorationStyle);
             end;
           end;
         end;
