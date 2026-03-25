@@ -175,8 +175,18 @@ const
     '  font-size: medium;' +
     '}' +
 
-    'tbody, tfoot, thead {' +
+    'tbody {' +
     '  display:table-row-group;' +
+    '  vertical-align:middle;' +
+    '}' +
+
+    'thead {' +
+    '  display:table-header-group;' +
+    '  vertical-align:middle;' +
+    '}' +
+
+    'tfoot {' +
+    '  display:table-footer-group;' +
     '  vertical-align:middle;' +
     '}' +
 
@@ -232,6 +242,7 @@ const
 
     'caption {' +
     '  display: table-caption;' +
+    '  text-align: center;' +
     '}' +
 
     'td[nowrap], th[nowrap] {' +
@@ -311,12 +322,29 @@ const
     '  margin-right: 40px;' +
     '}' +
 
+    'fieldset {' +
+    '  display: block;' +
+    '  margin-left: 2px;' +
+    '  margin-right: 2px;' +
+    '  padding-top: 0.35em;' +
+    '  padding-bottom: 0.625em;' +
+    '  padding-left: 0.75em;' +
+    '  padding-right: 0.75em;' +
+    '  border: 2px groove #c0c0c0;' +
+    '}' +
+
+    'legend {' +
+    '  display: block;' +
+    '  padding-left: 2px;' +
+    '  padding-right: 2px;' +
+    '}' +
+
     'form {' +
     '  display: block;' +
     '  margin-top: 0em;' +
     '}' +
 
-    'option {' +
+    'option, datalist {' +
     '  display: none;' +
     '}' +
 
@@ -338,7 +366,7 @@ const
     '  vertical-align: middle;' +
     '}' +
 
-    'button {' +
+    'button, input[type="submit"], input[type="button"], input[type="reset"] {' +
     '  padding: 4px 14px;' +
     '  cursor: default;' +
     '  vertical-align: middle;' +
@@ -356,6 +384,11 @@ const
     '  vertical-align: middle;' +
     '}' +
 
+    'address {' +
+    '  display: block;' +
+    '  font-style: italic;' +
+    '}' +
+
     'article, aside, footer, header, hgroup, nav, section {' +
     '  display: block;' +
     '}' +
@@ -370,6 +403,31 @@ const
     '  font-size: smaller;' +
     '}' +
 
+    'small {' +
+    '  font-size: smaller;' +
+    '}' +
+
+    'dfn, var {' +
+    '  font-style: italic;' +
+    '}' +
+
+    'abbr[title] {' +
+    '  text-decoration: underline dotted;' +
+    '}' +
+
+    'mark {' +
+    '  background-color: yellow;' +
+    '  color: black;' +
+    '}' +
+
+    'q::before {' +
+    '  content: "\201C";' +
+    '}' +
+
+    'q::after {' +
+    '  content: "\201D";' +
+    '}' +
+
     'figure {' +
     '  display: block;' +
     '  margin-top: 1em;' +
@@ -380,6 +438,23 @@ const
 
     'figcaption {' +
     '  display: block;' +
+    '}' +
+
+    'details {' +
+    '  display: block;' +
+    '}' +
+
+    'summary {' +
+    '  display: block;' +
+    '  cursor: pointer;' +
+    '}' +
+
+    'summary::before {' +
+    '  content: "\25B8 ";' +
+    '}' +
+
+    'details[open] > summary::before {' +
+    '  content: "\25BE ";' +
     '}';
 
 implementation
