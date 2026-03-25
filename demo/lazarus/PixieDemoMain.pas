@@ -118,6 +118,12 @@ begin
     end;
   end;
 
+  if (ParamCount > 0) and FileExists(ParamStr(1)) then
+  begin
+    PixieHtmlView.LoadFromFile(ParamStr(1));
+    Exit;
+  end;
+
   PixieHtmlView.LoadFromString(
     '<html><head><style>' +
     'a { color: #0066cc; text-decoration: underline; cursor: pointer; }' +
