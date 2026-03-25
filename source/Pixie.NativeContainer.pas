@@ -172,7 +172,7 @@ implementation
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Base64,{$ENDIF}
   {$IFNDEF FPC}System.NetEncoding,{$ENDIF}
-  Pixie.Url;
+  Pixie.Html, Pixie.Url;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -188,22 +188,19 @@ end;
 function PercentDecode(const S: string): string;
 var
   I, Len: Integer;
-  Ch: Byte;
 begin
   Result := '';
   I := 1;
   Len := Length(S);
   while I <= Len do
   begin
-    if (S[I] = '%') and (I + 2 <= Len) then
+    if (S[I] = '%') and (I + 2 <= Len) and
+       PixieIsHexDigit(Ord(S[I + 1])) and PixieIsHexDigit(Ord(S[I + 2])) then
     begin
-      Ch := StrToIntDef('$' + Copy(S, I + 1, 2), -1);
-      if Ch >= 0 then
-      begin
-        Result := Result + Chr(Ch);
-        Inc(I, 3);
-        Continue;
-      end;
+      Result := Result + Chr(PixieDigitValue(Ord(S[I + 1])) * 16 +
+        PixieDigitValue(Ord(S[I + 2])));
+      Inc(I, 3);
+      Continue;
     end;
     Result := Result + S[I];
     Inc(I);
