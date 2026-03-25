@@ -138,12 +138,16 @@ var
 begin
   FGrid := TPixieTableGrid.Create;
 
+  // Pass 1: thead sections
+  for I := 0 to FChildren.Count - 1 do
+    if FChildren[I].SrcEl.Css.Display = displayTableHeaderGroup then
+      ProcessSection(FChildren[I]);
+
+  // Pass 2: tbody sections, bare rows, and captions
   for I := 0 to FChildren.Count - 1 do
   begin
     El := FChildren[I];
-    if (El.SrcEl.Css.Display = displayTableRowGroup) or
-       (El.SrcEl.Css.Display = displayTableHeaderGroup) or
-       (El.SrcEl.Css.Display = displayTableFooterGroup) then
+    if El.SrcEl.Css.Display = displayTableRowGroup then
       ProcessSection(El)
     else if El.SrcEl.Css.Display = displayTableRow then
       ProcessRow(El)
@@ -160,6 +164,11 @@ begin
       FGrid.GetCaptions.Add(NewChild);
     end;
   end;
+
+  // Pass 3: tfoot sections
+  for I := 0 to FChildren.Count - 1 do
+    if FChildren[I].SrcEl.Css.Display = displayTableFooterGroup then
+      ProcessSection(FChildren[I]);
 
   FGrid.Finish;
 

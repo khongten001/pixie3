@@ -65,6 +65,7 @@ var
   AutoMargin: TPixiePixel;
   SavedChildTop: TPixiePixel;
   SelfCollapsed: TPixiePixel;
+  PreRenderMarginTop, OldCollapse, NewCollapse, Delta: TPixiePixel;
 begin
   RetWidth := 0;
   ChildTop := 0;
@@ -127,6 +128,7 @@ begin
         // Collapse top margin
         SavedChildTop := ChildTop;
         ChildMargins := El.GetMargins;
+        PreRenderMarginTop := ChildMargins.Top;
         if IsFirst and CollapseTopMargin then
         begin
           if ChildMargins.Top > 0 then
@@ -153,6 +155,35 @@ begin
            ElCss.CssWidth.IsPredefined then
           El.Render(ChildX, ChildTop, SelfSize.NewWidth(Rw), FmtCtx);
         ChildMargins := El.GetMargins;
+
+        // Post-render parent-child margin propagation fix:
+        // If the child's top margin grew during render (its first child's
+        // margin collapsed through), retroactively apply sibling collapsing.
+        if ChildMargins.Top > PreRenderMarginTop then
+        begin
+          if IsFirst and CollapseTopMargin then
+          begin
+            Delta := ChildMargins.Top - PreRenderMarginTop;
+            El.FPos.Y := El.FPos.Y - Delta;
+            ChildTop := ChildTop - Delta;
+            if ChildMargins.Top > TopMargin then
+              TopMargin := ChildMargins.Top;
+          end
+          else if not IsFirst then
+          begin
+            if PreRenderMarginTop > 0 then
+              OldCollapse := Min(LastMargin, PreRenderMarginTop)
+            else
+              OldCollapse := 0;
+            NewCollapse := Min(LastMargin, ChildMargins.Top);
+            Delta := NewCollapse - OldCollapse;
+            if Delta > 0 then
+            begin
+              El.FPos.Y := El.FPos.Y - Delta;
+              ChildTop := ChildTop - Delta;
+            end;
+          end;
+        end;
 
         // Move block if it overflows float area
         if El.SrcEl.IsReplaced or
