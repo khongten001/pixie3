@@ -1519,7 +1519,10 @@ begin
           begin
             Layer.ClipBox := Clip^;
             Layer.BorderBox := Clip^;
-            Layer.OriginBox := Clip^;
+            if Layer.Attachment = baFixed then
+              Layer.OriginBox := Clip^;
+            // baScroll: keep OriginBox at element position so background
+            // scrolls with content rather than staying fixed to viewport
           end;
 
           Layer.BorderBox.DoRound;

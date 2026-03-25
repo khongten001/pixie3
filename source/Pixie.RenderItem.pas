@@ -234,6 +234,13 @@ begin
     FMargins.Top    := Doc.ToPixels(FElement.Css.CssMargins.Top, Fm, 0);
     FMargins.Bottom := Doc.ToPixels(FElement.Css.CssMargins.Bottom, Fm, 0);
 
+    // CSS spec: margins do not apply to table-internal elements
+    if FElement.Css.Display in [displayTableCell, displayTableRow,
+       displayTableRowGroup, displayTableHeaderGroup,
+       displayTableFooterGroup, displayTableColumn,
+       displayTableColumnGroup] then
+      FMargins.Init;
+
     FPadding.Left   := Doc.ToPixels(FElement.Css.CssPadding.Left, Fm, 0);
     FPadding.Right  := Doc.ToPixels(FElement.Css.CssPadding.Right, Fm, 0);
     FPadding.Top    := Doc.ToPixels(FElement.Css.CssPadding.Top, Fm, 0);
@@ -727,6 +734,13 @@ begin
 
   FMargins.Top    := FElement.Css.CssMargins.Top.CalcPercent(ParentWidth);
   FMargins.Bottom := FElement.Css.CssMargins.Bottom.CalcPercent(ParentWidth);
+
+  // CSS spec: margins do not apply to table-internal elements
+  if FElement.Css.Display in [displayTableCell, displayTableRow,
+     displayTableRowGroup, displayTableHeaderGroup,
+     displayTableFooterGroup, displayTableColumn,
+     displayTableColumnGroup] then
+    FMargins.Init;
 
   FPadding.Top    := FElement.Css.CssPadding.Top.CalcPercent(ParentWidth);
   FPadding.Bottom := FElement.Css.CssPadding.Bottom.CalcPercent(ParentWidth);
