@@ -979,9 +979,13 @@ begin
   PY := PxToY(Y + H);
   PW := PxToPt(W);
   PH := PxToPt(H);
+  if Color.Alpha < 255 then
+    PushOpacity(Color.Alpha / 255.0);
   SetPdfColor(Color, True);
   EmitLn(PdfFloat(PX) + ' ' + PdfFloat(PY) + ' ' +
          PdfFloat(PW) + ' ' + PdfFloat(PH) + ' re f');
+  if Color.Alpha < 255 then
+    PopOpacity;
 end;
 
 procedure TPixiePdfCanvas.FillRoundedRect(X, Y, W, H: Single;
@@ -996,11 +1000,15 @@ begin
           (Radius.BottomRightX > 0) or (Radius.BottomRightY > 0) or
           (Radius.BottomLeftX > 0) or (Radius.BottomLeftY > 0);
 
-  SetPdfColor(Color, True);
   if HasR then
   begin
+    if Color.Alpha < 255 then
+      PushOpacity(Color.Alpha / 255.0);
+    SetPdfColor(Color, True);
     BuildRoundedRectPath(X, Y, W, H, Radius);
     EmitLn('f');
+    if Color.Alpha < 255 then
+      PopOpacity;
   end
   else
     FillRect(X, Y, W, H, Color);

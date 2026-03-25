@@ -652,6 +652,8 @@ begin
       Pdf := TPixiePdfExport.Create;
       try
         Pdf.Title := Caption;
+        Pdf.BaseUrl := PixieHtmlView.BaseUrl;
+        Pdf.OnFetchUrl := @FetchUrl;
         try
           Pdf.SaveToFile(PixieHtmlView.Lines.Text, Dlg.FileName);
           StatusBar.Panels[0].Text := 'PDF saved.';

@@ -10,7 +10,7 @@ interface
 
 uses
   SysUtils, Classes, Math, Generics.Collections,
-  Pixie.Types, Pixie.TrueType, Pixie.PdfWriter,
+  Pixie.Types, Pixie.NativeContainer, Pixie.TrueType, Pixie.PdfWriter,
   Pixie.Canvas.Pdf;
 
 type
@@ -37,6 +37,8 @@ type
     FTitle: string;
     FAuthor: string;
     FUserCss: string;
+    FBaseUrl: string;
+    FOnFetchUrl: TPixieFetchUrlEvent;
     procedure GetPageDimensions(out W, H: Single);
   public
     constructor Create;
@@ -52,13 +54,15 @@ type
     property Title: string read FTitle write FTitle;
     property Author: string read FAuthor write FAuthor;
     property UserCss: string read FUserCss write FUserCss;
+    property BaseUrl: string read FBaseUrl write FBaseUrl;
+    property OnFetchUrl: TPixieFetchUrlEvent read FOnFetchUrl write FOnFetchUrl;
   end;
 
 implementation
 
 uses
   Pixie.Borders,
-  Pixie.MasterCss, Pixie.NativeContainer, Pixie.Document,
+  Pixie.MasterCss, Pixie.Document,
   Pixie.RenderItem,
   // These units register their class variables in initialization sections;
   // without them block/inline layout and grid layout don't work.
@@ -269,6 +273,8 @@ begin
         Container.DefaultFontSize := 16;
         Container.ViewportWidth := ContentWidthPx;
         Container.ViewportHeight := ContentHeightPx;
+        Container.BaseUrl := FBaseUrl;
+        Container.OnFetchUrlEvent := FOnFetchUrl;
 
         // Create and render the document
         Doc := TPixieDocument.CreateFromString(Html, Container,
@@ -324,7 +330,7 @@ begin
               Canvas.SetClipRect(ClipPos, ClipRadius);
 
               // Draw with offset: margin + page scroll
-              Doc.Draw(0, MarginXPx, MarginYPx - PageStart, nil);
+              Doc.Draw(0, MarginXPx, MarginYPx - PageStart, @ClipPos);
 
               Canvas.RestoreState;
               Canvas.EndPage;
