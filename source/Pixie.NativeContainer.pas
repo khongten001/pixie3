@@ -185,6 +185,31 @@ begin
      (StrLComp(PChar(Url), 'https://', 8) = 0));
 end;
 
+function PercentDecode(const S: string): string;
+var
+  I, Len: Integer;
+  Ch: Byte;
+begin
+  Result := '';
+  I := 1;
+  Len := Length(S);
+  while I <= Len do
+  begin
+    if (S[I] = '%') and (I + 2 <= Len) then
+    begin
+      Ch := StrToIntDef('$' + Copy(S, I + 1, 2), -1);
+      if Ch >= 0 then
+      begin
+        Result := Result + Chr(Ch);
+        Inc(I, 3);
+        Continue;
+      end;
+    end;
+    Result := Result + S[I];
+    Inc(I);
+  end;
+end;
+
 function TPixieNativeContainer.ResolveUrl(
   const Src, ABaseUrl: string): string;
 var
@@ -217,14 +242,14 @@ begin
      ((Src[1] = '/') or (Src[1] = '\') or
       ((Length(Src) > 1) and (Src[2] = ':'))) then
   begin
-    Result := Src;
+    Result := PercentDecode(Src);
     Exit;
   end;
 
   if Base = '' then
-    Result := Src
+    Result := PercentDecode(Src)
   else
-    Result := IncludeTrailingPathDelimiter(Base) + Src;
+    Result := IncludeTrailingPathDelimiter(Base) + PercentDecode(Src);
 end;
 
 function DecodeDataUri(const Src: string;
