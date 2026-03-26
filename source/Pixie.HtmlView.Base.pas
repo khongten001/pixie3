@@ -10,7 +10,7 @@ unit Pixie.HtmlView.Base;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, Math,
   {$IFDEF FPC}ExtCtrls,{$ENDIF}
   {$IFDEF FRAMEWORK_FMX}FMX.Types,{$ENDIF}
   {$IFDEF FRAMEWORK_VCL}Vcl.ExtCtrls,{$ENDIF}
@@ -46,6 +46,8 @@ type
   TPixieHostCopyText  = procedure(const Text: string) of object;
   TPixieHostGetTick   = function: UInt64 of object;
 
+  TPixieScrollbarVisibility = (svShow, svHide, svAuto);
+
   { TPixieScrollbarSettings }
 
   TPixieScrollbarSettings = class
@@ -55,14 +57,14 @@ type
     FMinThumbHeight: Integer;
     FThumbColor: TPixieWebColor;
     FTrackColor: TPixieWebColor;
-    FAlwaysVisible: Boolean;
+    FVisibility: TPixieScrollbarVisibility;
     FOnChanged: TPixieHostNotify;
     procedure SetWidth(Value: Integer);
     procedure SetMargin(Value: Integer);
     procedure SetMinThumbHeight(Value: Integer);
     procedure SetThumbColor(const Value: TPixieWebColor);
     procedure SetTrackColor(const Value: TPixieWebColor);
-    procedure SetAlwaysVisible(Value: Boolean);
+    procedure SetVisibility(Value: TPixieScrollbarVisibility);
     procedure Changed;
   public
     constructor Create;
@@ -71,7 +73,7 @@ type
     property MinThumbHeight: Integer read FMinThumbHeight write SetMinThumbHeight;
     property ThumbColor: TPixieWebColor read FThumbColor write SetThumbColor;
     property TrackColor: TPixieWebColor read FTrackColor write SetTrackColor;
-    property AlwaysVisible: Boolean read FAlwaysVisible write SetAlwaysVisible;
+    property Visibility: TPixieScrollbarVisibility read FVisibility write SetVisibility;
     property OnChanged: TPixieHostNotify read FOnChanged write FOnChanged;
   end;
 
@@ -102,9 +104,15 @@ type
     FAutoScrollDY: TPixiePixel;
     FAutoScrollSpeed: Integer;
     FAutoScrollAccel: Integer;
+    FAutoScrollEdge: Integer;
+    FAutoScrollAccelThreshold: Integer;
+    FAutoScrollAccelMax: Integer;
     FLastDragVx: Integer;
     FLastDragVy: Integer;
     FAnchorScrollTick: UInt64;
+    FScrollbarOpacity: Single;
+    FScrollbarHoverZone: Boolean;
+    FScrollbarHideTimer: TTimer;
     FOnBeforeParse: TNotifyEvent;
     FOnAfterParse: TNotifyEvent;
     FOnBeforePaint: TNotifyEvent;
@@ -131,6 +139,10 @@ type
     procedure UpdateAutoScroll(Vy: Integer; ViewH: TPixiePixel;
       DeltaX: Integer);
     procedure StopAutoScroll;
+    function ShouldDrawScrollbar: Boolean;
+    procedure ShowScrollbar;
+    procedure StartScrollbarHide;
+    procedure DoScrollbarHideTimer(Sender: TObject);
   public
     // Host callbacks — set by concrete class in its constructor
     Owner: TObject;
@@ -184,6 +196,9 @@ type
     property ScrollY: TPixiePixel read FScrollY write SetScrollY;
     property NeedsLayout: Boolean read FNeedsLayout write FNeedsLayout;
     property AutoScrollSpeed: Integer read FAutoScrollSpeed write FAutoScrollSpeed;
+    property AutoScrollEdge: Integer read FAutoScrollEdge write FAutoScrollEdge;
+    property AutoScrollAccelThreshold: Integer read FAutoScrollAccelThreshold write FAutoScrollAccelThreshold;
+    property AutoScrollAccelMax: Integer read FAutoScrollAccelMax write FAutoScrollAccelMax;
     property OnAnchorClick: TPixieAnchorClickEvent
       read FOnAnchorClick write FOnAnchorClick;
     property OnElementClick: TPixieElementClickEvent
@@ -219,7 +234,7 @@ begin
   FMinThumbHeight := 16;
   FThumbColor := TPixieWebColor.Create(128, 128, 128, 160);
   FTrackColor := TPixieWebColor.Create(0, 0, 0, 0);
-  FAlwaysVisible := True;
+  FVisibility := svAuto;
 end;
 
 procedure TPixieScrollbarSettings.Changed;
@@ -265,10 +280,10 @@ begin
   Changed;
 end;
 
-procedure TPixieScrollbarSettings.SetAlwaysVisible(Value: Boolean);
+procedure TPixieScrollbarSettings.SetVisibility(Value: TPixieScrollbarVisibility);
 begin
-  if FAlwaysVisible = Value then Exit;
-  FAlwaysVisible := Value;
+  if FVisibility = Value then Exit;
+  FVisibility := Value;
   Changed;
 end;
 
@@ -311,24 +326,23 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Auto-scroll during drag selection
+// Auto-scroll and scrollbar fade
 // ---------------------------------------------------------------------------
 
 const
-  AutoScrollEdge = 10;
-  AutoScrollAccelThreshold = 3;
-  AutoScrollAccelMax = 3;
+  ScrollbarFadeDuration = 500; // ms for the fade-out animation
+  ScrollbarFadeInterval = 50;  // ms between fade ticks (~20 fps)
 
 procedure TPixieHtmlViewCore.UpdateAutoScroll(Vy: Integer;
   ViewH: TPixiePixel; DeltaX: Integer);
 var
   Dir: Integer;
 begin
-  if ViewH <= AutoScrollEdge * 2 then
+  if ViewH <= FAutoScrollEdge * 2 then
     Exit;
-  if Vy < AutoScrollEdge then
+  if Vy < FAutoScrollEdge then
     Dir := -1
-  else if Vy > Round(ViewH) - AutoScrollEdge then
+  else if Vy > Round(ViewH) - FAutoScrollEdge then
     Dir := 1
   else
   begin
@@ -337,9 +351,9 @@ begin
   end;
 
   // Horizontal jiggling accelerates scroll speed
-  if DeltaX >= AutoScrollAccelThreshold then
+  if DeltaX >= FAutoScrollAccelThreshold then
   begin
-    if FAutoScrollAccel < AutoScrollAccelMax then
+    if FAutoScrollAccel < FAutoScrollAccelMax then
       Inc(FAutoScrollAccel);
   end;
 
@@ -354,6 +368,58 @@ begin
     FAutoScrollTimer.Enabled := False;
   FAutoScrollDY := 0;
   FAutoScrollAccel := 0;
+end;
+
+// ---------------------------------------------------------------------------
+// Scrollbar auto-show/hide for svAuto
+// ---------------------------------------------------------------------------
+
+function TPixieHtmlViewCore.ShouldDrawScrollbar: Boolean;
+begin
+  case FScrollbar.Visibility of
+    svShow: Result := True;
+    svHide: Result := False;
+    svAuto: Result := FScrollbarOpacity > 0;
+  else
+    Result := True;
+  end;
+end;
+
+procedure TPixieHtmlViewCore.ShowScrollbar;
+begin
+  FScrollbarHideTimer.Enabled := False;
+  if FScrollbarOpacity < 1 then
+  begin
+    FScrollbarOpacity := 1;
+    Invalidate;
+  end;
+end;
+
+procedure TPixieHtmlViewCore.StartScrollbarHide;
+begin
+  if FScrollbarOpacity <= 0 then Exit;
+  if FScrollbarHoverZone or FScrollDragging then Exit;
+  FScrollbarHideTimer.Interval := ScrollbarFadeInterval;
+  FScrollbarHideTimer.Enabled := True;
+end;
+
+procedure TPixieHtmlViewCore.DoScrollbarHideTimer(Sender: TObject);
+var
+  Step: Single;
+begin
+  if FScrollbarHoverZone or FScrollDragging then
+  begin
+    FScrollbarHideTimer.Enabled := False;
+    Exit;
+  end;
+  Step := ScrollbarFadeInterval / ScrollbarFadeDuration;
+  FScrollbarOpacity := FScrollbarOpacity - Step;
+  if FScrollbarOpacity <= 0 then
+  begin
+    FScrollbarOpacity := 0;
+    FScrollbarHideTimer.Enabled := False;
+  end;
+  Invalidate;
 end;
 
 procedure TPixieHtmlViewCore.DoAutoScrollTimer(Sender: TObject);
@@ -428,10 +494,18 @@ begin
   FWordDragging := False;
   FScrollDragging := False;
   FAutoScrollSpeed := 20;
+  FAutoScrollEdge := 10;
+  FAutoScrollAccelThreshold := 3;
+  FAutoScrollAccelMax := 3;
   FAutoScrollTimer := TTimer.Create(nil);
   FAutoScrollTimer.Interval := 50;
   FAutoScrollTimer.OnTimer := DoAutoScrollTimer;
   FAutoScrollTimer.Enabled := False;
+  FScrollbarOpacity := 0;
+  FScrollbarHoverZone := False;
+  FScrollbarHideTimer := TTimer.Create(nil);
+  FScrollbarHideTimer.OnTimer := DoScrollbarHideTimer;
+  FScrollbarHideTimer.Enabled := False;
   FScrollbar := TPixieScrollbarSettings.Create;
   FScrollbar.OnChanged := Invalidate;
 
@@ -445,6 +519,7 @@ end;
 destructor TPixieHtmlViewCore.Destroy;
 begin
   FreeAndNil(FAutoScrollTimer);
+  FreeAndNil(FScrollbarHideTimer);
   FreeAndNil(FDocument);
   FreeAndNil(FContainer);
   FreeAndNil(FCanvas);
@@ -701,6 +776,7 @@ var
   OldContentHeight: TPixiePixel;
   BarW, BarMargin, TrackH, ThumbH, ThumbX, ThumbY, MaxScroll: TPixiePixel;
   IndicatorRadius: TPixieBorderRadiuses;
+  FadedColor: TPixieWebColor;
 begin
   if Assigned(FOnBeforePaint) then
     FOnBeforePaint(Owner);
@@ -732,7 +808,7 @@ begin
       ClipPos := TPixiePosition.Create(0, 0, ViewW, ViewH);
       FDocument.Draw(0, 0, -FScrollY, @ClipPos);
 
-      if (FContentHeight > ViewH) and FScrollbar.AlwaysVisible then
+      if (FContentHeight > ViewH) and ShouldDrawScrollbar then
       begin
         BarW := FScrollbar.Width;
         BarMargin := FScrollbar.Margin;
@@ -749,10 +825,17 @@ begin
 
         // Draw track background
         if FScrollbar.TrackColor.Alpha > 0 then
-          FCanvas.FillRect(ThumbX, BarMargin, BarW, TrackH,
-            FScrollbar.TrackColor);
+        begin
+          FadedColor := FScrollbar.TrackColor;
+          if FScrollbar.Visibility = svAuto then
+            FadedColor.Alpha := Round(FadedColor.Alpha * FScrollbarOpacity);
+          FCanvas.FillRect(ThumbX, BarMargin, BarW, TrackH, FadedColor);
+        end;
 
         // Draw thumb
+        FadedColor := FScrollbar.ThumbColor;
+        if FScrollbar.Visibility = svAuto then
+          FadedColor.Alpha := Round(FadedColor.Alpha * FScrollbarOpacity);
         IndicatorRadius.TopLeftX := BarW / 2;
         IndicatorRadius.TopLeftY := BarW / 2;
         IndicatorRadius.TopRightX := BarW / 2;
@@ -762,7 +845,7 @@ begin
         IndicatorRadius.BottomLeftX := BarW / 2;
         IndicatorRadius.BottomLeftY := BarW / 2;
         FCanvas.FillRoundedRect(ThumbX, ThumbY, BarW, ThumbH,
-          IndicatorRadius, FScrollbar.ThumbColor);
+          IndicatorRadius, FadedColor);
       end;
     end;
   finally
@@ -882,9 +965,13 @@ begin
       NewScroll := MaxScroll;
     if NewScroll <> FScrollY then
     begin
+      if FScrollbar.Visibility = svAuto then
+        ShowScrollbar;
       SetScrollY(NewScroll);
       Invalidate;
     end;
+    if FScrollbar.Visibility = svAuto then
+      StartScrollbarHide;
     Exit(True);
   end;
 
@@ -905,9 +992,13 @@ begin
     if NewScroll > MaxScroll then NewScroll := MaxScroll;
     if NewScroll <> FScrollY then
     begin
+      if FScrollbar.Visibility = svAuto then
+        ShowScrollbar;
       SetScrollY(NewScroll);
       Invalidate;
     end;
+    if FScrollbar.Visibility = svAuto then
+      StartScrollbarHide;
     Exit(True);
   end;
 end;
@@ -947,7 +1038,7 @@ begin
   ViewW := OnHostGetViewWidth / GetEffectiveScale;
   ViewH := OnHostGetViewHeight / GetEffectiveScale;
   BarMargin := FScrollbar.Margin;
-  if FScrollbar.AlwaysVisible and (FContentHeight > ViewH) and
+  if ShouldDrawScrollbar and (FContentHeight > ViewH) and
      (Vx >= Round(ViewW) - FScrollbar.Width - BarMargin * 2) then
   begin
     TrackH := ViewH - BarMargin * 2;
@@ -1028,7 +1119,8 @@ end;
 procedure TPixieHtmlViewCore.HandleMouseMove(X, Y: Integer);
 var
   Vx, Vy, DeltaX: Integer;
-  ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: TPixiePixel;
+  ViewW, ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: TPixiePixel;
+  InGutter: Boolean;
 begin
   if FScrollDragging then
   begin
@@ -1061,6 +1153,26 @@ begin
   begin
     Vx := Round(X / GetEffectiveScale);
     Vy := Round(Y / GetEffectiveScale);
+
+    // Gutter hover detection for svAuto
+    if FScrollbar.Visibility = svAuto then
+    begin
+      ViewW := OnHostGetViewWidth / GetEffectiveScale;
+      ViewH := OnHostGetViewHeight / GetEffectiveScale;
+      InGutter := (FContentHeight > ViewH) and
+        (Vx >= Round(ViewW) - Max(16, FScrollbar.Width + FScrollbar.Margin * 2));
+      if InGutter and not FScrollbarHoverZone then
+      begin
+        FScrollbarHoverZone := True;
+        ShowScrollbar;
+      end;
+      if not InGutter and FScrollbarHoverZone then
+      begin
+        FScrollbarHoverZone := False;
+        StartScrollbarHide;
+      end;
+    end;
+
     FRedrawBoxes.Clear;
     if FDocument.OnMouseOver(Vx, Vy + FScrollY, Vx, Vy,
       FRedrawBoxes) then
@@ -1100,6 +1212,8 @@ begin
   if IsLeft and FScrollDragging then
   begin
     FScrollDragging := False;
+    if FScrollbar.Visibility = svAuto then
+      StartScrollbarHide;
     Exit;
   end;
   if IsLeft and (FDocument <> nil) then
@@ -1125,6 +1239,12 @@ end;
 procedure TPixieHtmlViewCore.HandleMouseLeave;
 begin
   StopAutoScroll;
+  if FScrollbarHoverZone then
+  begin
+    FScrollbarHoverZone := False;
+    if FScrollbar.Visibility = svAuto then
+      StartScrollbarHide;
+  end;
   if FDocument <> nil then
   begin
     FRedrawBoxes.Clear;
@@ -1188,9 +1308,15 @@ begin
 
   if NewScroll <> FScrollY then
   begin
+    if FScrollbar.Visibility = svAuto then
+      ShowScrollbar;
     SetScrollY(NewScroll);
     Invalidate;
   end;
+
+  if FScrollbar.Visibility = svAuto then
+    StartScrollbarHide;
+
   Result := True;
 end;
 

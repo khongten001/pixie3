@@ -75,6 +75,12 @@ type
     function GetScrollbar: TPixieScrollbarSettings;
     function GetAutoScrollSpeed: Integer;
     procedure SetAutoScrollSpeed(Value: Integer);
+    function GetAutoScrollEdge: Integer;
+    procedure SetAutoScrollEdge(Value: Integer);
+    function GetAutoScrollAccelThreshold: Integer;
+    procedure SetAutoScrollAccelThreshold(Value: Integer);
+    function GetAutoScrollAccelMax: Integer;
+    procedure SetAutoScrollAccelMax(Value: Integer);
     function GetOnAnchorClick: TPixieAnchorClickEvent;
     procedure SetOnAnchorClick(Value: TPixieAnchorClickEvent);
     function GetOnElementClick: TPixieElementClickEvent;
@@ -126,6 +132,12 @@ type
     property ScrollY: TPixiePixel read GetScrollY write SetScrollY;
     property AutoScrollSpeed: Integer read GetAutoScrollSpeed
       write SetAutoScrollSpeed;
+    property AutoScrollEdge: Integer read GetAutoScrollEdge
+      write SetAutoScrollEdge;
+    property AutoScrollAccelThreshold: Integer read GetAutoScrollAccelThreshold
+      write SetAutoScrollAccelThreshold;
+    property AutoScrollAccelMax: Integer read GetAutoScrollAccelMax
+      write SetAutoScrollAccelMax;
   published
     property BorderSpacing;
     property BorderStyle default bsSingle;
@@ -402,6 +414,36 @@ end;
 procedure TPixieHtmlView.SetAutoScrollSpeed(Value: Integer);
 begin
   FCore.AutoScrollSpeed := Value;
+end;
+
+function TPixieHtmlView.GetAutoScrollEdge: Integer;
+begin
+  Result := FCore.AutoScrollEdge;
+end;
+
+procedure TPixieHtmlView.SetAutoScrollEdge(Value: Integer);
+begin
+  FCore.AutoScrollEdge := Value;
+end;
+
+function TPixieHtmlView.GetAutoScrollAccelThreshold: Integer;
+begin
+  Result := FCore.AutoScrollAccelThreshold;
+end;
+
+procedure TPixieHtmlView.SetAutoScrollAccelThreshold(Value: Integer);
+begin
+  FCore.AutoScrollAccelThreshold := Value;
+end;
+
+function TPixieHtmlView.GetAutoScrollAccelMax: Integer;
+begin
+  Result := FCore.AutoScrollAccelMax;
+end;
+
+procedure TPixieHtmlView.SetAutoScrollAccelMax(Value: Integer);
+begin
+  FCore.AutoScrollAccelMax := Value;
 end;
 
 function TPixieHtmlView.GetOnAnchorClick: TPixieAnchorClickEvent;
