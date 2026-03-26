@@ -16,7 +16,8 @@ uses
   {$IFDEF FRAMEWORK_VCL}Vcl.ExtCtrls,{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
   Pixie.Html, Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.RenderBlockContext, Pixie.RenderInlineContext;
+  Pixie.RenderBlockContext, Pixie.RenderInlineContext,
+  Pixie.SvgRenderer, Pixie.SvgRenderer.Canvas;
 
 type
   TPixieCursorKind = (
@@ -82,6 +83,8 @@ type
   TPixieHtmlViewCore = class
   private
     FDocument: TPixieDocument;
+    FSvgRenderer: TPixieSvgCanvasRenderer;
+    FSvgWidth, FSvgHeight: Single;
     FContainer: TPixieNativeContainer;
     FCanvas: TPixieCanvas;
     FLines: TStrings;
@@ -520,6 +523,7 @@ destructor TPixieHtmlViewCore.Destroy;
 begin
   FreeAndNil(FAutoScrollTimer);
   FreeAndNil(FScrollbarHideTimer);
+  FreeAndNil(FSvgRenderer);
   FreeAndNil(FDocument);
   FreeAndNil(FContainer);
   FreeAndNil(FCanvas);
@@ -592,11 +596,61 @@ end;
 // Document management
 // ---------------------------------------------------------------------------
 
+function IsLikelySvg(const Content: string): Boolean;
+var
+  I, Len: Integer;
+begin
+  // Returns True if content starts with <svg or <?xml...followed by <svg
+  Result := False;
+  Len := Length(Content);
+  if Len < 4 then Exit;
+  I := 1;
+  // Skip whitespace
+  while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+  if I + 3 > Len then Exit;
+  // Check for <svg or <?xml
+  if (Content[I] = '<') then
+  begin
+    if (I + 3 <= Len) and
+       ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
+       ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
+       ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    // Skip <?xml ...?> and look for <svg
+    if (I + 4 <= Len) and (Content[I + 1] = '?') then
+    begin
+      Inc(I, 2);
+      while (I < Len) and not ((Content[I] = '?') and (Content[I + 1] = '>')) do
+        Inc(I);
+      Inc(I, 2);
+      // Skip whitespace after ?>
+      while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+      // Skip <!DOCTYPE...>
+      if (I + 8 <= Len) and (Content[I] = '<') and (Content[I + 1] = '!') then
+      begin
+        while (I <= Len) and (Content[I] <> '>') do Inc(I);
+        Inc(I);
+        while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+      end;
+      if (I + 3 <= Len) and (Content[I] = '<') and
+         ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
+         ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
+         ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
+        Result := True;
+    end;
+  end;
+end;
+
 procedure TPixieHtmlViewCore.RebuildDocument;
 var
   W, H: Integer;
+  SvgData: UTF8String;
 begin
   FreeAndNil(FDocument);
+  FreeAndNil(FSvgRenderer);
   if (FScrollY <> 0) or (FContentHeight <> 0) then
   begin
     FScrollY := 0;
@@ -613,6 +667,19 @@ begin
   begin
     if PixieIsBinaryString(FLines.Text) then
       raise EPixieBinaryContent.Create(SPixieBinaryContent);
+
+    // Detect standalone SVG content
+    if IsLikelySvg(FLines.Text) then
+    begin
+      SvgData := UTF8Encode(FLines.Text);
+      FSvgRenderer := TPixieSvgCanvasRenderer.Create(FCanvas);
+      if not FSvgRenderer.ParseSvg(@SvgData[1], Length(SvgData),
+        FSvgWidth, FSvgHeight) then
+        FreeAndNil(FSvgRenderer);
+      Invalidate;
+      Exit;
+    end;
+
     if Assigned(FOnBeforeParse) then
       FOnBeforeParse(Owner);
     FContainer.BaseUrl := FBaseUrl;
@@ -788,6 +855,17 @@ begin
     ViewH := OnHostGetViewHeight / GetEffectiveScale;
     LayoutWidth := Round(ViewW);
 
+    BgColor := OnHostGetBackgroundColor();
+    FCanvas.FillRect(0, 0, ViewW, ViewH, BgColor);
+
+    // Standalone SVG mode — render SVG and skip HTML pipeline
+    if FSvgRenderer <> nil then
+    begin
+      FSvgRenderer.RenderToRect(0, 0, ViewW, ViewH);
+    end
+    else
+    begin
+
     if FNeedsLayout and (FDocument <> nil) then
     begin
       FContainer.ViewportWidth := LayoutWidth;
@@ -799,9 +877,6 @@ begin
         DoScrollChanged;
       FNeedsLayout := False;
     end;
-
-    BgColor := OnHostGetBackgroundColor();
-    FCanvas.FillRect(0, 0, ViewW, ViewH, BgColor);
 
     if FDocument <> nil then
     begin
@@ -848,6 +923,8 @@ begin
           IndicatorRadius, FadedColor);
       end;
     end;
+
+    end; // else (HTML mode)
   finally
     FCanvas.EndPaint;
   end;

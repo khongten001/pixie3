@@ -2,7 +2,7 @@ unit Pixie.Canvas.CG;
 
 // CoreGraphics + CoreText implementation of TPixieCanvas for macOS/Cocoa.
 // Provides 2D drawing via Quartz 2D and text measurement/rendering via CoreText.
-// SVG rendering uses Apple's private CoreSVG framework (macOS 10.15+).
+// SVG rendering via Pixie.SvgRenderer.Canvas (cross-platform path-based renderer).
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
@@ -12,7 +12,6 @@ uses
   SysUtils, Classes, Math,
   MacOSAll,
   CocoaGDIObjects,
-  dl,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
   Pixie.Canvas;
@@ -31,7 +30,7 @@ type
 
   TPixieCGImage = class
     Image: CGImageRef;
-    SvgDocument: Pointer;
+    SvgRenderer: TObject;  // TPixieSvgCanvasRenderer (owns)
     ImgWidth: Integer;
     ImgHeight: Integer;
     destructor Destroy; override;
@@ -124,6 +123,21 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
+    // Path API
+    procedure BeginPath; override;
+    procedure MoveTo(X, Y: Single); override;
+    procedure LineTo(X, Y: Single); override;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); override;
+    procedure ClosePath; override;
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); override;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure ClipPath; override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; override;
 
@@ -132,6 +146,9 @@ type
   end;
 
 implementation
+
+uses
+  Pixie.SvgRenderer.Canvas;
 
 function CheckCGFont(const Name: string): Boolean;
 var
@@ -145,36 +162,6 @@ begin
   Result := Font <> nil;
   if Result then
     CFRelease(Font);
-end;
-
-// ---------------------------------------------------------------------------
-// CoreSVG dynamic loading (private framework, available since macOS 10.15)
-// ---------------------------------------------------------------------------
-
-var
-  CoreSVGLoaded: Boolean = False;
-
-  CGSVGDocumentCreateFromData: function(Data: CFDataRef;
-    Options: CFDictionaryRef): Pointer; cdecl = nil;
-  CGSVGDocumentGetCanvasSize: function(
-    Document: Pointer): CGSize; cdecl = nil;
-  pCGContextDrawSVGDocument: procedure(Context: CGContextRef;
-    Document: Pointer); cdecl = nil;
-  CGSVGDocumentRelease: procedure(
-    Document: Pointer); cdecl = nil;
-
-procedure EnsureCoreSVG;
-begin
-  if CoreSVGLoaded then Exit;
-  CoreSVGLoaded := True;
-  @CGSVGDocumentCreateFromData :=
-    dlsym(RTLD_DEFAULT, 'CGSVGDocumentCreateFromData');
-  @CGSVGDocumentGetCanvasSize :=
-    dlsym(RTLD_DEFAULT, 'CGSVGDocumentGetCanvasSize');
-  @pCGContextDrawSVGDocument :=
-    dlsym(RTLD_DEFAULT, 'CGContextDrawSVGDocument');
-  @CGSVGDocumentRelease :=
-    dlsym(RTLD_DEFAULT, 'CGSVGDocumentRelease');
 end;
 
 // ---------------------------------------------------------------------------
@@ -192,8 +179,7 @@ destructor TPixieCGImage.Destroy;
 begin
   if Image <> nil then
     CGImageRelease(Image);
-  if (SvgDocument <> nil) and Assigned(CGSVGDocumentRelease) then
-    CGSVGDocumentRelease(SvgDocument);
+  SvgRenderer.Free;
   inherited;
 end;
 
@@ -1017,35 +1003,23 @@ function TPixieCGCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 var
   Info: TPixieCGImage;
-  CFData_: CFDataRef;
-  SvgDoc: Pointer;
-  DocSize: CGSize;
+  Renderer: TPixieSvgCanvasRenderer;
+  W, H: Single;
 begin
   Result := 0;
   if (Data = nil) or (Size <= 0) then Exit;
 
-  EnsureCoreSVG;
-  if not Assigned(CGSVGDocumentCreateFromData) or
-     not Assigned(CGSVGDocumentGetCanvasSize) then Exit;
-
-  CFData_ := CFDataCreate(nil, Data, Size);
-  if CFData_ = nil then Exit;
-  try
-    SvgDoc := CGSVGDocumentCreateFromData(CFData_, nil);
-  finally
-    CFRelease(CFData_);
+  Renderer := TPixieSvgCanvasRenderer.Create(Self);
+  if not Renderer.ParseSvg(Data, Size, W, H) then
+  begin
+    Renderer.Free;
+    Exit;
   end;
 
-  if SvgDoc = nil then Exit;
-
-  DocSize := CGSVGDocumentGetCanvasSize(SvgDoc);
-
   Info := TPixieCGImage.Create;
-  Info.SvgDocument := SvgDoc;
-  Info.ImgWidth := Round(DocSize.width);
-  Info.ImgHeight := Round(DocSize.height);
-  if Info.ImgWidth < 1 then Info.ImgWidth := 1;
-  if Info.ImgHeight < 1 then Info.ImgHeight := 1;
+  Info.SvgRenderer := Renderer;
+  Info.ImgWidth := Round(W);
+  Info.ImgHeight := Round(H);
   Result := TPixieImageHandle(Info);
 end;
 
@@ -1064,7 +1038,7 @@ begin
   Resolved := ExpandFileName(Path);
   if not FileExists(Resolved) then Exit;
 
-  // SVG — render via CoreSVG
+  // SVG — render via canvas path API
   if LowerCase(ExtractFileExt(Resolved)) = '.svg' then
   begin
     Result := LoadSvgFile(Resolved);
@@ -1165,56 +1139,16 @@ procedure TPixieCGCanvas.DrawImage(Handle: TPixieImageHandle;
   DstX, DstY, DstW, DstH: Single);
 var
   Info: TPixieCGImage;
-  Sx, Sy, BackingScale: Single;
-  BmpCtx: CGContextRef;
-  SvgImg: CGImageRef;
-  PixW, PixH: Integer;
 begin
   if (Handle = 0) or (FCG = nil) then Exit;
   Info := TPixieCGImage(Handle);
   if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
 
-  // SVG — render into an offscreen bitmap, then draw the bitmap.
-  // CGContextDrawSVGDocument (private CoreSVG API) corrupts the caller's
-  // CGContext state stack, so we must isolate it in a separate context.
-  // The bitmap is created at device-pixel resolution (Retina-aware).
-  if (Info.SvgDocument <> nil) and Assigned(pCGContextDrawSVGDocument) then
+  // SVG rendering via canvas path API
+  if Info.SvgRenderer <> nil then
   begin
-    // Scale bitmap to device pixels (Retina × zoom) for crisp rendering.
-    BackingScale := FCanvasScale * FScale;
-    if BackingScale < 1 then BackingScale := 1;
-
-    PixW := Round(DstW * BackingScale);
-    PixH := Round(DstH * BackingScale);
-    if (PixW < 1) or (PixH < 1) then Exit;
-
-    BmpCtx := CGBitmapContextCreate(nil, PixW, PixH, 8, PixW * 4,
-      FColorSpace,
-      kCGImageAlphaPremultipliedFirst or kCGBitmapByteOrder32Little);
-    if BmpCtx = nil then Exit;
-    try
-      Sx := PixW / Info.ImgWidth;
-      Sy := PixH / Info.ImgHeight;
-      CGContextScaleCTM(BmpCtx, Sx, Sy);
-      pCGContextDrawSVGDocument(BmpCtx, Info.SvgDocument);
-
-      SvgImg := CGBitmapContextCreateImage(BmpCtx);
-    finally
-      CGContextRelease(BmpCtx);
-    end;
-    if SvgImg = nil then Exit;
-    try
-      CGContextSaveGState(FCG);
-      try
-        CGContextTranslateCTM(FCG, DstX, DstY + DstH);
-        CGContextScaleCTM(FCG, 1, -1);
-        CGContextDrawImage(FCG, CGRectMake(0, 0, DstW, DstH), SvgImg);
-      finally
-        CGContextRestoreGState(FCG);
-      end;
-    finally
-      CGImageRelease(SvgImg);
-    end;
+    TPixieSvgCanvasRenderer(Info.SvgRenderer).RenderToRect(
+      DstX, DstY, DstW, DstH);
     Exit;
   end;
 
@@ -1311,6 +1245,91 @@ begin
   CGContextStrokePath(FCG);
   CGContextSetLineCap(FCG, kCGLineCapButt);
   CGContextSetLineJoin(FCG, kCGLineJoinMiter);
+end;
+
+// ---------------------------------------------------------------------------
+// Path API
+// ---------------------------------------------------------------------------
+
+procedure TPixieCGCanvas.BeginPath;
+begin
+  if FCG = nil then Exit;
+  CGContextBeginPath(FCG);
+end;
+
+procedure TPixieCGCanvas.MoveTo(X, Y: Single);
+begin
+  if FCG = nil then Exit;
+  CGContextMoveToPoint(FCG, X, Y);
+end;
+
+procedure TPixieCGCanvas.LineTo(X, Y: Single);
+begin
+  if FCG = nil then Exit;
+  CGContextAddLineToPoint(FCG, X, Y);
+end;
+
+procedure TPixieCGCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+begin
+  if FCG = nil then Exit;
+  CGContextAddCurveToPoint(FCG, X1, Y1, X2, Y2, X3, Y3);
+end;
+
+procedure TPixieCGCanvas.ClosePath;
+begin
+  if FCG = nil then Exit;
+  CGContextClosePath(FCG);
+end;
+
+procedure TPixieCGCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+begin
+  if (FCG = nil) or (Color.Alpha = 0) then Exit;
+  SetFillColor(Color);
+  if FillRule = frEvenOdd then
+    CGContextDrawPath(FCG, kCGPathEOFill)
+  else
+    CGContextDrawPath(FCG, kCGPathFill);
+end;
+
+procedure TPixieCGCanvas.StrokePath(Color: TPixieWebColor;
+  Width: Single);
+begin
+  if (FCG = nil) or (Color.Alpha = 0) then Exit;
+  SetStrokeColor(Color);
+  CGContextSetLineWidth(FCG, Width);
+  CGContextDrawPath(FCG, kCGPathStroke);
+end;
+
+procedure TPixieCGCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+begin
+  if FCG = nil then Exit;
+  SetFillColor(FillColor);
+  SetStrokeColor(StrokeColor);
+  CGContextSetLineWidth(FCG, StrokeWidth);
+  if FillRule = frEvenOdd then
+    CGContextDrawPath(FCG, kCGPathEOFillStroke)
+  else
+    CGContextDrawPath(FCG, kCGPathFillStroke);
+end;
+
+procedure TPixieCGCanvas.ClipPath;
+begin
+  if FCG = nil then Exit;
+  CGContextClip(FCG);
+end;
+
+procedure TPixieCGCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+var
+  M: CGAffineTransform;
+begin
+  if FCG = nil then Exit;
+  M.a := A;   M.b := B;
+  M.c := C;   M.d := D;
+  M.tx := E;  M.ty := F;
+  CGContextConcatCTM(FCG, M);
 end;
 
 // ---------------------------------------------------------------------------

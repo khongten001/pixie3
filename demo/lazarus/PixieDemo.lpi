@@ -17,7 +17,7 @@
         <CompilerOptions>
           <Version Value="11"/>
           <Target>
-            <Filename Value="../bin/PixieDemo"/>
+            <Filename Value="../bin/PixieDemo-$(TargetOS)-$(TargetCPU)"/>
           </Target>
           <SearchPaths>
             <OtherUnitFiles Value="../../source;../../package"/>
@@ -49,7 +49,7 @@
         <CompilerOptions>
           <Version Value="11"/>
           <Target>
-            <Filename Value="../bin/PixieDemo"/>
+            <Filename Value="../bin/PixieDemo-$(TargetOS)-$(TargetCPU)"/>
           </Target>
           <SearchPaths>
             <OtherUnitFiles Value="../../source;../../package"/>
@@ -63,7 +63,7 @@
           <CodeGeneration>
             <SmartLinkUnit Value="True"/>
             <Optimizations>
-              <OptimizationLevel Value="3"/>
+              <OptimizationLevel Value="2"/>
             </Optimizations>
           </CodeGeneration>
           <Linking>

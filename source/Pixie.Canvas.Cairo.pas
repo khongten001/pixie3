@@ -30,7 +30,7 @@ type
   TPixieCairoImage = class
     Surface: Pcairo_surface_t;
     PixelData: Pointer;
-    RsvgHandle: Pointer;
+    SvgRenderer: TObject;  // TPixieSvgCanvasRenderer (owns)
     ImgWidth: Integer;
     ImgHeight: Integer;
     destructor Destroy; override;
@@ -129,6 +129,21 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
+    // Path API
+    procedure BeginPath; override;
+    procedure MoveTo(X, Y: Single); override;
+    procedure LineTo(X, Y: Single); override;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); override;
+    procedure ClosePath; override;
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); override;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure ClipPath; override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; override;
 
@@ -141,6 +156,7 @@ implementation
 uses
   {$IFDEF LCLGtk2} Gtk2Def, gdk2 {$ENDIF}
   {$IFDEF LCLGtk3} Gtk3Objects {$ENDIF}
+  , Pixie.SvgRenderer.Canvas
   ;
 
 var
@@ -166,51 +182,6 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// librsvg dynamic loading
-// ---------------------------------------------------------------------------
-
-type
-  TRsvgDimensionData = record
-    Width: Integer;
-    Height: Integer;
-    Em: Double;
-    Ex: Double;
-  end;
-
-var
-  LibRsvg: TLibHandle = NilHandle;
-  LibRsvgLoaded: Boolean = False;
-
-  rsvg_handle_new_from_data: function(Data: Pointer; DataLen: PtrUInt;
-    var Error: Pointer): Pointer; cdecl = nil;
-  rsvg_handle_new_from_file: function(FileName: PAnsiChar;
-    var Error: Pointer): Pointer; cdecl = nil;
-  rsvg_handle_get_dimensions: procedure(Handle: Pointer;
-    out DimData: TRsvgDimensionData); cdecl = nil;
-  rsvg_handle_render_cairo: function(Handle: Pointer;
-    Cr: Pcairo_t): LongBool; cdecl = nil;
-
-procedure EnsureLibRsvg;
-begin
-  if LibRsvgLoaded then Exit;
-  LibRsvgLoaded := True;
-
-  LibRsvg := LoadLibrary('librsvg-2.so.2');
-  if LibRsvg = NilHandle then
-    LibRsvg := LoadLibrary('librsvg-2.so');
-  if LibRsvg = NilHandle then Exit;
-
-  @rsvg_handle_new_from_data :=
-    GetProcAddress(LibRsvg, 'rsvg_handle_new_from_data');
-  @rsvg_handle_new_from_file :=
-    GetProcAddress(LibRsvg, 'rsvg_handle_new_from_file');
-  @rsvg_handle_get_dimensions :=
-    GetProcAddress(LibRsvg, 'rsvg_handle_get_dimensions');
-  @rsvg_handle_render_cairo :=
-    GetProcAddress(LibRsvg, 'rsvg_handle_render_cairo');
-end;
-
-// ---------------------------------------------------------------------------
 // TPixieCairoFont / TPixieCairoImage destructors
 // ---------------------------------------------------------------------------
 
@@ -227,8 +198,7 @@ begin
     cairo_surface_destroy(Surface);
   if PixelData <> nil then
     FreeMem(PixelData);
-  if RsvgHandle <> nil then
-    g_object_unref(RsvgHandle);
+  SvgRenderer.Free;
   inherited;
 end;
 
@@ -1066,58 +1036,52 @@ end;
 function TPixieCairoCanvas.LoadSvgFile(
   const Path: string): TPixieImageHandle;
 var
-  Info: TPixieCairoImage;
-  Handle: Pointer;
-  Error: Pointer;
-  Dim: TRsvgDimensionData;
+  Stream: TFileStream;
+  Buf: Pointer;
+  BufSize: Integer;
 begin
   Result := 0;
-  EnsureLibRsvg;
-  if not Assigned(rsvg_handle_new_from_file) or
-     not Assigned(rsvg_handle_get_dimensions) then Exit;
-
-  Error := nil;
-  Handle := rsvg_handle_new_from_file(PAnsiChar(Path), Error);
-  if Error <> nil then
-    g_error_free(Error);
-  if Handle = nil then Exit;
-
-  rsvg_handle_get_dimensions(Handle, Dim);
-
-  Info := TPixieCairoImage.Create;
-  Info.RsvgHandle := Handle;
-  Info.ImgWidth := Dim.Width;
-  Info.ImgHeight := Dim.Height;
-  Result := TPixieImageHandle(Info);
+  if not FileExists(Path) then Exit;
+  try
+    Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+    try
+      BufSize := Stream.Size;
+      if BufSize <= 0 then Exit;
+      GetMem(Buf, BufSize);
+      try
+        Stream.ReadBuffer(Buf^, BufSize);
+        Result := LoadSvgFromData(Buf, BufSize);
+      finally
+        FreeMem(Buf);
+      end;
+    finally
+      Stream.Free;
+    end;
+  except
+  end;
 end;
 
 function TPixieCairoCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 var
   Info: TPixieCairoImage;
-  Handle: Pointer;
-  Error: Pointer;
-  Dim: TRsvgDimensionData;
+  Renderer: TPixieSvgCanvasRenderer;
+  W, H: Single;
 begin
   Result := 0;
   if (Data = nil) or (Size <= 0) then Exit;
 
-  EnsureLibRsvg;
-  if not Assigned(rsvg_handle_new_from_data) or
-     not Assigned(rsvg_handle_get_dimensions) then Exit;
-
-  Error := nil;
-  Handle := rsvg_handle_new_from_data(Data, Size, Error);
-  if Error <> nil then
-    g_error_free(Error);
-  if Handle = nil then Exit;
-
-  rsvg_handle_get_dimensions(Handle, Dim);
+  Renderer := TPixieSvgCanvasRenderer.Create(Self);
+  if not Renderer.ParseSvg(Data, Size, W, H) then
+  begin
+    Renderer.Free;
+    Exit;
+  end;
 
   Info := TPixieCairoImage.Create;
-  Info.RsvgHandle := Handle;
-  Info.ImgWidth := Dim.Width;
-  Info.ImgHeight := Dim.Height;
+  Info.SvgRenderer := Renderer;
+  Info.ImgWidth := Round(W);
+  Info.ImgHeight := Round(H);
   Result := TPixieImageHandle(Info);
 end;
 
@@ -1133,7 +1097,7 @@ begin
   Resolved := ExpandFileName(Path);
   if not FileExists(Resolved) then Exit;
 
-  // SVG — render via librsvg
+  // SVG — render via canvas SVG renderer
   if LowerCase(ExtractFileExt(Resolved)) = '.svg' then
   begin
     Result := LoadSvgFile(Resolved);
@@ -1214,19 +1178,11 @@ begin
   Info := TPixieCairoImage(Handle);
   if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
 
-  // SVG — re-render at destination size via librsvg
-  if (Info.RsvgHandle <> nil) and Assigned(rsvg_handle_render_cairo) then
+  // SVG — re-render at destination size via canvas renderer
+  if Info.SvgRenderer <> nil then
   begin
-    Sx := DstW / Info.ImgWidth;
-    Sy := DstH / Info.ImgHeight;
-    cairo_save(FCairo);
-    try
-      cairo_translate(FCairo, DstX, DstY);
-      cairo_scale(FCairo, Sx, Sy);
-      rsvg_handle_render_cairo(Info.RsvgHandle, FCairo);
-    finally
-      cairo_restore(FCairo);
-    end;
+    TPixieSvgCanvasRenderer(Info.SvgRenderer).RenderToRect(
+      DstX, DstY, DstW, DstH);
     Exit;
   end;
 
@@ -1353,6 +1309,100 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// Path API
+// ---------------------------------------------------------------------------
+
+procedure TPixieCairoCanvas.BeginPath;
+begin
+  if FCairo = nil then Exit;
+  cairo_new_path(FCairo);
+end;
+
+procedure TPixieCairoCanvas.MoveTo(X, Y: Single);
+begin
+  if FCairo = nil then Exit;
+  cairo_move_to(FCairo, X, Y);
+end;
+
+procedure TPixieCairoCanvas.LineTo(X, Y: Single);
+begin
+  if FCairo = nil then Exit;
+  cairo_line_to(FCairo, X, Y);
+end;
+
+procedure TPixieCairoCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+begin
+  if FCairo = nil then Exit;
+  cairo_curve_to(FCairo, X1, Y1, X2, Y2, X3, Y3);
+end;
+
+procedure TPixieCairoCanvas.ClosePath;
+begin
+  if FCairo = nil then Exit;
+  cairo_close_path(FCairo);
+end;
+
+procedure TPixieCairoCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+begin
+  if (FCairo = nil) or (Color.Alpha = 0) then Exit;
+  SetSourceColor(Color);
+  if FillRule = frEvenOdd then
+    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_EVEN_ODD)
+  else
+    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_WINDING);
+  cairo_fill(FCairo);
+end;
+
+procedure TPixieCairoCanvas.StrokePath(Color: TPixieWebColor;
+  Width: Single);
+begin
+  if (FCairo = nil) or (Color.Alpha = 0) then Exit;
+  SetSourceColor(Color);
+  cairo_set_line_width(FCairo, Width);
+  cairo_stroke(FCairo);
+end;
+
+procedure TPixieCairoCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+begin
+  if FCairo = nil then Exit;
+  if FillRule = frEvenOdd then
+    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_EVEN_ODD)
+  else
+    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_WINDING);
+  if FillColor.Alpha > 0 then
+  begin
+    SetSourceColor(FillColor);
+    cairo_fill_preserve(FCairo);
+  end;
+  if StrokeColor.Alpha > 0 then
+  begin
+    SetSourceColor(StrokeColor);
+    cairo_set_line_width(FCairo, StrokeWidth);
+    cairo_stroke(FCairo);
+  end
+  else
+    cairo_new_path(FCairo);
+end;
+
+procedure TPixieCairoCanvas.ClipPath;
+begin
+  if FCairo = nil then Exit;
+  cairo_clip(FCairo);
+end;
+
+procedure TPixieCairoCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+var
+  M: cairo_matrix_t;
+begin
+  if FCairo = nil then Exit;
+  cairo_matrix_init(@M, A, B, C, D, E, F);
+  cairo_transform(FCairo, @M);
+end;
+
+// ---------------------------------------------------------------------------
 // Scale / View size
 // ---------------------------------------------------------------------------
 
@@ -1366,9 +1416,5 @@ procedure TPixieCairoCanvas.SetScale(Scale: Single);
 begin
   FScale := Scale;
 end;
-
-finalization
-  if LibRsvg <> NilHandle then
-    FreeLibrary(LibRsvg);
 
 end.

@@ -27,7 +27,7 @@ type
     WicSource: IWICBitmapSource;
     WicStream: IStream;       // Prevent premature release of underlying stream
     D2DBitmap: ID2D1Bitmap;
-    SvgDocument: ID2D1SvgDocument;
+    SvgRenderer: TObject;     // TPixieSvgCanvasRenderer (owns)
     ImgWidth: UINT;
     ImgHeight: UINT;
   end;
@@ -46,11 +46,13 @@ type
     FDWriteFactory: IDWriteFactory;
     FWicFactory: IWICImagingFactory;
     FTarget: ID2D1DCRenderTarget;
-    FDeviceContext5: ID2D1DeviceContext5;
     FBrush: ID2D1SolidColorBrush;
     FViewWidth: Integer;
     FViewHeight: Integer;
     FScale: Single;
+    FPathGeometry: ID2D1PathGeometry;
+    FPathSink: ID2D1GeometrySink;
+    FPathFigureOpen: Boolean;
     FStateStack: array[0..63] of TPixieD2DSavedState;
     FStateTop: Integer;
 
@@ -62,6 +64,7 @@ type
       const R: TPixieBorderRadiuses; out Geom: ID2D1PathGeometry);
     function CreateGradientStops(const Points: TPixieColorPointList;
       out Collection: ID2D1GradientStopCollection): Boolean;
+    procedure FinalizePath;
     function FindFontMetrics(const Family: WideString;
       Weight: TDwriteFontWeight; Style: TDwriteFontStyle;
       out FM: TDwriteFontMetrics): Boolean;
@@ -133,6 +136,25 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
+    // Path API
+    procedure BeginPath; override;
+    procedure MoveTo(X, Y: Single); override;
+    procedure LineTo(X, Y: Single); override;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); override;
+    procedure ClosePath; override;
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); override;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure ClipPath; override;
+    procedure FillPathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer); override;
+    procedure FillPathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer); override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; override;
 
@@ -141,6 +163,9 @@ type
   end;
 
 implementation
+
+uses
+  Pixie.SvgRenderer.Canvas;
 
 var
   GCheckFontCanvas: TPixieD2DCanvas;
@@ -159,17 +184,9 @@ function CoCreateInstance(const clsid: TGUID; unkOuter: Pointer;
   dwClsContext: DWORD; const iid: TGUID; out pv): HResult; stdcall;
   external 'ole32.dll' name 'CoCreateInstance';
 
-function SHCreateStreamOnFileW(pszFile: LPCWSTR; grfMode: DWORD;
-  out ppstm: IStream): HResult; stdcall;
-  external 'shlwapi.dll' name 'SHCreateStreamOnFileW';
-
-function CreateStreamOnHGlobal(hGlobal: HGLOBAL; fDeleteOnRelease: BOOL;
-  out stm: IStream): HResult; stdcall;
-  external 'ole32.dll' name 'CreateStreamOnHGlobal';
 
 const
   CLSCTX_INPROC_SERVER = $1;
-  STGM_READ = $00000000;
 
   GUID_WICPixelFormat32bppPBGRA: TGUID = (
     D1: $6FDDC324; D2: $4E03; D3: $4BFE;
@@ -389,9 +406,6 @@ begin
   begin
     C.r := 0; C.g := 0; C.b := 0; C.a := 1;
     FTarget.CreateSolidColorBrush(C, nil, FBrush);
-
-    // Try to get ID2D1DeviceContext5 for SVG support (Windows 10 1703+)
-    FTarget.QueryInterface(IID_ID2D1DeviceContext5, FDeviceContext5);
   end;
 end;
 
@@ -399,7 +413,6 @@ destructor TPixieD2DCanvas.Destroy;
 begin
   // COM interfaces release automatically
   FBrush := nil;
-  FDeviceContext5 := nil;
   FTarget := nil;
   FWicFactory := nil;
   FDWriteFactory := nil;
@@ -1013,148 +1026,48 @@ end;
 // Image
 // ---------------------------------------------------------------------------
 
-procedure ParseSvgViewBox(const S: string; out W, H: Single);
-var
-  P, Q, I: Integer;
-  Vals: array[0..3] of Single;
-  ValCount: Integer;
-  Token: string;
-begin
-  FillChar(Vals, SizeOf(Vals), 0);
-  W := 300;
-  H := 150;
-
-  P := Pos('viewBox="', S);
-  if P = 0 then
-    P := Pos('viewbox="', S);
-  if P = 0 then Exit;
-
-  Inc(P, 9);
-  Q := Pos('"', Copy(S, P, 200));
-  if Q <= 0 then Exit;
-
-  Token := Copy(S, P, Q - 1);
-  for I := 1 to Length(Token) do
-    if Token[I] = ',' then Token[I] := ' ';
-
-  ValCount := 0;
-  P := 1;
-  while (P <= Length(Token)) and (ValCount < 4) do
-  begin
-    while (P <= Length(Token)) and (Token[P] = ' ') do Inc(P);
-    Q := P;
-    while (Q <= Length(Token)) and (Token[Q] <> ' ') do Inc(Q);
-    if Q > P then
-    begin
-      Val(Copy(Token, P, Q - P), Vals[ValCount], I);
-      if I = 0 then Inc(ValCount);
-    end;
-    P := Q;
-  end;
-
-  if ValCount >= 4 then
-  begin
-    W := Vals[2];
-    H := Vals[3];
-  end;
-end;
-
 function TPixieD2DCanvas.LoadSvgImage(
   const Path: string): TPixieImageHandle;
 var
-  Info: PPixieD2DImage;
-  WPath: WideString;
-  Stream: IStream;
-  SvgDoc: ID2D1SvgDocument;
-  ViewSize: TD2d1SizeF;
-  F: file;
-  Buf: array[0..4095] of AnsiChar;
-  BytesRead: Integer;
-  S: AnsiString;
-  W, H: Single;
+  Stream: TFileStream;
+  Data: AnsiString;
 begin
   Result := 0;
-  if FDeviceContext5 = nil then Exit;
-
-  // Parse SVG dimensions from file header
-  W := 300;
-  H := 150;
-  AssignFile(F, Path);
-  {$I-}
-  Reset(F, 1);
-  {$I+}
-  if IOResult = 0 then
-  begin
-    {$I-}
-    BlockRead(F, Buf, SizeOf(Buf), BytesRead);
-    CloseFile(F);
-    {$I+}
-    SetString(S, PAnsiChar(@Buf[0]), BytesRead);
-    ParseSvgViewBox(string(S), W, H);
+  try
+    Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+  except
+    Exit;
   end;
-
-  // Create IStream from file
-  WPath := WideString(Path);
-  if Failed(SHCreateStreamOnFileW(PWideChar(WPath), STGM_READ,
-    Stream)) then Exit;
-
-  // Create SVG document
-  ViewSize.width := W;
-  ViewSize.height := H;
-  if Failed(FDeviceContext5.CreateSvgDocument(Stream, ViewSize,
-    SvgDoc)) then Exit;
-
-  New(Info);
-  FillChar(Info^, SizeOf(TPixieD2DImage), 0);
-  Info.SvgDocument := SvgDoc;
-  Info.ImgWidth := Round(W);
-  Info.ImgHeight := Round(H);
-  Result := TPixieImageHandle(Info);
+  try
+    if Stream.Size <= 0 then Exit;
+    SetLength(Data, Stream.Size);
+    Stream.ReadBuffer(Data[1], Stream.Size);
+  finally
+    Stream.Free;
+  end;
+  Result := LoadSvgFromData(@Data[1], Length(Data));
 end;
 
 function TPixieD2DCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 var
   Info: PPixieD2DImage;
-  Stream: IStream;
-  SvgDoc: ID2D1SvgDocument;
-  ViewSize: TD2d1SizeF;
-  S: AnsiString;
+  Renderer: TPixieSvgCanvasRenderer;
   W, H: Single;
-  Hg: HGLOBAL;
-  Ptr: Pointer;
-  Len: Integer;
 begin
   Result := 0;
-  if (FDeviceContext5 = nil) or (Data = nil) or (Size <= 0) then Exit;
+  if (Data = nil) or (Size <= 0) then Exit;
 
-  // Parse SVG dimensions from data
-  Len := Size;
-  if Len > 4096 then Len := 4096;
-  SetString(S, PAnsiChar(Data), Len);
-  ParseSvgViewBox(string(S), W, H);
-
-  // Create IStream from memory buffer
-  Hg := GlobalAlloc(GMEM_MOVEABLE, Size);
-  if Hg = 0 then Exit;
-  Ptr := GlobalLock(Hg);
-  Move(Data^, Ptr^, Size);
-  GlobalUnlock(Hg);
-  if Failed(CreateStreamOnHGlobal(Hg, True, Stream)) then
+  Renderer := TPixieSvgCanvasRenderer.Create(Self);
+  if not Renderer.ParseSvg(Data, Size, W, H) then
   begin
-    GlobalFree(Hg);
+    Renderer.Free;
     Exit;
   end;
 
-  // Create SVG document
-  ViewSize.width := W;
-  ViewSize.height := H;
-  if Failed(FDeviceContext5.CreateSvgDocument(Stream, ViewSize,
-    SvgDoc)) then Exit;
-
   New(Info);
   FillChar(Info^, SizeOf(TPixieD2DImage), 0);
-  Info.SvgDocument := SvgDoc;
+  Info.SvgRenderer := Renderer;
   Info.ImgWidth := Round(W);
   Info.ImgHeight := Round(H);
   Result := TPixieImageHandle(Info);
@@ -1175,7 +1088,7 @@ begin
 
   Resolved := ExpandFileName(Path);
 
-  // SVG images use Direct2D native rendering
+  // SVG images use canvas path API renderer
   if LowerCase(ExtractFileExt(Resolved)) = '.svg' then
   begin
     Result := LoadSvgImage(Resolved);
@@ -1289,7 +1202,7 @@ var
 begin
   if Handle = 0 then Exit;
   Info := PPixieD2DImage(Handle);
-  Info.SvgDocument := nil;
+  Info.SvgRenderer.Free;
   Info.D2DBitmap := nil;
   Info.WicSource := nil;
   Info.WicStream := nil;
@@ -1314,34 +1227,15 @@ procedure TPixieD2DCanvas.DrawImage(Handle: TPixieImageHandle;
 var
   Info: PPixieD2DImage;
   R: TD2d1RectF;
-  OldTransform, NewTransform: TD2d1Matrix3x2F;
-  ViewSize: TD2d1SizeF;
 begin
   if (Handle = 0) or (FTarget = nil) then Exit;
   Info := PPixieD2DImage(Handle);
 
-  // SVG rendering via ID2D1DeviceContext5
-  if Info.SvgDocument <> nil then
+  // SVG rendering via canvas path API
+  if Info.SvgRenderer <> nil then
   begin
-    if FDeviceContext5 = nil then Exit;
-
-    // Set viewport to destination size
-    ViewSize.width := DstW;
-    ViewSize.height := DstH;
-    Info.SvgDocument.SetViewportSize(ViewSize);
-
-    // Apply translation to position the SVG
-    FTarget.GetTransform(OldTransform);
-    NewTransform := OldTransform;
-    NewTransform.dx := DstX * OldTransform.m11 + DstY * OldTransform.m21
-      + OldTransform.dx;
-    NewTransform.dy := DstX * OldTransform.m12 + DstY * OldTransform.m22
-      + OldTransform.dy;
-    FTarget.SetTransform(@NewTransform);
-
-    FDeviceContext5.DrawSvgDocument(Info.SvgDocument);
-
-    FTarget.SetTransform(@OldTransform);
+    TPixieSvgCanvasRenderer(Info.SvgRenderer).RenderToRect(
+      DstX, DstY, DstW, DstH);
     Exit;
   end;
 
@@ -1463,6 +1357,213 @@ end;
 
 // ---------------------------------------------------------------------------
 // Scale / View size
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Path API
+// ---------------------------------------------------------------------------
+
+procedure TPixieD2DCanvas.FinalizePath;
+begin
+  if FPathSink <> nil then
+  begin
+    if FPathFigureOpen then
+    begin
+      FPathSink.EndFigure(D2D1_FIGURE_END_OPEN);
+      FPathFigureOpen := False;
+    end;
+    FPathSink.Close;
+    FPathSink := nil;
+  end;
+end;
+
+procedure TPixieD2DCanvas.BeginPath;
+begin
+  if FFactory = nil then Exit;
+  FinalizePath;
+  FPathGeometry := nil;
+  FFactory.CreatePathGeometry(FPathGeometry);
+  if FPathGeometry <> nil then
+    FPathGeometry.Open(FPathSink);
+  FPathFigureOpen := False;
+end;
+
+procedure TPixieD2DCanvas.MoveTo(X, Y: Single);
+var
+  Pt: TD2d1Point2f;
+begin
+  if FPathSink = nil then
+    BeginPath;
+  if FPathSink = nil then Exit;
+  if FPathFigureOpen then
+    FPathSink.EndFigure(D2D1_FIGURE_END_OPEN);
+  Pt.x := X;
+  Pt.y := Y;
+  FPathSink.BeginFigure(Pt, D2D1_FIGURE_BEGIN_FILLED);
+  FPathFigureOpen := True;
+end;
+
+procedure TPixieD2DCanvas.LineTo(X, Y: Single);
+var
+  Pt: TD2d1Point2f;
+begin
+  if (FPathSink = nil) or (not FPathFigureOpen) then Exit;
+  Pt.x := X;
+  Pt.y := Y;
+  FPathSink.AddLine(Pt);
+end;
+
+procedure TPixieD2DCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+var
+  Seg: TD2d1BezierSegment;
+begin
+  if (FPathSink = nil) or (not FPathFigureOpen) then Exit;
+  Seg.point1.x := X1; Seg.point1.y := Y1;
+  Seg.point2.x := X2; Seg.point2.y := Y2;
+  Seg.point3.x := X3; Seg.point3.y := Y3;
+  FPathSink.AddBezier(Seg);
+end;
+
+procedure TPixieD2DCanvas.ClosePath;
+begin
+  if (FPathSink = nil) or (not FPathFigureOpen) then Exit;
+  FPathSink.EndFigure(D2D1_FIGURE_END_CLOSED);
+  FPathFigureOpen := False;
+end;
+
+procedure TPixieD2DCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+begin
+  if (FTarget = nil) or (Color.Alpha = 0) then Exit;
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  FBrush.SetColor(ToColorF(Color));
+  FTarget.FillGeometry(FPathGeometry, FBrush, nil);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.StrokePath(Color: TPixieWebColor; Width: Single);
+begin
+  if (FTarget = nil) or (Color.Alpha = 0) then Exit;
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  FBrush.SetColor(ToColorF(Color));
+  FTarget.DrawGeometry(FPathGeometry, FBrush, Width, nil);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+begin
+  if FTarget = nil then Exit;
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  if FillColor.Alpha > 0 then
+  begin
+    FBrush.SetColor(ToColorF(FillColor));
+    FTarget.FillGeometry(FPathGeometry, FBrush, nil);
+  end;
+  if StrokeColor.Alpha > 0 then
+  begin
+    FBrush.SetColor(ToColorF(StrokeColor));
+    FTarget.DrawGeometry(FPathGeometry, FBrush, StrokeWidth, nil);
+  end;
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.ClipPath;
+var
+  LayerParams: TD2d1LayerParameters;
+begin
+  if FTarget = nil then Exit;
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  FillChar(LayerParams, SizeOf(LayerParams), 0);
+  LayerParams.contentBounds.left := -1e9;
+  LayerParams.contentBounds.top := -1e9;
+  LayerParams.contentBounds.right := 1e9;
+  LayerParams.contentBounds.bottom := 1e9;
+  LayerParams.geometricMask := FPathGeometry;
+  LayerParams.maskAntialiasMode := D2D1_ANTIALIAS_MODE_PER_PRIMITIVE;
+  LayerParams.maskTransform.m11 := 1;
+  LayerParams.maskTransform.m22 := 1;
+  LayerParams.opacity := 1.0;
+  FTarget.PushLayer(@LayerParams, nil);
+  if FStateTop > 0 then
+    Inc(FStateStack[FStateTop - 1].LayersPushed);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.FillPathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer);
+var
+  Stops: ID2D1GradientStopCollection;
+  Props: TD2d1LinearGradientBrushProperties;
+  LBrush: ID2D1LinearGradientBrush;
+begin
+  if (FTarget = nil) or (Gradient = nil) then Exit;
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  if not CreateGradientStops(Gradient.ColorPoints, Stops) then
+  begin
+    FPathGeometry := nil;
+    Exit;
+  end;
+  Props.startPoint := MakePoint(Gradient.StartPt.X, Gradient.StartPt.Y);
+  Props.endPoint := MakePoint(Gradient.EndPt.X, Gradient.EndPt.Y);
+  if Succeeded(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
+    LBrush)) then
+    FTarget.FillGeometry(FPathGeometry, LBrush, nil);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.FillPathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer);
+var
+  Stops: ID2D1GradientStopCollection;
+  Props: TD2d1RadialGradientBrushProperties;
+  RBrush: ID2D1RadialGradientBrush;
+begin
+  if (FTarget = nil) or (Gradient = nil) then Exit;
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  if not CreateGradientStops(Gradient.ColorPoints, Stops) then
+  begin
+    FPathGeometry := nil;
+    Exit;
+  end;
+  Props.center := MakePoint(Gradient.Position.X, Gradient.Position.Y);
+  Props.gradientOriginOffset := MakePoint(0, 0);
+  Props.radiusX := Gradient.Radius.X;
+  Props.radiusY := Gradient.Radius.Y;
+  if Succeeded(FTarget.CreateRadialGradientBrush(@Props, nil, Stops,
+    RBrush)) then
+    FTarget.FillGeometry(FPathGeometry, RBrush, nil);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+var
+  Current, New_, Combined: TD2d1Matrix3x2F;
+begin
+  if FTarget = nil then Exit;
+  FTarget.GetTransform(Current);
+  New_.m11 := A;  New_.m12 := B;
+  New_.m21 := C;  New_.m22 := D;
+  New_.dx  := E;  New_.dy  := F;
+  // Combined = Current * New_ (post-multiply: new transform applied in local space)
+  Combined.m11 := Current.m11 * New_.m11 + Current.m12 * New_.m21;
+  Combined.m12 := Current.m11 * New_.m12 + Current.m12 * New_.m22;
+  Combined.m21 := Current.m21 * New_.m11 + Current.m22 * New_.m21;
+  Combined.m22 := Current.m21 * New_.m12 + Current.m22 * New_.m22;
+  Combined.dx  := Current.dx + Current.m11 * New_.dx + Current.m12 * New_.dy;
+  Combined.dy  := Current.dy + Current.m21 * New_.dx + Current.m22 * New_.dy;
+  FTarget.SetTransform(@Combined);
+end;
+
+// ---------------------------------------------------------------------------
+// View size / scale
 // ---------------------------------------------------------------------------
 
 procedure TPixieD2DCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);

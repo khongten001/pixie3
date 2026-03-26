@@ -42,7 +42,37 @@ type
     FontSize: Single;
     FontWeight: Integer;
     LetterSpacing: Single;
+    TextAnchor: TPixieTextAlign;
+    FillGradientId: string;
+    StrokeGradientId: string;
   end;
+
+  { TPixieSvgGradientStop }
+
+  TPixieSvgGradientStop = record
+    Offset: Single;
+    Color: TPixieWebColor;
+  end;
+
+  TPixieSvgGradientStopList = TList<TPixieSvgGradientStop>;
+
+  { TPixieSvgGradient }
+
+  TPixieSvgGradient = class
+  public
+    Id: string;
+    IsRadial: Boolean;
+    X1, Y1, X2, Y2: Single;
+    CX, CY, R, FX, FY: Single;
+    Stops: TPixieSvgGradientStopList;
+    UserSpaceUnits: Boolean;
+    HrefId: string;
+    GradientTransform: string;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+  TPixieSvgGradientMap = TObjectDictionary<string, TPixieSvgGradient>;
 
   { TPixieSvgPathCmd - tokenised path command }
 
@@ -61,6 +91,7 @@ type
     FSvgRoot: Pointer;
     FInitState: TPixieSvgState;
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
+    FGradients: TPixieSvgGradientMap;
   protected
     // Abstract drawing primitives — subclasses override these
     procedure DoMoveTo(X, Y: Single); virtual; abstract;
@@ -100,6 +131,12 @@ type
     procedure ApplyOpacity(const State: TPixieSvgState;
       out NeedRestore: Boolean);
 
+    // Gradient support
+    procedure CollectDefs(Node: Pointer);
+    procedure ParseGradient(Node: Pointer; IsRadial: Boolean);
+    function ResolveGradientStops(const Id: string): TPixieSvgGradient;
+    class function ExtractUrlId(const S: string): string; static;
+
     // Shape renderers (call abstract drawing primitives)
     procedure RenderGroup(Node: Pointer; const State: TPixieSvgState);
     procedure RenderRect(Node: Pointer; const State: TPixieSvgState);
@@ -117,6 +154,8 @@ type
     // Parse SVG XML, extract dimensions. Call RenderDocument after setup.
     function ParseSvg(Data: Pointer; Size: Integer;
       out W, H: Single): Boolean;
+    // Override viewport dimensions (call after ParseSvg, before rendering)
+    procedure SetViewport(AWidth, AHeight: Single);
     // Render the parsed document by walking the SVG tree.
     procedure RenderDocument;
     // Free the parsed document.
@@ -144,6 +183,67 @@ begin Result := S; end;
 function StrToDom(const S: string): WideString; inline;
 begin Result := S; end;
 {$ENDIF}
+
+// ===========================================================================
+// DOCTYPE entity expansion
+// ===========================================================================
+
+procedure ExpandDoctypeEntities(var S: string; DtdStart, DtdEnd: Integer);
+var
+  Subset, EntName, EntValue: string;
+  BracketStart, BracketEnd: Integer;
+  P, Q, ValStart, ValEnd: Integer;
+  QuoteCh: Char;
+begin
+  // Find internal subset between [ and ]
+  BracketStart := Pos('[', S, DtdStart);
+  if (BracketStart = 0) or (BracketStart > DtdEnd) then Exit;
+  BracketEnd := Pos(']', S, BracketStart);
+  if (BracketEnd = 0) or (BracketEnd > DtdEnd) then Exit;
+
+  Subset := Copy(S, BracketStart + 1, BracketEnd - BracketStart - 1);
+
+  // Parse <!ENTITY Name "Value"> declarations and expand &Name; in body
+  P := 1;
+  while P < Length(Subset) do
+  begin
+    P := Pos('<!ENTITY', Subset, P);
+    if P = 0 then Break;
+    Inc(P, 8);
+
+    // Skip whitespace
+    while (P <= Length(Subset)) and (Subset[P] <= ' ') do Inc(P);
+
+    // Read entity name
+    Q := P;
+    while (Q <= Length(Subset)) and (Subset[Q] > ' ') and
+          (Subset[Q] <> '"') and (Subset[Q] <> '''') do Inc(Q);
+    EntName := Copy(Subset, P, Q - P);
+    P := Q;
+
+    // Skip whitespace
+    while (P <= Length(Subset)) and (Subset[P] <= ' ') do Inc(P);
+    if P > Length(Subset) then Break;
+
+    // Read quoted value
+    QuoteCh := Subset[P];
+    if (QuoteCh <> '"') and (QuoteCh <> '''') then
+    begin
+      Inc(P);
+      Continue;
+    end;
+    Inc(P);
+    ValStart := P;
+    while (P <= Length(Subset)) and (Subset[P] <> QuoteCh) do Inc(P);
+    ValEnd := P;
+    EntValue := Copy(Subset, ValStart, ValEnd - ValStart);
+    Inc(P);
+
+    // Expand &Name; references in the document body (after DOCTYPE)
+    if EntName <> '' then
+      S := StringReplace(S, '&' + EntName + ';', EntValue, [rfReplaceAll]);
+  end;
+end;
 
 // ===========================================================================
 // TPixieSvgMatrix
@@ -200,6 +300,27 @@ begin
 end;
 
 // ===========================================================================
+// TPixieSvgGradient
+// ===========================================================================
+
+constructor TPixieSvgGradient.Create;
+begin
+  inherited Create;
+  Stops := TPixieSvgGradientStopList.Create;
+  // Linear defaults (left to right in objectBoundingBox)
+  X1 := 0; Y1 := 0; X2 := 1; Y2 := 0;
+  // Radial defaults
+  CX := 0.5; CY := 0.5; R := 0.5; FX := -1; FY := -1;
+  UserSpaceUnits := False;
+end;
+
+destructor TPixieSvgGradient.Destroy;
+begin
+  Stops.Free;
+  inherited;
+end;
+
+// ===========================================================================
 // TPixieSvgRendererBase — lifecycle
 // ===========================================================================
 
@@ -211,6 +332,7 @@ end;
 
 procedure TPixieSvgRendererBase.ClearDocument;
 begin
+  FreeAndNil(FGradients);
   if FDoc <> nil then
   begin
     FDoc.Free;
@@ -249,27 +371,76 @@ end;
 
 function TPixieSvgRendererBase.ParseSvgFloat(const S: string): Single;
 var
-  Trimmed: string;
-  Code: Integer;
+  Trimmed, Suffix: string;
+  Code, Len: Integer;
+  Scale: Single;
 begin
   Result := 0;
   Trimmed := Trim(S);
   if Trimmed = '' then Exit;
 
-  // Strip common suffixes
-  if (Length(Trimmed) > 2) and
-     ((Copy(Trimmed, Length(Trimmed) - 1, 2) = 'px') or
-      (Copy(Trimmed, Length(Trimmed) - 1, 2) = 'pt') or
-      (Copy(Trimmed, Length(Trimmed) - 1, 2) = 'em')) then
-    Trimmed := Copy(Trimmed, 1, Length(Trimmed) - 2);
+  // Handle percentage suffix (e.g. "50%" → 0.5)
+  Len := Length(Trimmed);
+  if (Len > 1) and (Trimmed[Len] = '%') then
+  begin
+    Trimmed := Copy(Trimmed, 1, Len - 1);
+    Val(Trimmed, Result, Code);
+    if Code = 0 then
+      Result := Result / 100.0;
+    Exit;
+  end;
+
+  // Detect and strip unit suffix, apply conversion factor
+  // SVG default is px (user units); 1in=96px, 1cm=96/2.54, 1mm=96/25.4, 1pt=96/72
+  Scale := 1.0;
+  if Len > 2 then
+  begin
+    Suffix := Copy(Trimmed, Len - 1, 2);
+    if Suffix = 'px' then
+      Trimmed := Copy(Trimmed, 1, Len - 2)
+    else if Suffix = 'cm' then
+    begin
+      Trimmed := Copy(Trimmed, 1, Len - 2);
+      Scale := 96.0 / 2.54;
+    end
+    else if Suffix = 'mm' then
+    begin
+      Trimmed := Copy(Trimmed, 1, Len - 2);
+      Scale := 96.0 / 25.4;
+    end
+    else if Suffix = 'in' then
+    begin
+      Trimmed := Copy(Trimmed, 1, Len - 2);
+      Scale := 96.0;
+    end
+    else if Suffix = 'pt' then
+    begin
+      Trimmed := Copy(Trimmed, 1, Len - 2);
+      Scale := 96.0 / 72.0;
+    end
+    else if Suffix = 'pc' then
+    begin
+      Trimmed := Copy(Trimmed, 1, Len - 2);
+      Scale := 96.0 / 6.0;
+    end
+    else if Suffix = 'em' then
+      Trimmed := Copy(Trimmed, 1, Len - 2);
+  end;
 
   Val(Trimmed, Result, Code);
+  if Code = 0 then
+    Result := Result * Scale;
 end;
 
 function TPixieSvgRendererBase.ParseSvgColor(const S: string;
   out Color: TPixieWebColor): Boolean;
 var
-  Trimmed: string;
+  Trimmed, Lower: string;
+  P, ParenStart: Integer;
+  Vals: array[0..3] of Single;
+  ValCount: Integer;
+  NumStr: string;
+  AlphaIsPercent: Boolean;
 begin
   Trimmed := Trim(S);
   if (Trimmed = '') or (Trimmed = 'none') then
@@ -277,6 +448,61 @@ begin
     Result := False;
     Exit;
   end;
+
+  // Try rgb()/rgba() first
+  Lower := LowerCase(Trimmed);
+  if (Pos('rgb(', Lower) = 1) or (Pos('rgba(', Lower) = 1) then
+  begin
+    ParenStart := Pos('(', Trimmed);
+    if ParenStart = 0 then Exit(False);
+    P := ParenStart + 1;
+    ValCount := 0;
+    AlphaIsPercent := False;
+    while (P <= Length(Trimmed)) and (ValCount < 4) do
+    begin
+      while (P <= Length(Trimmed)) and
+            CharInSet(Trimmed[P], [' ', ',', '/', #9]) do Inc(P);
+      if (P > Length(Trimmed)) or (Trimmed[P] = ')') then Break;
+
+      NumStr := '';
+      while (P <= Length(Trimmed)) and
+            CharInSet(Trimmed[P], ['0'..'9', '.', '-']) do
+      begin
+        NumStr := NumStr + Trimmed[P];
+        Inc(P);
+      end;
+      if NumStr = '' then Break;
+
+      Vals[ValCount] := StrToFloatDef(NumStr, 0);
+      if (P <= Length(Trimmed)) and (Trimmed[P] = '%') then
+      begin
+        if ValCount < 3 then
+          Vals[ValCount] := Vals[ValCount] * 255 / 100
+        else
+          AlphaIsPercent := True;
+        Inc(P);
+      end;
+      Inc(ValCount);
+    end;
+
+    if ValCount >= 3 then
+    begin
+      Color := TPixieWebColor.Create(
+        EnsureRange(Round(Vals[0]), 0, 255),
+        EnsureRange(Round(Vals[1]), 0, 255),
+        EnsureRange(Round(Vals[2]), 0, 255));
+      if ValCount >= 4 then
+      begin
+        if AlphaIsPercent then
+          Color.Alpha := EnsureRange(Round(Vals[3] * 255 / 100), 0, 255)
+        else
+          Color.Alpha := EnsureRange(Round(Vals[3] * 255), 0, 255);
+      end;
+      Exit(True);
+    end;
+    Exit(False);
+  end;
+
   Result := PixieParseColorString(Trimmed, Color);
 end;
 
@@ -320,6 +546,7 @@ var
   StyleStr: string;
   FontFamilyStr, FontSizeStr, FontWeightStr: string;
   LetterSpacingStr: string;
+  AnchorStr: string;
   Color: TPixieWebColor;
 begin
   Result := ParentState;
@@ -333,11 +560,20 @@ begin
   if FillStr <> '' then
   begin
     if FillStr = 'none' then
-      Result.HasFill := False
+    begin
+      Result.HasFill := False;
+      Result.FillGradientId := '';
+    end
+    else if Pos('url(', LowerCase(FillStr)) > 0 then
+    begin
+      Result.FillGradientId := ExtractUrlId(FillStr);
+      Result.HasFill := True;
+    end
     else if (FillStr <> 'inherit') and ParseSvgColor(FillStr, Color) then
     begin
       Result.FillColor := Color;
       Result.HasFill := True;
+      Result.FillGradientId := '';
     end;
   end;
 
@@ -348,11 +584,20 @@ begin
   if StrokeStr <> '' then
   begin
     if StrokeStr = 'none' then
-      Result.HasStroke := False
+    begin
+      Result.HasStroke := False;
+      Result.StrokeGradientId := '';
+    end
+    else if Pos('url(', LowerCase(StrokeStr)) > 0 then
+    begin
+      Result.StrokeGradientId := ExtractUrlId(StrokeStr);
+      Result.HasStroke := True;
+    end
     else if (StrokeStr <> 'inherit') and ParseSvgColor(StrokeStr, Color) then
     begin
       Result.StrokeColor := Color;
       Result.HasStroke := True;
+      Result.StrokeGradientId := '';
     end;
   end;
 
@@ -430,6 +675,17 @@ begin
     else
       Result.LetterSpacing := ParseSvgFloat(LetterSpacingStr);
   end;
+
+  // Text anchor
+  AnchorStr := GetAttr(Node, 'text-anchor');
+  if AnchorStr = '' then
+    AnchorStr := ParseStyleAttribute(StyleStr, 'text-anchor');
+  if AnchorStr = 'middle' then
+    Result.TextAnchor := taCenter
+  else if AnchorStr = 'end' then
+    Result.TextAnchor := taRight
+  else if AnchorStr = 'start' then
+    Result.TextAnchor := taLeft;
 end;
 
 // ===========================================================================
@@ -590,6 +846,193 @@ begin
   DoCurveTo(CX - KX, CY + RY, CX - RX, CY + KY, CX - RX, CY);
   // Left -> top
   DoCurveTo(CX - RX, CY - KY, CX - KX, CY - RY, CX, CY - RY);
+end;
+
+// ===========================================================================
+// Gradient support
+// ===========================================================================
+
+class function TPixieSvgRendererBase.ExtractUrlId(const S: string): string;
+var
+  P1, P2: Integer;
+begin
+  Result := '';
+  P1 := Pos('#', S);
+  if P1 = 0 then Exit;
+  Inc(P1);
+  P2 := Pos(')', S, P1);
+  if P2 = 0 then P2 := Length(S) + 1;
+  Result := Trim(Copy(S, P1, P2 - P1));
+  // Strip optional quotes
+  if (Length(Result) >= 2) and (Result[1] = '''') then
+    Result := Copy(Result, 2, Length(Result) - 2);
+end;
+
+procedure TPixieSvgRendererBase.CollectDefs(Node: Pointer);
+var
+  Child: TDOMNode;
+  El: TDOMElement;
+  TagName: string;
+begin
+  if FGradients = nil then
+    FGradients := TPixieSvgGradientMap.Create([doOwnsValues]);
+
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+    begin
+      El := TDOMElement(Child);
+      TagName := LowerCase(DomToStr(El.TagName));
+      if TagName = 'lineargradient' then
+        ParseGradient(Child, False)
+      else if TagName = 'radialgradient' then
+        ParseGradient(Child, True);
+    end;
+    Child := Child.NextSibling;
+  end;
+end;
+
+procedure TPixieSvgRendererBase.ParseGradient(Node: Pointer;
+  IsRadial: Boolean);
+var
+  El: TDOMElement;
+  Grad: TPixieSvgGradient;
+  GradId, Units, HrefStr: string;
+  Child: TDOMNode;
+  ChildEl: TDOMElement;
+  ChildTag: string;
+  Stop: TPixieSvgGradientStop;
+  OffsetStr, StopColorStr, StopOpacStr, StyleStr: string;
+  StopColor: TPixieWebColor;
+  StopOpacity: Single;
+begin
+  if FGradients = nil then
+    FGradients := TPixieSvgGradientMap.Create([doOwnsValues]);
+
+  El := TDOMElement(Node);
+  GradId := DomToStr(El.GetAttribute('id'));
+  if GradId = '' then Exit;
+
+  Grad := TPixieSvgGradient.Create;
+  Grad.Id := GradId;
+  Grad.IsRadial := IsRadial;
+
+  // gradientUnits
+  Units := DomToStr(El.GetAttribute('gradientUnits'));
+  Grad.UserSpaceUnits := (LowerCase(Units) = 'userspaceonuse');
+
+  // xlink:href / href
+  HrefStr := DomToStr(El.GetAttribute('xlink:href'));
+  if HrefStr = '' then
+    HrefStr := DomToStr(El.GetAttribute('href'));
+  if (HrefStr <> '') and (HrefStr[1] = '#') then
+    Grad.HrefId := Copy(HrefStr, 2, MaxInt);
+
+  // gradientTransform
+  Grad.GradientTransform := DomToStr(El.GetAttribute('gradientTransform'));
+
+  if IsRadial then
+  begin
+    Grad.CX := ParseSvgFloat(GetAttr(Node, 'cx', '0.5'));
+    Grad.CY := ParseSvgFloat(GetAttr(Node, 'cy', '0.5'));
+    Grad.R := ParseSvgFloat(GetAttr(Node, 'r', '0.5'));
+    Grad.FX := ParseSvgFloat(GetAttr(Node, 'fx', '-1'));
+    Grad.FY := ParseSvgFloat(GetAttr(Node, 'fy', '-1'));
+  end
+  else
+  begin
+    Grad.X1 := ParseSvgFloat(GetAttr(Node, 'x1', '0'));
+    Grad.Y1 := ParseSvgFloat(GetAttr(Node, 'y1', '0'));
+    Grad.X2 := ParseSvgFloat(GetAttr(Node, 'x2', '1'));
+    Grad.Y2 := ParseSvgFloat(GetAttr(Node, 'y2', '0'));
+  end;
+
+  // Parse <stop> children
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+    begin
+      ChildEl := TDOMElement(Child);
+      ChildTag := LowerCase(DomToStr(ChildEl.TagName));
+      if ChildTag = 'stop' then
+      begin
+        OffsetStr := DomToStr(ChildEl.GetAttribute('offset'));
+        Stop.Offset := ParseSvgFloat(OffsetStr);
+        Stop.Offset := EnsureRange(Stop.Offset, 0, 1);
+
+        // Parse stop-color from attribute or style
+        StyleStr := DomToStr(ChildEl.GetAttribute('style'));
+        StopColorStr := DomToStr(ChildEl.GetAttribute('stop-color'));
+        if StopColorStr = '' then
+          StopColorStr := ParseStyleAttribute(StyleStr, 'stop-color');
+        if StopColorStr = '' then
+          StopColorStr := 'black';
+
+        if not ParseSvgColor(StopColorStr, StopColor) then
+          StopColor := TPixieWebColor.Black;
+
+        // Parse stop-opacity
+        StopOpacStr := DomToStr(ChildEl.GetAttribute('stop-opacity'));
+        if StopOpacStr = '' then
+          StopOpacStr := ParseStyleAttribute(StyleStr, 'stop-opacity');
+        if StopOpacStr <> '' then
+          StopOpacity := EnsureRange(ParseSvgFloat(StopOpacStr), 0, 1)
+        else
+          StopOpacity := 1.0;
+
+        StopColor.Alpha := Round(StopColor.Alpha * StopOpacity);
+        Stop.Color := StopColor;
+        Grad.Stops.Add(Stop);
+      end;
+    end;
+    Child := Child.NextSibling;
+  end;
+
+  // Add or replace in dictionary
+  if FGradients.ContainsKey(GradId) then
+    FGradients.Remove(GradId);
+  FGradients.Add(GradId, Grad);
+end;
+
+function TPixieSvgRendererBase.ResolveGradientStops(
+  const Id: string): TPixieSvgGradient;
+var
+  Grad, RefGrad: TPixieSvgGradient;
+  Visited: Integer;
+begin
+  Result := nil;
+  if (FGradients = nil) or not FGradients.TryGetValue(Id, Grad) then
+    Exit;
+
+  // If this gradient has stops, use it directly
+  if Grad.Stops.Count > 0 then
+  begin
+    Result := Grad;
+    Exit;
+  end;
+
+  // Follow xlink:href chain to find stops
+  Visited := 0;
+  while (Grad.Stops.Count = 0) and (Grad.HrefId <> '') and (Visited < 10) do
+  begin
+    if not FGradients.TryGetValue(Grad.HrefId, RefGrad) then
+      Break;
+    if RefGrad.Stops.Count > 0 then
+    begin
+      Result := Grad;
+      // Copy stops from referenced gradient
+      Grad.Stops.Clear;
+      Grad.Stops.AddRange(RefGrad.Stops.ToArray);
+      Exit;
+    end;
+    Grad := RefGrad;
+    Inc(Visited);
+  end;
+
+  if Grad.Stops.Count > 0 then
+    Result := Grad;
 end;
 
 // ===========================================================================
@@ -1471,7 +1914,13 @@ begin
       else if TagName = 'path' then
         RenderPath(Child, ChildState)
       else if TagName = 'text' then
-        RenderText(Child, ChildState);
+        RenderText(Child, ChildState)
+      else if TagName = 'defs' then
+        CollectDefs(Child)
+      else if TagName = 'lineargradient' then
+        ParseGradient(Child, False)
+      else if TagName = 'radialgradient' then
+        ParseGradient(Child, True);
     end;
 
     Child := Child.NextSibling;
@@ -1491,6 +1940,9 @@ var
   VbStr, WidthStr, HeightStr: string;
   Parts: array[0..3] of string;
   P, Idx: Integer;
+  SvgStr: string;
+  DtdStart, DtdEnd: Integer;
+  Utf8: UTF8String;
 begin
   Result := False;
   W := 0;
@@ -1501,9 +1953,32 @@ begin
   // Free any previous document
   ClearDocument;
 
+  // Strip <!DOCTYPE...> declaration — FPC XML parser fails on external DTDs.
+  // Before stripping, extract <!ENTITY> definitions from any internal subset
+  // and expand entity references in the document body.
+  SetString(SvgStr, PAnsiChar(Data), Size);
+  DtdStart := Pos('<!DOCTYPE', SvgStr);
+  if DtdStart > 0 then
+  begin
+    // Find closing '>' — handle nested brackets for internal subsets
+    DtdEnd := DtdStart + 9;
+    while (DtdEnd <= Length(SvgStr)) and (SvgStr[DtdEnd] <> '>') do
+    begin
+      if SvgStr[DtdEnd] = '[' then
+        while (DtdEnd <= Length(SvgStr)) and (SvgStr[DtdEnd] <> ']') do
+          Inc(DtdEnd);
+      Inc(DtdEnd);
+    end;
+
+    // Extract and expand internal entities before removing DOCTYPE
+    ExpandDoctypeEntities(SvgStr, DtdStart, DtdEnd);
+    Delete(SvgStr, DtdStart, DtdEnd - DtdStart + 1);
+  end;
+
+  Utf8 := UTF8String(SvgStr);
   MemStream := TMemoryStream.Create;
   try
-    MemStream.Write(Data^, Size);
+    MemStream.Write(Utf8[1], Length(Utf8));
     MemStream.Position := 0;
 
     Doc := nil;
@@ -1561,11 +2036,19 @@ begin
     else
       H := FViewBoxH;
 
-    if (W <= 0) or (H <= 0) then
-    begin
-      Doc.Free;
-      Exit;
-    end;
+    // If only one dimension given, derive the other from viewBox aspect ratio
+    if (W <= 0) and (H > 0) and (FViewBoxW > 0) and (FViewBoxH > 0) then
+      W := H * FViewBoxW / FViewBoxH;
+    if (H <= 0) and (W > 0) and (FViewBoxW > 0) and (FViewBoxH > 0) then
+      H := W * FViewBoxH / FViewBoxW;
+
+    // If still missing one dimension and no viewBox, match the other
+    if (W <= 0) and (H > 0) then W := H;
+    if (H <= 0) and (W > 0) then H := W;
+
+    // Last resort: default to 300x150 (SVG spec default)
+    if W <= 0 then W := 300;
+    if H <= 0 then H := 150;
 
     if FViewBoxW <= 0 then FViewBoxW := W;
     if FViewBoxH <= 0 then FViewBoxH := H;
@@ -1583,6 +2066,9 @@ begin
     FInitState.FontSize := 16;
     FInitState.FontWeight := 400;
     FInitState.LetterSpacing := 0;
+    FInitState.TextAnchor := taLeft;
+    FInitState.FillGradientId := '';
+    FInitState.StrokeGradientId := '';
 
     // Inherit state from the root SVG element
     FInitState := InheritState(SvgRoot, FInitState);
@@ -1594,6 +2080,12 @@ begin
   finally
     MemStream.Free;
   end;
+end;
+
+procedure TPixieSvgRendererBase.SetViewport(AWidth, AHeight: Single);
+begin
+  FViewBoxW := AWidth;
+  FViewBoxH := AHeight;
 end;
 
 procedure TPixieSvgRendererBase.RenderDocument;

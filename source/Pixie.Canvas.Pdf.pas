@@ -183,6 +183,21 @@ type
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; override;
 
+    // Path API
+    procedure BeginPath; override;
+    procedure MoveTo(X, Y: Single); override;
+    procedure LineTo(X, Y: Single); override;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); override;
+    procedure ClosePath; override;
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); override;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure ClipPath; override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
     property Writer: TPixiePdfWriter read FWriter;
   end;
 
@@ -1908,6 +1923,86 @@ begin
   Info.ImgHeight := Round(H);
   FImages.Add(Info);
   Result := TPixieImageHandle(Info);
+end;
+
+// ---------------------------------------------------------------------------
+// Path API
+// ---------------------------------------------------------------------------
+
+procedure TPixiePdfCanvas.BeginPath;
+begin
+  // PDF has implicit path state — nothing to do
+end;
+
+procedure TPixiePdfCanvas.MoveTo(X, Y: Single);
+begin
+  EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(Y)) + ' m');
+end;
+
+procedure TPixiePdfCanvas.LineTo(X, Y: Single);
+begin
+  EmitLn(PdfFloat(PxToPt(X)) + ' ' + PdfFloat(PxToY(Y)) + ' l');
+end;
+
+procedure TPixiePdfCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+begin
+  EmitLn(PdfFloat(PxToPt(X1)) + ' ' + PdfFloat(PxToY(Y1)) + ' ' +
+         PdfFloat(PxToPt(X2)) + ' ' + PdfFloat(PxToY(Y2)) + ' ' +
+         PdfFloat(PxToPt(X3)) + ' ' + PdfFloat(PxToY(Y3)) + ' c');
+end;
+
+procedure TPixiePdfCanvas.ClosePath;
+begin
+  EmitLn('h');
+end;
+
+procedure TPixiePdfCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+begin
+  if Color.Alpha = 0 then Exit;
+  SetPdfColor(Color, True);
+  if FillRule = frEvenOdd then
+    EmitLn('f*')
+  else
+    EmitLn('f');
+end;
+
+procedure TPixiePdfCanvas.StrokePath(Color: TPixieWebColor;
+  Width: Single);
+begin
+  if Color.Alpha = 0 then Exit;
+  SetPdfColor(Color, False);
+  EmitLn(PdfFloat(PxToPt(Width)) + ' w');
+  EmitLn('S');
+end;
+
+procedure TPixiePdfCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+begin
+  SetPdfColor(FillColor, True);
+  SetPdfColor(StrokeColor, False);
+  EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
+  if FillRule = frEvenOdd then
+    EmitLn('B*')
+  else
+    EmitLn('B');
+end;
+
+procedure TPixiePdfCanvas.ClipPath;
+begin
+  EmitLn('W n');
+end;
+
+procedure TPixiePdfCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+begin
+  // Note: PDF uses a different coordinate system (Y-up).
+  // This method emits the raw cm operator; the caller is responsible
+  // for coordinate conversion if needed. SVG rendering uses SvgToPdf
+  // which handles its own coordinate system.
+  EmitLn(PdfFloat(A) + ' ' + PdfFloat(B) + ' ' +
+         PdfFloat(C) + ' ' + PdfFloat(D) + ' ' +
+         PdfFloat(PxToPt(E)) + ' ' + PdfFloat(PxToY(F)) + ' cm');
 end;
 
 end.

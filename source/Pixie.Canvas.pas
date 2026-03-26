@@ -15,6 +15,7 @@ uses
 type
   TPixieFontHandle = PtrUInt;
   TPixieImageHandle = PtrUInt;
+  TPixieFillRule = (frNonZero, frEvenOdd);
 
   { TPixieCanvas }
 
@@ -104,6 +105,34 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); virtual; abstract;
 
+    // Path construction — builds an implicit "current path"
+    procedure BeginPath; virtual;
+    procedure MoveTo(X, Y: Single); virtual;
+    procedure LineTo(X, Y: Single); virtual;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); virtual;
+    procedure ClosePath; virtual;
+
+    // Path rendering — renders current path, then clears it
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); virtual;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); virtual;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); virtual;
+
+    // Clip to current path, then clear path
+    procedure ClipPath; virtual;
+
+    // Fill current path with gradient, then clear path
+    procedure FillPathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer); virtual;
+    procedure FillPathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer); virtual;
+
+    // Affine transform — concatenates with current CTM
+    // Parameters match SVG matrix(a,b,c,d,e,f) convention
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); virtual;
+
     // View size hint for render targets that need explicit sizing
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); virtual;
     // Scale/zoom — applies a uniform scale transform to all drawing
@@ -142,6 +171,74 @@ function TPixieCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 begin
   Result := 0;
+end;
+
+procedure TPixieCanvas.BeginPath;
+begin
+end;
+
+procedure TPixieCanvas.MoveTo(X, Y: Single);
+begin
+end;
+
+procedure TPixieCanvas.LineTo(X, Y: Single);
+begin
+end;
+
+procedure TPixieCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+begin
+end;
+
+procedure TPixieCanvas.ClosePath;
+begin
+end;
+
+procedure TPixieCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+begin
+end;
+
+procedure TPixieCanvas.StrokePath(Color: TPixieWebColor; Width: Single);
+begin
+end;
+
+procedure TPixieCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+begin
+end;
+
+procedure TPixieCanvas.ClipPath;
+begin
+end;
+
+procedure TPixieCanvas.FillPathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer);
+var
+  EmptyRadius: TPixieBorderRadiuses;
+begin
+  // Default: clip to path, fill bounding rect with gradient
+  FillChar(EmptyRadius, SizeOf(EmptyRadius), 0);
+  SaveState;
+  ClipPath;
+  FillLinearGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
+  RestoreState;
+end;
+
+procedure TPixieCanvas.FillPathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer);
+var
+  EmptyRadius: TPixieBorderRadiuses;
+begin
+  FillChar(EmptyRadius, SizeOf(EmptyRadius), 0);
+  SaveState;
+  ClipPath;
+  FillRadialGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
+  RestoreState;
+end;
+
+procedure TPixieCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+begin
 end;
 
 end.

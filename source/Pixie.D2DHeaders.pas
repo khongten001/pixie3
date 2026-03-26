@@ -819,24 +819,7 @@ type
   PWicrect = ^TWicrect;
 
 // =========================================================================
-// Section 12 -- D2D1SVG types
-// =========================================================================
-
-type
-  TD2d1SvgPaintType = type Integer;
-
-  D2D1_SVG_LENGTH = record
-    value: FLOAT;
-    units: Integer;
-  end;
-  TD2d1SvgLength = D2D1_SVG_LENGTH;
-  PD2d1SvgLength = ^TD2d1SvgLength;
-
-  TD2d1SvgPathCommand = type Integer;
-  PD2d1SvgPathCommand = ^TD2d1SvgPathCommand;
-
-// =========================================================================
-// Section 13 -- All interface declarations (single type block)
+// Section 12 -- All interface declarations (single type block)
 // =========================================================================
 
 type
@@ -874,8 +857,6 @@ type
   ID2D1DeviceContext2 = interface;
   ID2D1DeviceContext3 = interface;
   ID2D1DeviceContext4 = interface;
-  ID2D1DeviceContext5 = interface;
-  ID2D1SvgDocument = interface;
 
   // Opaque D2D1 interfaces (used only as parameter types)
   ID2D1BitmapBrush = interface end;
@@ -948,13 +929,6 @@ type
   // Opaque DXGI interfaces
   IDXGISurface = interface end;
 
-  // Opaque D2D1SVG interfaces
-  ID2D1SvgElement = interface end;
-  ID2D1SvgPaint = interface end;
-  ID2D1SvgStrokeDashArray = interface end;
-  ID2D1SvgPointCollection = interface end;
-  ID2D1SvgPathData = interface end;
-  ID2D1SvgAttribute = interface end;
 
   // --- Full interface declarations follow ---
 
@@ -1899,62 +1873,14 @@ type
       out glyphImage: ID2D1CommandList): HResult; stdcall;
   end;
 
-  // ID2D1DeviceContext5 -- 4 own methods
-  ID2D1DeviceContext5 = interface(ID2D1DeviceContext4)
-  ['{7836d248-68cc-4df6-b9e8-de991bf62eb7}']
-    function CreateSvgDocument(inputXmlStream: IStream;
-      viewportSize: TD2d1SizeF;
-      out svgDocument: ID2D1SvgDocument): HResult; stdcall;
-    procedure DrawSvgDocument(
-      svgDocument: ID2D1SvgDocument); stdcall;
-    function CreateColorContextFromDxgiColorSpace(
-      colorSpace: TDxgiColorSpaceType;
-      out colorContext: ID2D1ColorContext1): HResult; stdcall;
-    function CreateColorContextFromSimpleColorProfile(
-      const simpleProfile: PD2d1SimpleColorProfile;
-      out colorContext: ID2D1ColorContext1): HResult; stdcall;
-  end;
-
 // =========================================================================
-// Section 17 -- ID2D1SvgDocument
-// =========================================================================
-
-  ID2D1SvgDocument = interface(ID2D1Resource)
-  ['{86b88e4d-afa4-4d7b-88e4-68a51c4a0aec}']
-    function SetViewportSize(viewportSize: TD2d1SizeF): HResult; stdcall;
-    function GetViewportSize: TD2d1SizeF; stdcall;
-    function SetRoot(root: ID2D1SvgElement): HResult; stdcall;
-    procedure GetRoot(out root: ID2D1SvgElement); stdcall;
-    function FindElementById(id: PWCHAR;
-      out svgElement: ID2D1SvgElement): HResult; stdcall;
-    function Serialize(outputXmlStream: IStream;
-      subtree: ID2D1SvgElement): HResult; stdcall;
-    function Deserialize(inputXmlStream: IStream;
-      out subtree: ID2D1SvgElement): HResult; stdcall;
-    function CreatePaint(paintType: TD2d1SvgPaintType;
-      const color: PD2d1ColorF; id: PWCHAR;
-      out paint: ID2D1SvgPaint): HResult; stdcall;
-    function CreateStrokeDashArray(const dashes: PD2d1SvgLength;
-      dashesCount: UINT32;
-      out strokeDashArray: ID2D1SvgStrokeDashArray): HResult; stdcall;
-    function CreatePointCollection(const points: PD2d1Point2f;
-      pointsCount: UINT32;
-      out pointCollection: ID2D1SvgPointCollection): HResult; stdcall;
-    function CreatePathData(const segmentData: PFloat;
-      segmentDataCount: UINT32; const commands: PD2d1SvgPathCommand;
-      commandsCount: UINT32;
-      out pathData: ID2D1SvgPathData): HResult; stdcall;
-  end;
-
-// =========================================================================
-// Section 18 -- GUID constants
+// Section 17 -- GUID constants
 // =========================================================================
 
 const
   IID_ID2D1Factory: TGUID = '{06152247-6f50-465a-9245-118bfd3b6007}';
   IID_IDWriteFactory: TGUID = '{b859ee5a-d838-4b5b-a2e8-1adc7d93db48}';
   IID_IWICImagingFactory: TGUID = '{ec5ec8a9-c395-4314-9c77-54d7a935ff70}';
-  IID_ID2D1DeviceContext5: TGUID = '{7836d248-68cc-4df6-b9e8-de991bf62eb7}';
   CLSID_WICImagingFactory: TGUID = '{CACAF262-9370-4615-A13B-9F5539DA4C0A}';
   GUID_WICPixelFormat32bppPBGRA: TGUID = '{6FDDC324-4E03-4BFE-B185-3D77768DC910}';
 

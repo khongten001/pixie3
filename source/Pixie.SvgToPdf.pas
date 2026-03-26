@@ -33,13 +33,25 @@ type
     FFontCache: TPixieTrueTypeFontCache;
     FStream: TMemoryStream;
     FResourceExtGState: AnsiString;
+    FResourceShading: AnsiString;
     FFonts: TPixieSvgFontInfoList;
     FGsCounter: Integer;
     FFontCounter: Integer;
+    FShadingCounter: Integer;
+
+    // Bounding box tracking for gradient fills
+    FBBoxMinX, FBBoxMinY, FBBoxMaxX, FBBoxMaxY: Single;
+    FBBoxValid: Boolean;
 
     procedure Emit(const S: AnsiString);
     procedure EmitLn(const S: AnsiString);
     procedure SetPdfColor(const Color: TPixieWebColor; Fill: Boolean);
+    procedure UpdateBBox(X, Y: Single);
+
+    // Gradient helpers
+    function BuildType2Function(const C0, C1: TPixieWebColor): Integer;
+    function BuildColorFunction(const Grad: TPixieSvgGradient): Integer;
+    procedure FillGradient(const State: TPixieSvgState);
 
     // Font helpers
     function FindOrCreateSvgFont(const Family: string;
@@ -97,6 +109,8 @@ begin
   FFonts := TPixieSvgFontInfoList.Create;
   FGsCounter := 0;
   FFontCounter := 0;
+  FShadingCounter := 0;
+  FBBoxValid := False;
 end;
 
 destructor TPixieSvgRenderer.Destroy;
@@ -140,21 +154,208 @@ begin
 end;
 
 // ===========================================================================
+// Bounding box and gradient helpers
+// ===========================================================================
+
+procedure TPixieSvgRenderer.UpdateBBox(X, Y: Single);
+begin
+  if not FBBoxValid then
+  begin
+    FBBoxMinX := X; FBBoxMinY := Y;
+    FBBoxMaxX := X; FBBoxMaxY := Y;
+    FBBoxValid := True;
+  end
+  else
+  begin
+    if X < FBBoxMinX then FBBoxMinX := X;
+    if Y < FBBoxMinY then FBBoxMinY := Y;
+    if X > FBBoxMaxX then FBBoxMaxX := X;
+    if Y > FBBoxMaxY then FBBoxMaxY := Y;
+  end;
+end;
+
+function TPixieSvgRenderer.BuildType2Function(
+  const C0, C1: TPixieWebColor): Integer;
+var
+  Obj: TPixiePdfObject;
+begin
+  Obj := FWriter.AllocObject;
+  Obj.AddEntry('FunctionType', '2');
+  Obj.AddEntry('Domain', '[0 1]');
+  Obj.AddEntry('C0', '[' + PdfFloat(C0.Red / 255.0) + ' ' +
+    PdfFloat(C0.Green / 255.0) + ' ' + PdfFloat(C0.Blue / 255.0) + ']');
+  Obj.AddEntry('C1', '[' + PdfFloat(C1.Red / 255.0) + ' ' +
+    PdfFloat(C1.Green / 255.0) + ' ' + PdfFloat(C1.Blue / 255.0) + ']');
+  Obj.AddEntry('N', '1');
+  Result := Obj.Id;
+end;
+
+function TPixieSvgRenderer.BuildColorFunction(
+  const Grad: TPixieSvgGradient): Integer;
+var
+  I, N: Integer;
+  SubIds: array of Integer;
+  FuncsStr, BoundsStr, EncodeStr: AnsiString;
+  Obj: TPixiePdfObject;
+begin
+  N := Grad.Stops.Count;
+  if N < 2 then begin Result := 0; Exit; end;
+
+  if N = 2 then
+  begin
+    Result := BuildType2Function(Grad.Stops[0].Color, Grad.Stops[1].Color);
+    Exit;
+  end;
+
+  // N >= 3: stitching function (Type 3)
+  SetLength(SubIds, N - 1);
+  for I := 0 to N - 2 do
+    SubIds[I] := BuildType2Function(Grad.Stops[I].Color, Grad.Stops[I + 1].Color);
+
+  FuncsStr := '[';
+  for I := 0 to N - 2 do
+    FuncsStr := FuncsStr + PdfRef(SubIds[I]) + ' ';
+  FuncsStr := FuncsStr + ']';
+
+  BoundsStr := '[';
+  for I := 1 to N - 2 do
+    BoundsStr := BoundsStr + PdfFloat(Grad.Stops[I].Offset) + ' ';
+  BoundsStr := BoundsStr + ']';
+
+  EncodeStr := '[';
+  for I := 0 to N - 2 do
+    EncodeStr := EncodeStr + '0 1 ';
+  EncodeStr := EncodeStr + ']';
+
+  Obj := FWriter.AllocObject;
+  Obj.AddEntry('FunctionType', '3');
+  Obj.AddEntry('Domain', '[0 1]');
+  Obj.AddEntry('Functions', FuncsStr);
+  Obj.AddEntry('Bounds', BoundsStr);
+  Obj.AddEntry('Encode', EncodeStr);
+  Result := Obj.Id;
+end;
+
+procedure TPixieSvgRenderer.FillGradient(const State: TPixieSvgState);
+var
+  Grad: TPixieSvgGradient;
+  FuncId: Integer;
+  ShObj: TPixiePdfObject;
+  ShName: AnsiString;
+  BX, BY, BW, BH: Single;
+  GX1, GY1, GX2, GY2: Single;
+  GCX, GCY, GR: Single;
+  TX, TY: Single;
+  M: TPixieSvgMatrix;
+  HasTransform: Boolean;
+begin
+  Grad := ResolveGradientStops(State.FillGradientId);
+  if (Grad = nil) or (Grad.Stops.Count < 2) then
+  begin
+    EmitLn('n');
+    Exit;
+  end;
+
+  if not FBBoxValid then begin EmitLn('n'); Exit; end;
+  BX := FBBoxMinX; BY := FBBoxMinY;
+  BW := FBBoxMaxX - FBBoxMinX; BH := FBBoxMaxY - FBBoxMinY;
+  if (BW < 0.001) or (BH < 0.001) then begin EmitLn('n'); Exit; end;
+
+  FuncId := BuildColorFunction(Grad);
+  if FuncId = 0 then begin EmitLn('n'); Exit; end;
+
+  HasTransform := Grad.GradientTransform <> '';
+  if HasTransform then
+    M := ParseTransform(Grad.GradientTransform);
+
+  // Build PDF shading object
+  ShObj := FWriter.AllocObject;
+  ShObj.AddEntry('ColorSpace', '/DeviceRGB');
+  ShObj.AddEntry('Function', PdfRef(FuncId));
+  ShObj.AddEntry('Extend', '[true true]');
+
+  if not Grad.IsRadial then
+  begin
+    ShObj.AddEntry('ShadingType', '2');
+    if Grad.UserSpaceUnits then
+    begin
+      GX1 := Grad.X1; GY1 := Grad.Y1;
+      GX2 := Grad.X2; GY2 := Grad.Y2;
+    end
+    else
+    begin
+      GX1 := BX + Grad.X1 * BW; GY1 := BY + Grad.Y1 * BH;
+      GX2 := BX + Grad.X2 * BW; GY2 := BY + Grad.Y2 * BH;
+    end;
+    if HasTransform then
+    begin
+      TX := M.A * GX1 + M.C * GY1 + M.E;
+      TY := M.B * GX1 + M.D * GY1 + M.F;
+      GX1 := TX; GY1 := TY;
+      TX := M.A * GX2 + M.C * GY2 + M.E;
+      TY := M.B * GX2 + M.D * GY2 + M.F;
+      GX2 := TX; GY2 := TY;
+    end;
+    ShObj.AddEntry('Coords', '[' +
+      PdfFloat(GX1) + ' ' + PdfFloat(GY1) + ' ' +
+      PdfFloat(GX2) + ' ' + PdfFloat(GY2) + ']');
+  end
+  else
+  begin
+    ShObj.AddEntry('ShadingType', '3');
+    if Grad.UserSpaceUnits then
+    begin
+      GCX := Grad.CX; GCY := Grad.CY; GR := Grad.R;
+    end
+    else
+    begin
+      GCX := BX + Grad.CX * BW; GCY := BY + Grad.CY * BH;
+      GR := Grad.R * Max(BW, BH);
+    end;
+    if HasTransform then
+    begin
+      TX := M.A * GCX + M.C * GCY + M.E;
+      TY := M.B * GCX + M.D * GCY + M.F;
+      GCX := TX; GCY := TY;
+      GR := GR * Sqrt(M.A * M.A + M.B * M.B);
+    end;
+    ShObj.AddEntry('Coords', '[' +
+      PdfFloat(GCX) + ' ' + PdfFloat(GCY) + ' 0 ' +
+      PdfFloat(GCX) + ' ' + PdfFloat(GCY) + ' ' + PdfFloat(GR) + ']');
+  end;
+
+  // Register shading resource
+  Inc(FShadingCounter);
+  ShName := 'SvgSh' + AnsiString(IntToStr(FShadingCounter));
+  FResourceShading := FResourceShading + '/' + ShName + ' ' +
+    PdfRef(ShObj.Id) + ' ';
+
+  // Clip to path and paint shading
+  EmitLn('W n');
+  EmitLn('/' + ShName + ' sh');
+end;
+
+// ===========================================================================
 // Abstract drawing primitive overrides — PDF operators
 // ===========================================================================
 
 procedure TPixieSvgRenderer.DoMoveTo(X, Y: Single);
 begin
+  UpdateBBox(X, Y);
   EmitLn(PdfFloat(X) + ' ' + PdfFloat(Y) + ' m');
 end;
 
 procedure TPixieSvgRenderer.DoLineTo(X, Y: Single);
 begin
+  UpdateBBox(X, Y);
   EmitLn(PdfFloat(X) + ' ' + PdfFloat(Y) + ' l');
 end;
 
 procedure TPixieSvgRenderer.DoCurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
 begin
+  UpdateBBox(X1, Y1);
+  UpdateBBox(X2, Y2);
+  UpdateBBox(X3, Y3);
   EmitLn(PdfFloat(X1) + ' ' + PdfFloat(Y1) + ' ' +
          PdfFloat(X2) + ' ' + PdfFloat(Y2) + ' ' +
          PdfFloat(X3) + ' ' + PdfFloat(Y3) + ' c');
@@ -184,7 +385,15 @@ end;
 
 procedure TPixieSvgRenderer.DoFillAndStroke(const State: TPixieSvgState);
 begin
-  if State.HasFill and State.HasStroke then
+  if State.FillGradientId <> '' then
+  begin
+    // Gradient fill: clip to path and paint shading
+    EmitLn('q');
+    FillGradient(State);
+    EmitLn('Q');
+    // Stroke needs path rebuild — not supported yet for PDF SVG, skip stroke
+  end
+  else if State.HasFill and State.HasStroke then
   begin
     SetPdfColor(State.FillColor, True);
     SetPdfColor(State.StrokeColor, False);
@@ -204,6 +413,8 @@ begin
   end
   else
     EmitLn('n');
+
+  FBBoxValid := False;
 end;
 
 procedure TPixieSvgRenderer.DoBeginOpacity(Opacity: Single);
@@ -598,6 +809,8 @@ begin
     ResourceStr := '<< ';
     if FResourceExtGState <> '' then
       ResourceStr := ResourceStr + '/ExtGState << ' + FResourceExtGState + ' >> ';
+    if FResourceShading <> '' then
+      ResourceStr := ResourceStr + '/Shading << ' + FResourceShading + ' >> ';
     if FFonts.Count > 0 then
     begin
       ResourceStr := ResourceStr + '/Font << ';

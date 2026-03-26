@@ -12,7 +12,7 @@ uses
   FMX.Graphics, FMX.Types, FMX.TextLayout,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
-  Pixie.Canvas, Pixie.FontMetrics, Pixie.SvgRenderer.FMX;
+  Pixie.Canvas, Pixie.FontMetrics;
 
 type
   { TPixieFmxFont — font instance with FMX font + metrics }
@@ -31,6 +31,7 @@ type
   TPixieFmxImage = class
   public
     Bitmap: TBitmap;
+    SvgRenderer: TObject;  // TPixieSvgCanvasRenderer (owns)
     ImgWidth: Integer;
     ImgHeight: Integer;
     constructor Create;
@@ -52,6 +53,7 @@ type
     FBrush: TBrush;
     FStrokeBrush: TStrokeBrush;
     FPath: TPathData;
+    FCurrentPath: TPathData;
     FTextLayout: TTextLayout;
     FStateStack: array[0..63] of TCanvasSaveState;
     FStateTop: Integer;
@@ -144,11 +146,33 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
+    // Path API
+    procedure BeginPath; override;
+    procedure MoveTo(X, Y: Single); override;
+    procedure LineTo(X, Y: Single); override;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); override;
+    procedure ClosePath; override;
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); override;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure ClipPath; override;
+    procedure FillPathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer); override;
+    procedure FillPathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer); override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
     // View / scale
     procedure SetScale(Scale: Single); override;
   end;
 
 implementation
+
+uses
+  Pixie.SvgRenderer.Canvas;
 
 const
   // Kappa constant for quarter-circle bezier approximation
@@ -197,6 +221,7 @@ end;
 destructor TPixieFmxImage.Destroy;
 begin
   Bitmap.Free;
+  SvgRenderer.Free;
   inherited Destroy;
 end;
 
@@ -216,12 +241,14 @@ begin
   FBrush := TBrush.Create(TBrushKind.Solid, claBlack);
   FStrokeBrush := TStrokeBrush.Create(TBrushKind.Solid, claBlack);
   FPath := TPathData.Create;
+  FCurrentPath := TPathData.Create;
   FTextLayout := TTextLayoutManager.DefaultTextLayout.Create;
 end;
 
 destructor TPixieFmxCanvas.Destroy;
 begin
   FTextLayout.Free;
+  FCurrentPath.Free;
   FPath.Free;
   FStrokeBrush.Free;
   FBrush.Free;
@@ -843,10 +870,31 @@ function TPixieFmxCanvas.LoadImage(const Path: string): TPixieImageHandle;
 var
   Info: TPixieFmxImage;
   Resolved: string;
+  Stream: TFileStream;
+  Data: TBytes;
 begin
   Result := 0;
   Resolved := ExpandFileName(Path);
   if not FileExists(Resolved) then Exit;
+
+  // SVG — use canvas renderer
+  if LowerCase(ExtractFileExt(Resolved)) = '.svg' then
+  begin
+    try
+      Stream := TFileStream.Create(Resolved, fmOpenRead or fmShareDenyNone);
+      try
+        if Stream.Size <= 0 then Exit;
+        SetLength(Data, Stream.Size);
+        Stream.ReadBuffer(Data[0], Stream.Size);
+      finally
+        Stream.Free;
+      end;
+      Result := LoadSvgFromData(@Data[0], Length(Data));
+    except
+      Result := 0;
+    end;
+    Exit;
+  end;
 
   Info := TPixieFmxImage.Create;
   try
@@ -892,19 +940,24 @@ end;
 function TPixieFmxCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 var
-  Bitmap: TBitmap;
   Info: TPixieFmxImage;
+  Renderer: TPixieSvgCanvasRenderer;
+  W, H: Single;
 begin
   Result := 0;
   if (Data = nil) or (Size <= 0) then Exit;
 
-  Bitmap := TPixieSvgCanvasRenderer.RenderToBitmap(Data, Size);
-  if Bitmap = nil then Exit;
+  Renderer := TPixieSvgCanvasRenderer.Create(Self);
+  if not Renderer.ParseSvg(Data, Size, W, H) then
+  begin
+    Renderer.Free;
+    Exit;
+  end;
 
   Info := TPixieFmxImage.Create;
-  Info.Bitmap := Bitmap;
-  Info.ImgWidth := Bitmap.Width;
-  Info.ImgHeight := Bitmap.Height;
+  Info.SvgRenderer := Renderer;
+  Info.ImgWidth := Round(W);
+  Info.ImgHeight := Round(H);
   Result := TPixieImageHandle(Info);
 end;
 
@@ -979,6 +1032,15 @@ var
 begin
   if (FCanvas = nil) or (Handle = 0) then Exit;
   Info := TPixieFmxImage(Handle);
+
+  // SVG rendering via canvas path API
+  if Info.SvgRenderer <> nil then
+  begin
+    TPixieSvgCanvasRenderer(Info.SvgRenderer).RenderToRect(
+      DstX, DstY, DstW, DstH);
+    Exit;
+  end;
+
   if Info.Bitmap = nil then Exit;
 
   SrcRect := TRectF.Create(0, 0, Info.ImgWidth, Info.ImgHeight);
@@ -1068,6 +1130,153 @@ end;
 procedure TPixieFmxCanvas.SetScale(Scale: Single);
 begin
   FScale := Scale;
+end;
+
+// ---------------------------------------------------------------------------
+// Path API
+// ---------------------------------------------------------------------------
+
+procedure TPixieFmxCanvas.BeginPath;
+begin
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.MoveTo(X, Y: Single);
+begin
+  FCurrentPath.MoveTo(PointF(X, Y));
+end;
+
+procedure TPixieFmxCanvas.LineTo(X, Y: Single);
+begin
+  FCurrentPath.LineTo(PointF(X, Y));
+end;
+
+procedure TPixieFmxCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+begin
+  FCurrentPath.CurveTo(PointF(X1, Y1), PointF(X2, Y2), PointF(X3, Y3));
+end;
+
+procedure TPixieFmxCanvas.ClosePath;
+begin
+  FCurrentPath.ClosePath;
+end;
+
+procedure TPixieFmxCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+begin
+  if (FCanvas = nil) or (Color.Alpha = 0) then Exit;
+  FBrush.Kind := TBrushKind.Solid;
+  FBrush.Color := ToAlphaColor(Color);
+  FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.StrokePath(Color: TPixieWebColor;
+  Width: Single);
+begin
+  if (FCanvas = nil) or (Color.Alpha = 0) then Exit;
+  FStrokeBrush.Kind := TBrushKind.Solid;
+  FStrokeBrush.Color := ToAlphaColor(Color);
+  FStrokeBrush.Thickness := Width;
+  FStrokeBrush.Dash := TStrokeDash.Solid;
+  FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+begin
+  if FCanvas = nil then Exit;
+  if FillColor.Alpha > 0 then
+  begin
+    FBrush.Kind := TBrushKind.Solid;
+    FBrush.Color := ToAlphaColor(FillColor);
+    FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  end;
+  if StrokeColor.Alpha > 0 then
+  begin
+    FStrokeBrush.Kind := TBrushKind.Solid;
+    FStrokeBrush.Color := ToAlphaColor(StrokeColor);
+    FStrokeBrush.Thickness := StrokeWidth;
+    FStrokeBrush.Dash := TStrokeDash.Solid;
+    FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
+  end;
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.ClipPath;
+var
+  R: TRectF;
+begin
+  if FCanvas = nil then Exit;
+  R := FCurrentPath.GetBounds;
+  FCanvas.IntersectClipRect(R);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.FillPathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer);
+var
+  R: TRectF;
+  RW, RH: Single;
+begin
+  if (FCanvas = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  // FMX FillPath maps gradient 0..1 relative to path bounding box
+  R := FCurrentPath.GetBounds;
+  RW := R.Width;
+  RH := R.Height;
+  if (RW <= 0) or (RH <= 0) then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  FBrush.Kind := TBrushKind.Gradient;
+  FBrush.Gradient.Style := TGradientStyle.Linear;
+  FBrush.Gradient.StartPosition.X := (Gradient.StartPt.X - R.Left) / RW;
+  FBrush.Gradient.StartPosition.Y := (Gradient.StartPt.Y - R.Top) / RH;
+  FBrush.Gradient.StopPosition.X := (Gradient.EndPt.X - R.Left) / RW;
+  FBrush.Gradient.StopPosition.Y := (Gradient.EndPt.Y - R.Top) / RH;
+  SetupGradientStops(Gradient.ColorPoints);
+
+  FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.FillPathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer);
+begin
+  if (FCanvas = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  FBrush.Kind := TBrushKind.Gradient;
+  FBrush.Gradient.Style := TGradientStyle.Radial;
+  SetupGradientStops(Gradient.ColorPoints);
+
+  FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+var
+  M: TMatrix;
+begin
+  if FCanvas = nil then Exit;
+  M.m11 := A; M.m12 := B; M.m13 := 0;
+  M.m21 := C; M.m22 := D; M.m23 := 0;
+  M.m31 := E; M.m32 := F; M.m33 := 1;
+  FCanvas.MultiplyMatrix(M);
 end;
 
 end.

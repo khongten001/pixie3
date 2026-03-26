@@ -230,6 +230,14 @@
         <UnitName Value="Pixie.Stylesheet"/>
       </Item>
       <Item>
+        <Filename Value="../source/Pixie.SvgRenderer.pas"/>
+        <UnitName Value="Pixie.SvgRenderer"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/Pixie.SvgRenderer.Canvas.pas"/>
+        <UnitName Value="Pixie.SvgRenderer.Canvas"/>
+      </Item>
+      <Item>
         <Filename Value="../source/Pixie.Table.pas"/>
         <UnitName Value="Pixie.Table"/>
       </Item>

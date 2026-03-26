@@ -34,6 +34,7 @@ type
   TPixieQtImage = class
     Handle: QImageH;
     PixelData: Pointer;
+    SvgRenderer: TObject;  // TPixieSvgCanvasRenderer (owns)
     ImgWidth: Integer;
     ImgHeight: Integer;
     destructor Destroy; override;
@@ -56,6 +57,7 @@ type
     FOpacityTop: Integer;
     FCurrentOpacity: Single;
     FTempRect: QRectFH;
+    FCurrentPath: QPainterPathH;
 
     function HasRadius(const R: TPixieBorderRadiuses): Boolean;
     procedure MakeColor(const C: TPixieWebColor; out QC: TQColor);
@@ -64,6 +66,7 @@ type
     procedure DrawBorderSide(const Border: TPixieBorder;
       X1, Y1, X2, Y2: Single);
     function DecodeImageFile(const Path: string): TPixieImageHandle;
+    function LoadSvgFile(const Path: string): TPixieImageHandle;
   public
     constructor Create;
     destructor Destroy; override;
@@ -127,11 +130,32 @@ type
     procedure StrokePolyline(const Points: array of Single;
       Color: TPixieWebColor; StrokeWidth: Single); override;
 
+    // Path API
+    procedure BeginPath; override;
+    procedure MoveTo(X, Y: Single); override;
+    procedure LineTo(X, Y: Single); override;
+    procedure CurveTo(X1, Y1, X2, Y2, X3, Y3: Single); override;
+    procedure ClosePath; override;
+    procedure FillPath(Color: TPixieWebColor;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePath(Color: TPixieWebColor; Width: Single); override;
+    procedure FillAndStrokePath(FillColor: TPixieWebColor;
+      StrokeColor: TPixieWebColor; StrokeWidth: Single;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure ClipPath; override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
+    function LoadSvgFromData(Data: Pointer;
+      Size: Integer): TPixieImageHandle; override;
+
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
     procedure SetScale(Scale: Single); override;
   end;
 
 implementation
+
+uses
+  Pixie.SvgRenderer.Canvas;
 
 // ---------------------------------------------------------------------------
 // Font check callback for PixieResolveFontFamily
@@ -179,6 +203,7 @@ begin
     QImage_Destroy(Handle);
   if PixelData <> nil then
     FreeMem(PixelData);
+  SvgRenderer.Free;
   inherited;
 end;
 
@@ -269,10 +294,13 @@ begin
   FOpacityTop := 0;
   FCurrentOpacity := 1.0;
   FTempRect := QRectF_Create;
+  FCurrentPath := nil;
 end;
 
 destructor TPixieQtCanvas.Destroy;
 begin
+  if FCurrentPath <> nil then
+    QPainterPath_Destroy(FCurrentPath);
   if FTempRect <> nil then
     QRectF_Destroy(FTempRect);
   inherited Destroy;
@@ -1006,8 +1034,12 @@ begin
   Resolved := ExpandFileName(Path);
   if not FileExists(Resolved) then Exit;
 
-  // SVG — skip in phase 1
-  if LowerCase(ExtractFileExt(Resolved)) = '.svg' then Exit;
+  // SVG — load via renderer
+  if LowerCase(ExtractFileExt(Resolved)) = '.svg' then
+  begin
+    Result := LoadSvgFile(Resolved);
+    Exit;
+  end;
 
   // Try native Qt image loading (PNG, JPEG, GIF, BMP, etc.)
   WPath := UTF8Decode(Resolved);
@@ -1080,9 +1112,17 @@ var
 begin
   if (Handle = 0) or (FPainter = nil) then Exit;
   Info := TPixieQtImage(Handle);
-  if (Info.Handle = nil) or (Info.ImgWidth <= 0) or
-     (Info.ImgHeight <= 0) then
+  if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
+
+  // SVG rendering via canvas path API
+  if Info.SvgRenderer <> nil then
+  begin
+    TPixieSvgCanvasRenderer(Info.SvgRenderer).RenderToRect(
+      DstX, DstY, DstW, DstH);
     Exit;
+  end;
+
+  if Info.Handle = nil then Exit;
 
   QRectF_setRect(FTempRect, DstX, DstY, DstW, DstH);
   QPainter_drawImage(FPainter, FTempRect, Info.Handle);
@@ -1222,6 +1262,203 @@ begin
   finally
     QPen_Destroy(Pen);
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// Path API
+// ---------------------------------------------------------------------------
+
+procedure TPixieQtCanvas.BeginPath;
+begin
+  if FCurrentPath <> nil then
+    QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := QPainterPath_Create;
+end;
+
+procedure TPixieQtCanvas.MoveTo(X, Y: Single);
+begin
+  if FCurrentPath = nil then
+    FCurrentPath := QPainterPath_Create;
+  QPainterPath_moveTo(FCurrentPath, X, Y);
+end;
+
+procedure TPixieQtCanvas.LineTo(X, Y: Single);
+begin
+  if FCurrentPath = nil then Exit;
+  QPainterPath_lineTo(FCurrentPath, X, Y);
+end;
+
+procedure TPixieQtCanvas.CurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+begin
+  if FCurrentPath = nil then Exit;
+  QPainterPath_cubicTo(FCurrentPath, X1, Y1, X2, Y2, X3, Y3);
+end;
+
+procedure TPixieQtCanvas.ClosePath;
+begin
+  if FCurrentPath = nil then Exit;
+  QPainterPath_closeSubpath(FCurrentPath);
+end;
+
+procedure TPixieQtCanvas.FillPath(Color: TPixieWebColor;
+  FillRule: TPixieFillRule);
+var
+  QC: TQColor;
+  Brush: QBrushH;
+begin
+  if (FPainter = nil) or (FCurrentPath = nil) or (Color.Alpha = 0) then Exit;
+  if FillRule = frEvenOdd then
+    QPainterPath_setFillRule(FCurrentPath, QtOddEvenFill)
+  else
+    QPainterPath_setFillRule(FCurrentPath, QtWindingFill);
+  MakeColor(Color, QC);
+  Brush := QBrush_Create(@QC);
+  try
+    QPainter_fillPath(FPainter, FCurrentPath, Brush);
+  finally
+    QBrush_Destroy(Brush);
+  end;
+  // Clear path so next shape starts fresh
+  QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := nil;
+end;
+
+procedure TPixieQtCanvas.StrokePath(Color: TPixieWebColor;
+  Width: Single);
+var
+  QC: TQColor;
+  Pen: QPenH;
+begin
+  if (FPainter = nil) or (FCurrentPath = nil) or (Color.Alpha = 0) then Exit;
+  MakeColor(Color, QC);
+  Pen := QPen_Create(@QC);
+  try
+    QPen_setWidthF(Pen, Width);
+    QPainter_setPen(FPainter, Pen);
+    QPainter_setBrush(FPainter, QtNoBrush);
+    QPainter_drawPath(FPainter, FCurrentPath);
+  finally
+    QPen_Destroy(Pen);
+  end;
+  QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := nil;
+end;
+
+procedure TPixieQtCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
+  StrokeColor: TPixieWebColor; StrokeWidth: Single;
+  FillRule: TPixieFillRule);
+var
+  QC: TQColor;
+  Brush: QBrushH;
+  Pen: QPenH;
+begin
+  if (FPainter = nil) or (FCurrentPath = nil) then Exit;
+  if FillRule = frEvenOdd then
+    QPainterPath_setFillRule(FCurrentPath, QtOddEvenFill)
+  else
+    QPainterPath_setFillRule(FCurrentPath, QtWindingFill);
+  if FillColor.Alpha > 0 then
+  begin
+    MakeColor(FillColor, QC);
+    Brush := QBrush_Create(@QC);
+    try
+      QPainter_fillPath(FPainter, FCurrentPath, Brush);
+    finally
+      QBrush_Destroy(Brush);
+    end;
+  end;
+  if StrokeColor.Alpha > 0 then
+  begin
+    MakeColor(StrokeColor, QC);
+    Pen := QPen_Create(@QC);
+    try
+      QPen_setWidthF(Pen, StrokeWidth);
+      QPainter_setPen(FPainter, Pen);
+      QPainter_setBrush(FPainter, QtNoBrush);
+      QPainter_drawPath(FPainter, FCurrentPath);
+    finally
+      QPen_Destroy(Pen);
+    end;
+  end;
+  QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := nil;
+end;
+
+procedure TPixieQtCanvas.ClipPath;
+begin
+  if (FPainter = nil) or (FCurrentPath = nil) then Exit;
+  QPainter_setClipPath(FPainter, FCurrentPath, QtIntersectClip);
+  QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := nil;
+end;
+
+procedure TPixieQtCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
+var
+  Transform: QTransformH;
+begin
+  if FPainter = nil then Exit;
+  Transform := QTransform_Create(A, B, C, D, E, F);
+  try
+    QPainter_setWorldTransform(FPainter, Transform, True);
+  finally
+    QTransform_Destroy(Transform);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// SVG loading
+// ---------------------------------------------------------------------------
+
+function TPixieQtCanvas.LoadSvgFile(
+  const Path: string): TPixieImageHandle;
+var
+  Stream: TFileStream;
+  Buf: Pointer;
+  BufSize: Integer;
+begin
+  Result := 0;
+  if not FileExists(Path) then Exit;
+  try
+    Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+    try
+      BufSize := Stream.Size;
+      if BufSize <= 0 then Exit;
+      GetMem(Buf, BufSize);
+      try
+        Stream.ReadBuffer(Buf^, BufSize);
+        Result := LoadSvgFromData(Buf, BufSize);
+      finally
+        FreeMem(Buf);
+      end;
+    finally
+      Stream.Free;
+    end;
+  except
+  end;
+end;
+
+function TPixieQtCanvas.LoadSvgFromData(Data: Pointer;
+  Size: Integer): TPixieImageHandle;
+var
+  Info: TPixieQtImage;
+  Renderer: TPixieSvgCanvasRenderer;
+  W, H: Single;
+begin
+  Result := 0;
+  if (Data = nil) or (Size <= 0) then Exit;
+
+  Renderer := TPixieSvgCanvasRenderer.Create(Self);
+  if not Renderer.ParseSvg(Data, Size, W, H) then
+  begin
+    Renderer.Free;
+    Exit;
+  end;
+
+  Info := TPixieQtImage.Create;
+  Info.SvgRenderer := Renderer;
+  Info.ImgWidth := Round(W);
+  Info.ImgHeight := Round(H);
+  Result := TPixieImageHandle(Info);
 end;
 
 // ---------------------------------------------------------------------------
