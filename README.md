@@ -25,7 +25,7 @@ It ships with five rendering backends so the same code works across operating sy
 |----------|-----------|------|--------|
 | Windows (Lazarus, Delphi VCL) | Direct2D | DirectWrite | WIC |
 | Delphi FMX (Windows, macOS, iOS, Android) | FMX Canvas | FMX TextLayout | FMX Bitmap |
-| Linux (GTK2, GTK3) | Cairo | Pango | FPImage + librsvg |
+| Linux (GTK2, GTK3) | Cairo | Pango | FPImage |
 | macOS (Lazarus) | Core Graphics | Core Text | ImageIO |
 | Qt5 / Qt6 (any platform) | QPainter | QFontMetrics | QImage |
 

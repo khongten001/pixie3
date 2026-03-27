@@ -156,7 +156,7 @@ The `<img>` element's `src` attribute supports several prefixes:
 | URL | `<img src="https://...">` | Fetched via the `OnFetchUrl` event. |
 | File path | `<img src="/path/to/image.png">` | Loaded directly from disk. |
 
-Supported raster formats: PNG, JPEG, BMP, GIF (all platforms); TIFF and ICO additionally on Windows and macOS for file-based loading. SVG is supported on all platforms (see [Known Limitations](#known-limitations) for details).
+Supported raster formats: PNG, JPEG, BMP, GIF (all platforms); TIFF and ICO additionally on Windows and macOS for file-based loading. SVG is supported on all platforms via the built-in vector renderer (see [Known Limitations](#known-limitations) for details).
 
 ## Built-in Keyboard and Mouse Behaviour
 
@@ -506,7 +506,7 @@ Pdf.CustomHeight := 600;      // points
 
 - Conic gradients are rendered as solid colour fills
 - Gradient opacity uses average alpha across all stops rather than per-stop alpha
-- SVG images in PDF output are rendered as vector Form XObjects (basic shapes and text only)
+- SVG images in PDF output are rendered as vector Form XObjects
 - Non-BMP characters (emoji) are not included in font subsets
 - Form controls are rendered but not interactive in PDF output
 
@@ -514,20 +514,11 @@ Pdf.CustomHeight := 600;      // points
 
 ### SVG Support
 
-SVG rendering uses the best available method per platform:
+SVG rendering uses a single built-in renderer (`TPixieSvgCanvasRenderer`) on all platforms. SVG elements are drawn as native vector graphics through each backend's canvas path API — no rasterisation and no external dependencies. This ensures consistent rendering across Windows, Linux, macOS, Qt, FMX, and PDF export.
 
-| Platform | API Used | Requirement |
-|----------|----------|-------------|
-| Windows (Lazarus, Delphi VCL) | `ID2D1DeviceContext5.DrawSvgDocument` | Windows 10 version 1703 (Creators Update) or later |
-| Delphi FMX (Windows, macOS, iOS, Android) | Built-in SVG renderer (rasterised to bitmap) | None |
-| macOS (Lazarus) | CoreSVG (private framework) | macOS 10.15 (Catalina) or later |
-| Linux | librsvg (`librsvg-2.so`) | librsvg must be installed at runtime |
-| Qt5 / Qt6 | Not yet supported | — |
-| PDF export | Built-in SVG-to-PDF (vector Form XObject) | None |
+Supported SVG features: rect, circle, ellipse, line, polyline, polygon, path commands (M/L/H/V/C/S/Q/T/A/Z), text, linearGradient, radialGradient, opacity, and transforms.
 
-On platforms without native SVG support (older Windows, Qt), SVG images are silently skipped. Consider providing PNG fallbacks for critical images.
-
-The built-in SVG renderer (used by FMX and PDF export) supports rect, circle, ellipse, line, polyline, polygon, path commands (M/L/H/V/C/S/Q/T/A/Z), text, opacity, and transforms. Advanced features like gradients, clipPath, masks, and filters are not yet supported.
+Not yet supported: spreadMethod (reflect/repeat), `clipPath` element, masks, filters, `use`/`symbol`, embedded images, CSS `style` selectors, `tspan`/`textPath`.
 
 ### Conic Gradients
 
