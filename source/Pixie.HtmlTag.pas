@@ -1480,8 +1480,91 @@ var
   CssBdr: TPixieCssBorders;
   J: Integer;
   DecColor: TPixieWebColor;
-  DecY: TPixiePixel;
+  DecSegStart, BoxRight, BoxBottom: TPixiePixel;
   HasTextContent: Boolean;
+
+  procedure DrawDecSegment(SegX1, SegX2: TPixiePixel);
+  var
+    DecY: TPixiePixel;
+  begin
+    if SegX2 <= SegX1 then
+      Exit;
+    if (FCss.TextDecorationLine and TextDecorationLineUnderline) <> 0 then
+    begin
+      DecY := ContentBox.Y + FCss.FontMetrics.Ascent + 2;
+      Doc.Container.DrawLine(Hdc,
+        SegX1, DecY, SegX2, DecY,
+        DecColor, 1, FCss.TextDecorationStyle);
+    end;
+    if (FCss.TextDecorationLine and TextDecorationLineOverline) <> 0 then
+    begin
+      DecY := ContentBox.Y;
+      Doc.Container.DrawLine(Hdc,
+        SegX1, DecY, SegX2, DecY,
+        DecColor, 1, FCss.TextDecorationStyle);
+    end;
+    if (FCss.TextDecorationLine and TextDecorationLineLineThrough) <> 0 then
+    begin
+      DecY := ContentBox.Y + FCss.FontMetrics.Ascent - FCss.FontMetrics.XHeight / 2;
+      Doc.Container.DrawLine(Hdc,
+        SegX1, DecY, SegX2, DecY,
+        DecColor, 1, FCss.TextDecorationStyle);
+    end;
+  end;
+
+  function ChildOnLine(Child: TPixieRenderItem): Boolean;
+  var
+    CY: TPixiePixel;
+  begin
+    CY := Child.FPos.Y + Y;
+    Result := (CY < BoxBottom) and (CY + Child.FPos.Height > ContentBox.Y);
+  end;
+
+  procedure DrawDecLines(Ri: TPixieRenderItem);
+  var
+    K: Integer;
+    Child, Sibling: TPixieRenderItem;
+    ChildLeft, ChildRight: TPixiePixel;
+    SibLeft: TPixiePixel;
+  begin
+    for K := 0 to Ri.FChildren.Count - 1 do
+    begin
+      Child := Ri.FChildren[K];
+      ChildLeft := Child.FPos.X + X;
+      ChildRight := ChildLeft + Child.FPos.Width;
+      // Skip children outside this content box fragment (X and Y)
+      if (ChildRight <= ContentBox.X) or (ChildLeft >= BoxRight) or
+         not ChildOnLine(Child) then
+        Continue;
+      if Child.SrcEl.IsReplaced then
+      begin
+        // Expand gap to include implicit whitespace between the
+        // replaced element and its next neighbour on the same line.
+        if K + 1 < Ri.FChildren.Count then
+        begin
+          Sibling := Ri.FChildren[K + 1];
+          if ChildOnLine(Sibling) then
+          begin
+            SibLeft := Sibling.FPos.X + X;
+            if SibLeft > ChildRight then
+              ChildRight := SibLeft;
+          end
+          else
+            // Next child is on a different line — extend gap to line end
+            ChildRight := BoxRight;
+        end
+        else
+          // No next child — extend gap to line end
+          ChildRight := BoxRight;
+        // Draw decoration segment before this replaced element
+        DrawDecSegment(DecSegStart, ChildLeft);
+        DecSegStart := ChildRight;
+      end
+      else if Child.SrcEl.Css.Display = displayInline then
+        // Recurse into inline children to find nested replaced elements
+        DrawDecLines(Child);
+    end;
+  end;
 begin
   Assert(TObject(Ri) is TPixieRenderItem);
   Assert(FDoc is TPixieDocument);
@@ -1553,6 +1636,16 @@ begin
     try
       RiObj.GetInlineBoxes(Boxes);
 
+      // Check once whether any child is non-replaced, non-space text
+      HasTextContent := False;
+      for I := 0 to FChildren.Count - 1 do
+        if not FChildren[I].IsReplaced and
+           not FChildren[I].IsSpace then
+        begin
+          HasTextContent := True;
+          Break;
+        end;
+
       for J := 0 to Boxes.Count - 1 do
       begin
         Box := Boxes[J];
@@ -1617,43 +1710,18 @@ begin
             Doc.Container.DrawBorders(Hdc, Borders, Box, False);
           end;
 
-          // Draw text-decoration lines spanning the full inline box
-          // Skip decoration when the element contains only replaced elements (e.g. <a><img></a>)
-          HasTextContent := False;
-          for I := 0 to FChildren.Count - 1 do
-            if not FChildren[I].IsReplaced and
-               not FChildren[I].IsSpace then
-            begin
-              HasTextContent := True;
-              Break;
-            end;
+          // Draw text-decoration lines skipping replaced elements
           if HasTextContent and (FCss.TextDecorationLine <> TextDecorationLineNone) then
           begin
             if FCss.TextDecorationColor.IsCurrentColor then
               DecColor := FCss.Color
             else
               DecColor := FCss.TextDecorationColor;
-            if (FCss.TextDecorationLine and TextDecorationLineUnderline) <> 0 then
-            begin
-              DecY := ContentBox.Y + FCss.FontMetrics.Ascent + 2;
-              Doc.Container.DrawLine(Hdc,
-                ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
-                DecColor, 1, FCss.TextDecorationStyle);
-            end;
-            if (FCss.TextDecorationLine and TextDecorationLineOverline) <> 0 then
-            begin
-              DecY := ContentBox.Y;
-              Doc.Container.DrawLine(Hdc,
-                ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
-                DecColor, 1, FCss.TextDecorationStyle);
-            end;
-            if (FCss.TextDecorationLine and TextDecorationLineLineThrough) <> 0 then
-            begin
-              DecY := ContentBox.Y + FCss.FontMetrics.Ascent - FCss.FontMetrics.XHeight / 2;
-              Doc.Container.DrawLine(Hdc,
-                ContentBox.X, DecY, ContentBox.X + ContentBox.Width, DecY,
-                DecColor, 1, FCss.TextDecorationStyle);
-            end;
+            BoxRight := ContentBox.X + ContentBox.Width;
+            BoxBottom := ContentBox.Y + ContentBox.Height;
+            DecSegStart := ContentBox.X;
+            DrawDecLines(RiObj);
+            DrawDecSegment(DecSegStart, BoxRight);
           end;
         end;
       end;

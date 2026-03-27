@@ -794,6 +794,7 @@ var
   RepeatX, RepeatY: Boolean;
   Col, Row, StartCol, StartRow, EndCol, EndRow: Integer;
   DrawX, DrawY, DrawW, DrawH: Single;
+  ExtraW, ExtraH: Single;
 begin
   Handle := GetCachedImage(Url, ABaseUrl);
   if Handle = 0 then Exit;
@@ -827,6 +828,10 @@ begin
     EndRow := 0;
   end;
 
+  // Overlap by 1px to prevent interpolation gaps between tiles
+  if RepeatX then ExtraW := 1 else ExtraW := 0;
+  if RepeatY then ExtraH := 1 else ExtraH := 0;
+
   R := Layer.BorderRadius;
   FCanvas.SaveState;
   try
@@ -834,11 +839,10 @@ begin
     for Row := StartRow to EndRow do
       for Col := StartCol to EndCol do
       begin
-        // Snap to pixels and overlap by 1px to prevent D2D interpolation gaps
         DrawX := Floor(Layer.OriginBox.X + Col * TileW);
         DrawY := Floor(Layer.OriginBox.Y + Row * TileH);
-        DrawW := Floor(Layer.OriginBox.X + (Col + 1) * TileW) - DrawX + 1;
-        DrawH := Floor(Layer.OriginBox.Y + (Row + 1) * TileH) - DrawY + 1;
+        DrawW := Floor(Layer.OriginBox.X + (Col + 1) * TileW) - DrawX + ExtraW;
+        DrawH := Floor(Layer.OriginBox.Y + (Row + 1) * TileH) - DrawY + ExtraH;
         FCanvas.DrawImage(Handle, DrawX, DrawY, DrawW, DrawH);
       end;
   finally
