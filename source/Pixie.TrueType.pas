@@ -709,7 +709,7 @@ function TPixieTrueTypeFont.BuildSubsetCmap(
   UsedGlyphs: TPixieGlyphMap): TBytes;
 type
   TCpGlyph = record
-    Codepoint: UInt16;
+    Codepoint: UInt32;
     GlyphId: UInt16;
   end;
   TSeg = record
@@ -717,35 +717,41 @@ type
     EndCode: UInt16;
     Delta: Int16;
   end;
+  TSeqGroup = record
+    StartCharCode: UInt32;
+    EndCharCode: UInt32;
+    StartGlyphId: UInt32;
+  end;
 var
   Stream: TMemoryStream;
   Pair: TPair<UInt16, UInt32>;
   Segments: array of TSeg;
-  SegCount, I, J: Integer;
+  SegCount, BmpCount, I, J: Integer;
   SortedCps: array of TCpGlyph;
   Tmp: TCpGlyph;
-  Count, Capacity: Integer;
-  Cp: UInt16;
+  Count: Integer;
+  HasSupplementary: Boolean;
+  Groups: array of TSeqGroup;
+  NumGroups: Integer;
   SearchRange, EntrySelector, RangeShift: UInt16;
   Pow2: UInt16;
   SegTableLen: UInt16;
+  Fmt4Offset, Fmt12Offset: UInt32;
+  NumTables: UInt16;
 begin
-  // Collect BMP codepoints from UsedGlyphs (glyph->codepoint map)
+  // Collect ALL codepoints from UsedGlyphs in a single pass
+  HasSupplementary := False;
   Count := 0;
-  Capacity := UsedGlyphs.Count;
-  SetLength(SortedCps, Capacity);
+  SetLength(SortedCps, UsedGlyphs.Count);
   for Pair in UsedGlyphs do
   begin
-    if (Pair.Value > 0) and (Pair.Value <= $FFFF) and (Pair.Key > 0) then
+    if (Pair.Value > 0) and (Pair.Key > 0) then
     begin
-      if Count >= Capacity then
-      begin
-        Capacity := Capacity * 2;
-        SetLength(SortedCps, Capacity);
-      end;
-      SortedCps[Count].Codepoint := UInt16(Pair.Value);
+      SortedCps[Count].Codepoint := Pair.Value;
       SortedCps[Count].GlyphId := Pair.Key;
       Inc(Count);
+      if Pair.Value > $FFFF then
+        HasSupplementary := True;
     end;
   end;
   SetLength(SortedCps, Count);
@@ -753,12 +759,11 @@ begin
   // Sort by codepoint (simple insertion sort — small N)
   for I := 1 to Count - 1 do
   begin
-    Cp := SortedCps[I].Codepoint;
-    if Cp < SortedCps[I - 1].Codepoint then
+    if SortedCps[I].Codepoint < SortedCps[I - 1].Codepoint then
     begin
       Tmp := SortedCps[I];
       J := I - 1;
-      while (J >= 0) and (SortedCps[J].Codepoint > Cp) do
+      while (J >= 0) and (SortedCps[J].Codepoint > Tmp.Codepoint) do
       begin
         SortedCps[J + 1] := SortedCps[J];
         Dec(J);
@@ -767,20 +772,28 @@ begin
     end;
   end;
 
-  // Build segments: each entry is a single-codepoint segment using idDelta
-  SetLength(Segments, Count + 1); // +1 for sentinel
+  // Build Format 4 segments from BMP codepoints only (sorted array,
+  // BMP entries come first since they have lower codepoints)
+  BmpCount := 0;
   for I := 0 to Count - 1 do
+    if SortedCps[I].Codepoint <= $FFFF then
+      Inc(BmpCount)
+    else
+      Break; // sorted, so all remaining are supplementary
+
+  SetLength(Segments, BmpCount + 1); // +1 for sentinel
+  for I := 0 to BmpCount - 1 do
   begin
-    Segments[I].StartCode := SortedCps[I].Codepoint;
-    Segments[I].EndCode := SortedCps[I].Codepoint;
+    Segments[I].StartCode := UInt16(SortedCps[I].Codepoint);
+    Segments[I].EndCode := UInt16(SortedCps[I].Codepoint);
     Segments[I].Delta := Int16(Integer(SortedCps[I].GlyphId) -
       Integer(SortedCps[I].Codepoint));
   end;
   // Sentinel segment
-  Segments[Count].StartCode := $FFFF;
-  Segments[Count].EndCode := $FFFF;
-  Segments[Count].Delta := 1;
-  SegCount := Count + 1;
+  Segments[BmpCount].StartCode := $FFFF;
+  Segments[BmpCount].EndCode := $FFFF;
+  Segments[BmpCount].Delta := 1;
+  SegCount := BmpCount + 1;
 
   // Compute searchRange, entrySelector, rangeShift
   Pow2 := 1;
@@ -796,15 +809,30 @@ begin
   // Format 4 length: 14 (header) + 4 arrays x SegCount x 2 + 2 (reservedPad)
   SegTableLen := 14 + UInt16(SegCount) * 8 + 2;
 
+  // Determine cmap header layout
+  if HasSupplementary then
+    NumTables := 2
+  else
+    NumTables := 1;
+  Fmt4Offset := 4 + UInt32(NumTables) * 8;
+  Fmt12Offset := Fmt4Offset + SegTableLen;
+
   Stream := TMemoryStream.Create;
   try
-    // cmap header: version=0, numTables=1
-    WriteU16BE(Stream, 0);
-    WriteU16BE(Stream, 1);
-    // Encoding record: platform=3 (Windows), encoding=1 (BMP), offset=12
+    // cmap header
+    WriteU16BE(Stream, 0);          // version
+    WriteU16BE(Stream, NumTables);  // numTables
+    // Encoding record 1: platform=3 (Windows), encoding=1 (BMP), -> Format 4
     WriteU16BE(Stream, 3);
     WriteU16BE(Stream, 1);
-    WriteU32BE(Stream, 12);
+    WriteU32BE(Stream, Fmt4Offset);
+    // Encoding record 2 (supplementary only): platform=3, encoding=10, -> Format 12
+    if HasSupplementary then
+    begin
+      WriteU16BE(Stream, 3);
+      WriteU16BE(Stream, 10);
+      WriteU32BE(Stream, Fmt12Offset);
+    end;
 
     // Format 4 subtable
     WriteU16BE(Stream, 4); // format
@@ -829,6 +857,48 @@ begin
     // idRangeOffset array (all zeros — we use delta only)
     for I := 0 to SegCount - 1 do
       WriteU16BE(Stream, 0);
+
+    // Format 12 subtable (when supplementary-plane codepoints are present)
+    if HasSupplementary then
+    begin
+      // Build sequential map groups from the already-sorted full array
+      NumGroups := 0;
+      SetLength(Groups, Count);
+      if Count > 0 then
+      begin
+        Groups[0].StartCharCode := SortedCps[0].Codepoint;
+        Groups[0].EndCharCode := SortedCps[0].Codepoint;
+        Groups[0].StartGlyphId := SortedCps[0].GlyphId;
+        NumGroups := 1;
+        for I := 1 to Count - 1 do
+        begin
+          // Extend current group if consecutive codepoint and glyph
+          if (SortedCps[I].Codepoint = Groups[NumGroups - 1].EndCharCode + 1) and
+             (SortedCps[I].GlyphId = Groups[NumGroups - 1].StartGlyphId +
+               (SortedCps[I].Codepoint - Groups[NumGroups - 1].StartCharCode)) then
+            Groups[NumGroups - 1].EndCharCode := SortedCps[I].Codepoint
+          else begin
+            Groups[NumGroups].StartCharCode := SortedCps[I].Codepoint;
+            Groups[NumGroups].EndCharCode := SortedCps[I].Codepoint;
+            Groups[NumGroups].StartGlyphId := SortedCps[I].GlyphId;
+            Inc(NumGroups);
+          end;
+        end;
+      end;
+
+      // Write Format 12 subtable header (16 bytes) + groups (12 bytes each)
+      WriteU16BE(Stream, 12);                                // format
+      WriteU16BE(Stream, 0);                                 // reserved
+      WriteU32BE(Stream, UInt32(16 + NumGroups * 12));       // length
+      WriteU32BE(Stream, 0);                                 // language
+      WriteU32BE(Stream, UInt32(NumGroups));                 // numGroups
+      for I := 0 to NumGroups - 1 do
+      begin
+        WriteU32BE(Stream, Groups[I].StartCharCode);
+        WriteU32BE(Stream, Groups[I].EndCharCode);
+        WriteU32BE(Stream, Groups[I].StartGlyphId);
+      end;
+    end;
 
     SetLength(Result, Stream.Size);
     Stream.Position := 0;

@@ -658,6 +658,21 @@ end;
 // Font PDF object construction
 // ---------------------------------------------------------------------------
 
+// Encode a Unicode codepoint as a hex string in UTF-16BE for ToUnicode CMap.
+// BMP codepoints produce 4 hex digits; supplementary plane produces 8 (surrogate pair).
+function CodepointToUtf16Hex(Cp: UInt32): AnsiString;
+var
+  Hi, Lo: UInt16;
+begin
+  if Cp <= $FFFF then
+    Result := AnsiString(IntToHex(Cp, 4))
+  else begin
+    Hi := UInt16(((Cp - $10000) shr 10) + $D800);
+    Lo := UInt16(((Cp - $10000) and $3FF) + $DC00);
+    Result := AnsiString(IntToHex(Hi, 4) + IntToHex(Lo, 4));
+  end;
+end;
+
 procedure TPixiePdfCanvas.BuildFontObjects(Info: TPixiePdfFontInfo);
 var
   FontFile, Descriptor, CidFont, Type0, ToUnicode: TPixiePdfObject;
@@ -781,9 +796,8 @@ begin
         begin
           GlyphId := SortedGlyphs[J];
           CmapStr := CmapStr +
-            '<' + AnsiString(LowerCase(IntToHex(GlyphId, 4))) + '> ' +
-            '<' + AnsiString(LowerCase(IntToHex(
-              Info.UsedGlyphs[GlyphId], 4))) + '>'#10;
+            '<' + AnsiString(IntToHex(GlyphId, 4)) + '> ' +
+            '<' + CodepointToUtf16Hex(Info.UsedGlyphs[GlyphId]) + '>'#10;
         end;
         CmapStr := CmapStr + 'endbfchar'#10;
         Inc(I, ChunkSize);

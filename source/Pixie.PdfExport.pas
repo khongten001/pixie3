@@ -88,19 +88,26 @@ end;
 // Page break computation
 // ---------------------------------------------------------------------------
 
+const
+  // Maximum recursion depth for collecting break candidates in the render
+  // tree. Deeper nesting (e.g. body > .document > .container > .section)
+  // needs deeper recursion; too deep risks splitting leaf-level content.
+  MaxBreakDepth = 3;
+
 // Collect break candidates from direct children of a render item.
-// Each candidate is a child's Top — breaking there puts the child
-// entirely on the next page, and all previous siblings (whose bottoms
-// are <= this top in normal flow) stay on the current page.
-// Only recurses one level into large containers to provide finer
-// granularity without risking breaks inside nested structures.
+// Each candidate is a child's margin-box Top or Bottom — breaking at Top
+// puts the child entirely on the next page with its full decoration intact.
+// Uses margin-box boundaries so breaks never split border/padding from content.
+// Does NOT recurse into children that have borders or padding, since
+// splitting inside a decorated container would separate the decoration
+// from its content.
 procedure CollectBreakCandidates(Ri: TPixieRenderItem;
   Candidates: TPixiePageBreakList; Depth: Integer; OffsetY: Single);
 var
   I: Integer;
   Children: TPixieRenderItemList;
   Child: TPixieRenderItem;
-  AbsY: Single;
+  HasDecoration: Boolean;
 begin
   Children := Ri.GetChildren;
   for I := 0 to Children.Count - 1 do
@@ -109,18 +116,22 @@ begin
     if Child.GetSkip then Continue;
     if Child.Pos.Height > 0 then
     begin
-      AbsY := OffsetY + Child.Pos.Y;
-      // Add the top of each block as a break candidate — breaking here
-      // means everything above stays on the current page and this element
-      // starts cleanly on the next page
-      Candidates.Add(AbsY);
-      // Also add the bottom, which is a safe point after this element
-      Candidates.Add(AbsY + Child.Pos.Height);
+      // Use margin-box boundaries so breaks don't split an element's
+      // decoration (border/padding/margin) from its content
+      Candidates.Add(OffsetY + Child.Top);
+      Candidates.Add(OffsetY + Child.Bottom);
     end;
-    // Recurse one extra level for finer granularity inside large containers
-    if (Depth < 1) and (Child.GetChildren.Count > 0) then
-      CollectBreakCandidates(Child, Candidates, Depth + 1,
-        OffsetY + Child.Pos.Y);
+    // Recurse into nested blocks for finer break granularity, but
+    // skip containers with visible borders or padding — breaking
+    // inside those would split the decoration from the content
+    if (Depth < MaxBreakDepth) and (Child.GetChildren.Count > 0) then
+    begin
+      HasDecoration := (Child.BorderTop > 0) or (Child.BorderBottom > 0) or
+                       (Child.PaddingTop > 0) or (Child.PaddingBottom > 0);
+      if not HasDecoration then
+        CollectBreakCandidates(Child, Candidates, Depth + 1,
+          OffsetY + Child.Pos.Y);
+    end;
   end;
 end;
 

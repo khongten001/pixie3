@@ -173,12 +173,10 @@ begin
     Ch := Txt[I];
 
     // Detect escape sequences
-    IsHex := (Ch >= '0') and (Ch <= '9') or
-             (Ch >= 'A') and (Ch <= 'Z') or
-             (Ch >= 'a') and (Ch <= 'z');
+    IsHex := PixieIsHexDigit(Ord(Ch));
 
     if (Ch = '\') or
-       ((Esc <> '') and (Length(Esc) < 6) and IsHex) then
+       ((Esc <> '') and (Length(Esc) < 7) and IsHex) then
     begin
       // If we have a pending escape and hit another backslash, finalize
       if (Esc <> '') and (Ch = '\') then
