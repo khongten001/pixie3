@@ -258,12 +258,13 @@ end;
 
 function TPixieSvgMatrix.Multiply(const M: TPixieSvgMatrix): TPixieSvgMatrix;
 begin
-  Result.A := A * M.A + B * M.C;
-  Result.B := A * M.B + B * M.D;
-  Result.C := C * M.A + D * M.C;
-  Result.D := C * M.B + D * M.D;
-  Result.E := E * M.A + F * M.C + M.E;
-  Result.F := E * M.B + F * M.D + M.F;
+  // Column-vector convention matching SVG spec and ConcatMatrix
+  Result.A := A * M.A + C * M.B;
+  Result.B := B * M.A + D * M.B;
+  Result.C := A * M.C + C * M.D;
+  Result.D := B * M.C + D * M.D;
+  Result.E := A * M.E + C * M.F + E;
+  Result.F := B * M.E + D * M.F + F;
 end;
 
 class function TPixieSvgMatrix.CreateTranslate(TX, TY: Single): TPixieSvgMatrix;
