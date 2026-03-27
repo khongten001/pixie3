@@ -92,6 +92,14 @@ contains
   Pixie.NativeContainer in '..\source\Pixie.NativeContainer.pas',
   Pixie.HtmlView.Base in '..\source\Pixie.HtmlView.Base.pas',
   Pixie.HtmlView.VCL in '..\source\Pixie.HtmlView.VCL.pas',
+  Pixie.SimpleXml in '..\source\Pixie.SimpleXml.pas',
+  Pixie.SvgRenderer in '..\source\Pixie.SvgRenderer.pas',
+  Pixie.SvgRenderer.Canvas in '..\source\Pixie.SvgRenderer.Canvas.pas',
+  Pixie.SvgToPdf in '..\source\Pixie.SvgToPdf.pas',
+  Pixie.TrueType in '..\source\Pixie.TrueType.pas',
+  Pixie.PdfWriter in '..\source\Pixie.PdfWriter.pas',
+  Pixie.Canvas.Pdf in '..\source\Pixie.Canvas.Pdf.pas',
+  Pixie.PdfExport in '..\source\Pixie.PdfExport.pas',
   Pixie.Register.Delphi.VCL in 'Pixie.Register.Delphi.VCL.pas';
 
 end.

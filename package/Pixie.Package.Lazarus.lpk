@@ -238,6 +238,30 @@
         <UnitName Value="Pixie.SvgRenderer.Canvas"/>
       </Item>
       <Item>
+        <Filename Value="../source/Pixie.SvgToPdf.pas"/>
+        <UnitName Value="Pixie.SvgToPdf"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/Pixie.Clipboard.pas"/>
+        <UnitName Value="Pixie.Clipboard"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/Pixie.TrueType.pas"/>
+        <UnitName Value="Pixie.TrueType"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/Pixie.PdfWriter.pas"/>
+        <UnitName Value="Pixie.PdfWriter"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/Pixie.Canvas.Pdf.pas"/>
+        <UnitName Value="Pixie.Canvas.Pdf"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/Pixie.PdfExport.pas"/>
+        <UnitName Value="Pixie.PdfExport"/>
+      </Item>
+      <Item>
         <Filename Value="../source/Pixie.Table.pas"/>
         <UnitName Value="Pixie.Table"/>
       </Item>

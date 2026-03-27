@@ -95,6 +95,11 @@ contains
   Pixie.TrueType in '..\source\Pixie.TrueType.pas',
   Pixie.HtmlView.Base in '..\source\Pixie.HtmlView.Base.pas',
   Pixie.HtmlView.FMX in '..\source\Pixie.HtmlView.FMX.pas',
+  Pixie.SvgRenderer.Canvas in '..\source\Pixie.SvgRenderer.Canvas.pas',
+  Pixie.SvgToPdf in '..\source\Pixie.SvgToPdf.pas',
+  Pixie.PdfWriter in '..\source\Pixie.PdfWriter.pas',
+  Pixie.Canvas.Pdf in '..\source\Pixie.Canvas.Pdf.pas',
+  Pixie.PdfExport in '..\source\Pixie.PdfExport.pas',
   Pixie.Register.Delphi.FMX in 'Pixie.Register.Delphi.FMX.pas';
 
 end.
