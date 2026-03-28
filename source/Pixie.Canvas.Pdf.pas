@@ -571,7 +571,7 @@ end;
 function TPixiePdfCanvas.FindFallbackFontInfo(Primary: TPixiePdfFontInfo;
   Codepoint: UInt32): TPixiePdfFontInfo;
 const
-  FallbackFamilies: array[0..6] of string = (
+  FallbackFamilies: array[0..8] of string = (
     {$IFDEF MSWINDOWS}
     'Microsoft YaHei',   // Chinese
     'Yu Gothic',         // Japanese
@@ -579,7 +579,9 @@ const
     'Arial Unicode MS',  // Broad coverage
     'Segoe UI Symbol',   // Symbols
     'Segoe UI Emoji',    // Emoji
-    'Noto Sans'          // Cross-platform
+    'Noto Sans',         // Cross-platform
+    'Noto Emoji',        // Monochrome emoji
+    'Symbola'            // Broad Unicode coverage
     {$ENDIF}
     {$IFDEF LINUX}
     'Noto Sans CJK SC',
@@ -588,7 +590,9 @@ const
     'WenQuanYi Micro Hei',
     'Noto Sans',
     'DejaVu Sans',
-    'Liberation Sans'
+    'Liberation Sans',
+    'Noto Emoji',        // Monochrome emoji (glyf outlines)
+    'Symbola'            // Broad Unicode coverage
     {$ENDIF}
     {$IFDEF DARWIN}
     'PingFang SC',
@@ -597,11 +601,14 @@ const
     'Arial Unicode MS',
     'Noto Sans CJK SC',
     'Helvetica Neue',
-    'Noto Sans'
+    'Noto Sans',
+    'Noto Emoji',        // Monochrome emoji
+    'Apple Symbols'      // Symbols and pictographs
     {$ENDIF}
   );
 var
   I, J: Integer;
+  GlyphId: UInt16;
   TtFont: TPixieTrueTypeFont;
   Scale: Single;
   SpaceGlyph: UInt16;
@@ -611,43 +618,50 @@ begin
   begin
     Result := FFonts[I];
     if (Result.TtFont <> nil) and (Result.TtFont <> Primary.TtFont) and
-       (Abs(Result.FontSize - Primary.FontSize) < 0.01) and
-       (Result.TtFont.CharToGlyph(Codepoint) <> 0) then
-      Exit;
+       (Abs(Result.FontSize - Primary.FontSize) < 0.01) then
+    begin
+      GlyphId := Result.TtFont.CharToGlyph(Codepoint);
+      if (GlyphId <> 0) and Result.TtFont.HasGlyphOutline(GlyphId) then
+        Exit;
+    end;
   end;
 
   // Try each fallback family
   for J := Low(FallbackFamilies) to High(FallbackFamilies) do
   begin
     TtFont := FindOrCreateFont(FallbackFamilies[J], 400, False);
-    if (TtFont <> nil) and (TtFont <> Primary.TtFont) and
-       (TtFont.CharToGlyph(Codepoint) <> 0) then
+    if (TtFont <> nil) and (TtFont <> Primary.TtFont) then
     begin
-      // Create a new TPixiePdfFontInfo for this fallback
-      Result := TPixiePdfFontInfo.Create;
-      Result.TtFont := TtFont;
-      Result.FamilyName := FallbackFamilies[J];
-      Result.FontSize := Primary.FontSize;
-      Result.DecorationLine := Primary.DecorationLine;
-      Result.PdfName := AllocFontName;
+      GlyphId := TtFont.CharToGlyph(Codepoint);
+      // Verify the glyph has outline data (rejects colour-only emoji fonts)
+      if (GlyphId <> 0) and TtFont.HasGlyphOutline(GlyphId) then
+      begin
+        // Create a new TPixiePdfFontInfo for this fallback
+        Result := TPixiePdfFontInfo.Create;
+        Result.TtFont := TtFont;
+        Result.FamilyName := FallbackFamilies[J];
+        Result.FontSize := Primary.FontSize;
+        Result.DecorationLine := Primary.DecorationLine;
+        Result.PdfName := AllocFontName;
 
-      Scale := Primary.FontSize / TtFont.UnitsPerEm;
-      Result.Metrics := Primary.Metrics;
-      Result.Metrics.Ascent := TtFont.Ascent * Scale;
-      Result.Metrics.Descent := Abs(TtFont.Descent) * Scale;
-      Result.Metrics.Height := Result.Metrics.Ascent + Result.Metrics.Descent;
-      if TtFont.XHeight > 0 then
-        Result.Metrics.XHeight := TtFont.XHeight * Scale
-      else
-        Result.Metrics.XHeight := Result.Metrics.Ascent * 0.53;
-      SpaceGlyph := TtFont.CharToGlyph(Ord('0'));
-      if SpaceGlyph <> 0 then
-        Result.Metrics.ChWidth := TtFont.GetGlyphWidth(SpaceGlyph) * Scale
-      else
-        Result.Metrics.ChWidth := Primary.FontSize * 0.5;
+        Scale := Primary.FontSize / TtFont.UnitsPerEm;
+        Result.Metrics := Primary.Metrics;
+        Result.Metrics.Ascent := TtFont.Ascent * Scale;
+        Result.Metrics.Descent := Abs(TtFont.Descent) * Scale;
+        Result.Metrics.Height := Result.Metrics.Ascent + Result.Metrics.Descent;
+        if TtFont.XHeight > 0 then
+          Result.Metrics.XHeight := TtFont.XHeight * Scale
+        else
+          Result.Metrics.XHeight := Result.Metrics.Ascent * 0.53;
+        SpaceGlyph := TtFont.CharToGlyph(Ord('0'));
+        if SpaceGlyph <> 0 then
+          Result.Metrics.ChWidth := TtFont.GetGlyphWidth(SpaceGlyph) * Scale
+        else
+          Result.Metrics.ChWidth := Primary.FontSize * 0.5;
 
-      FFonts.Add(Result);
-      Exit;
+        FFonts.Add(Result);
+        Exit;
+      end;
     end;
   end;
 

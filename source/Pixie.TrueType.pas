@@ -91,6 +91,7 @@ type
     function LoadFromStream(Stream: TStream): Boolean;
 
     function CharToGlyph(Codepoint: UInt32): UInt16;
+    function HasGlyphOutline(GlyphId: UInt16): Boolean;
     function GetGlyphWidth(GlyphId: UInt16): UInt16;
     function GetFullData: TBytes;
     function BuildSubsetFont(UsedGlyphs: TPixieGlyphMap): TBytes;
@@ -561,6 +562,17 @@ begin
     if Result <> 0 then Exit;
   end;
   Result := CharToGlyphFmt4(Codepoint);
+end;
+
+// Returns true if the glyph has outline data in the 'glyf' table.
+// Rejects bitmap-only emoji fonts (CBDT/SBIX with empty glyf entries).
+// COLR/CPAL colour fonts that also have base outlines will pass — PDF
+// renders the monochrome outline, which is acceptable fallback behaviour.
+function TPixieTrueTypeFont.HasGlyphOutline(GlyphId: UInt16): Boolean;
+var
+  GlyfOff, GlyfLen: UInt32;
+begin
+  Result := GetGlyphDataRange(GlyphId, GlyfOff, GlyfLen);
 end;
 
 function TPixieTrueTypeFont.GetGlyphWidth(GlyphId: UInt16): UInt16;
