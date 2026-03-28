@@ -758,6 +758,7 @@ begin
   CidFont.AddEntry('FontDescriptor', PdfRef(Descriptor.Id));
   CidFont.AddEntry('W', WArray);
   CidFont.AddEntry('DW', '1000');
+  CidFont.AddEntry('CIDToGIDMap', '/Identity');
 
   // 5. ToUnicode CMap
   ToUnicode := FWriter.AllocObject;
