@@ -8,7 +8,7 @@ unit Pixie.Canvas;
 interface
 
 uses
-  Classes,
+  Classes, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription;
 
@@ -16,11 +16,23 @@ type
   TPixieFontHandle = PtrUInt;
   TPixieImageHandle = PtrUInt;
   TPixieFillRule = (frNonZero, frEvenOdd);
+  TPixieTextWidthMap = TDictionary<string, TPixiePixel>;
+  TPixieTextWidthCache = TDictionary<TPixieFontHandle, TPixieTextWidthMap>;
 
   { TPixieCanvas }
 
   TPixieCanvas = class
+  private
+    FTextWidthCache: TPixieTextWidthCache;
+  protected
+    function DoMeasureText(const Text: string;
+      Handle: TPixieFontHandle): TPixiePixel; virtual; abstract;
+    procedure DoDeleteFont(Handle: TPixieFontHandle); virtual; abstract;
   public
+    constructor Create;
+    destructor Destroy; override;
+    procedure ClearTextWidthCache;
+
     // Lifecycle — bind to a platform device context for painting
     procedure BeginPaint(DC: PtrUInt); virtual; abstract;
     procedure EndPaint; virtual; abstract;
@@ -68,11 +80,11 @@ type
     // Font management
     function CreateFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): TPixieFontHandle; virtual; abstract;
-    procedure DeleteFont(Handle: TPixieFontHandle); virtual; abstract;
+    procedure DeleteFont(Handle: TPixieFontHandle);
 
     // Text
     function MeasureText(const Text: string;
-      Handle: TPixieFontHandle): TPixiePixel; virtual; abstract;
+      Handle: TPixieFontHandle): TPixiePixel;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); virtual; abstract;
 
@@ -140,6 +152,57 @@ type
   end;
 
 implementation
+
+constructor TPixieCanvas.Create;
+begin
+  inherited Create;
+  FTextWidthCache := TPixieTextWidthCache.Create;
+end;
+
+destructor TPixieCanvas.Destroy;
+begin
+  ClearTextWidthCache;
+  FTextWidthCache.Free;
+  inherited Destroy;
+end;
+
+procedure TPixieCanvas.ClearTextWidthCache;
+var
+  Pair: TPair<TPixieFontHandle, TPixieTextWidthMap>;
+begin
+  for Pair in FTextWidthCache do
+    Pair.Value.Free;
+  FTextWidthCache.Clear;
+end;
+
+procedure TPixieCanvas.DeleteFont(Handle: TPixieFontHandle);
+var
+  FontMap: TPixieTextWidthMap;
+begin
+  if FTextWidthCache.TryGetValue(Handle, FontMap) then
+  begin
+    FontMap.Free;
+    FTextWidthCache.Remove(Handle);
+  end;
+  DoDeleteFont(Handle);
+end;
+
+function TPixieCanvas.MeasureText(const Text: string;
+  Handle: TPixieFontHandle): TPixiePixel;
+var
+  FontMap: TPixieTextWidthMap;
+begin
+  if not FTextWidthCache.TryGetValue(Handle, FontMap) then
+  begin
+    FontMap := TPixieTextWidthMap.Create;
+    FTextWidthCache.Add(Handle, FontMap);
+  end;
+  if not FontMap.TryGetValue(Text, Result) then
+  begin
+    Result := DoMeasureText(Text, Handle);
+    FontMap.Add(Text, Result);
+  end;
+end;
 
 procedure TPixieCanvas.PushOpacity(AOpacity: Single);
 begin

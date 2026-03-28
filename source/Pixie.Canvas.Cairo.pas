@@ -101,8 +101,8 @@ type
 
     function CreateFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): TPixieFontHandle; override;
-    procedure DeleteFont(Handle: TPixieFontHandle); override;
-    function MeasureText(const Text: string;
+    procedure DoDeleteFont(Handle: TPixieFontHandle); override;
+    function DoMeasureText(const Text: string;
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
@@ -871,13 +871,13 @@ begin
   Result := TPixieFontHandle(Info);
 end;
 
-procedure TPixieCairoCanvas.DeleteFont(Handle: TPixieFontHandle);
+procedure TPixieCairoCanvas.DoDeleteFont(Handle: TPixieFontHandle);
 begin
   if Handle <> 0 then
     TPixieCairoFont(Handle).Free;
 end;
 
-function TPixieCairoCanvas.MeasureText(const Text: string;
+function TPixieCairoCanvas.DoMeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: TPixieCairoFont;

@@ -152,8 +152,8 @@ type
 
     function CreateFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): TPixieFontHandle; override;
-    procedure DeleteFont(Handle: TPixieFontHandle); override;
-    function MeasureText(const Text: string;
+    procedure DoDeleteFont(Handle: TPixieFontHandle); override;
+    function DoMeasureText(const Text: string;
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
@@ -1403,13 +1403,13 @@ begin
   Result := TPixieFontHandle(Info);
 end;
 
-procedure TPixiePdfCanvas.DeleteFont(Handle: TPixieFontHandle);
+procedure TPixiePdfCanvas.DoDeleteFont(Handle: TPixieFontHandle);
 begin
   // Fonts are owned by FFonts list and freed on canvas destroy
   // Do not delete individual fonts here — they are needed for PDF writing
 end;
 
-function TPixiePdfCanvas.MeasureText(const Text: string;
+function TPixiePdfCanvas.DoMeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
   Info, Fallback: TPixiePdfFontInfo;
