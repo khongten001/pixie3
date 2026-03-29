@@ -382,10 +382,9 @@ begin
     Exit;
   end;
 
-  // Local file
+  // Local file (cache both success and failure to avoid repeated attempts)
   Result := FCanvas.LoadImage(Key);
-  if Result <> 0 then
-    FImages.Add(Key, Result);
+  FImages.Add(Key, Result);
 end;
 
 // ---------------------------------------------------------------------------

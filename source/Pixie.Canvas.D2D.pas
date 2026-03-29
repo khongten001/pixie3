@@ -1033,6 +1033,7 @@ var
   Data: AnsiString;
 begin
   Result := 0;
+  if not FileExists(Path) then Exit;
   try
     Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
   except

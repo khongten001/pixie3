@@ -93,6 +93,8 @@ begin
     {$ELSE}'unknown'
     {$ENDIF};
   ImgPath := ExtractFilePath(ParamStr(0)) + '..' + PathDelim + 'resources' + PathDelim;
+  if not DirectoryExists(ImgPath) then
+    ImgPath := ExtractFilePath(ParamStr(0));
   SvgPath := ImgPath;
   Randomize;
   FCardCount := 0;
@@ -205,11 +207,11 @@ begin
       '<img src="' + ImgPath + 'opera.png" style="vertical-align: middle;"> Opera ' +
       '<img src="' + ImgPath + 'steam.png" style="vertical-align: middle;"> Steam' +
     '</p>' +
-    '<p>SVG images (Direct2D native): ' +
+    '<p>SVG images: ' +
       '<img src="' + SvgPath + 'about.svg" width="48" height="48" style="vertical-align: middle;"> ' +
-      '<img src="' + SvgPath + 'copy_direct.svg" width="48" height="48" style="vertical-align: middle;"> ' +
+      '<img src="' + SvgPath + 'copy.svg" width="48" height="48" style="vertical-align: middle;"> ' +
       '<img src="' + SvgPath + 'export.svg" width="48" height="48" style="vertical-align: middle;"> ' +
-      '<img src="' + SvgPath + 'edit_image.svg" width="48" height="48" style="vertical-align: middle;">' +
+      '<img src="' + SvgPath + 'edit.svg" width="48" height="48" style="vertical-align: middle;">' +
     '</p>' +
 
     // ---- Stream-registered images ----

@@ -184,6 +184,16 @@ function StrToDom(const S: string): WideString; inline;
 begin Result := S; end;
 {$ENDIF}
 
+// Locale-independent float parse (Val uses '.' regardless of locale)
+function SvgStrToFloat(const S: string): Single;
+var
+  Code: Integer;
+begin
+  Val(S, Result, Code);
+  if Code <> 0 then
+    Result := 0;
+end;
+
 // ===========================================================================
 // DOCTYPE entity expansion
 // ===========================================================================
@@ -474,7 +484,7 @@ begin
       end;
       if NumStr = '' then Break;
 
-      Vals[ValCount] := StrToFloatDef(NumStr, 0);
+      Vals[ValCount] := SvgStrToFloat(NumStr);
       if (P <= Length(Trimmed)) and (Trimmed[P] = '%') then
       begin
         if ValCount < 3 then
@@ -730,7 +740,7 @@ var
 
       if (NumStr <> '') and (ArgCount <= High(Args)) then
       begin
-        Args[ArgCount] := StrToFloatDef(NumStr, 0);
+        Args[ArgCount] := SvgStrToFloat(NumStr);
         Inc(ArgCount);
       end;
     end;
@@ -1217,7 +1227,7 @@ begin
     begin
       if NumCount >= Length(Nums) then
         SetLength(Nums, Length(Nums) * 2);
-      Nums[NumCount] := StrToFloatDef(NumStr, 0);
+      Nums[NumCount] := SvgStrToFloat(NumStr);
       Inc(NumCount);
     end;
   end;
@@ -1314,7 +1324,7 @@ begin
         begin
           if ArgCount >= Length(ArgList) then
             SetLength(ArgList, Length(ArgList) * 2);
-          ArgList[ArgCount] := StrToFloatDef(NumStr, 0);
+          ArgList[ArgCount] := SvgStrToFloat(NumStr);
           Inc(ArgCount);
         end
         else
@@ -2018,10 +2028,10 @@ begin
         Inc(Idx);
       end;
 
-      FViewBoxX := StrToFloatDef(Parts[0], 0);
-      FViewBoxY := StrToFloatDef(Parts[1], 0);
-      FViewBoxW := StrToFloatDef(Parts[2], 0);
-      FViewBoxH := StrToFloatDef(Parts[3], 0);
+      FViewBoxX := SvgStrToFloat(Parts[0]);
+      FViewBoxY := SvgStrToFloat(Parts[1]);
+      FViewBoxW := SvgStrToFloat(Parts[2]);
+      FViewBoxH := SvgStrToFloat(Parts[3]);
     end;
 
     // Parse width/height, fall back to viewBox

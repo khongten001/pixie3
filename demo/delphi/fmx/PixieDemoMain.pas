@@ -58,6 +58,8 @@ var
   Stream: TFileStream;
 begin
   ImgPath := ExtractFilePath(ParamStr(0)) + '..\resources\';
+  if not DirectoryExists(ImgPath) then
+    ImgPath := ExtractFilePath(ParamStr(0));
   SvgPath := ImgPath;
   Randomize;
   FCardCount := 0;
@@ -175,6 +177,12 @@ begin
       '<img src="' + ImgPath + 'chrome.png" style="vertical-align: middle;"> Chrome (alpha) ' +
       '<img src="' + ImgPath + 'opera.png" style="vertical-align: middle;"> Opera ' +
       '<img src="' + ImgPath + 'steam.png" style="vertical-align: middle;"> Steam' +
+    '</p>' +
+    '<p>SVG images: ' +
+      '<img src="' + SvgPath + 'about.svg" width="48" height="48" style="vertical-align: middle;"> ' +
+      '<img src="' + SvgPath + 'copy.svg" width="48" height="48" style="vertical-align: middle;"> ' +
+      '<img src="' + SvgPath + 'export.svg" width="48" height="48" style="vertical-align: middle;"> ' +
+      '<img src="' + SvgPath + 'edit.svg" width="48" height="48" style="vertical-align: middle;">' +
     '</p>' +
 
     // ---- Stream-registered images ----
