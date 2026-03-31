@@ -69,31 +69,26 @@ begin
   Result := Name;
 end;
 
-// Maps legacy font names to their modern equivalents. Browsers
-// perform this substitution automatically (e.g. GDI uses the
-// Windows font substitution registry), but DirectWrite, CoreText,
-// and Pango require exact family names.
+// Maps legacy bitmap font names to their TrueType equivalents on
+// Windows. DirectWrite does not support bitmap .fon fonts, so names
+// like "Courier" and "MS Sans Serif" are invisible to it. Both
+// Chromium (AlternateFamilyName) and Firefox (sDirectWriteSubs)
+// carry the same mappings. macOS and Linux need no aliases: CoreText
+// finds the real fonts, and fontconfig handles substitution via
+// 30-metric-aliases.conf.
 function MapLegacyAlias(const Name: string): string;
+{$IFDEF MSWINDOWS}
 var
   Lower: string;
+{$ENDIF}
 begin
-  Lower := LowerCase(Name);
   {$IFDEF MSWINDOWS}
+  Lower := LowerCase(Name);
   if Lower = 'courier' then Exit('Courier New');
   if Lower = 'helvetica' then Exit('Arial');
   if Lower = 'times' then Exit('Times New Roman');
-  {$ENDIF}
-  {$IFDEF DARWIN}
-  if Lower = 'courier' then Exit('Courier New');
-  if Lower = 'courier new' then Exit('Courier');
-  {$ENDIF}
-  {$IF DEFINED(LINUX)}
-  if Lower = 'courier' then Exit('DejaVu Sans Mono');
-  if Lower = 'courier new' then Exit('DejaVu Sans Mono');
-  if Lower = 'helvetica' then Exit('DejaVu Sans');
-  if Lower = 'arial' then Exit('DejaVu Sans');
-  if Lower = 'times' then Exit('DejaVu Serif');
-  if Lower = 'times new roman' then Exit('DejaVu Serif');
+  if Lower = 'ms sans serif' then Exit('Microsoft Sans Serif');
+  if Lower = 'ms serif' then Exit('Times New Roman');
   {$ENDIF}
   Result := '';
 end;
