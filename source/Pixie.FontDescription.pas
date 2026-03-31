@@ -69,6 +69,35 @@ begin
   Result := Name;
 end;
 
+// Maps legacy font names to their modern equivalents. Browsers
+// perform this substitution automatically (e.g. GDI uses the
+// Windows font substitution registry), but DirectWrite, CoreText,
+// and Pango require exact family names.
+function MapLegacyAlias(const Name: string): string;
+var
+  Lower: string;
+begin
+  Lower := LowerCase(Name);
+  {$IFDEF MSWINDOWS}
+  if Lower = 'courier' then Exit('Courier New');
+  if Lower = 'helvetica' then Exit('Arial');
+  if Lower = 'times' then Exit('Times New Roman');
+  {$ENDIF}
+  {$IFDEF DARWIN}
+  if Lower = 'courier' then Exit('Courier New');
+  if Lower = 'courier new' then Exit('Courier');
+  {$ENDIF}
+  {$IF DEFINED(LINUX)}
+  if Lower = 'courier' then Exit('DejaVu Sans Mono');
+  if Lower = 'courier new' then Exit('DejaVu Sans Mono');
+  if Lower = 'helvetica' then Exit('DejaVu Sans');
+  if Lower = 'arial' then Exit('DejaVu Sans');
+  if Lower = 'times' then Exit('DejaVu Serif');
+  if Lower = 'times new roman' then Exit('DejaVu Serif');
+  {$ENDIF}
+  Result := '';
+end;
+
 function PixieResolveFontFamily(const CssFamily: string;
   CheckFont: TPixieFontCheckFunc): string;
 var
@@ -103,6 +132,13 @@ begin
     Mapped := MapGenericFamily(Parts[I]);
     if (Mapped <> '') and CheckFont(Mapped) then
       Exit(Mapped);
+    // Try legacy alias (e.g. Courier -> Courier New)
+    if Mapped <> '' then
+    begin
+      Part := MapLegacyAlias(Mapped);
+      if (Part <> '') and CheckFont(Part) then
+        Exit(Part);
+    end;
   end;
 
   // Platform default fallback
