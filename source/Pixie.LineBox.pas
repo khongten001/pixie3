@@ -676,7 +676,7 @@ begin
   begin
     if FItems[I].GetItemType = lbiTextPart then
     begin
-      if (not FItems[I].GetEl.GetSkip) or FItems[I].GetEl.SrcEl.IsBreak then
+      if (not FItems[I].GetEl.GetSkip) and (not FItems[I].GetEl.SrcEl.IsBreak) then
         Exit(False);
     end;
   end;

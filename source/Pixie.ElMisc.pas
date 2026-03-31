@@ -103,6 +103,7 @@ type
   public
     constructor Create(ADoc: TObject);
     function AppendChild(El: TPixieElement): Boolean; override;
+    function CreateRenderItem(ParentRi: Pointer): Pointer; override;
     function GetTag: Integer; override;
     function GetTagName: string; override;
     procedure ParseAttributes; override;
@@ -428,6 +429,11 @@ begin
   El.GetText(Txt);
   FText := FText + Txt;
   Result := True;
+end;
+
+function TPixieElScript.CreateRenderItem(ParentRi: Pointer): Pointer;
+begin
+  Result := nil;
 end;
 
 function TPixieElScript.GetTag: Integer;
