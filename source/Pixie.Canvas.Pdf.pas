@@ -1098,7 +1098,8 @@ begin
   AvgAlpha := 0;
   for I := 0 to Gradient.ColorPoints.Count - 1 do
     AvgAlpha := AvgAlpha + Gradient.ColorPoints[I].Color.Alpha;
-  AvgAlpha := AvgAlpha / Gradient.ColorPoints.Count / 255.0;
+  if Gradient.ColorPoints.Count > 0 then
+    AvgAlpha := AvgAlpha / Gradient.ColorPoints.Count / 255.0;
 
   EmitLn('q');
 
@@ -1181,7 +1182,8 @@ begin
   AvgAlpha := 0;
   for I := 0 to Gradient.ColorPoints.Count - 1 do
     AvgAlpha := AvgAlpha + Gradient.ColorPoints[I].Color.Alpha;
-  AvgAlpha := AvgAlpha / Gradient.ColorPoints.Count / 255.0;
+  if Gradient.ColorPoints.Count > 0 then
+    AvgAlpha := AvgAlpha / Gradient.ColorPoints.Count / 255.0;
 
   EmitLn('q');
 

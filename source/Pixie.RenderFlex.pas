@@ -355,7 +355,8 @@ begin
   end;
 
   // Distribute free cross size for stretch
-  if (Css.FlexAlignContent = facStretch) and (FreeCrossSize > 0) then
+  if (Css.FlexAlignContent = facStretch) and (FreeCrossSize > 0) and
+     (FLines.Count > 0) then
   begin
     Add := FreeCrossSize / FLines.Count;
     if Add > 0 then
