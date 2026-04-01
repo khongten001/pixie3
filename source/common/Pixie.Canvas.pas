@@ -56,7 +56,7 @@ type
     // Rounded-rect path fill
     procedure FillRoundedRect(X, Y, W, H: Single;
       const Radius: TPixieBorderRadiuses;
-      Color: TPixieWebColor); virtual; abstract;
+      Color: TPixieWebColor); overload; virtual; abstract;
 
     // Linear gradient fill
     procedure FillLinearGradient(X, Y, W, H: Single;
@@ -87,6 +87,23 @@ type
       Handle: TPixieFontHandle): TPixiePixel;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); virtual; abstract;
+
+    // ---- Convenience methods (non-abstract, call through to abstract) ----
+
+    // Rounded rect with uniform radius
+    procedure FillRoundedRect(X, Y, W, H, Radius: Single;
+      Color: TPixieWebColor); overload;
+
+    // Text at a position (no clip rect)
+    procedure DrawSimpleText(const Text: string; Handle: TPixieFontHandle;
+      Color: TPixieWebColor; X, Y: Single);
+
+    // Text aligned within a rectangle
+    procedure TextRect(const Text: string; Handle: TPixieFontHandle;
+      const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; X, Y, W, H: Single;
+      HAlign: TPixieTextAlign = taCenter;
+      VAlign: TPixieVerticalAlign = vaMiddle);
 
     // Unit conversion
     function PtToPx(Pt: Single): TPixiePixel; virtual; abstract;
@@ -202,6 +219,54 @@ begin
     Result := DoMeasureText(Text, Handle);
     FontMap.Add(Text, Result);
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// Convenience methods
+// ---------------------------------------------------------------------------
+
+procedure TPixieCanvas.FillRoundedRect(X, Y, W, H, Radius: Single;
+  Color: TPixieWebColor);
+var
+  Rad: TPixieBorderRadiuses;
+begin
+  Rad.TopLeftX := Radius;     Rad.TopLeftY := Radius;
+  Rad.TopRightX := Radius;    Rad.TopRightY := Radius;
+  Rad.BottomRightX := Radius; Rad.BottomRightY := Radius;
+  Rad.BottomLeftX := Radius;  Rad.BottomLeftY := Radius;
+  FillRoundedRect(X, Y, W, H, Rad, Color);
+end;
+
+procedure TPixieCanvas.DrawSimpleText(const Text: string;
+  Handle: TPixieFontHandle; Color: TPixieWebColor; X, Y: Single);
+begin
+  DrawText(Text, Handle, Color, X, Y, 1e6, 1e6);
+end;
+
+procedure TPixieCanvas.TextRect(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; X, Y, W, H: Single;
+  HAlign: TPixieTextAlign; VAlign: TPixieVerticalAlign);
+var
+  TextW, TX, TY: Single;
+begin
+  TextW := MeasureText(Text, Handle);
+
+  case HAlign of
+    taCenter: TX := X + (W - TextW) * 0.5;
+    taRight:  TX := X + W - TextW;
+  else
+    TX := X;
+  end;
+
+  case VAlign of
+    vaMiddle: TY := Y + (H - Metrics.Height) * 0.5;
+    vaBottom: TY := Y + H - Metrics.Height;
+  else
+    TY := Y;
+  end;
+
+  DrawText(Text, Handle, Color, TX, TY, X + W, Y + H);
 end;
 
 procedure TPixieCanvas.PushOpacity(AOpacity: Single);

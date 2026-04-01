@@ -158,5 +158,56 @@ object MainForm: TMainForm
         Align = alClient
       end
     end
+    object TabPaintBox: TTabSheet
+      Caption = 'Paint Box'
+      object PaintBoxToolbar: TPanel
+        Left = 0
+        Height = 36
+        Top = 0
+        Width = 792
+        Align = alTop
+        BevelOuter = bvNone
+        ClientHeight = 36
+        ClientWidth = 792
+        TabOrder = 0
+        object LblZoom: TLabel
+          Left = 4
+          Height = 15
+          Top = 10
+          Width = 40
+          Caption = 'Zoom:'
+        end
+        object ZoomSlider: TTrackBar
+          Left = 50
+          Height = 28
+          Top = 4
+          Width = 200
+          Frequency = 5
+          LineSize = 5
+          Max = 300
+          Min = 100
+          OnChange = ZoomSliderChange
+          PageSize = 5
+          Position = 100
+          TabOrder = 0
+        end
+        object LblZoomPct: TLabel
+          Left = 256
+          Height = 15
+          Top = 10
+          Width = 40
+          Caption = '100%'
+        end
+      end
+      object PixiePaintBox: TPixiePaintBox
+        Left = 0
+        Height = 513
+        Top = 36
+        Width = 792
+        Align = alClient
+        Color = clWhite
+        OnPaint = PaintBoxPaint
+      end
+    end
   end
 end

@@ -6,7 +6,7 @@
     <CompilerOptions>
       <Version Value="11"/>
       <SearchPaths>
-        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/svgview"/>
+        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/tagbar;../source/paintbox;../source/svgview"/>
         <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
       </SearchPaths>
     </CompilerOptions>
@@ -292,6 +292,30 @@
       <Item>
         <Filename Value="../source/common/Pixie.CustomControl.pas"/>
         <UnitName Value="Pixie.CustomControl"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.Base.pas"/>
+        <UnitName Value="Pixie.TagBar.Base"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.Colors.pas"/>
+        <UnitName Value="Pixie.TagBar.Colors"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.Render.pas"/>
+        <UnitName Value="Pixie.TagBar.Render"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.pas"/>
+        <UnitName Value="Pixie.TagBar"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/paintbox/Pixie.DrawingCanvas.pas"/>
+        <UnitName Value="Pixie.DrawingCanvas"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/paintbox/Pixie.PaintBox.pas"/>
+        <UnitName Value="Pixie.PaintBox"/>
       </Item>
       <Item>
         <Filename Value="../source/svgview/Pixie.SvgView.pas"/>

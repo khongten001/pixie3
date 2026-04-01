@@ -7,10 +7,11 @@ uses
   Vcl.Forms, Vcl.Controls, Vcl.Graphics, Vcl.Dialogs, Vcl.ComCtrls,
   Vcl.StdCtrls, Vcl.ExtCtrls,
   System.Net.HttpClient,
+  System.Math,
   Pixie.HtmlView.VCL, Pixie.NativeContainer, Pixie.Url,
   Pixie.Element, Pixie.Document, Pixie.PdfExport,
-  Pixie.SvgView.VCL,
-  PixieDemoContent;
+  Pixie.SvgView.VCL, Pixie.PaintBox.VCL, Pixie.DrawingCanvas,
+  PixieDemoContent, PixieDemoPaintBox;
 
 type
   TMainForm = class(TForm)
@@ -30,6 +31,13 @@ type
     CbAlignment: TComboBox;
     PixieHtmlView: TPixieHtmlView;
     PixieSvgView: TPixieSvgView;
+    TabPaintBox: TTabSheet;
+    PaintBoxToolbar: TPanel;
+    LblZoom: TLabel;
+    ZoomSlider: TTrackBar;
+    LblZoomPct: TLabel;
+    PixiePaintBox: TPixiePaintBox;
+    FPaintBoxScale: Single;
     FCardCount: Integer;
     FParseStart: Int64;
     FPaintStart: Int64;
@@ -49,6 +57,8 @@ type
     procedure ViewAfterParse(Sender: TObject);
     procedure ViewBeforePaint(Sender: TObject);
     procedure ViewAfterPaint(Sender: TObject);
+    procedure PaintBoxPaint(Sender: TObject; ACanvas: TPixieDrawingCanvas);
+    procedure ZoomSliderChange(Sender: TObject);
     procedure NavigateToUrl(const Url: string);
     function Scale(Value: Integer): Integer;
   end;
@@ -90,6 +100,7 @@ begin
   SvgPath := ImgPath;
   Randomize;
   FCardCount := 0;
+  FPaintBoxScale := 1.0;
 
   // Page control
   PageControl := TPageControl.Create(Self);
@@ -193,6 +204,48 @@ begin
   PixieSvgView.Align := alClient;
   PixieSvgView.Lines.Text := PixieDemoSampleSvg;
 
+  // --- Paint Box tab ---
+  TabPaintBox := TTabSheet.Create(PageControl);
+  TabPaintBox.PageControl := PageControl;
+  TabPaintBox.Caption := 'Paint Box';
+
+  PaintBoxToolbar := TPanel.Create(TabPaintBox);
+  PaintBoxToolbar.Parent := TabPaintBox;
+  PaintBoxToolbar.Align := alTop;
+  PaintBoxToolbar.Height := Scale(36);
+  PaintBoxToolbar.BevelOuter := bvNone;
+
+  LblZoom := TLabel.Create(PaintBoxToolbar);
+  LblZoom.Parent := PaintBoxToolbar;
+  LblZoom.Left := Scale(8);
+  LblZoom.Top := Scale(10);
+  LblZoom.Caption := 'Zoom:';
+
+  ZoomSlider := TTrackBar.Create(PaintBoxToolbar);
+  ZoomSlider.Parent := PaintBoxToolbar;
+  ZoomSlider.Left := Scale(50);
+  ZoomSlider.Top := Scale(4);
+  ZoomSlider.Width := Scale(200);
+  ZoomSlider.Min := 100;
+  ZoomSlider.Max := 300;
+  ZoomSlider.Frequency := 5;
+  ZoomSlider.PageSize := 5;
+  ZoomSlider.LineSize := 5;
+  ZoomSlider.Position := 100;
+  ZoomSlider.OnChange := ZoomSliderChange;
+
+  LblZoomPct := TLabel.Create(PaintBoxToolbar);
+  LblZoomPct.Parent := PaintBoxToolbar;
+  LblZoomPct.Left := Scale(260);
+  LblZoomPct.Top := Scale(10);
+  LblZoomPct.Caption := '100%';
+
+  PixiePaintBox := TPixiePaintBox.Create(Self);
+  PixiePaintBox.Parent := TabPaintBox;
+  PixiePaintBox.Align := alClient;
+  PixiePaintBox.Color := clWhite;
+  PixiePaintBox.OnPaint := PaintBoxPaint;
+
   // Register images from streams
   if FileExists(ImgPath + 'firefox.png') then
   begin
@@ -216,6 +269,25 @@ begin
   end;
 
   PixieHtmlView.LoadFromString(PixieDemoHtmlContent(ImgPath, SvgPath), ImgPath);
+end;
+
+// ---------------------------------------------------------------------------
+// PaintBox
+// ---------------------------------------------------------------------------
+
+procedure TMainForm.PaintBoxPaint(Sender: TObject; ACanvas: TPixieDrawingCanvas);
+begin
+  ACanvas.Canvas.ConcatMatrix(FPaintBoxScale, 0, 0, FPaintBoxScale, 0, 0);
+  PixieDemoDraw(ACanvas,
+    PixiePaintBox.ClientWidth / FPaintBoxScale,
+    PixiePaintBox.ClientHeight / FPaintBoxScale);
+end;
+
+procedure TMainForm.ZoomSliderChange(Sender: TObject);
+begin
+  FPaintBoxScale := ZoomSlider.Position / 100;
+  LblZoomPct.Caption := IntToStr(ZoomSlider.Position) + '%';
+  PixiePaintBox.Invalidate;
 end;
 
 // ---------------------------------------------------------------------------

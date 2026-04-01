@@ -5,14 +5,14 @@ unit PixieDemoMain;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ComCtrls, StdCtrls,
-  ExtCtrls, Buttons,
+  Classes, SysUtils, Math, Forms, Controls, Graphics, Dialogs, ComCtrls,
+  StdCtrls, ExtCtrls, Buttons,
   {$ifdef windows}Windows,{$endif}
   fphttpclient, opensslsockets,
   Pixie.HtmlView, Pixie.NativeContainer, Pixie.Url,
   Pixie.Element, Pixie.Document, Pixie.PdfExport,
-  Pixie.SvgView,
-  PixieDemoContent;
+  Pixie.SvgView, Pixie.PaintBox, Pixie.DrawingCanvas,
+  PixieDemoContent, PixieDemoPaintBox;
 
 type
   TMainForm = class(TForm)
@@ -25,6 +25,12 @@ type
     PageControl: TPageControl;
     TabHtmlView: TTabSheet;
     PixieHtmlView: TPixieHtmlView;
+    TabPaintBox: TTabSheet;
+    PaintBoxToolbar: TPanel;
+    LblZoom: TLabel;
+    ZoomSlider: TTrackBar;
+    LblZoomPct: TLabel;
+    PixiePaintBox: TPixiePaintBox;
     TabSvgView: TTabSheet;
     SvgToolbar: TPanel;
     BtnLoadSvg: TSpeedButton;
@@ -43,10 +49,13 @@ type
     procedure ViewAfterParse(Sender: TObject);
     procedure ViewBeforePaint(Sender: TObject);
     procedure ViewAfterPaint(Sender: TObject);
+    procedure PaintBoxPaint(Sender: TObject; ACanvas: TPixieDrawingCanvas);
+    procedure ZoomSliderChange(Sender: TObject);
     procedure BtnLoadSvgClick(Sender: TObject);
     procedure CbAlignmentChange(Sender: TObject);
   private
     FCardCount: Integer;
+    FPaintBoxScale: Single;
     FParseStart: Int64;
     FPaintStart: Int64;
     FFetchAccum: Int64;
@@ -109,6 +118,7 @@ begin
   SvgPath := ImgPath;
   Randomize;
   FCardCount := 0;
+  FPaintBoxScale := 1.0;
 
   // Register images from streams for #name syntax
   if FileExists(ImgPath + 'firefox.png') then
@@ -373,6 +383,25 @@ end;
 procedure TMainForm.ViewAfterPaint(Sender: TObject);
 begin
   StatusBar.Panels[1].Text := Format('Paint: %.1f ms', [StopwatchElapsedMs(FPaintStart)]);
+end;
+
+// ---------------------------------------------------------------------------
+// PaintBox tab
+// ---------------------------------------------------------------------------
+
+procedure TMainForm.PaintBoxPaint(Sender: TObject; ACanvas: TPixieDrawingCanvas);
+begin
+  ACanvas.Canvas.ConcatMatrix(FPaintBoxScale, 0, 0, FPaintBoxScale, 0, 0);
+  PixieDemoDraw(ACanvas,
+    PixiePaintBox.ClientWidth / FPaintBoxScale,
+    PixiePaintBox.ClientHeight / FPaintBoxScale);
+end;
+
+procedure TMainForm.ZoomSliderChange(Sender: TObject);
+begin
+  FPaintBoxScale := ZoomSlider.Position / 100;
+  LblZoomPct.Caption := IntToStr(ZoomSlider.Position) + '%';
+  PixiePaintBox.Invalidate;
 end;
 
 // ---------------------------------------------------------------------------

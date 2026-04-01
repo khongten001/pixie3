@@ -101,6 +101,8 @@ contains
   Pixie.Canvas.Pdf in '..\source\htmlview\Pixie.Canvas.Pdf.pas',
   Pixie.PdfExport in '..\source\htmlview\Pixie.PdfExport.pas',
   Pixie.SvgView.VCL in '..\source\svgview\Pixie.SvgView.VCL.pas',
+  Pixie.DrawingCanvas in '..\source\paintbox\Pixie.DrawingCanvas.pas',
+  Pixie.PaintBox.VCL in '..\source\paintbox\Pixie.PaintBox.VCL.pas',
   Pixie.Register.Delphi.VCL in 'Pixie.Register.Delphi.VCL.pas';
 
 end.

@@ -62,7 +62,7 @@
         <SanitizedProjectName>PixieDemoVCL</SanitizedProjectName>
         <DCC_DcuOutput>$(TEMP)\pixie-units</DCC_DcuOutput>
         <DCC_ExeOutput>..\..\bin</DCC_ExeOutput>
-        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\svgview;..\..\common;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\svgview;..\..\..\source\paintbox;..\..\common;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
