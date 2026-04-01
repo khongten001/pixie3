@@ -2,7 +2,7 @@ unit Pixie.CustomControl;
 
 // TPixieCustomControl — interactive base for Pixie components (Lazarus).
 // Adds focus, keyboard scaffolding, cursor management, and DoMouseLeave.
-// Subclasses: TPixieHtmlView, TPixieTagBar.
+// Subclasses: TPixieHtmlView.
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 

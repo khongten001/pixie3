@@ -46,6 +46,9 @@ desktop.ini
 # Tests (internal)
 tests/
 
+# TagBar (not yet public)
+source/tagbar/
+
 # Claude Code
 CLAUDE.md
 .claude/
