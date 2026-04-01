@@ -59,6 +59,7 @@ type
     procedure DoFillAndStroke(const State: TPixieSvgState); override;
     procedure DoBeginOpacity(Opacity: Single); override;
     procedure DoEndOpacity; override;
+    procedure DoClipPath; override;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
   public
@@ -401,6 +402,11 @@ begin
   FCanvas.PopOpacity;
 end;
 
+procedure TPixieSvgCanvasRenderer.DoClipPath;
+begin
+  FCanvas.ClipPath;
+end;
+
 // ===========================================================================
 // Text
 // ===========================================================================
@@ -456,6 +462,8 @@ procedure TPixieSvgCanvasRenderer.RenderToRect(
   DstX, DstY, DstW, DstH: Single);
 var
   Sx, Sy, Scale, OffX, OffY: Single;
+  ClipPos: TPixiePosition;
+  ClipRadius: TPixieBorderRadiuses;
 begin
   FCanvas.SaveState;
   try
@@ -474,6 +482,13 @@ begin
       if (Abs(OffX) > 0.01) or (Abs(OffY) > 0.01) then
         FCanvas.ConcatMatrix(1, 0, 0, 1, OffX, OffY);
       FCanvas.ConcatMatrix(Scale, 0, 0, Scale, 0, 0);
+
+      // Clip to viewBox (SVG default overflow=hidden).
+      // Use axis-aligned rect clip to avoid D2D PushLayer affecting text.
+      ClipPos := TPixiePosition.Create(
+        FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH);
+      ClipRadius.Init;
+      FCanvas.SetClipRect(ClipPos, ClipRadius);
     end;
 
     // Apply viewBox offset

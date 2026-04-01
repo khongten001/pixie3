@@ -85,6 +85,8 @@ type
 
   { TPixieSvgRendererBase - abstract SVG renderer }
 
+  TPixieSvgIdMap = TDictionary<string, Pointer>;
+
   TPixieSvgRendererBase = class
   protected
     FDoc: TObject;
@@ -92,6 +94,8 @@ type
     FInitState: TPixieSvgState;
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
     FGradients: TPixieSvgGradientMap;
+    FIdMap: TPixieSvgIdMap;
+    FUseDepth: Integer;
   protected
     // Abstract drawing primitives — subclasses override these
     procedure DoMoveTo(X, Y: Single); virtual; abstract;
@@ -104,6 +108,7 @@ type
     procedure DoFillAndStroke(const State: TPixieSvgState); virtual; abstract;
     procedure DoBeginOpacity(Opacity: Single); virtual; abstract;
     procedure DoEndOpacity; virtual; abstract;
+    procedure DoClipPath; virtual; abstract;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); virtual;
 
@@ -130,6 +135,8 @@ type
     procedure ApplyNodeTransform(Node: Pointer);
     procedure ApplyOpacity(const State: TPixieSvgState;
       out NeedRestore: Boolean);
+    procedure EmitShapeGeometry(Node: Pointer);
+    procedure ApplyClipPath(Node: Pointer);
 
     // Gradient support
     procedure CollectDefs(Node: Pointer);
@@ -137,8 +144,13 @@ type
     function ResolveGradientStops(const Id: string): TPixieSvgGradient;
     class function ExtractUrlId(const S: string): string; static;
 
+    // ID map for <use> element lookup
+    procedure BuildIdMap(Node: Pointer);
+
     // Shape renderers (call abstract drawing primitives)
+    procedure RenderElement(Node: Pointer; const State: TPixieSvgState);
     procedure RenderGroup(Node: Pointer; const State: TPixieSvgState);
+    procedure RenderUse(Node: Pointer; const State: TPixieSvgState);
     procedure RenderRect(Node: Pointer; const State: TPixieSvgState);
     procedure RenderCircle(Node: Pointer; const State: TPixieSvgState);
     procedure RenderEllipse(Node: Pointer; const State: TPixieSvgState);
@@ -165,7 +177,7 @@ type
 implementation
 
 uses
-  Math, {$IFDEF FPC}DOM, XMLRead,{$ELSE}Pixie.SimpleXml,{$ENDIF} Pixie.Utf8;
+  Math, Pixie.SimpleXml, Pixie.Utf8;
 
 const
   Kappa: Single = 0.5522847498;
@@ -344,6 +356,7 @@ end;
 procedure TPixieSvgRendererBase.ClearDocument;
 begin
   FreeAndNil(FGradients);
+  FreeAndNil(FIdMap);
   if FDoc <> nil then
   begin
     FDoc.Free;
@@ -841,6 +854,106 @@ begin
   NeedRestore := True;
 end;
 
+procedure TPixieSvgRendererBase.EmitShapeGeometry(Node: Pointer);
+var
+  TagName: string;
+  X, Y, W, H, CX, CY, R, RX, RY: Single;
+  D: string;
+  Cmds: TPixieSvgPathCmdList;
+begin
+  TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
+
+  if TagName = 'path' then
+  begin
+    D := GetAttr(Node, 'd');
+    if D <> '' then
+    begin
+      Cmds := ParsePathData(D);
+      try
+        EmitPathCommands(Cmds);
+      finally
+        Cmds.Free;
+      end;
+    end;
+  end
+  else if TagName = 'rect' then
+  begin
+    X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
+    Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
+    W := ParseSvgFloat(GetAttr(Node, 'width', '0'));
+    H := ParseSvgFloat(GetAttr(Node, 'height', '0'));
+    if (W > 0) and (H > 0) then
+    begin
+      DoMoveTo(X, Y);
+      DoLineTo(X + W, Y);
+      DoLineTo(X + W, Y + H);
+      DoLineTo(X, Y + H);
+      DoClosePath;
+    end;
+  end
+  else if TagName = 'circle' then
+  begin
+    CX := ParseSvgFloat(GetAttr(Node, 'cx', '0'));
+    CY := ParseSvgFloat(GetAttr(Node, 'cy', '0'));
+    R := ParseSvgFloat(GetAttr(Node, 'r', '0'));
+    if R > 0 then
+      EmitBezierEllipse(CX, CY, R, R);
+  end
+  else if TagName = 'ellipse' then
+  begin
+    CX := ParseSvgFloat(GetAttr(Node, 'cx', '0'));
+    CY := ParseSvgFloat(GetAttr(Node, 'cy', '0'));
+    RX := ParseSvgFloat(GetAttr(Node, 'rx', '0'));
+    RY := ParseSvgFloat(GetAttr(Node, 'ry', '0'));
+    if (RX > 0) and (RY > 0) then
+      EmitBezierEllipse(CX, CY, RX, RY);
+  end
+  else if TagName = 'polygon' then
+  begin
+    // Reuse polyline parsing — emit points and close
+    D := GetAttr(Node, 'points');
+    if D <> '' then
+    begin
+      // Parse points as path M...L...Z
+      D := 'M' + D + 'Z';
+      Cmds := ParsePathData(D);
+      try
+        EmitPathCommands(Cmds);
+      finally
+        Cmds.Free;
+      end;
+    end;
+  end;
+end;
+
+procedure TPixieSvgRendererBase.ApplyClipPath(Node: Pointer);
+var
+  ClipStr, ClipId: string;
+  ClipEl: Pointer;
+  Child: TDOMNode;
+begin
+  if FIdMap = nil then Exit;
+
+  ClipStr := GetAttr(Node, 'clip-path');
+  if ClipStr = '' then Exit;
+
+  ClipId := ExtractUrlId(ClipStr);
+  if ClipId = '' then Exit;
+
+  if not FIdMap.TryGetValue(ClipId, ClipEl) then Exit;
+
+  // Emit geometry of all children in the <clipPath> element
+  Child := TDOMNode(ClipEl).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+      EmitShapeGeometry(Child);
+    Child := Child.NextSibling;
+  end;
+
+  DoClipPath;
+end;
+
 procedure TPixieSvgRendererBase.EmitBezierEllipse(CX, CY, RX, RY: Single);
 var
   KX, KY: Single;
@@ -900,6 +1013,32 @@ begin
       else if TagName = 'radialgradient' then
         ParseGradient(Child, True);
     end;
+    Child := Child.NextSibling;
+  end;
+end;
+
+procedure TPixieSvgRendererBase.BuildIdMap(Node: Pointer);
+var
+  Child: TDOMNode;
+  El: TDOMElement;
+  IdStr: string;
+begin
+  if FIdMap = nil then
+    FIdMap := TPixieSvgIdMap.Create;
+
+  if TDOMNode(Node).NodeType = ELEMENT_NODE then
+  begin
+    El := TDOMElement(Node);
+    IdStr := DomToStr(El.GetAttribute('id'));
+    if IdStr <> '' then
+      FIdMap.AddOrSetValue(IdStr, Node);
+  end;
+
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+      BuildIdMap(Child);
     Child := Child.NextSibling;
   end;
 end;
@@ -1071,6 +1210,7 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   if (RX > 0) or (RY > 0) then
@@ -1130,6 +1270,7 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   EmitBezierEllipse(CX, CY, R, R);
@@ -1153,6 +1294,7 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   EmitBezierEllipse(CX, CY, RX, RY);
@@ -1176,6 +1318,7 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   DoMoveTo(X1, Y1);
@@ -1236,6 +1379,7 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   DoMoveTo(Nums[0], Nums[1]);
@@ -1828,6 +1972,7 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   Cmds := ParsePathData(D);
@@ -1872,10 +2017,112 @@ begin
 
   DoSaveState;
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
   DoDrawText(TextContent, X, Y, State);
   if NeedRestore then DoEndOpacity;
+  DoRestoreState;
+end;
+
+// ===========================================================================
+// Element rendering (single-node dispatch)
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.RenderElement(Node: Pointer;
+  const State: TPixieSvgState);
+var
+  TagName: string;
+  IsGroup: Boolean;
+begin
+  TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
+
+  IsGroup := (TagName = 'g') or (TagName = 'svg') or (TagName = 'symbol');
+
+  if IsGroup then
+  begin
+    DoSaveState;
+    ApplyNodeTransform(Node);
+    ApplyClipPath(Node);
+    RenderGroup(Node, State);
+    DoRestoreState;
+  end
+  else if TagName = 'rect' then
+    RenderRect(Node, State)
+  else if TagName = 'circle' then
+    RenderCircle(Node, State)
+  else if TagName = 'ellipse' then
+    RenderEllipse(Node, State)
+  else if TagName = 'line' then
+    RenderLine(Node, State)
+  else if TagName = 'polyline' then
+    RenderPolyline(Node, State, False)
+  else if TagName = 'polygon' then
+    RenderPolyline(Node, State, True)
+  else if TagName = 'path' then
+    RenderPath(Node, State)
+  else if TagName = 'text' then
+    RenderText(Node, State)
+  else if TagName = 'use' then
+    RenderUse(Node, State)
+  else if TagName = 'defs' then
+    CollectDefs(Node)
+  else if TagName = 'lineargradient' then
+    ParseGradient(Node, False)
+  else if TagName = 'radialgradient' then
+    ParseGradient(Node, True);
+end;
+
+// ===========================================================================
+// <use> element rendering
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.RenderUse(Node: Pointer;
+  const State: TPixieSvgState);
+var
+  HrefStr, TargetId: string;
+  Target: Pointer;
+  X, Y: Single;
+  M: TPixieSvgMatrix;
+  TargetState: TPixieSvgState;
+begin
+  if FIdMap = nil then Exit;
+
+  // Recursion guard
+  if FUseDepth >= 10 then Exit;
+
+  // Resolve href
+  HrefStr := GetAttr(Node, 'xlink:href');
+  if HrefStr = '' then
+    HrefStr := GetAttr(Node, 'href');
+  if (HrefStr = '') or (HrefStr[1] <> '#') then Exit;
+
+  TargetId := Copy(HrefStr, 2, MaxInt);
+  if not FIdMap.TryGetValue(TargetId, Target) then Exit;
+
+  // Get x/y offset
+  X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
+  Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
+
+  DoSaveState;
+
+  // Apply <use> element's own transform, then x/y translation
+  ApplyNodeTransform(Node);
+  if (Abs(X) > 0.0001) or (Abs(Y) > 0.0001) then
+  begin
+    M := TPixieSvgMatrix.CreateTranslate(X, Y);
+    DoSetTransform(M);
+  end;
+
+  // Merge target's own style attributes on top of the <use> state
+  TargetState := InheritState(Target, State);
+  Inc(FUseDepth);
+  try
+    RenderElement(Target, TargetState);
+  finally
+    Dec(FUseDepth);
+  end;
+
   DoRestoreState;
 end;
 
@@ -1887,51 +2134,15 @@ procedure TPixieSvgRendererBase.RenderGroup(Node: Pointer;
   const State: TPixieSvgState);
 var
   Child: TDOMNode;
-  El: TDOMElement;
-  TagName: string;
   ChildState: TPixieSvgState;
-  IsGroup: Boolean;
 begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
     if Child.NodeType = ELEMENT_NODE then
     begin
-      El := TDOMElement(Child);
-      TagName := LowerCase(DomToStr(El.TagName));
       ChildState := InheritState(Child, State);
-
-      IsGroup := (TagName = 'g') or (TagName = 'svg');
-
-      if IsGroup then
-      begin
-        DoSaveState;
-        ApplyNodeTransform(Child);
-        RenderGroup(Child, ChildState);
-        DoRestoreState;
-      end
-      else if TagName = 'rect' then
-        RenderRect(Child, ChildState)
-      else if TagName = 'circle' then
-        RenderCircle(Child, ChildState)
-      else if TagName = 'ellipse' then
-        RenderEllipse(Child, ChildState)
-      else if TagName = 'line' then
-        RenderLine(Child, ChildState)
-      else if TagName = 'polyline' then
-        RenderPolyline(Child, ChildState, False)
-      else if TagName = 'polygon' then
-        RenderPolyline(Child, ChildState, True)
-      else if TagName = 'path' then
-        RenderPath(Child, ChildState)
-      else if TagName = 'text' then
-        RenderText(Child, ChildState)
-      else if TagName = 'defs' then
-        CollectDefs(Child)
-      else if TagName = 'lineargradient' then
-        ParseGradient(Child, False)
-      else if TagName = 'radialgradient' then
-        ParseGradient(Child, True);
+      RenderElement(Child, ChildState);
     end;
 
     Child := Child.NextSibling;
@@ -2087,6 +2298,10 @@ begin
     // Store document for RenderDocument
     FDoc := Doc;
     FSvgRoot := SvgRoot;
+
+    // Build ID map for <use> element resolution
+    BuildIdMap(SvgRoot);
+
     Result := True;
   finally
     MemStream.Free;

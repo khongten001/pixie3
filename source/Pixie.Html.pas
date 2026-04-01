@@ -29,6 +29,7 @@ function PixieIsSurrogate(C: Integer): Boolean; inline;
 function PixieToLower(C: Integer): Integer; inline;
 
 function PixieDecodeHtmlBytes(const Bytes: TBytes): string;
+function PixieIsLikelySvg(const Content: string): Boolean;
 
 implementation
 
@@ -705,6 +706,47 @@ begin
       Enc.Free;
     end;
   end;
+end;
+
+function PixieIsLikelySvg(const Content: string): Boolean;
+var
+  I, Len: Integer;
+begin
+  Result := False;
+  Len := Length(Content);
+  if Len < 4 then Exit;
+  I := 1;
+  while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+  if I + 3 > Len then Exit;
+  if Content[I] <> '<' then Exit;
+
+  // Direct <svg match
+  if ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
+     ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
+     ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  // Skip <?xml ...?> then optional <!DOCTYPE...>, then look for <svg
+  if (I + 4 > Len) or (Content[I + 1] <> '?') then Exit;
+  Inc(I, 2);
+  while (I < Len) and not ((Content[I] = '?') and (Content[I + 1] = '>')) do
+    Inc(I);
+  Inc(I, 2);
+  while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+  if (I + 8 <= Len) and (Content[I] = '<') and (Content[I + 1] = '!') then
+  begin
+    while (I <= Len) and (Content[I] <> '>') do Inc(I);
+    Inc(I);
+    while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+  end;
+  if (I + 3 <= Len) and (Content[I] = '<') and
+     ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
+     ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
+     ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
+    Result := True;
 end;
 
 end.

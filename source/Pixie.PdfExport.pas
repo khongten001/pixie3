@@ -10,7 +10,7 @@ interface
 
 uses
   SysUtils, Classes, Math, Generics.Collections,
-  Pixie.Types, Pixie.NativeContainer, Pixie.TrueType, Pixie.PdfWriter,
+  Pixie.Types, Pixie.Html, Pixie.NativeContainer, Pixie.TrueType, Pixie.PdfWriter,
   Pixie.Canvas.Pdf;
 
 type
@@ -63,7 +63,7 @@ implementation
 uses
   Pixie.Borders,
   Pixie.MasterCss, Pixie.Document,
-  Pixie.RenderItem,
+  Pixie.RenderItem, Pixie.SvgToPdf,
   // These units register their class variables in initialization sections;
   // without them block/inline layout and grid layout don't work.
   Pixie.RenderBlockContext, Pixie.RenderInlineContext, Pixie.RenderGrid;
@@ -259,8 +259,83 @@ var
   PageStart, PageClipH: Single;
   Bottoms, PageStarts: TPixiePageBreakList;
   RootRi: TPixieRenderItem;
+
+  procedure SaveSvgToStream;
+  var
+    SvgUtf8: UTF8String;
+    SvgFontCache: TPixieTrueTypeFontCache;
+    SvgWriter: TPixiePdfWriter;
+    SvgRenderer: TPixieSvgRenderer;
+    SvgW, SvgH, Scale, ImgW, ImgH, ImgX, ImgY: Single;
+    ObjId: Integer;
+    PageObj, ContentObj: TPixiePdfObject;
+    ContentBuf: AnsiString;
+    ContentBytes: TBytes;
+  begin
+    SvgUtf8 := UTF8Encode(Html);
+    SvgFontCache := TPixieTrueTypeFontCache.Create([doOwnsValues]);
+    SvgWriter := TPixiePdfWriter.Create;
+    try
+      SvgWriter.Title := FTitle;
+      SvgWriter.Author := FAuthor;
+
+      SvgRenderer := TPixieSvgRenderer.Create(SvgWriter, SvgFontCache);
+      try
+        ObjId := SvgRenderer.RenderToFormXObject(
+          @SvgUtf8[1], Length(SvgUtf8), SvgW, SvgH);
+      finally
+        SvgRenderer.Free;
+      end;
+
+      if (ObjId <> 0) and (SvgW > 0) and (SvgH > 0) then
+      begin
+        ContentWidthPt := PageW - FMargins.Left - FMargins.Right;
+        ContentHeightPt := PageH - FMargins.Top - FMargins.Bottom;
+
+        // Fit SVG into content area preserving aspect ratio
+        Scale := Min(ContentWidthPt / SvgW, ContentHeightPt / SvgH);
+        ImgW := SvgW * Scale;
+        ImgH := SvgH * Scale;
+        // Centre on page
+        ImgX := FMargins.Left + (ContentWidthPt - ImgW) / 2;
+        ImgY := FMargins.Top + (ContentHeightPt - ImgH) / 2;
+
+        PageObj := SvgWriter.AllocPage(PageW, PageH);
+
+        // Build content stream: draw Form XObject scaled to fit
+        ContentBuf :=
+          'q' + #10 +
+          PdfFloat(ImgW) + ' 0 0 ' + PdfFloat(ImgH) + ' ' +
+          PdfFloat(ImgX) + ' ' + PdfFloat(PageH - ImgY - ImgH) +
+          ' cm' + #10 +
+          '/Im1 Do' + #10 +
+          'Q' + #10;
+        SetLength(ContentBytes, Length(ContentBuf));
+        Move(ContentBuf[1], ContentBytes[0], Length(ContentBuf));
+
+        ContentObj := SvgWriter.AllocObject;
+        ContentObj.SetStream(ContentBytes, True);
+        PageObj.AddEntry('Contents', PdfRef(ContentObj.Id));
+        PageObj.AddEntry('Resources',
+          '<< /XObject << /Im1 ' + PdfRef(ObjId) + ' >> >>');
+      end;
+
+      SvgWriter.Write(Stream);
+    finally
+      SvgWriter.Free;
+      SvgFontCache.Free;
+    end;
+  end;
+
 begin
   GetPageDimensions(PageW, PageH);
+
+  // Standalone SVG — render directly via SVG-to-PDF
+  if PixieIsLikelySvg(Html) then
+  begin
+    SaveSvgToStream;
+    Exit;
+  end;
 
   ContentWidthPt := PageW - FMargins.Left - FMargins.Right;
   ContentHeightPt := PageH - FMargins.Top - FMargins.Bottom;

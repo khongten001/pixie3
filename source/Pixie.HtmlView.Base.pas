@@ -596,53 +596,6 @@ end;
 // Document management
 // ---------------------------------------------------------------------------
 
-function IsLikelySvg(const Content: string): Boolean;
-var
-  I, Len: Integer;
-begin
-  // Returns True if content starts with <svg or <?xml...followed by <svg
-  Result := False;
-  Len := Length(Content);
-  if Len < 4 then Exit;
-  I := 1;
-  // Skip whitespace
-  while (I <= Len) and (Content[I] <= ' ') do Inc(I);
-  if I + 3 > Len then Exit;
-  // Check for <svg or <?xml
-  if (Content[I] = '<') then
-  begin
-    if (I + 3 <= Len) and
-       ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
-       ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
-       ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
-    begin
-      Result := True;
-      Exit;
-    end;
-    // Skip <?xml ...?> and look for <svg
-    if (I + 4 <= Len) and (Content[I + 1] = '?') then
-    begin
-      Inc(I, 2);
-      while (I < Len) and not ((Content[I] = '?') and (Content[I + 1] = '>')) do
-        Inc(I);
-      Inc(I, 2);
-      // Skip whitespace after ?>
-      while (I <= Len) and (Content[I] <= ' ') do Inc(I);
-      // Skip <!DOCTYPE...>
-      if (I + 8 <= Len) and (Content[I] = '<') and (Content[I + 1] = '!') then
-      begin
-        while (I <= Len) and (Content[I] <> '>') do Inc(I);
-        Inc(I);
-        while (I <= Len) and (Content[I] <= ' ') do Inc(I);
-      end;
-      if (I + 3 <= Len) and (Content[I] = '<') and
-         ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
-         ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
-         ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
-        Result := True;
-    end;
-  end;
-end;
 
 procedure TPixieHtmlViewCore.RebuildDocument;
 var
@@ -669,7 +622,7 @@ begin
       raise EPixieBinaryContent.Create(SPixieBinaryContent);
 
     // Detect standalone SVG content
-    if IsLikelySvg(FLines.Text) then
+    if PixieIsLikelySvg(FLines.Text) then
     begin
       SvgData := UTF8Encode(FLines.Text);
       FSvgRenderer := TPixieSvgCanvasRenderer.Create(FCanvas);

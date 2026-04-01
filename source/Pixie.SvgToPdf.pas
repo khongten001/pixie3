@@ -69,6 +69,7 @@ type
     procedure DoFillAndStroke(const State: TPixieSvgState); override;
     procedure DoBeginOpacity(Opacity: Single); override;
     procedure DoEndOpacity; override;
+    procedure DoClipPath; override;
 
     // Override text rendering for PDF font embedding
     procedure RenderText(Node: Pointer;
@@ -85,7 +86,7 @@ type
 implementation
 
 uses
-  Math, {$IFDEF FPC}DOM, XMLRead,{$ELSE}Pixie.SimpleXml,{$ENDIF} Pixie.Utf8;
+  Math, Pixie.SimpleXml, Pixie.Utf8;
 
 {$IFDEF FPC}
 function DomToStr(const S: WideString): string; inline;
@@ -438,6 +439,12 @@ end;
 procedure TPixieSvgRenderer.DoEndOpacity;
 begin
   // No-op for PDF — restore handled by q/Q
+end;
+
+procedure TPixieSvgRenderer.DoClipPath;
+begin
+  // W n — clip to current path (non-zero winding), then clear path
+  EmitLn('W n');
 end;
 
 // ===========================================================================

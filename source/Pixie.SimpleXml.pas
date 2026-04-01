@@ -520,12 +520,21 @@ begin
   SetLength(Bytes, Stream.Size - Stream.Position);
   Stream.Read(Bytes[0], Length(Bytes));
 
-  // Detect UTF-8 BOM
+  // Detect and skip UTF-8 BOM
+  {$IFDEF FPC}
+  // FPC string = UTF-8 AnsiString — use raw bytes directly
+  if (Length(Bytes) >= 3) and
+     (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+    SetString(Text, PAnsiChar(@Bytes[3]), Length(Bytes) - 3)
+  else
+    SetString(Text, PAnsiChar(@Bytes[0]), Length(Bytes));
+  {$ELSE}
   if (Length(Bytes) >= 3) and
      (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
     Text := TEncoding.UTF8.GetString(Bytes, 3, Length(Bytes) - 3)
   else
     Text := TEncoding.UTF8.GetString(Bytes);
+  {$ENDIF}
 
   P.Data := Text;
   P.Pos := 1;
