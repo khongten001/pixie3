@@ -17,9 +17,11 @@
 
 ---
 
-Pixie is a drop-in visual component (`TPixieHtmlView`) for Lazarus and Delphi that renders HTML and CSS using platform-native graphics. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
+Pixie is a set of drop-in visual components for Lazarus and Delphi that render HTML, SVG, and custom graphics using platform-native APIs. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
 
-It ships with five rendering backends so the same code works across operating systems and frameworks:
+Three components are included: `TPixieHtmlView` (HTML/CSS rendering with interaction), `TPixieSvgView` (proportional SVG display), and `TPixiePaintBox` (drawing surface with a TCanvas-like API).
+
+All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration where available. Five rendering backends are included so the same code works across operating systems and frameworks:
 
 | Platform | 2D Drawing | Text | Images |
 |----------|-----------|------|--------|
@@ -92,7 +94,7 @@ It ships with five rendering backends so the same code works across operating sy
 
 1. Open `package/Pixie.Package.Lazarus.lpk` in the Lazarus IDE.
 2. Click **Compile**, then **Use > Install**.
-3. Restart the IDE. `TPixieHtmlView` appears on the component palette.
+3. Restart the IDE. `TPixieHtmlView`, `TPixieSvgView`, and `TPixiePaintBox` appear on the **Pixie** component palette tab.
 
 Or add the package as a dependency without installing:
 
@@ -106,11 +108,11 @@ Or add the package as a dependency without installing:
 
 1. Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE.
 2. Right-click the project in the Project Manager and select **Install**.
-3. `TPixieHtmlView` appears on the component palette under **Additional**.
+3. Components appear on the **Pixie** palette tab.
 
 Or add the source files directly to your project without installing the package:
 
-1. Add `source/` to your project's unit search path.
+1. Add `source/common` and `source/htmlview` to your project's unit search path (plus `source/svgview` or `source/paintbox` if needed).
 2. Add `Pixie.HtmlView.VCL` to your form's `uses` clause.
 
 ### Delphi (FMX)
@@ -119,11 +121,11 @@ Or add the source files directly to your project without installing the package:
 
 1. Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE.
 2. Right-click the project in the Project Manager and select **Install**.
-3. `TPixieHtmlView` appears on the component palette under **Additional**.
+3. Components appear on the **Pixie** palette tab.
 
 Or add the source files directly to your project without installing the package:
 
-1. Add `source/` to your project's unit search path.
+1. Add `source/common` and `source/htmlview` to your project's unit search path (plus `source/svgview` or `source/paintbox` if needed).
 2. Add `Pixie.HtmlView.FMX` to your form's `uses` clause.
 
 ## Usage

@@ -1,20 +1,20 @@
 # Pixie HTML View — Usage Guide
 
-Pixie is a lightweight HTML/CSS rendering engine for Free Pascal and Delphi. It provides `TPixieHtmlView`, a visual component that renders HTML content with mouse interaction, text selection, focus management, and form controls.
+Pixie is a lightweight HTML/CSS rendering engine for Free Pascal and Delphi. It provides three visual components: `TPixieHtmlView` (HTML rendering with mouse interaction, text selection, focus, and form controls), `TPixieSvgView` (proportional SVG display with alignment), and `TPixiePaintBox` (drawing surface with a TCanvas-like stateful API).
 
 ## Installation
 
 ### Lazarus (Free Pascal)
 
-The package is located in `package/Pixie.Package.Lazarus.lpk`. Install it into the Lazarus IDE to add `TPixieHtmlView` to the **Additional** component palette tab.
+The package is located in `package/Pixie.Package.Lazarus.lpk`. Install it into the Lazarus IDE to add the components to the **Pixie** component palette tab.
 
 ### Delphi (VCL)
 
-Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE and install it. Or add `source/` to the unit search path and use `Pixie.HtmlView.VCL` directly.
+Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE and install it. Or add `source/common` and `source/htmlview` to the unit search path (plus `source/svgview` or `source/paintbox` if needed) and use `Pixie.HtmlView.VCL` directly.
 
 ### Delphi (FMX)
 
-Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE and install it. Or add `source/` to the unit search path and use `Pixie.HtmlView.FMX` directly. The FMX backend supports Windows, macOS, iOS, and Android.
+Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE and install it. Or add `source/common` and `source/htmlview` to the unit search path (plus `source/svgview` or `source/paintbox` if needed) and use `Pixie.HtmlView.FMX` directly. The FMX backend supports Windows, macOS, iOS, and Android.
 
 ## Quick Start
 
@@ -39,7 +39,7 @@ HTML string
   -> Drawing via platform canvas
 ```
 
-Five platform backends are used transparently:
+All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration where available. Five platform backends are used transparently:
 
 | Platform | Drawing | Text | Images |
 |----------|---------|------|--------|
@@ -516,9 +516,9 @@ Pdf.CustomHeight := 600;      // points
 
 SVG rendering uses a single built-in renderer (`TPixieSvgCanvasRenderer`) on all platforms. SVG elements are drawn as native vector graphics through each backend's canvas path API — no rasterisation and no external dependencies. This ensures consistent rendering across Windows, Linux, macOS, Qt, FMX, and PDF export.
 
-Supported SVG features: rect, circle, ellipse, line, polyline, polygon, path commands (M/L/H/V/C/S/Q/T/A/Z), text, linearGradient, radialGradient, opacity, and transforms.
+Supported SVG features: rect, circle, ellipse, line, polyline, polygon, path commands (M/L/H/V/C/S/Q/T/A/Z), text, `use`/`symbol`, `clipPath`, linearGradient, radialGradient, opacity, viewBox clipping, and transforms.
 
-Not yet supported: spreadMethod (reflect/repeat), `clipPath` element, masks, filters, `use`/`symbol`, embedded images, CSS `style` selectors, `tspan`/`textPath`.
+Not yet supported: spreadMethod (reflect/repeat), masks, filters, embedded images, CSS `style` selectors, `tspan`/`textPath`.
 
 ### Conic Gradients
 
