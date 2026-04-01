@@ -6,7 +6,7 @@
     <CompilerOptions>
       <Version Value="11"/>
       <SearchPaths>
-        <OtherUnitFiles Value="../source/common;../source/htmlview"/>
+        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/svgview"/>
         <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
       </SearchPaths>
     </CompilerOptions>
@@ -292,6 +292,10 @@
       <Item>
         <Filename Value="../source/common/Pixie.CustomControl.pas"/>
         <UnitName Value="Pixie.CustomControl"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/svgview/Pixie.SvgView.pas"/>
+        <UnitName Value="Pixie.SvgView"/>
       </Item>
     </Files>
     <RequiredPkgs>
