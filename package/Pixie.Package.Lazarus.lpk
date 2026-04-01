@@ -246,7 +246,7 @@
         <UnitName Value="Pixie.SvgRenderer.Canvas"/>
       </Item>
       <Item>
-        <Filename Value="../source/htmlview/Pixie.SvgToPdf.pas"/>
+        <Filename Value="../source/common/Pixie.SvgToPdf.pas"/>
         <UnitName Value="Pixie.SvgToPdf"/>
       </Item>
       <Item>

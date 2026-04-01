@@ -95,7 +95,7 @@ contains
   Pixie.SimpleXml in '..\source\common\Pixie.SimpleXml.pas',
   Pixie.SvgRenderer in '..\source\common\Pixie.SvgRenderer.pas',
   Pixie.SvgRenderer.Canvas in '..\source\common\Pixie.SvgRenderer.Canvas.pas',
-  Pixie.SvgToPdf in '..\source\htmlview\Pixie.SvgToPdf.pas',
+  Pixie.SvgToPdf in '..\source\common\Pixie.SvgToPdf.pas',
   Pixie.TrueType in '..\source\htmlview\Pixie.TrueType.pas',
   Pixie.PdfWriter in '..\source\htmlview\Pixie.PdfWriter.pas',
   Pixie.Canvas.Pdf in '..\source\htmlview\Pixie.Canvas.Pdf.pas',
