@@ -484,9 +484,8 @@ begin
       FCanvas.ConcatMatrix(Scale, 0, 0, Scale, 0, 0);
 
       // Clip to viewBox (SVG default overflow=hidden).
-      // Use axis-aligned rect clip to avoid D2D PushLayer affecting text.
-      ClipPos := TPixiePosition.Create(
-        FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH);
+      // Use (0,0) origin because the viewBox offset translation is applied after.
+      ClipPos := TPixiePosition.Create(0, 0, FViewBoxW, FViewBoxH);
       ClipRadius.Init;
       FCanvas.SetClipRect(ClipPos, ClipRadius);
     end;
