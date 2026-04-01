@@ -1,7 +1,8 @@
-program PixieDemo;
+program PixieDemoFMX;
 
 uses
-  Vcl.Forms,
+  System.StartUpCopy,
+  FMX.Forms,
   PixieDemoMain in 'PixieDemoMain.pas' {MainForm};
 
 {$R *.res}
@@ -9,7 +10,6 @@ uses
 
 begin
   Application.Initialize;
-  Application.MainFormOnTaskbar := True;
   Application.CreateForm(TMainForm, MainForm);
   Application.Run;
 end.

@@ -1,7 +1,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{E8A3B7F1-2C4D-4E5F-9A1B-6C7D8E9F0A1B}</ProjectGuid>
-        <MainSource>PixieDemo.dpr</MainSource>
+        <MainSource>PixieDemoVCL.dpr</MainSource>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <DCC_DCCCompiler>DCC32</DCC_DCCCompiler>
         <ProjectVersion>20.0</ProjectVersion>
@@ -59,15 +59,15 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <SanitizedProjectName>PixieDemo</SanitizedProjectName>
+        <SanitizedProjectName>PixieDemoVCL</SanitizedProjectName>
         <DCC_DcuOutput>$(TEMP)\pixie-units</DCC_DcuOutput>
         <DCC_ExeOutput>..\..\bin</DCC_ExeOutput>
-        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\tagbar;..\..\..\source\paintbox;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\svgview;..\..\common;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_DependencyCheckOutputName>PixieDemo.exe</DCC_DependencyCheckOutputName>
+        <DCC_DependencyCheckOutputName>PixieDemoVCL.exe</DCC_DependencyCheckOutputName>
         <DCC_ImageBase>00400000</DCC_ImageBase>
         <DCC_N>true</DCC_N>
         <DCC_S>false</DCC_S>
@@ -97,7 +97,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="PixieDemoMain.pas">
+        <DCCReference Include="PixieDemoVCLMain.pas">
             <Form>MainForm</Form>
         </DCCReference>
         <BuildConfiguration Include="Base">
@@ -119,7 +119,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">PixieDemo.dpr</Source>
+                    <Source Name="MainSource">PixieDemoVCL.dpr</Source>
                 </Source>
             </Delphi.Personality>
             <Platforms>

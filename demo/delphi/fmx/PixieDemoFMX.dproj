@@ -1,7 +1,7 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{F1A2B3C4-5D6E-7F80-9A1B-2C3D4E5F6A7B}</ProjectGuid>
-        <MainSource>PixieDemo.dpr</MainSource>
+        <MainSource>PixieDemoFMX.dpr</MainSource>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <DCC_DCCCompiler>DCC32</DCC_DCCCompiler>
         <ProjectVersion>20.0</ProjectVersion>
@@ -35,12 +35,12 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <SanitizedProjectName>PixieDemo</SanitizedProjectName>
+        <SanitizedProjectName>PixieDemoFMX</SanitizedProjectName>
         <DCC_DcuOutput>$(TEMP)\pixie-fmx-units</DCC_DcuOutput>
         <DCC_ExeOutput>..\..\bin</DCC_ExeOutput>
-        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\tagbar;..\..\..\source\paintbox;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\svgview;..\..\common;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;FMX;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_DependencyCheckOutputName>PixieDemo.exe</DCC_DependencyCheckOutputName>
+        <DCC_DependencyCheckOutputName>PixieDemoFMX.exe</DCC_DependencyCheckOutputName>
         <DCC_ImageBase>00400000</DCC_ImageBase>
         <DCC_N>true</DCC_N>
         <DCC_S>false</DCC_S>
@@ -73,7 +73,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="PixieDemoMain.pas">
+        <DCCReference Include="PixieDemoFMXMain.pas">
             <Form>MainForm</Form>
             <FormType>fmx</FormType>
         </DCCReference>
@@ -96,7 +96,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">PixieDemo.dpr</Source>
+                    <Source Name="MainSource">PixieDemoFMX.dpr</Source>
                 </Source>
             </Delphi.Personality>
             <Platforms>

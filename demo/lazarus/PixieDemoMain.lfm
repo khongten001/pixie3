@@ -6,68 +6,6 @@ object MainForm: TMainForm
   Caption = 'Pixie Demo'
   Position = poScreenCenter
   OnCreate = FormCreate
-  object UrlPanel: TPanel
-    Left = 0
-    Height = 36
-    Top = 0
-    Width = 800
-    Align = alTop
-    BevelOuter = bvNone
-    ClientHeight = 36
-    ClientWidth = 800
-    TabOrder = 0
-    object BtnOpen: TSpeedButton
-      Left = 4
-      Height = 24
-      Top = 6
-      Width = 130
-      Align = alLeft
-      BorderSpacing.Left = 4
-      BorderSpacing.Top = 6
-      BorderSpacing.Bottom = 6
-      Caption = 'Load HTML from file'
-      OnClick = BtnOpenClick
-    end
-    object BtnSavePdf: TSpeedButton
-      Left = 134
-      Height = 24
-      Top = 6
-      Width = 90
-      Align = alLeft
-      BorderSpacing.Left = 4
-      BorderSpacing.Top = 6
-      BorderSpacing.Bottom = 6
-      Caption = 'Save as PDF'
-      OnClick = BtnSavePdfClick
-    end
-    object BtnGo: TButton
-      Left = 746
-      Height = 24
-      Top = 6
-      Width = 50
-      Align = alRight
-      BorderSpacing.Top = 6
-      BorderSpacing.Right = 4
-      BorderSpacing.Bottom = 6
-      Caption = 'Go'
-      OnClick = BtnGoClick
-      TabOrder = 1
-    end
-    object UrlEdit: TEdit
-      Left = 142
-      Height = 24
-      Top = 6
-      Width = 604
-      Align = alClient
-      BorderSpacing.Left = 8
-      BorderSpacing.Top = 6
-      BorderSpacing.Right = 8
-      BorderSpacing.Bottom = 6
-      TabOrder = 0
-      TextHint = '...or try a simple web-site here'
-      OnKeyPress = UrlEditKeyPress
-    end
-  end
   object StatusBar: TStatusBar
     Left = 0
     Height = 23
@@ -84,20 +22,141 @@ object MainForm: TMainForm
       end>
     SimplePanel = False
   end
-  object PixieHtmlView: TPixieHtmlView
+  object PageControl: TPageControl
     Left = 0
-    Height = 541
-    Top = 36
+    Height = 577
+    Top = 0
     Width = 800
+    ActivePage = TabHtmlView
     Align = alClient
-    BorderStyle = bsSingle
-    Color = clWhite
-    OnAnchorClick = ViewAnchorClick
-    OnElementClick = ViewElementClick
-    OnFetchUrl = FetchUrl
-    OnBeforeParse = ViewBeforeParse
-    OnAfterParse = ViewAfterParse
-    OnBeforePaint = ViewBeforePaint
-    OnAfterPaint = ViewAfterPaint
+    TabOrder = 0
+    object TabHtmlView: TTabSheet
+      Caption = 'HTML View'
+      object UrlPanel: TPanel
+        Left = 0
+        Height = 36
+        Top = 0
+        Width = 792
+        Align = alTop
+        BevelOuter = bvNone
+        ClientHeight = 36
+        ClientWidth = 792
+        TabOrder = 0
+        object BtnOpen: TSpeedButton
+          Left = 4
+          Height = 24
+          Top = 6
+          Width = 130
+          Align = alLeft
+          BorderSpacing.Left = 4
+          BorderSpacing.Top = 6
+          BorderSpacing.Bottom = 6
+          Caption = 'Load HTML from file'
+          OnClick = BtnOpenClick
+        end
+        object BtnSavePdf: TSpeedButton
+          Left = 134
+          Height = 24
+          Top = 6
+          Width = 90
+          Align = alLeft
+          BorderSpacing.Left = 4
+          BorderSpacing.Top = 6
+          BorderSpacing.Bottom = 6
+          Caption = 'Save as PDF'
+          OnClick = BtnSavePdfClick
+        end
+        object BtnGo: TButton
+          Left = 746
+          Height = 24
+          Top = 6
+          Width = 50
+          Align = alRight
+          BorderSpacing.Top = 6
+          BorderSpacing.Right = 4
+          BorderSpacing.Bottom = 6
+          Caption = 'Go'
+          OnClick = BtnGoClick
+          TabOrder = 1
+        end
+        object UrlEdit: TEdit
+          Left = 142
+          Height = 24
+          Top = 6
+          Width = 604
+          Align = alClient
+          BorderSpacing.Left = 8
+          BorderSpacing.Top = 6
+          BorderSpacing.Right = 8
+          BorderSpacing.Bottom = 6
+          TabOrder = 0
+          TextHint = '...or try a simple web-site here'
+          OnKeyPress = UrlEditKeyPress
+        end
+      end
+      object PixieHtmlView: TPixieHtmlView
+        Left = 0
+        Height = 513
+        Top = 36
+        Width = 792
+        Align = alClient
+        BorderStyle = bsSingle
+        Color = clWhite
+        OnAnchorClick = ViewAnchorClick
+        OnElementClick = ViewElementClick
+        OnFetchUrl = FetchUrl
+        OnBeforeParse = ViewBeforeParse
+        OnAfterParse = ViewAfterParse
+        OnBeforePaint = ViewBeforePaint
+        OnAfterPaint = ViewAfterPaint
+      end
+    end
+    object TabSvgView: TTabSheet
+      Caption = 'SVG View'
+      object SvgToolbar: TPanel
+        Left = 0
+        Height = 36
+        Top = 0
+        Width = 792
+        Align = alTop
+        BevelOuter = bvNone
+        ClientHeight = 36
+        ClientWidth = 792
+        TabOrder = 0
+        object BtnLoadSvg: TSpeedButton
+          Left = 4
+          Height = 24
+          Top = 6
+          Width = 100
+          Align = alLeft
+          BorderSpacing.Left = 4
+          BorderSpacing.Top = 6
+          BorderSpacing.Bottom = 6
+          Caption = 'Load SVG file'
+          OnClick = BtnLoadSvgClick
+        end
+        object CbAlignment: TComboBox
+          Left = 642
+          Height = 24
+          Top = 6
+          Width = 150
+          Align = alRight
+          BorderSpacing.Top = 6
+          BorderSpacing.Right = 4
+          BorderSpacing.Bottom = 6
+          ItemHeight = 15
+          Style = csDropDownList
+          TabOrder = 0
+          OnChange = CbAlignmentChange
+        end
+      end
+      object PixieSvgView: TPixieSvgView
+        Left = 0
+        Height = 477
+        Top = 36
+        Width = 792
+        Align = alClient
+      end
+    end
   end
 end
