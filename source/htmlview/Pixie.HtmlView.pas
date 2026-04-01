@@ -12,29 +12,21 @@ uses
   LMessages, LCLType,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.HtmlView.Base
-  {$IF DEFINED(LCLqt) or DEFINED(LCLqt5) or DEFINED(LCLqt6)}
-    , Pixie.Canvas.Qt
-  {$ELSEIF DEFINED(MSWINDOWS)}
-    , JwaWinUser, Pixie.Canvas.D2D
-  {$ELSEIF DEFINED(DARWIN)}
-    , Pixie.Canvas.CG
-  {$ELSEIF DEFINED(UNIX)}
-    , Pixie.Canvas.Cairo
+  Pixie.CustomControl, Pixie.HtmlView.Base
+  {$IFDEF MSWINDOWS}
+    , JwaWinUser
   {$ENDIF};
 
 
 type
   { TPixieHtmlView }
 
-  TPixieHtmlView = class(TCustomControl)
+  TPixieHtmlView = class(TPixieCustomControl)
   private
     FCore: TPixieHtmlViewCore;
     FCaretTimer: TTimer;
 
     procedure DoCaretTimer(Sender: TObject);
-    procedure WMEraseBkgnd(var Msg: TLMEraseBkgnd); message LM_ERASEBKGND;
-    procedure CMMouseLeave(var Msg: TLMessage); message CM_MOUSELEAVE;
     {$IFDEF MSWINDOWS}
     procedure WMIMEStartComposition(var Msg: TLMessage); message WM_IME_STARTCOMPOSITION;
     {$ENDIF}
@@ -98,8 +90,9 @@ type
     function GetOnScrollChanged: TNotifyEvent;
     procedure SetOnScrollChanged(Value: TNotifyEvent);
   protected
+    procedure DoPaint; override;
+    procedure DoMouseLeave; override;
     procedure Loaded; override;
-    procedure Paint; override;
     procedure Resize; override;
     {$IF DEFINED(LCLGTK2) or DEFINED(LCLGTK3)}
     procedure DoEnter; override;
@@ -208,30 +201,15 @@ const
 // ---------------------------------------------------------------------------
 
 constructor TPixieHtmlView.Create(AOwner: TComponent);
-var
-  PxCanvas: TPixieCanvas;
 begin
   FCore := nil;
   inherited Create(AOwner);
-  ControlStyle := ControlStyle + [csOpaque];
   BorderStyle := bsSingle;
   Color := clWhite;
   Width := 400;
   Height := 300;
-  TabStop := True;
 
-  PxCanvas := nil;
-  {$IF DEFINED(LCLqt) or DEFINED(LCLqt5) or DEFINED(LCLqt6)}
-  PxCanvas := TPixieQtCanvas.Create;
-  {$ELSEIF DEFINED(MSWINDOWS)}
-  PxCanvas := TPixieD2DCanvas.Create;
-  {$ELSEIF DEFINED(DARWIN)}
-  PxCanvas := TPixieCGCanvas.Create;
-  {$ELSEIF DEFINED(UNIX)}
-  PxCanvas := TPixieCairoCanvas.Create;
-  {$ENDIF}
-
-  FCore := TPixieHtmlViewCore.Create(PxCanvas);
+  FCore := TPixieHtmlViewCore.Create(PixieCanvas);
   FCore.Owner := Self;
   FCore.OnHostInvalidate := HostInvalidate;
   FCore.OnHostSetCursor := HostSetCursor;
@@ -268,11 +246,8 @@ begin
 end;
 
 procedure TPixieHtmlView.HostSetCursor(ACursor: TPixieCursorKind);
-const
-  CursorMap: array[TPixieCursorKind] of TCursor = (
-    crDefault, crHandPoint, crIBeam, crCross, crSizeAll);
 begin
-  Self.Cursor := CursorMap[ACursor];
+  SetPixieCursor(ACursor);
 end;
 
 procedure TPixieHtmlView.HostSetFocus;
@@ -291,29 +266,13 @@ begin
 end;
 
 function TPixieHtmlView.HostGetScaleFactor: Single;
-{$IFDEF MSWINDOWS}
-var
-  F: TCustomForm;
-{$ENDIF}
 begin
-  {$IFDEF MSWINDOWS}
-  F := GetParentForm(Self);
-  if F <> nil then
-    Result := F.PixelsPerInch / 96
-  else
-    Result := Screen.PixelsPerInch / 96;
-  {$ELSE}
-  Result := GetCanvasScaleFactor;
-  {$ENDIF}
+  Result := GetScaleFactor;
 end;
 
 function TPixieHtmlView.HostGetBackgroundColor: TPixieWebColor;
-var
-  Rgb: LongInt;
 begin
-  Rgb := ColorToRGB(Self.Color);
-  Result := TPixieWebColor.Create(
-    Byte(Rgb), Byte(Rgb shr 8), Byte(Rgb shr 16));
+  Result := GetBackgroundColor;
 end;
 
 procedure TPixieHtmlView.HostCopyToClipboard(const Text: string);
@@ -562,14 +521,8 @@ end;
 // Messages
 // ---------------------------------------------------------------------------
 
-procedure TPixieHtmlView.WMEraseBkgnd(var Msg: TLMEraseBkgnd);
+procedure TPixieHtmlView.DoMouseLeave;
 begin
-  Msg.Result := 1;
-end;
-
-procedure TPixieHtmlView.CMMouseLeave(var Msg: TLMessage);
-begin
-  inherited;
   if FCore <> nil then
     FCore.HandleMouseLeave;
 end;
@@ -601,8 +554,8 @@ begin
   if FCore.Document = nil then Exit;
   if not FCore.Document.GetFocusedCaretPos(DocX, DocY, H) then Exit;
 
-  ClientX := Round(DocX * FCore.Zoom);
-  ClientY := Round((DocY - FCore.ScrollY) * FCore.Zoom);
+  ClientX := Round(DocX * FCore.Zoom * GetScaleFactor);
+  ClientY := Round((DocY - FCore.ScrollY) * FCore.Zoom * GetScaleFactor);
 
   {$IFDEF MSWINDOWS}
   Imc := ImmGetContext(Handle);
@@ -752,16 +705,11 @@ begin
   FCore.HandleLoaded;
 end;
 
-procedure TPixieHtmlView.Paint;
+procedure TPixieHtmlView.DoPaint;
 begin
-  if (FCore = nil) or (FCore.Canvas = nil) then
-  begin
-    inherited Canvas.Brush.Color := Self.Color;
-    inherited Canvas.FillRect(ClientRect);
-    Exit;
-  end;
+  if FCore = nil then Exit;
   FCore.Canvas.SetViewSize(ClientWidth, ClientHeight, GetCanvasScaleFactor);
-  FCore.HandlePaint(PtrUInt(inherited Canvas.Handle));
+  FCore.HandlePaint(GetPaintHandle);
 end;
 
 procedure TPixieHtmlView.Resize;

@@ -1,37 +1,47 @@
-unit Pixie.HtmlView.VCL;
+unit Pixie.HtmlView.FMX;
 
-// TPixieHtmlView — Delphi VCL visual component that renders HTML content
-// using the Pixie engine with Direct2D/DirectWrite graphics.
-
-{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
+// TPixieHtmlView — Delphi FMX visual component that renders HTML content
+// using the Pixie engine with FireMonkey graphics. Enables cross-platform
+// HTML rendering on Windows, macOS, iOS, and Android.
 
 interface
 
 uses
-  SysUtils, Classes, Windows, Messages,
-  Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
+  System.SysUtils, System.Classes, System.Types, System.UITypes,
+  System.UIConsts, System.Rtti, System.Math,
+  FMX.Controls, FMX.Graphics, FMX.Types, FMX.Platform,
+  FMX.Text, FMX.Forms,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.Canvas.D2D,
+  Pixie.Canvas.FMX,
   Pixie.HtmlView.Base;
 
 type
   { TPixieHtmlView }
 
-  TPixieHtmlView = class(TCustomControl)
+  TPixieHtmlView = class(TControl, ITextInput)
   private
     FCore: TPixieHtmlViewCore;
+    FCanvas: TPixieCanvas;
     FCaretTimer: TTimer;
-    FBorderStyle: TBorderStyle;
+    FTextService: TTextService;
+    FLastMouseX: Single;
+    FLastMouseY: Single;
 
     procedure DoCaretTimer(Sender: TObject);
-    procedure SetBorderStyle(Value: TBorderStyle);
-    procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
-    procedure WMGetDlgCode(var Msg: TWMGetDlgCode); message WM_GETDLGCODE;
-    procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
-    procedure WMIMEStartComposition(var Msg: TMessage); message WM_IME_STARTCOMPOSITION;
-    procedure UpdateIMEPosition;
-    function GetScaleFactor: Single;
+    procedure ClipboardCopy(const S: string);
+
+    // ITextInput
+    function GetTextService: TTextService;
+    function GetTargetClausePointF: TPointF;
+    procedure StartIMEInput;
+    procedure EndIMEInput;
+    procedure IMEStateUpdated;
+    function GetSelection: string;
+    function GetSelectionRect: TRectF;
+    function GetSelectionBounds: TRect;
+    function GetSelectionPointSize: TSizeF;
+    function HasText: Boolean;
 
     // Host callbacks
     procedure HostInvalidate;
@@ -39,12 +49,10 @@ type
     procedure HostSetFocus;
     function HostGetViewWidth: TPixiePixel;
     function HostGetViewHeight: TPixiePixel;
-    function HostGetScaleFactor: Single;
     function HostGetBackgroundColor: TPixieWebColor;
     procedure HostCopyToClipboard(const Text: string);
     function HostGetTickCount: UInt64;
     procedure HostResetCaret;
-    procedure HostUpdateIME;
 
     // Property forwarding
     function GetDocument: TPixieDocument;
@@ -85,19 +93,22 @@ type
     function GetOnScrollChanged: TNotifyEvent;
     procedure SetOnScrollChanged(Value: TNotifyEvent);
   protected
-    procedure CreateParams(var Params: TCreateParams); override;
     procedure Loaded; override;
     procedure Paint; override;
     procedure Resize; override;
-    procedure KeyDown(var Key: Word; Shift: TShiftState); override;
-    procedure KeyPress(var Key: Char); override;
+    procedure DialogKey(var Key: Word; Shift: TShiftState); override;
+    procedure DoMouseLeave; override;
+    procedure DoEnter; override;
+    procedure DoExit; override;
+    procedure KeyDown(var Key: Word; var KeyChar: WideChar;
+      Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
-      X, Y: Integer); override;
-    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
+      X, Y: Single); override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Single); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState;
-      X, Y: Integer); override;
-    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
-      MousePos: TPoint): Boolean; override;
+      X, Y: Single); override;
+    procedure MouseWheel(Shift: TShiftState; WheelDelta: Integer;
+      var Handled: Boolean); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -124,10 +135,6 @@ type
     property AutoScrollAccelMax: Integer read GetAutoScrollAccelMax
       write SetAutoScrollAccelMax;
   published
-    property BorderStyle: TBorderStyle read FBorderStyle
-      write SetBorderStyle default bsSingle;
-    property TabOrder;
-    property TabStop;
     property Lines: TStrings read GetLines write SetLines;
     property BaseUrl: string read GetBaseUrl write SetBaseUrl;
     property UserCss: string read GetUserCss write SetUserCss;
@@ -151,11 +158,24 @@ type
 
     property Align;
     property Anchors;
-    property Color;
-    property Constraints;
+    property ClipChildren default True;
+    property ClipParent default False;
     property Enabled;
+    property Height;
+    property HitTest default True;
+    property Locked default False;
+    property Margins;
+    property Opacity;
+    property Padding;
     property PopupMenu;
+    property Position;
+    property RotationAngle;
+    property RotationCenter;
+    property Scale;
+    property Size;
+    property TabOrder;
     property Visible;
+    property Width;
 
     property OnClick;
     property OnDblClick;
@@ -170,37 +190,57 @@ type
 
 implementation
 
-uses
-  Vcl.Clipbrd, Winapi.Imm;
+// ---------------------------------------------------------------------------
+// Clipboard helpers via FMX platform services
+// ---------------------------------------------------------------------------
+
+procedure TPixieHtmlView.ClipboardCopy(const S: string);
+var
+  Svc: IFMXClipboardService;
+begin
+  if TPlatformServices.Current.SupportsPlatformService(
+    IFMXClipboardService, Svc) then
+    Svc.SetClipboard(TValue.From<string>(S));
+end;
 
 // ---------------------------------------------------------------------------
 // Construction
 // ---------------------------------------------------------------------------
 
 constructor TPixieHtmlView.Create(AOwner: TComponent);
+var
+  TextSvc: IFMXTextService;
 begin
   FCore := nil;
+  FTextService := nil;
+  FLastMouseX := 0;
+  FLastMouseY := 0;
+
   inherited Create(AOwner);
-  ControlStyle := ControlStyle + [csOpaque];
-  FBorderStyle := bsSingle;
-  Color := clWhite;
+  ClipChildren := True;
+  HitTest := True;
+  AutoCapture := True;
   Width := 400;
   Height := 300;
-  TabStop := True;
+  CanFocus := True;
 
-  FCore := TPixieHtmlViewCore.Create(TPixieD2DCanvas.Create);
+  if not (csDesigning in ComponentState) then
+    if TPlatformServices.Current.SupportsPlatformService(
+      IFMXTextService, TextSvc) then
+      FTextService := TextSvc.GetTextServiceClass.Create(Self, False);
+
+  FCanvas := TPixieFmxCanvas.Create;
+  FCore := TPixieHtmlViewCore.Create(FCanvas);
   FCore.Owner := Self;
   FCore.OnHostInvalidate := HostInvalidate;
   FCore.OnHostSetCursor := HostSetCursor;
   FCore.OnHostSetFocus := HostSetFocus;
   FCore.OnHostGetViewWidth := HostGetViewWidth;
   FCore.OnHostGetViewHeight := HostGetViewHeight;
-  FCore.OnHostGetScaleFactor := HostGetScaleFactor;
   FCore.OnHostGetBackgroundColor := HostGetBackgroundColor;
   FCore.OnHostCopyToClipboard := HostCopyToClipboard;
   FCore.OnHostGetTickCount := HostGetTickCount;
   FCore.OnHostResetCaret := HostResetCaret;
-  FCore.OnHostUpdateIME := HostUpdateIME;
 
   FCaretTimer := TTimer.Create(Self);
   FCaretTimer.Interval := 530;
@@ -211,28 +251,10 @@ end;
 destructor TPixieHtmlView.Destroy;
 begin
   FreeAndNil(FCaretTimer);
+  FreeAndNil(FTextService);
   FreeAndNil(FCore);
+  FreeAndNil(FCanvas);
   inherited Destroy;
-end;
-
-// ---------------------------------------------------------------------------
-// Border style
-// ---------------------------------------------------------------------------
-
-procedure TPixieHtmlView.SetBorderStyle(Value: TBorderStyle);
-begin
-  if FBorderStyle <> Value then
-  begin
-    FBorderStyle := Value;
-    RecreateWnd;
-  end;
-end;
-
-procedure TPixieHtmlView.CreateParams(var Params: TCreateParams);
-begin
-  inherited CreateParams(Params);
-  if FBorderStyle = bsSingle then
-    Params.ExStyle := Params.ExStyle or WS_EX_CLIENTEDGE;
 end;
 
 // ---------------------------------------------------------------------------
@@ -241,7 +263,7 @@ end;
 
 procedure TPixieHtmlView.HostInvalidate;
 begin
-  Invalidate;
+  Repaint;
 end;
 
 procedure TPixieHtmlView.HostSetCursor(ACursor: TPixieCursorKind);
@@ -254,53 +276,38 @@ end;
 
 procedure TPixieHtmlView.HostSetFocus;
 begin
-  if CanFocus then
-    SetFocus;
+  SetFocus;
 end;
 
 function TPixieHtmlView.HostGetViewWidth: TPixiePixel;
 begin
-  Result := ClientWidth;
+  Result := Width;
 end;
 
 function TPixieHtmlView.HostGetViewHeight: TPixiePixel;
 begin
-  Result := ClientHeight;
-end;
-
-function TPixieHtmlView.HostGetScaleFactor: Single;
-begin
-  Result := GetScaleFactor;
+  Result := Height;
 end;
 
 function TPixieHtmlView.HostGetBackgroundColor: TPixieWebColor;
-var
-  Rgb: LongInt;
 begin
-  Rgb := ColorToRGB(Self.Color);
-  Result := TPixieWebColor.Create(
-    Byte(Rgb), Byte(Rgb shr 8), Byte(Rgb shr 16));
+  Result := TPixieWebColor.Create(255, 255, 255);
 end;
 
 procedure TPixieHtmlView.HostCopyToClipboard(const Text: string);
 begin
-  Clipboard.AsText := Text;
+  ClipboardCopy(Text);
 end;
 
 function TPixieHtmlView.HostGetTickCount: UInt64;
 begin
-  Result := GetTickCount64;
+  Result := UInt64(TThread.GetTickCount);
 end;
 
 procedure TPixieHtmlView.HostResetCaret;
 begin
   FCaretTimer.Enabled := False;
   FCaretTimer.Enabled := True;
-end;
-
-procedure TPixieHtmlView.HostUpdateIME;
-begin
-  UpdateIMEPosition;
 end;
 
 // ---------------------------------------------------------------------------
@@ -525,70 +532,110 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// DPI / Scale
+// ITextInput
 // ---------------------------------------------------------------------------
 
-function TPixieHtmlView.GetScaleFactor: Single;
-var
-  F: TCustomForm;
+function TPixieHtmlView.GetTextService: TTextService;
 begin
-  F := GetParentForm(Self);
-  if F <> nil then
-    Result := F.PixelsPerInch / 96
-  else
-    Result := 1.0;
+  Result := FTextService;
 end;
 
-// ---------------------------------------------------------------------------
-// Messages
-// ---------------------------------------------------------------------------
-
-procedure TPixieHtmlView.WMEraseBkgnd(var Msg: TWMEraseBkgnd);
-begin
-  Msg.Result := 1;
-end;
-
-procedure TPixieHtmlView.WMGetDlgCode(var Msg: TWMGetDlgCode);
-begin
-  inherited;
-  Msg.Result := Msg.Result or DLGC_WANTARROWS or DLGC_WANTTAB;
-end;
-
-procedure TPixieHtmlView.CMMouseLeave(var Msg: TMessage);
-begin
-  inherited;
-  if FCore <> nil then
-    FCore.HandleMouseLeave;
-end;
-
-// ---------------------------------------------------------------------------
-// IME
-// ---------------------------------------------------------------------------
-
-procedure TPixieHtmlView.UpdateIMEPosition;
+function TPixieHtmlView.GetTargetClausePointF: TPointF;
 var
   DocX, DocY, H: TPixiePixel;
-  Imc: HIMC;
-  CompForm: TCompositionForm;
 begin
-  if FCore.Document = nil then Exit;
-  if not FCore.Document.GetFocusedCaretPos(DocX, DocY, H) then Exit;
-
-  Imc := ImmGetContext(Handle);
-  if Imc <> 0 then
+  Result := TPointF.Zero;
+  if (FCore.Document <> nil) and
+     FCore.Document.GetFocusedCaretPos(DocX, DocY, H) then
   begin
-    CompForm.dwStyle := CFS_POINT;
-    CompForm.ptCurrentPos.X := Round(DocX * FCore.Zoom);
-    CompForm.ptCurrentPos.Y := Round((DocY - FCore.ScrollY) * FCore.Zoom);
-    ImmSetCompositionWindow(Imc, @CompForm);
-    ImmReleaseContext(Handle, Imc);
+    Result.X := DocX * FCore.Zoom;
+    Result.Y := (DocY - FCore.ScrollY + H) * FCore.Zoom + 2;
+    Result := LocalToAbsolute(Result);
   end;
 end;
 
-procedure TPixieHtmlView.WMIMEStartComposition(var Msg: TMessage);
+procedure TPixieHtmlView.StartIMEInput;
+begin
+end;
+
+procedure TPixieHtmlView.EndIMEInput;
+begin
+end;
+
+procedure TPixieHtmlView.IMEStateUpdated;
+begin
+  Repaint;
+end;
+
+function TPixieHtmlView.GetSelection: string;
+begin
+  if (FCore.Document <> nil) and FCore.Document.HasSelection then
+    Result := FCore.Document.GetSelectedText
+  else
+    Result := '';
+end;
+
+function TPixieHtmlView.GetSelectionRect: TRectF;
+var
+  DocX, DocY, H: TPixiePixel;
+begin
+  if (FCore.Document <> nil) and
+     FCore.Document.GetFocusedCaretPos(DocX, DocY, H) then
+  begin
+    Result.Left := DocX * FCore.Zoom;
+    Result.Top := (DocY - FCore.ScrollY) * FCore.Zoom;
+    Result.Right := Result.Left + 2;
+    Result.Bottom := Result.Top + H * FCore.Zoom;
+  end
+  else
+    Result := TRectF.Empty;
+end;
+
+function TPixieHtmlView.GetSelectionBounds: TRect;
+begin
+  Result := TRect.Create(
+    TPoint.Create(Round(LocalRect.Left), Round(LocalRect.Top)),
+    Round(LocalRect.Width), Round(LocalRect.Height));
+end;
+
+function TPixieHtmlView.GetSelectionPointSize: TSizeF;
+begin
+  Result := TSizeF.Create(LocalRect.Width, LocalRect.Height);
+end;
+
+function TPixieHtmlView.HasText: Boolean;
+begin
+  Result := FCore.Document <> nil;
+end;
+
+// ---------------------------------------------------------------------------
+// Focus — text service enter/exit for IME
+// ---------------------------------------------------------------------------
+
+procedure TPixieHtmlView.DoEnter;
+var
+  Form: TCommonCustomForm;
 begin
   inherited;
-  UpdateIMEPosition;
+  if (FTextService <> nil) and (Root <> nil) and
+     (Root.GetObject is TCommonCustomForm) then
+  begin
+    Form := TCommonCustomForm(Root.GetObject);
+    FTextService.EnterControl(Form.Handle);
+  end;
+end;
+
+procedure TPixieHtmlView.DoExit;
+var
+  Form: TCommonCustomForm;
+begin
+  if (FTextService <> nil) and (Root <> nil) and
+     (Root.GetObject is TCommonCustomForm) then
+  begin
+    Form := TCommonCustomForm(Root.GetObject);
+    FTextService.ExitControl(Form.Handle);
+  end;
+  inherited;
 end;
 
 // ---------------------------------------------------------------------------
@@ -603,14 +650,8 @@ end;
 
 procedure TPixieHtmlView.Paint;
 begin
-  if (FCore = nil) or (FCore.Canvas = nil) then
-  begin
-    inherited Canvas.Brush.Color := Self.Color;
-    inherited Canvas.FillRect(ClientRect);
-    Exit;
-  end;
-  FCore.Canvas.SetViewSize(ClientWidth, ClientHeight, GetScaleFactor);
-  FCore.HandlePaint(NativeUInt(inherited Canvas.Handle));
+  if (FCore = nil) or (FCore.Canvas = nil) then Exit;
+  FCore.HandlePaint(PtrUInt(Pointer(Canvas)));
 end;
 
 procedure TPixieHtmlView.Resize;
@@ -618,6 +659,13 @@ begin
   inherited Resize;
   if FCore <> nil then
     FCore.HandleResize;
+end;
+
+procedure TPixieHtmlView.DoMouseLeave;
+begin
+  inherited;
+  if FCore <> nil then
+    FCore.HandleMouseLeave;
 end;
 
 // ---------------------------------------------------------------------------
@@ -633,23 +681,51 @@ end;
 // Keyboard
 // ---------------------------------------------------------------------------
 
-procedure TPixieHtmlView.KeyDown(var Key: Word; Shift: TShiftState);
+procedure TPixieHtmlView.DialogKey(var Key: Word; Shift: TShiftState);
 begin
-  inherited KeyDown(Key, Shift);
-  if FCore.HandleKeyDown(Key, Shift, ssCtrl in Shift) then
-    Key := 0;
+  if (Key = vkTab) and (FCore.Document <> nil) then
+  begin
+    if FCore.HandleKeyDown(Key, Shift,
+      {$IFDEF MACOS}ssCommand{$ELSE}ssCtrl{$ENDIF} in Shift) then
+    begin
+      Key := 0;
+      Exit;
+    end;
+  end;
+  inherited;
 end;
 
-procedure TPixieHtmlView.KeyPress(var Key: Char);
+procedure TPixieHtmlView.KeyDown(var Key: Word; var KeyChar: WideChar;
+  Shift: TShiftState);
 var
   S: string;
+  CtrlDown: Boolean;
 begin
-  inherited KeyPress(Key);
-  if Ord(Key) >= 32 then
+  inherited KeyDown(Key, KeyChar, Shift);
+
+  {$IFDEF MACOS}
+  CtrlDown := ssCommand in Shift;
+  {$ELSE}
+  CtrlDown := ssCtrl in Shift;
+  {$ENDIF}
+
+  // Dispatch virtual key to core
+  if (Key <> 0) and FCore.HandleKeyDown(Key, Shift, CtrlDown) then
   begin
-    S := Key;
+    Key := 0;
+    KeyChar := #0;
+    Exit;
+  end;
+
+  // Printable character input for focused text elements
+  if KeyChar >= ' ' then
+  begin
+    S := KeyChar;
     if FCore.HandleCharInput(S) then
-      Key := #0;
+    begin
+      Key := 0;
+      KeyChar := #0;
+    end;
   end;
 end;
 
@@ -658,32 +734,44 @@ end;
 // ---------------------------------------------------------------------------
 
 procedure TPixieHtmlView.MouseDown(Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+  Shift: TShiftState; X, Y: Single);
 begin
   inherited MouseDown(Button, Shift, X, Y);
-  FCore.HandleMouseDown(Button = mbLeft, ssDouble in Shift, X, Y);
+  FLastMouseX := Round(X / FCore.Zoom);
+  FLastMouseY := Round(Y / FCore.Zoom);
+  FCore.HandleMouseDown(Button = TMouseButton.mbLeft, ssDouble in Shift,
+    Round(X), Round(Y));
 end;
 
-procedure TPixieHtmlView.MouseMove(Shift: TShiftState; X, Y: Integer);
+procedure TPixieHtmlView.MouseMove(Shift: TShiftState; X, Y: Single);
 begin
   inherited MouseMove(Shift, X, Y);
-  FCore.HandleMouseMove(X, Y);
+  FCore.HandleMouseMove(Round(X), Round(Y));
 end;
 
 procedure TPixieHtmlView.MouseUp(Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+  Shift: TShiftState; X, Y: Single);
 begin
   inherited MouseUp(Button, Shift, X, Y);
-  FCore.HandleMouseUp(Button = mbLeft, X, Y);
+  FCore.HandleMouseUp(Button = TMouseButton.mbLeft, Round(X), Round(Y));
 end;
 
-function TPixieHtmlView.DoMouseWheel(Shift: TShiftState;
-  WheelDelta: Integer; MousePos: TPoint): Boolean;
+procedure TPixieHtmlView.MouseWheel(Shift: TShiftState;
+  WheelDelta: Integer; var Handled: Boolean);
+var
+  CtrlDown: Boolean;
 begin
-  Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
-  if Result then Exit;
-  Result := FCore.HandleMouseWheel(WheelDelta, ssCtrl in Shift,
-    Round(MousePos.X / FCore.Zoom), Round(MousePos.Y / FCore.Zoom));
+  inherited MouseWheel(Shift, WheelDelta, Handled);
+  if Handled then Exit;
+
+  {$IFDEF MACOS}
+  CtrlDown := ssCommand in Shift;
+  {$ELSE}
+  CtrlDown := ssCtrl in Shift;
+  {$ENDIF}
+
+  Handled := FCore.HandleMouseWheel(WheelDelta, CtrlDown,
+    Round(FLastMouseX), Round(FLastMouseY));
 end;
 
 end.

@@ -6,7 +6,7 @@
     <CompilerOptions>
       <Version Value="11"/>
       <SearchPaths>
-        <OtherUnitFiles Value="../source"/>
+        <OtherUnitFiles Value="../source/common;../source/htmlview"/>
         <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
       </SearchPaths>
     </CompilerOptions>
@@ -15,11 +15,11 @@
     <Version Major="1"/>
     <Files>
       <Item>
-        <Filename Value="../source/Pixie.Background.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Background.pas"/>
         <UnitName Value="Pixie.Background"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Borders.pas"/>
+        <Filename Value="../source/common/Pixie.Borders.pas"/>
         <UnitName Value="Pixie.Borders"/>
       </Item>
       <!-- Platform canvas units excluded from the package:
@@ -29,143 +29,147 @@
            - Pixie.Canvas.Cairo.pas (Linux)
            - Pixie.Canvas.CG.pas (macOS) -->
       <Item>
-        <Filename Value="../source/Pixie.Canvas.pas"/>
+        <Filename Value="../source/common/Pixie.Canvas.pas"/>
         <UnitName Value="Pixie.Canvas"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Container.pas"/>
+        <Filename Value="../source/common/Pixie.Clipboard.pas"/>
+        <UnitName Value="Pixie.Clipboard"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/htmlview/Pixie.Container.pas"/>
         <UnitName Value="Pixie.Container"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.CssLength.pas"/>
+        <Filename Value="../source/common/Pixie.CssLength.pas"/>
         <UnitName Value="Pixie.CssLength"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.CssParser.pas"/>
+        <Filename Value="../source/htmlview/Pixie.CssParser.pas"/>
         <UnitName Value="Pixie.CssParser"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.CssProperties.pas"/>
+        <Filename Value="../source/htmlview/Pixie.CssProperties.pas"/>
         <UnitName Value="Pixie.CssProperties"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.CssSelector.pas"/>
+        <Filename Value="../source/htmlview/Pixie.CssSelector.pas"/>
         <UnitName Value="Pixie.CssSelector"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.CssTokenizer.pas"/>
+        <Filename Value="../source/htmlview/Pixie.CssTokenizer.pas"/>
         <UnitName Value="Pixie.CssTokenizer"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Document.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Document.pas"/>
         <UnitName Value="Pixie.Document"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElAnchor.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElAnchor.pas"/>
         <UnitName Value="Pixie.ElAnchor"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElBeforeAfter.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElBeforeAfter.pas"/>
         <UnitName Value="Pixie.ElBeforeAfter"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElDetails.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElDetails.pas"/>
         <UnitName Value="Pixie.ElDetails"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Element.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Element.pas"/>
         <UnitName Value="Pixie.Element"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElImage.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElImage.pas"/>
         <UnitName Value="Pixie.ElImage"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElInput.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElInput.pas"/>
         <UnitName Value="Pixie.ElInput"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElMisc.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElMisc.pas"/>
         <UnitName Value="Pixie.ElMisc"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElTable.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElTable.pas"/>
         <UnitName Value="Pixie.ElTable"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElText.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElText.pas"/>
         <UnitName Value="Pixie.ElText"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ElTextInput.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ElTextInput.pas"/>
         <UnitName Value="Pixie.ElTextInput"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.FlexItem.pas"/>
+        <Filename Value="../source/htmlview/Pixie.FlexItem.pas"/>
         <UnitName Value="Pixie.FlexItem"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.FontDescription.pas"/>
+        <Filename Value="../source/common/Pixie.FontDescription.pas"/>
         <UnitName Value="Pixie.FontDescription"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.FormattingContext.pas"/>
+        <Filename Value="../source/htmlview/Pixie.FormattingContext.pas"/>
         <UnitName Value="Pixie.FormattingContext"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Gradient.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Gradient.pas"/>
         <UnitName Value="Pixie.Gradient"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.GridItem.pas"/>
+        <Filename Value="../source/htmlview/Pixie.GridItem.pas"/>
         <UnitName Value="Pixie.GridItem"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Html.pas"/>
+        <Filename Value="../source/common/Pixie.Html.pas"/>
         <UnitName Value="Pixie.Html"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.HtmlEntities.pas"/>
+        <Filename Value="../source/common/Pixie.HtmlEntities.pas"/>
         <UnitName Value="Pixie.HtmlEntities"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.HtmlParser.pas"/>
+        <Filename Value="../source/htmlview/Pixie.HtmlParser.pas"/>
         <UnitName Value="Pixie.HtmlParser"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.HtmlTag.pas"/>
+        <Filename Value="../source/htmlview/Pixie.HtmlTag.pas"/>
         <UnitName Value="Pixie.HtmlTag"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.HtmlView.Base.pas"/>
+        <Filename Value="../source/htmlview/Pixie.HtmlView.Base.pas"/>
         <UnitName Value="Pixie.HtmlView.Base"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.HtmlView.pas"/>
+        <Filename Value="../source/htmlview/Pixie.HtmlView.pas"/>
         <UnitName Value="Pixie.HtmlView"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Iterators.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Iterators.pas"/>
         <UnitName Value="Pixie.Iterators"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.LineBox.pas"/>
+        <Filename Value="../source/htmlview/Pixie.LineBox.pas"/>
         <UnitName Value="Pixie.LineBox"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.MasterCss.pas"/>
+        <Filename Value="../source/htmlview/Pixie.MasterCss.pas"/>
         <UnitName Value="Pixie.MasterCss"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.MediaQuery.pas"/>
+        <Filename Value="../source/htmlview/Pixie.MediaQuery.pas"/>
         <UnitName Value="Pixie.MediaQuery"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.NativeContainer.pas"/>
+        <Filename Value="../source/htmlview/Pixie.NativeContainer.pas"/>
         <UnitName Value="Pixie.NativeContainer"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.NumCvt.pas"/>
+        <Filename Value="../source/common/Pixie.NumCvt.pas"/>
         <UnitName Value="Pixie.NumCvt"/>
       </Item>
       <Item>
@@ -174,112 +178,120 @@
         <UnitName Value="Pixie.Register.Lazarus"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderBlock.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderBlock.pas"/>
         <UnitName Value="Pixie.RenderBlock"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderBlockContext.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderBlockContext.pas"/>
         <UnitName Value="Pixie.RenderBlockContext"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderFlex.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderFlex.pas"/>
         <UnitName Value="Pixie.RenderFlex"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderGrid.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderGrid.pas"/>
         <UnitName Value="Pixie.RenderGrid"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderImage.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderImage.pas"/>
         <UnitName Value="Pixie.RenderImage"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderInline.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderInline.pas"/>
         <UnitName Value="Pixie.RenderInline"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderInlineContext.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderInlineContext.pas"/>
         <UnitName Value="Pixie.RenderInlineContext"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderInput.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderInput.pas"/>
         <UnitName Value="Pixie.RenderInput"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderItem.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderItem.pas"/>
         <UnitName Value="Pixie.RenderItem"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.RenderTable.pas"/>
+        <Filename Value="../source/htmlview/Pixie.RenderTable.pas"/>
         <UnitName Value="Pixie.RenderTable"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.ScrollView.pas"/>
+        <Filename Value="../source/htmlview/Pixie.ScrollView.pas"/>
         <UnitName Value="Pixie.ScrollView"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.StringId.pas"/>
+        <Filename Value="../source/common/Pixie.SimpleXml.pas"/>
+        <UnitName Value="Pixie.SimpleXml"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/common/Pixie.StringId.pas"/>
         <UnitName Value="Pixie.StringId"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Style.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Style.pas"/>
         <UnitName Value="Pixie.Style"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Stylesheet.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Stylesheet.pas"/>
         <UnitName Value="Pixie.Stylesheet"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.SvgRenderer.pas"/>
+        <Filename Value="../source/common/Pixie.SvgRenderer.pas"/>
         <UnitName Value="Pixie.SvgRenderer"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.SvgRenderer.Canvas.pas"/>
+        <Filename Value="../source/common/Pixie.SvgRenderer.Canvas.pas"/>
         <UnitName Value="Pixie.SvgRenderer.Canvas"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.SvgToPdf.pas"/>
+        <Filename Value="../source/htmlview/Pixie.SvgToPdf.pas"/>
         <UnitName Value="Pixie.SvgToPdf"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Clipboard.pas"/>
-        <UnitName Value="Pixie.Clipboard"/>
-      </Item>
-      <Item>
-        <Filename Value="../source/Pixie.TrueType.pas"/>
+        <Filename Value="../source/htmlview/Pixie.TrueType.pas"/>
         <UnitName Value="Pixie.TrueType"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.PdfWriter.pas"/>
+        <Filename Value="../source/htmlview/Pixie.PdfWriter.pas"/>
         <UnitName Value="Pixie.PdfWriter"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Canvas.Pdf.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Canvas.Pdf.pas"/>
         <UnitName Value="Pixie.Canvas.Pdf"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.PdfExport.pas"/>
+        <Filename Value="../source/htmlview/Pixie.PdfExport.pas"/>
         <UnitName Value="Pixie.PdfExport"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Table.pas"/>
+        <Filename Value="../source/htmlview/Pixie.Table.pas"/>
         <UnitName Value="Pixie.Table"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Types.pas"/>
+        <Filename Value="../source/common/Pixie.Types.pas"/>
         <UnitName Value="Pixie.Types"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Url.pas"/>
+        <Filename Value="../source/common/Pixie.Url.pas"/>
         <UnitName Value="Pixie.Url"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.Utf8.pas"/>
+        <Filename Value="../source/common/Pixie.Utf8.pas"/>
         <UnitName Value="Pixie.Utf8"/>
       </Item>
       <Item>
-        <Filename Value="../source/Pixie.WebColor.pas"/>
+        <Filename Value="../source/common/Pixie.WebColor.pas"/>
         <UnitName Value="Pixie.WebColor"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/common/Pixie.ControlBase.pas"/>
+        <UnitName Value="Pixie.ControlBase"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/common/Pixie.CustomControl.pas"/>
+        <UnitName Value="Pixie.CustomControl"/>
       </Item>
     </Files>
     <RequiredPkgs>

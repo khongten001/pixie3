@@ -38,7 +38,7 @@
         <SanitizedProjectName>PixieDemo</SanitizedProjectName>
         <DCC_DcuOutput>$(TEMP)\pixie-fmx-units</DCC_DcuOutput>
         <DCC_ExeOutput>..\..\bin</DCC_ExeOutput>
-        <DCC_UnitSearchPath>..\..\..\source;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\..\source\common;..\..\..\source\htmlview;..\..\..\source\tagbar;..\..\..\source\paintbox;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;FMX;$(DCC_Namespace)</DCC_Namespace>
         <DCC_DependencyCheckOutputName>PixieDemo.exe</DCC_DependencyCheckOutputName>
         <DCC_ImageBase>00400000</DCC_ImageBase>

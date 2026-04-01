@@ -784,6 +784,10 @@ type
     After: Pointer;   // TPixieRenderItem
   end;
 
+  // Cursor kinds for Pixie components
+  TPixieCursorKind = (
+    pxCurDefault, pxCurHandPoint, pxCurIBeam, pxCurCross, pxCurSizeAll);
+
 implementation
 
 function PixieIsBinaryString(const S: string): Boolean;
