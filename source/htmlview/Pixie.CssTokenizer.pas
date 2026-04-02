@@ -564,6 +564,7 @@ class function TPixieCssTokenizer.ConvertStringToNumber(const S: string): Double
 var
   P, Len: Integer;
   Sign, IntPart, FracPart, FracDigits, ExpSign, ExpPart: Double;
+  Mantissa, ExpVal: Double;
 begin
   P := 1;
   Len := Length(S);
@@ -611,7 +612,23 @@ begin
   end;
 
   // Return s*(i + f*10^(-d))*10^(t*e)
-  Result := Sign * (IntPart + FracPart * Power(10, -FracDigits)) * Power(10, ExpSign * ExpPart);
+  // Guard against FPU overflow from extreme exponents
+  if FracDigits > 0 then
+    Mantissa := IntPart + FracPart * Power(10, -FracDigits)
+  else
+    Mantissa := IntPart;
+  if Mantissa = 0 then
+    Result := 0
+  else
+  begin
+    ExpVal := ExpSign * ExpPart;
+    if ExpVal > 38 then
+      Result := Sign * 3.4e38
+    else if ExpVal < -38 then
+      Result := 0
+    else
+      Result := Sign * Mantissa * Power(10, ExpVal);
+  end;
 end;
 
 // https://www.w3.org/TR/css-syntax-3/#consume-number
@@ -764,8 +781,33 @@ end;
 function TPixieCssTokenizer.ConsumeIdentLikeToken: TPixieCssToken;
 var
   Name: string;
+  Ch: Integer;
 begin
   Name := ConsumeIdentSequence;
+
+  // Unicode-range: U+hex — skip the range value so +10E60 etc.
+  // are not parsed as numbers (would overflow Single).
+  if (Length(Name) = 1) and SameText(Name, 'u')
+    and (ByteAt(FIndex) = Ord('+')) then
+  begin
+    Ch := ByteAt(FIndex + 1);
+    if PixieIsHexDigit(Ch) or (Ch = Ord('?')) then
+    begin
+      Inc(FIndex);
+      while PixieIsHexDigit(ByteAt(FIndex))
+        or (ByteAt(FIndex) = Ord('?')) do
+        Inc(FIndex);
+      if (ByteAt(FIndex) = Ord('-'))
+        and PixieIsHexDigit(ByteAt(FIndex + 1)) then
+      begin
+        Inc(FIndex);
+        while PixieIsHexDigit(ByteAt(FIndex)) do
+          Inc(FIndex);
+      end;
+      Result := TPixieCssToken.Create(cssTokenIdent, Name);
+      Exit;
+    end;
+  end;
 
   // Special handling for url(
   if SameText(Name, 'url') and (ByteAt(FIndex) = Ord('(')) then
