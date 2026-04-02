@@ -25,6 +25,7 @@ type
     const Url: string; Stream: TStream; var Success: Boolean) of object;
 
   TPixieImageCacheMap = TDictionary<string, TPixieImageHandle>;
+  TPixieAlphaImageSet = TDictionary<string, Boolean>;
 
   TPixiePendingImage = record
     Data: TMemoryStream;
@@ -42,6 +43,7 @@ type
   private
     FCanvas: TPixieCanvas;
     FImages: TPixieImageCacheMap;
+    FAlphaImages: TPixieAlphaImageSet;
     FPendingImages: TPixiePendingImageMap;
     FCssCache: TPixieCssCache;
     FBaseUrl: string;
@@ -341,12 +343,36 @@ begin
   end;
 end;
 
+function DetectImageAlpha(Stream: TStream): Boolean;
+var
+  Header: array[0..25] of Byte;
+  SavePos: Int64;
+  BytesRead: Integer;
+begin
+  Result := False;
+  SavePos := Stream.Position;
+  try
+    FillChar(Header, SizeOf(Header), 0);
+    BytesRead := Stream.Read(Header, SizeOf(Header));
+    if BytesRead < 26 then Exit;
+
+    // PNG: check IHDR color type at byte 25
+    // Color type 4 = grayscale+alpha, 6 = RGBA
+    if (Header[0] = $89) and (Header[1] = $50) and
+       (Header[2] = $4E) and (Header[3] = $47) then
+      Result := (Header[25] = 4) or (Header[25] = 6);
+  finally
+    Stream.Position := SavePos;
+  end;
+end;
+
 function TPixieNativeContainer.GetCachedImage(
   const Src, ABaseUrl: string): TPixieImageHandle;
 var
   Key: string;
   FetchStream: TMemoryStream;
   DataStream: TMemoryStream;
+  FileStream: TFileStream;
   Success: Boolean;
 begin
   // #name — pre-registered image
@@ -376,6 +402,8 @@ begin
     Result := 0;
     if DecodeDataUri(Src, DataStream) then
     try
+      if DetectImageAlpha(DataStream) then
+        FAlphaImages.AddOrSetValue(Src, True);
       Result := DecodeStreamToHandle(DataStream);
     finally
       DataStream.Free;
@@ -403,6 +431,8 @@ begin
         if Success and (FetchStream.Size > 0) then
         begin
           FetchStream.Position := 0;
+          if DetectImageAlpha(FetchStream) then
+            FAlphaImages.AddOrSetValue(Src, True);
           Result := DecodeStreamToHandle(FetchStream);
         end;
       finally
@@ -414,7 +444,17 @@ begin
     Exit;
   end;
 
-  // Local file (cache both success and failure to avoid repeated attempts)
+  // Local file — check alpha from file header (26 bytes), then load
+  if FileExists(Key) then
+  begin
+    FileStream := TFileStream.Create(Key, fmOpenRead or fmShareDenyNone);
+    try
+      if DetectImageAlpha(FileStream) then
+        FAlphaImages.AddOrSetValue(Src, True);
+    finally
+      FileStream.Free;
+    end;
+  end;
   Result := FCanvas.LoadImage(Key);
   FImages.Add(Key, Result);
 end;
@@ -694,6 +734,7 @@ begin
   inherited Create;
   FCanvas := ACanvas;
   FImages := TPixieImageCacheMap.Create;
+  FAlphaImages := TPixieAlphaImageSet.Create;
   FPendingImages := TPixiePendingImageMap.Create;
   FCssCache := TPixieCssCache.Create;
   FDefaultFontSize := 16;
@@ -710,6 +751,7 @@ begin
   for Pair in FImages do
     FCanvas.FreeImage(Pair.Value);
   FImages.Free;
+  FAlphaImages.Free;
   for PendingPair in FPendingImages do
     PendingPair.Value.Data.Free;
   FPendingImages.Free;
@@ -822,9 +864,10 @@ var
   Handle: TPixieImageHandle;
   R: TPixieBorderRadiuses;
   TileW, TileH: Single;
-  RepeatX, RepeatY: Boolean;
+  RepeatX, RepeatY, HasAlpha: Boolean;
   Col, Row, StartCol, StartRow, EndCol, EndRow: Integer;
   DrawX, DrawY, DrawW, DrawH: Single;
+  CX, CY, CW, CH, K: Single;
   ExtraW, ExtraH: Single;
 begin
   Handle := GetCachedImage(Url, ABaseUrl);
@@ -859,14 +902,47 @@ begin
     EndRow := 0;
   end;
 
-  // Overlap by 1px to prevent interpolation gaps between tiles
-  if RepeatX then ExtraW := 1 else ExtraW := 0;
-  if RepeatY then ExtraH := 1 else ExtraH := 0;
+  // Overlap by 2px to prevent interpolation gaps between tiles.
+  // Skip overlap for images with alpha to avoid compositing artifacts.
+  HasAlpha := FAlphaImages.ContainsKey(Url);
+  if RepeatX and not HasAlpha then ExtraW := 2 else ExtraW := 0;
+  if RepeatY and not HasAlpha then ExtraH := 2 else ExtraH := 0;
 
   R := Layer.BorderRadius;
   FCanvas.SaveState;
   try
     FCanvas.SetClipRect(Layer.ClipBox, R);
+    // SetClipRect ignores border radius on some backends (D2D, FMX).
+    // Add an explicit rounded-rect path clip when radius is present.
+    if (R.TopLeftX > 0) or (R.TopLeftY > 0) or
+       (R.TopRightX > 0) or (R.TopRightY > 0) or
+       (R.BottomRightX > 0) or (R.BottomRightY > 0) or
+       (R.BottomLeftX > 0) or (R.BottomLeftY > 0) then
+    begin
+      CX := Layer.ClipBox.X;
+      CY := Layer.ClipBox.Y;
+      CW := Layer.ClipBox.Width;
+      CH := Layer.ClipBox.Height;
+      K := 0.5522847498; // bezier kappa for quarter-circle approximation
+      FCanvas.BeginPath;
+      FCanvas.MoveTo(CX + R.TopLeftX, CY);
+      FCanvas.LineTo(CX + CW - R.TopRightX, CY);
+      FCanvas.CurveTo(CX + CW - R.TopRightX * (1 - K), CY,
+        CX + CW, CY + R.TopRightY * (1 - K), CX + CW, CY + R.TopRightY);
+      FCanvas.LineTo(CX + CW, CY + CH - R.BottomRightY);
+      FCanvas.CurveTo(CX + CW, CY + CH - R.BottomRightY * (1 - K),
+        CX + CW - R.BottomRightX * (1 - K), CY + CH,
+        CX + CW - R.BottomRightX, CY + CH);
+      FCanvas.LineTo(CX + R.BottomLeftX, CY + CH);
+      FCanvas.CurveTo(CX + R.BottomLeftX * (1 - K), CY + CH,
+        CX, CY + CH - R.BottomLeftY * (1 - K),
+        CX, CY + CH - R.BottomLeftY);
+      FCanvas.LineTo(CX, CY + R.TopLeftY);
+      FCanvas.CurveTo(CX, CY + R.TopLeftY * (1 - K),
+        CX + R.TopLeftX * (1 - K), CY, CX + R.TopLeftX, CY);
+      FCanvas.ClosePath;
+      FCanvas.ClipPath;
+    end;
     for Row := StartRow to EndRow do
       for Col := StartCol to EndCol do
       begin
