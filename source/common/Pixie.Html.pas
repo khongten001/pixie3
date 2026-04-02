@@ -671,6 +671,15 @@ begin
   Result := 0;
 end;
 
+{$IFDEF FPC}
+function BytesToUtf8(const Bytes: TBytes; Offset, Count: Integer): string;
+begin
+  SetLength(Result, Count);
+  if Count > 0 then
+    Move(Bytes[Offset], Result[1], Count);
+end;
+{$ENDIF}
+
 function PixieDecodeHtmlBytes(const Bytes: TBytes): string;
 var
   Charset: string;
@@ -680,7 +689,13 @@ begin
   // Check for UTF-8 BOM
   if (Length(Bytes) >= 3) and
      (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+  begin
+    {$IFDEF FPC}
+    Exit(BytesToUtf8(Bytes, 3, Length(Bytes) - 3));
+    {$ELSE}
     Exit(TEncoding.UTF8.GetString(Bytes, 3, Length(Bytes) - 3));
+    {$ENDIF}
+  end;
 
   // Check for UTF-16 LE BOM
   if (Length(Bytes) >= 2) and (Bytes[0] = $FF) and (Bytes[1] = $FE) then
@@ -695,8 +710,14 @@ begin
   CodePage := PixieCharsetToCodePage(Charset);
 
   if CodePage = 0 then
+  begin
     // UTF-8 or unknown — interpret as UTF-8
-    Result := TEncoding.UTF8.GetString(Bytes)
+    {$IFDEF FPC}
+    Result := BytesToUtf8(Bytes, 0, Length(Bytes));
+    {$ELSE}
+    Result := TEncoding.UTF8.GetString(Bytes);
+    {$ENDIF}
+  end
   else
   begin
     Enc := TEncoding.GetEncoding(CodePage);

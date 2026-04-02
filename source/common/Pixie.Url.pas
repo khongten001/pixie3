@@ -167,10 +167,15 @@ end;
 
 class function TPixieUrl.Decode(const S: string): string;
 var
-  I: Integer;
+  I, Ch: Integer;
+{$IFDEF FPC}
   C: Char;
-  Hex: string;
+{$ELSE}
+  Bytes: array of Byte;
+  ByteCount: Integer;
+{$ENDIF}
 begin
+{$IFDEF FPC}
   Result := '';
   I := 1;
   while I <= Length(S) do
@@ -180,8 +185,7 @@ begin
     begin
       if I + 2 > Length(S) then
         Break;
-      Hex := Copy(S, I + 1, 2);
-      C := Chr(StrToIntDef('$' + Hex, 0));
+      C := Chr(StrToIntDef('$' + Copy(S, I + 1, 2), 0));
       Inc(I, 2);
     end
     else if C = '+' then
@@ -189,6 +193,32 @@ begin
     Result := Result + C;
     Inc(I);
   end;
+{$ELSE}
+  SetLength(Bytes, Length(S));
+  ByteCount := 0;
+  I := 1;
+  while I <= Length(S) do
+  begin
+    if (S[I] = '%') and (I + 2 <= Length(S)) then
+    begin
+      Ch := StrToIntDef('$' + Copy(S, I + 1, 2), -1);
+      if Ch >= 0 then
+      begin
+        Bytes[ByteCount] := Byte(Ch);
+        Inc(ByteCount);
+        Inc(I, 3);
+        Continue;
+      end;
+    end;
+    if S[I] = '+' then
+      Bytes[ByteCount] := Byte(Ord(' '))
+    else
+      Bytes[ByteCount] := Byte(Ord(S[I]));
+    Inc(ByteCount);
+    Inc(I);
+  end;
+  Result := TEncoding.UTF8.GetString(Bytes, 0, ByteCount);
+{$ENDIF}
 end;
 
 function TPixieUrl.HasScheme: Boolean;

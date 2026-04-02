@@ -107,16 +107,6 @@ begin
   UrlPanel.Align := TAlignLayout.Top;
   UrlPanel.Height := 36;
 
-  BtnOpen := TButton.Create(UrlPanel);
-  BtnOpen.Parent := UrlPanel;
-  BtnOpen.Align := TAlignLayout.Left;
-  BtnOpen.Width := 130;
-  BtnOpen.Text := 'Load HTML from file';
-  BtnOpen.OnClick := BtnOpenClick;
-  BtnOpen.Margins.Left := 4;
-  BtnOpen.Margins.Top := 4;
-  BtnOpen.Margins.Bottom := 4;
-
   BtnSavePdf := TButton.Create(UrlPanel);
   BtnSavePdf.Parent := UrlPanel;
   BtnSavePdf.Align := TAlignLayout.Left;
@@ -126,6 +116,16 @@ begin
   BtnSavePdf.Margins.Left := 4;
   BtnSavePdf.Margins.Top := 4;
   BtnSavePdf.Margins.Bottom := 4;
+
+  BtnOpen := TButton.Create(UrlPanel);
+  BtnOpen.Parent := UrlPanel;
+  BtnOpen.Align := TAlignLayout.Left;
+  BtnOpen.Width := 130;
+  BtnOpen.Text := 'Load HTML from file';
+  BtnOpen.OnClick := BtnOpenClick;
+  BtnOpen.Margins.Left := 4;
+  BtnOpen.Margins.Top := 4;
+  BtnOpen.Margins.Bottom := 4;
 
   BtnGo := TButton.Create(UrlPanel);
   BtnGo.Parent := UrlPanel;

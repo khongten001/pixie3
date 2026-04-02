@@ -172,7 +172,7 @@ implementation
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Base64,{$ENDIF}
   {$IFNDEF FPC}System.NetEncoding,{$ENDIF}
-  Pixie.Url;
+  Pixie.Utf8, Pixie.Url;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -188,7 +188,13 @@ end;
 function PercentDecode(const S: string): string;
 var
   I, Len, Ch: Integer;
+{$IFNDEF FPC}
+  Bytes: array of Byte;
+  ByteCount: Integer;
+{$ENDIF}
 begin
+{$IFDEF FPC}
+  // FPC: string is UTF-8 AnsiString, Chr() produces raw bytes — decode in place
   Result := '';
   I := 1;
   Len := Length(S);
@@ -207,6 +213,32 @@ begin
     Result := Result + S[I];
     Inc(I);
   end;
+{$ELSE}
+  // Delphi: string is UTF-16; collect decoded bytes then convert from UTF-8
+  Len := Length(S);
+  SetLength(Bytes, Len);
+  ByteCount := 0;
+  I := 1;
+  while I <= Len do
+  begin
+    if (S[I] = '%') and (I + 2 <= Len) then
+    begin
+      Ch := StrToIntDef('$' + Copy(S, I + 1, 2), -1);
+      if Ch >= 0 then
+      begin
+        Bytes[ByteCount] := Byte(Ch);
+        Inc(ByteCount);
+        Inc(I, 3);
+        Continue;
+      end;
+    end;
+    // Non-encoded ASCII character: flush as a byte
+    Bytes[ByteCount] := Byte(Ord(S[I]));
+    Inc(ByteCount);
+    Inc(I);
+  end;
+  Result := TEncoding.UTF8.GetString(Bytes, 0, ByteCount);
+{$ENDIF}
 end;
 
 function TPixieNativeContainer.ResolveUrl(
@@ -975,22 +1007,36 @@ end;
 procedure TPixieNativeContainer.TransformText(var Text: string;
   Tt: TPixieTextTransform);
 var
-  I: Integer;
+  I, Start: Integer;
+  Ch: UInt32;
   PrevSpace: Boolean;
+  Tmp, Up: string;
 begin
   case Tt of
     ttUppercase:
-      Text := UpperCase(Text);
+      Text := AnsiUpperCase(Text);
     ttLowercase:
-      Text := LowerCase(Text);
+      Text := AnsiLowerCase(Text);
     ttCapitalize:
     begin
       PrevSpace := True;
-      for I := 1 to Length(Text) do
+      I := 1;
+      while I <= Length(Text) do
       begin
-        if PrevSpace and ({$IFDEF FPC}Text[I] in ['a'..'z']{$ELSE}CharInSet(Text[I], ['a'..'z']){$ENDIF}) then
-          Text[I] := UpCase(Text[I]);
-        PrevSpace := {$IFDEF FPC}Text[I] in [' ', #9, #10, #13, #12]{$ELSE}CharInSet(Text[I], [' ', #9, #10, #13, #12]){$ENDIF};
+        Start := I;
+        Ch := ReadUtf8Char(Text, I);
+        if PrevSpace and (Ch > 32) then
+        begin
+          Tmp := Copy(Text, Start, I - Start);
+          Up := AnsiUpperCase(Tmp);
+          if Up <> Tmp then
+          begin
+            Delete(Text, Start, I - Start);
+            Insert(Up, Text, Start);
+            I := Start + Length(Up);
+          end;
+        end;
+        PrevSpace := (Ch = 32) or (Ch = 9) or (Ch = 10) or (Ch = 13) or (Ch = 12);
       end;
     end;
   end;
