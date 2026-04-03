@@ -23,6 +23,7 @@ type
   public
     constructor Create(ASrcEl: TPixieElement); override;
     function Clone: TPixieRenderItem; override;
+    procedure ApplyVerticalAlign; override;
     function GetFirstBaseline: TPixiePixel; override;
     function GetLastBaseline: TPixiePixel; override;
   end;
@@ -42,6 +43,33 @@ end;
 function TPixieRenderBlockContext.Clone: TPixieRenderItem;
 begin
   Result := TPixieRenderBlockContext.Create(FElement);
+end;
+
+procedure TPixieRenderBlockContext.ApplyVerticalAlign;
+var
+  ContentHeight, Add: TPixiePixel;
+  I: Integer;
+begin
+  if FChildren.Count = 0 then
+    Exit;
+  ContentHeight := 0;
+  for I := 0 to FChildren.Count - 1 do
+    ContentHeight := Max(ContentHeight,
+      FChildren[I].FPos.Y + FChildren[I].Height);
+  if FPos.Height > ContentHeight then
+  begin
+    case SrcEl.Css.VerticalAlign of
+      vaMiddle:
+        Add := (FPos.Height - ContentHeight) / 2;
+      vaBottom:
+        Add := FPos.Height - ContentHeight;
+    else
+      Add := 0;
+    end;
+    if Add <> 0 then
+      for I := 0 to FChildren.Count - 1 do
+        FChildren[I].YShift(Add);
+  end;
 end;
 
 function TPixieRenderBlockContext._RenderContent(X, Y: TPixiePixel;

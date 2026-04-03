@@ -1288,6 +1288,11 @@ begin
     FLineHeight.ComputedValue := FFontMetrics.Height
   else if FLineHeight.CssValue.Units = cssUnitsNone then
     FLineHeight.ComputedValue := TPixiePixel(FLineHeight.CssValue.Val * FS)
+  else if FLineHeight.CssValue.Units = cssUnitsPercentage then
+  begin
+    FLineHeight.ComputedValue := TPixiePixel(FLineHeight.CssValue.Val / 100 * FS);
+    FLineHeight.CssValue.SetValue(FLineHeight.ComputedValue, cssUnitsPx);
+  end
   else
   begin
     FLineHeight.ComputedValue := CtxToPixels(FLineHeight.CssValue,

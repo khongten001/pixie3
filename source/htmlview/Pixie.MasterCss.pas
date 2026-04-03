@@ -172,7 +172,6 @@ const
     '  border-left-color:gray;' +
     '  border-bottom-color:black;' +
     '  border-right-color:black;' +
-    '  font-size: medium;' +
     '}' +
 
     'tbody {' +
