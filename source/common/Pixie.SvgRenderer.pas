@@ -86,6 +86,7 @@ type
   { TPixieSvgRendererBase - abstract SVG renderer }
 
   TPixieSvgIdMap = TDictionary<string, Pointer>;
+  TPixieSvgStyleMap = TDictionary<string, string>;
 
   TPixieSvgRendererBase = class
   protected
@@ -95,6 +96,7 @@ type
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
     FGradients: TPixieSvgGradientMap;
     FIdMap: TPixieSvgIdMap;
+    FStyleMap: TPixieSvgStyleMap;
     FUseDepth: Integer;
   protected
     // Abstract drawing primitives — subclasses override these
@@ -137,6 +139,9 @@ type
       out NeedRestore: Boolean);
     procedure EmitShapeGeometry(Node: Pointer);
     procedure ApplyClipPath(Node: Pointer);
+
+    // CSS <style> support
+    procedure ParseStyleElement(const CSS: string);
 
     // Gradient support
     procedure CollectDefs(Node: Pointer);
@@ -358,6 +363,7 @@ procedure TPixieSvgRendererBase.ClearDocument;
 begin
   FreeAndNil(FGradients);
   FreeAndNil(FIdMap);
+  FreeAndNil(FStyleMap);
   if FDoc <> nil then
   begin
     FDoc.Free;
@@ -531,6 +537,49 @@ begin
   Result := PixieParseColorString(Trimmed, Color);
 end;
 
+procedure TPixieSvgRendererBase.ParseStyleElement(const CSS: string);
+var
+  P, Len, BraceStart, BraceEnd: Integer;
+  Selector, Declarations: string;
+begin
+  if FStyleMap = nil then
+    FStyleMap := TPixieSvgStyleMap.Create;
+
+  P := 1;
+  Len := Length(CSS);
+  while P <= Len do
+  begin
+    // Skip whitespace and comments
+    while (P <= Len) and (CSS[P] <= ' ') do Inc(P);
+    if (P < Len) and (CSS[P] = '/') and (CSS[P + 1] = '*') then
+    begin
+      Inc(P, 2);
+      while (P < Len) and not ((CSS[P] = '*') and (CSS[P + 1] = '/')) do Inc(P);
+      Inc(P, 2);
+      Continue;
+    end;
+    if P > Len then Break;
+
+    // Read selector(s) up to '{'
+    BraceStart := P;
+    while (BraceStart <= Len) and (CSS[BraceStart] <> '{') do Inc(BraceStart);
+    if BraceStart > Len then Break;
+    Selector := Trim(Copy(CSS, P, BraceStart - P));
+
+    // Read declarations up to '}'
+    BraceEnd := BraceStart + 1;
+    while (BraceEnd <= Len) and (CSS[BraceEnd] <> '}') do Inc(BraceEnd);
+    if BraceEnd > Len then Break;
+    Declarations := Trim(Copy(CSS, BraceStart + 1, BraceEnd - BraceStart - 1));
+    P := BraceEnd + 1;
+
+    // Handle simple class selectors: .className
+    if (Length(Selector) > 1) and (Selector[1] = '.') and
+       (Pos(' ', Selector) = 0) and (Pos(',', Selector) = 0) then
+      FStyleMap.AddOrSetValue(Copy(Selector, 2, MaxInt), Declarations);
+  end;
+end;
+
 function TPixieSvgRendererBase.ParseStyleAttribute(
   const StyleStr, PropName: string): string;
 var
@@ -568,15 +617,57 @@ function TPixieSvgRendererBase.InheritState(Node: Pointer;
 var
   FillStr, StrokeStr, StrokeWStr, OpacStr: string;
   FillOpStr, StrokeOpStr: string;
-  StyleStr: string;
+  StyleStr, ClassStr, ClassDecl, InlineStyleStr: string;
   FontFamilyStr, FontSizeStr, FontWeightStr: string;
   LetterSpacingStr: string;
   AnchorStr: string;
   Color: TPixieWebColor;
+  SpacePos: Integer;
+  ClassName: string;
 begin
   Result := ParentState;
 
-  StyleStr := GetAttr(Node, 'style');
+  // Resolve class-based styles from <style> element
+  StyleStr := '';
+  if FStyleMap <> nil then
+  begin
+    ClassStr := GetAttr(Node, 'class');
+    if ClassStr <> '' then
+    begin
+      // Support space-separated class lists: class="st0 st1 st2"
+      while ClassStr <> '' do
+      begin
+        SpacePos := Pos(' ', ClassStr);
+        if SpacePos > 0 then
+        begin
+          ClassName := Copy(ClassStr, 1, SpacePos - 1);
+          ClassStr := TrimLeft(Copy(ClassStr, SpacePos + 1, MaxInt));
+        end
+        else
+        begin
+          ClassName := ClassStr;
+          ClassStr := '';
+        end;
+        if (ClassName <> '') and FStyleMap.TryGetValue(ClassName, ClassDecl) then
+        begin
+          if StyleStr <> '' then
+            StyleStr := StyleStr + ';' + ClassDecl
+          else
+            StyleStr := ClassDecl;
+        end;
+      end;
+    end;
+  end;
+
+  // Inline style attribute overrides class styles
+  InlineStyleStr := GetAttr(Node, 'style');
+  if InlineStyleStr <> '' then
+  begin
+    if StyleStr <> '' then
+      StyleStr := StyleStr + ';' + InlineStyleStr
+    else
+      StyleStr := InlineStyleStr;
+  end;
 
   // Fill
   FillStr := GetAttr(Node, 'fill');
@@ -1026,9 +1117,9 @@ end;
 
 procedure TPixieSvgRendererBase.BuildIdMap(Node: Pointer);
 var
-  Child: TDOMNode;
+  Child, TextChild: TDOMNode;
   El: TDOMElement;
-  IdStr, TagName: string;
+  IdStr, TagName, CSS: string;
 begin
   if FIdMap = nil then
     FIdMap := TPixieSvgIdMap.Create;
@@ -1052,7 +1143,20 @@ begin
       else if TagName = 'lineargradient' then
         ParseGradient(Child, False)
       else if TagName = 'radialgradient' then
-        ParseGradient(Child, True);
+        ParseGradient(Child, True)
+      else if TagName = 'style' then
+      begin
+        CSS := '';
+        TextChild := Child.FirstChild;
+        while TextChild <> nil do
+        begin
+          if TextChild.NodeType = TEXT_NODE then
+            CSS := CSS + DomToStr(TextChild.NodeValue);
+          TextChild := TextChild.NextSibling;
+        end;
+        if CSS <> '' then
+          ParseStyleElement(CSS);
+      end;
       BuildIdMap(Child);
     end;
     Child := Child.NextSibling;
