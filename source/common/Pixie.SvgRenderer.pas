@@ -140,6 +140,7 @@ type
 
     // Gradient support
     procedure CollectDefs(Node: Pointer);
+    procedure CollectAllGradients(Node: Pointer);
     procedure ParseGradient(Node: Pointer; IsRadial: Boolean);
     function ResolveGradientStops(const Id: string): TPixieSvgGradient;
     class function ExtractUrlId(const S: string): string; static;
@@ -1017,11 +1018,17 @@ begin
   end;
 end;
 
+procedure TPixieSvgRendererBase.CollectAllGradients(Node: Pointer);
+begin
+  // Merged into BuildIdMap — single tree walk collects both IDs and gradients
+  BuildIdMap(Node);
+end;
+
 procedure TPixieSvgRendererBase.BuildIdMap(Node: Pointer);
 var
   Child: TDOMNode;
   El: TDOMElement;
-  IdStr: string;
+  IdStr, TagName: string;
 begin
   if FIdMap = nil then
     FIdMap := TPixieSvgIdMap.Create;
@@ -1038,7 +1045,16 @@ begin
   while Child <> nil do
   begin
     if Child.NodeType = ELEMENT_NODE then
+    begin
+      TagName := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if TagName = 'defs' then
+        CollectDefs(Child)
+      else if TagName = 'lineargradient' then
+        ParseGradient(Child, False)
+      else if TagName = 'radialgradient' then
+        ParseGradient(Child, True);
       BuildIdMap(Child);
+    end;
     Child := Child.NextSibling;
   end;
 end;
@@ -1063,6 +1079,7 @@ begin
   El := TDOMElement(Node);
   GradId := DomToStr(El.GetAttribute('id'));
   if GradId = '' then Exit;
+  if (FGradients <> nil) and FGradients.ContainsKey(GradId) then Exit;
 
   Grad := TPixieSvgGradient.Create;
   Grad.Id := GradId;
@@ -2299,7 +2316,7 @@ begin
     FDoc := Doc;
     FSvgRoot := SvgRoot;
 
-    // Build ID map for <use> element resolution
+    // Build ID map and pre-collect gradients (single tree walk)
     BuildIdMap(SvgRoot);
 
     Result := True;
