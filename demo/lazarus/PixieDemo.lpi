@@ -34,6 +34,7 @@
               <RangeChecks Value="True"/>
               <OverflowChecks Value="True"/>
               <StackChecks Value="True"/>
+              <IncludeAssertionCode Value="True"/>
             </Checks>
             <VerifyObjMethodCallValidity Value="True"/>
           </CodeGeneration>
