@@ -1196,14 +1196,15 @@ var
     Doc.AddTabular(AnonRi);
     AnonRi.SetParent(ElPtr);
 
-    // Insert anon item at FirstIdx, remove the original children
+    // Remove wrapped children from parent, then insert the anonymous wrapper
     ElPtr.FChildren.OwnsObjects := False;
+    for K := 0 to Tmp.Count - 1 do
+      ElPtr.FChildren.Remove(Tmp[K]);
+    if FirstIdx > ElPtr.FChildren.Count then
+      FirstIdx := ElPtr.FChildren.Count;
     ElPtr.FChildren.Insert(FirstIdx, AnonRi);
-    CurIdx := FirstIdx + 1;
-    while (CurIdx < ElPtr.FChildren.Count) and
-          (ElPtr.FChildren[CurIdx].GetParent <> ElPtr) do
-      ElPtr.FChildren.Delete(CurIdx);
     ElPtr.FChildren.OwnsObjects := True;
+    CurIdx := FirstIdx + 1;
     FirstIdx := CurIdx;
     Tmp.Clear;
   end;
