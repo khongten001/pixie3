@@ -468,11 +468,12 @@ function TPixieSvgRendererBase.ParseSvgColor(const S: string;
   out Color: TPixieWebColor): Boolean;
 var
   Trimmed, Lower: string;
-  P, ParenStart: Integer;
+  P, ParenStart, Depth: Integer;
   Vals: array[0..3] of Single;
   ValCount: Integer;
   NumStr: string;
   AlphaIsPercent: Boolean;
+  Fallback: string;
 begin
   Trimmed := Trim(S);
   if (Trimmed = '') or (Trimmed = 'none') then
@@ -481,8 +482,37 @@ begin
     Exit;
   end;
 
-  // Try rgb()/rgba() first
+  // Resolve var() — extract fallback value (handles nesting)
   Lower := LowerCase(Trimmed);
+  while Pos('var(', Lower) = 1 do
+  begin
+    // Find the comma separating property name from fallback
+    P := 5; // after 'var('
+    Depth := 1;
+    while (P <= Length(Trimmed)) and (Depth > 0) do
+    begin
+      if Trimmed[P] = '(' then Inc(Depth)
+      else if Trimmed[P] = ')' then Dec(Depth)
+      else if (Trimmed[P] = ',') and (Depth = 1) then Break;
+      Inc(P);
+    end;
+    if (P > Length(Trimmed)) or (Trimmed[P] <> ',') then
+    begin
+      // No fallback — cannot resolve
+      Exit(False);
+    end;
+    // Extract fallback, strip outer closing paren
+    Fallback := Trim(Copy(Trimmed, P + 1, Length(Trimmed) - P));
+    if (Length(Fallback) > 0) and (Fallback[Length(Fallback)] = ')') then
+      Fallback := Trim(Copy(Fallback, 1, Length(Fallback) - 1));
+    Trimmed := Fallback;
+    Lower := LowerCase(Trimmed);
+  end;
+
+  if (Trimmed = '') or (Trimmed = 'none') then
+    Exit(False);
+
+  // Try rgb()/rgba() first
   if (Pos('rgb(', Lower) = 1) or (Pos('rgba(', Lower) = 1) then
   begin
     ParenStart := Pos('(', Trimmed);
