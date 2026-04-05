@@ -10,7 +10,7 @@ interface
 uses
   Windows, ActiveX, SysUtils, Classes, Math,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription,
+  Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas,
   Pixie.D2DHeaders;
 
@@ -64,6 +64,7 @@ type
       const R: TPixieBorderRadiuses; out Geom: ID2D1PathGeometry);
     function CreateGradientStops(const Points: TPixieColorPointList;
       out Collection: ID2D1GradientStopCollection): Boolean;
+    procedure ApplyFillRule(FillRule: TPixieFillRule);
     procedure FinalizePath;
     function FindFontMetrics(const Family: WideString;
       Weight: TDwriteFontWeight; Style: TDwriteFontStyle;
@@ -148,11 +149,18 @@ type
     procedure FillAndStrokePath(FillColor: TPixieWebColor;
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); override;
-    procedure ClipPath; override;
+    procedure DiscardPath; override;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
     procedure FillPathLinearGradient(
-      const Gradient: TPixieLinearGradientLayer); override;
+      const Gradient: TPixieLinearGradientLayer;
+      FillRule: TPixieFillRule = frNonZero); override;
     procedure FillPathRadialGradient(
-      const Gradient: TPixieRadialGradientLayer); override;
+      const Gradient: TPixieRadialGradientLayer;
+      FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer; Width: Single); override;
+    procedure StrokePathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer; Width: Single); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     function LoadSvgFromData(Data: Pointer;
@@ -1364,6 +1372,17 @@ end;
 // Path API
 // ---------------------------------------------------------------------------
 
+procedure TPixieD2DCanvas.ApplyFillRule(FillRule: TPixieFillRule);
+begin
+  if FPathSink <> nil then
+  begin
+    if FillRule = frEvenOdd then
+      FPathSink.SetFillMode(D2D1_FILL_MODE_ALTERNATE)
+    else
+      FPathSink.SetFillMode(D2D1_FILL_MODE_WINDING);
+  end;
+end;
+
 procedure TPixieD2DCanvas.FinalizePath;
 begin
   if FPathSink <> nil then
@@ -1435,21 +1454,28 @@ end;
 procedure TPixieD2DCanvas.FillPath(Color: TPixieWebColor;
   FillRule: TPixieFillRule);
 begin
-  if (FTarget = nil) or (Color.Alpha = 0) then Exit;
+  if FTarget = nil then Exit;
+  ApplyFillRule(FillRule);
   FinalizePath;
   if FPathGeometry = nil then Exit;
-  FBrush.SetColor(ToColorF(Color));
-  FTarget.FillGeometry(FPathGeometry, FBrush, nil);
+  if Color.Alpha > 0 then
+  begin
+    FBrush.SetColor(ToColorF(Color));
+    FTarget.FillGeometry(FPathGeometry, FBrush, nil);
+  end;
   FPathGeometry := nil;
 end;
 
 procedure TPixieD2DCanvas.StrokePath(Color: TPixieWebColor; Width: Single);
 begin
-  if (FTarget = nil) or (Color.Alpha = 0) then Exit;
+  if FTarget = nil then Exit;
   FinalizePath;
   if FPathGeometry = nil then Exit;
-  FBrush.SetColor(ToColorF(Color));
-  FTarget.DrawGeometry(FPathGeometry, FBrush, Width, nil);
+  if Color.Alpha > 0 then
+  begin
+    FBrush.SetColor(ToColorF(Color));
+    FTarget.DrawGeometry(FPathGeometry, FBrush, Width, nil);
+  end;
   FPathGeometry := nil;
 end;
 
@@ -1458,6 +1484,7 @@ procedure TPixieD2DCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
   FillRule: TPixieFillRule);
 begin
   if FTarget = nil then Exit;
+  ApplyFillRule(FillRule);
   FinalizePath;
   if FPathGeometry = nil then Exit;
   if FillColor.Alpha > 0 then
@@ -1473,11 +1500,18 @@ begin
   FPathGeometry := nil;
 end;
 
-procedure TPixieD2DCanvas.ClipPath;
+procedure TPixieD2DCanvas.DiscardPath;
+begin
+  FinalizePath;
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.ClipPath(FillRule: TPixieFillRule);
 var
   LayerParams: TD2d1LayerParameters;
 begin
   if FTarget = nil then Exit;
+  ApplyFillRule(FillRule);
   FinalizePath;
   if FPathGeometry = nil then Exit;
   FillChar(LayerParams, SizeOf(LayerParams), 0);
@@ -1497,7 +1531,59 @@ begin
 end;
 
 procedure TPixieD2DCanvas.FillPathLinearGradient(
-  const Gradient: TPixieLinearGradientLayer);
+  const Gradient: TPixieLinearGradientLayer;
+  FillRule: TPixieFillRule);
+var
+  Stops: ID2D1GradientStopCollection;
+  Props: TD2d1LinearGradientBrushProperties;
+  LBrush: ID2D1LinearGradientBrush;
+begin
+  if (FTarget = nil) or (Gradient = nil) then Exit;
+  ApplyFillRule(FillRule);
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  if not CreateGradientStops(Gradient.ColorPoints, Stops) then
+  begin
+    FPathGeometry := nil;
+    Exit;
+  end;
+  Props.startPoint := MakePoint(Gradient.StartPt.X, Gradient.StartPt.Y);
+  Props.endPoint := MakePoint(Gradient.EndPt.X, Gradient.EndPt.Y);
+  if Succeeded(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
+    LBrush)) then
+    FTarget.FillGeometry(FPathGeometry, LBrush, nil);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.FillPathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer;
+  FillRule: TPixieFillRule);
+var
+  Stops: ID2D1GradientStopCollection;
+  Props: TD2d1RadialGradientBrushProperties;
+  RBrush: ID2D1RadialGradientBrush;
+begin
+  if (FTarget = nil) or (Gradient = nil) then Exit;
+  ApplyFillRule(FillRule);
+  FinalizePath;
+  if FPathGeometry = nil then Exit;
+  if not CreateGradientStops(Gradient.ColorPoints, Stops) then
+  begin
+    FPathGeometry := nil;
+    Exit;
+  end;
+  Props.center := MakePoint(Gradient.Position.X, Gradient.Position.Y);
+  Props.gradientOriginOffset := MakePoint(0, 0);
+  Props.radiusX := Gradient.Radius.X;
+  Props.radiusY := Gradient.Radius.Y;
+  if Succeeded(FTarget.CreateRadialGradientBrush(@Props, nil, Stops,
+    RBrush)) then
+    FTarget.FillGeometry(FPathGeometry, RBrush, nil);
+  FPathGeometry := nil;
+end;
+
+procedure TPixieD2DCanvas.StrokePathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer; Width: Single);
 var
   Stops: ID2D1GradientStopCollection;
   Props: TD2d1LinearGradientBrushProperties;
@@ -1515,12 +1601,12 @@ begin
   Props.endPoint := MakePoint(Gradient.EndPt.X, Gradient.EndPt.Y);
   if Succeeded(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
     LBrush)) then
-    FTarget.FillGeometry(FPathGeometry, LBrush, nil);
+    FTarget.DrawGeometry(FPathGeometry, LBrush, Width, nil);
   FPathGeometry := nil;
 end;
 
-procedure TPixieD2DCanvas.FillPathRadialGradient(
-  const Gradient: TPixieRadialGradientLayer);
+procedure TPixieD2DCanvas.StrokePathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer; Width: Single);
 var
   Stops: ID2D1GradientStopCollection;
   Props: TD2d1RadialGradientBrushProperties;
@@ -1540,7 +1626,7 @@ begin
   Props.radiusY := Gradient.Radius.Y;
   if Succeeded(FTarget.CreateRadialGradientBrush(@Props, nil, Stops,
     RBrush)) then
-    FTarget.FillGeometry(FPathGeometry, RBrush, nil);
+    FTarget.DrawGeometry(FPathGeometry, RBrush, Width, nil);
   FPathGeometry := nil;
 end;
 

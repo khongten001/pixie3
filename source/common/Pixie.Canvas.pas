@@ -10,7 +10,7 @@ interface
 uses
   Classes, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription;
+  Pixie.GradientLayer, Pixie.FontDescription;
 
 type
   TPixieFontHandle = PtrUInt;
@@ -149,14 +149,25 @@ type
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); virtual;
 
+    // Discard current path without rendering
+    procedure DiscardPath; virtual;
+
     // Clip to current path, then clear path
-    procedure ClipPath; virtual;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); virtual;
 
     // Fill current path with gradient, then clear path
     procedure FillPathLinearGradient(
-      const Gradient: TPixieLinearGradientLayer); virtual;
+      const Gradient: TPixieLinearGradientLayer;
+      FillRule: TPixieFillRule = frNonZero); virtual;
     procedure FillPathRadialGradient(
-      const Gradient: TPixieRadialGradientLayer); virtual;
+      const Gradient: TPixieRadialGradientLayer;
+      FillRule: TPixieFillRule = frNonZero); virtual;
+
+    // Stroke current path with gradient, then clear path
+    procedure StrokePathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer; Width: Single); virtual;
+    procedure StrokePathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer; Width: Single); virtual;
 
     // Affine transform — concatenates with current CTM
     // Parameters match SVG matrix(a,b,c,d,e,f) convention
@@ -336,33 +347,53 @@ procedure TPixieCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
 begin
 end;
 
-procedure TPixieCanvas.ClipPath;
+procedure TPixieCanvas.DiscardPath;
+begin
+  BeginPath;
+end;
+
+procedure TPixieCanvas.ClipPath(FillRule: TPixieFillRule);
 begin
 end;
 
 procedure TPixieCanvas.FillPathLinearGradient(
-  const Gradient: TPixieLinearGradientLayer);
+  const Gradient: TPixieLinearGradientLayer;
+  FillRule: TPixieFillRule);
 var
   EmptyRadius: TPixieBorderRadiuses;
 begin
   // Default: clip to path, fill bounding rect with gradient
   FillChar(EmptyRadius, SizeOf(EmptyRadius), 0);
   SaveState;
-  ClipPath;
+  ClipPath(FillRule);
   FillLinearGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
   RestoreState;
 end;
 
 procedure TPixieCanvas.FillPathRadialGradient(
-  const Gradient: TPixieRadialGradientLayer);
+  const Gradient: TPixieRadialGradientLayer;
+  FillRule: TPixieFillRule);
 var
   EmptyRadius: TPixieBorderRadiuses;
 begin
   FillChar(EmptyRadius, SizeOf(EmptyRadius), 0);
   SaveState;
-  ClipPath;
+  ClipPath(FillRule);
   FillRadialGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
   RestoreState;
+end;
+
+procedure TPixieCanvas.StrokePathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer; Width: Single);
+begin
+  // Default: discard path. Backends with native gradient stroke override this.
+  DiscardPath;
+end;
+
+procedure TPixieCanvas.StrokePathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer; Width: Single);
+begin
+  DiscardPath;
 end;
 
 procedure TPixieCanvas.ConcatMatrix(A, B, C, D, E, F: Single);

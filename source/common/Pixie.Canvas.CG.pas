@@ -13,7 +13,7 @@ uses
   MacOSAll,
   CocoaGDIObjects,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription,
+  Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas;
 
 type
@@ -135,7 +135,12 @@ type
     procedure FillAndStrokePath(FillColor: TPixieWebColor;
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); override;
-    procedure ClipPath; override;
+    procedure DiscardPath; override;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer; Width: Single); override;
+    procedure StrokePathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer; Width: Single); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     function LoadSvgFromData(Data: Pointer;
@@ -1284,21 +1289,31 @@ end;
 procedure TPixieCGCanvas.FillPath(Color: TPixieWebColor;
   FillRule: TPixieFillRule);
 begin
-  if (FCG = nil) or (Color.Alpha = 0) then Exit;
-  SetFillColor(Color);
-  if FillRule = frEvenOdd then
-    CGContextDrawPath(FCG, kCGPathEOFill)
+  if FCG = nil then Exit;
+  if Color.Alpha > 0 then
+  begin
+    SetFillColor(Color);
+    if FillRule = frEvenOdd then
+      CGContextDrawPath(FCG, kCGPathEOFill)
+    else
+      CGContextDrawPath(FCG, kCGPathFill);
+  end
   else
-    CGContextDrawPath(FCG, kCGPathFill);
+    CGContextBeginPath(FCG);
 end;
 
 procedure TPixieCGCanvas.StrokePath(Color: TPixieWebColor;
   Width: Single);
 begin
-  if (FCG = nil) or (Color.Alpha = 0) then Exit;
-  SetStrokeColor(Color);
-  CGContextSetLineWidth(FCG, Width);
-  CGContextDrawPath(FCG, kCGPathStroke);
+  if FCG = nil then Exit;
+  if Color.Alpha > 0 then
+  begin
+    SetStrokeColor(Color);
+    CGContextSetLineWidth(FCG, Width);
+    CGContextDrawPath(FCG, kCGPathStroke);
+  end
+  else
+    CGContextBeginPath(FCG);
 end;
 
 procedure TPixieCGCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
@@ -1306,19 +1321,158 @@ procedure TPixieCGCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
   FillRule: TPixieFillRule);
 begin
   if FCG = nil then Exit;
-  SetFillColor(FillColor);
-  SetStrokeColor(StrokeColor);
-  CGContextSetLineWidth(FCG, StrokeWidth);
-  if FillRule = frEvenOdd then
-    CGContextDrawPath(FCG, kCGPathEOFillStroke)
+  if (FillColor.Alpha > 0) and (StrokeColor.Alpha > 0) then
+  begin
+    SetFillColor(FillColor);
+    SetStrokeColor(StrokeColor);
+    CGContextSetLineWidth(FCG, StrokeWidth);
+    if FillRule = frEvenOdd then
+      CGContextDrawPath(FCG, kCGPathEOFillStroke)
+    else
+      CGContextDrawPath(FCG, kCGPathFillStroke);
+  end
+  else if FillColor.Alpha > 0 then
+  begin
+    SetFillColor(FillColor);
+    if FillRule = frEvenOdd then
+      CGContextDrawPath(FCG, kCGPathEOFill)
+    else
+      CGContextDrawPath(FCG, kCGPathFill);
+  end
+  else if StrokeColor.Alpha > 0 then
+  begin
+    SetStrokeColor(StrokeColor);
+    CGContextSetLineWidth(FCG, StrokeWidth);
+    CGContextDrawPath(FCG, kCGPathStroke);
+  end
   else
-    CGContextDrawPath(FCG, kCGPathFillStroke);
+    CGContextBeginPath(FCG);
 end;
 
-procedure TPixieCGCanvas.ClipPath;
+procedure TPixieCGCanvas.DiscardPath;
+begin
+  if FCG <> nil then
+    CGContextBeginPath(FCG);
+end;
+
+procedure TPixieCGCanvas.StrokePathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer; Width: Single);
+var
+  Components: array of CGFloat;
+  Locations: array of CGFloat;
+  I, Count: Integer;
+  Cp: TPixieColorPoint;
+  Grad: CGGradientRef;
+begin
+  if (FCG = nil) or (Gradient = nil) then Exit;
+  Count := Gradient.ColorPoints.Count;
+  if Count < 2 then
+  begin
+    CGContextBeginPath(FCG);
+    Exit;
+  end;
+
+  SetLength(Components, Count * 4);
+  SetLength(Locations, Count);
+  for I := 0 to Count - 1 do
+  begin
+    Cp := Gradient.ColorPoints[I];
+    Components[I * 4 + 0] := Cp.Color.Red / 255.0;
+    Components[I * 4 + 1] := Cp.Color.Green / 255.0;
+    Components[I * 4 + 2] := Cp.Color.Blue / 255.0;
+    Components[I * 4 + 3] := Cp.Color.Alpha / 255.0;
+    Locations[I] := Cp.Offset;
+  end;
+
+  Grad := CGGradientCreateWithColorComponents(FColorSpace,
+    @Components[0], @Locations[0], Count);
+  if Grad = nil then
+  begin
+    CGContextBeginPath(FCG);
+    Exit;
+  end;
+  try
+    CGContextSetLineWidth(FCG, Width);
+    CGContextReplacePathWithStrokedPath(FCG);
+    CGContextSaveGState(FCG);
+    try
+      CGContextClip(FCG);
+      CGContextDrawLinearGradient(FCG, Grad,
+        CGPointMake(Gradient.StartPt.X, Gradient.StartPt.Y),
+        CGPointMake(Gradient.EndPt.X, Gradient.EndPt.Y),
+        kCGGradientDrawsBeforeStartLocation or
+          kCGGradientDrawsAfterEndLocation);
+    finally
+      CGContextRestoreGState(FCG);
+    end;
+  finally
+    CGGradientRelease(Grad);
+  end;
+end;
+
+procedure TPixieCGCanvas.StrokePathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer; Width: Single);
+var
+  Components: array of CGFloat;
+  Locations: array of CGFloat;
+  I, Count: Integer;
+  Cp: TPixieColorPoint;
+  Grad: CGGradientRef;
+begin
+  if (FCG = nil) or (Gradient = nil) then Exit;
+  Count := Gradient.ColorPoints.Count;
+  if Count < 2 then
+  begin
+    CGContextBeginPath(FCG);
+    Exit;
+  end;
+
+  SetLength(Components, Count * 4);
+  SetLength(Locations, Count);
+  for I := 0 to Count - 1 do
+  begin
+    Cp := Gradient.ColorPoints[I];
+    Components[I * 4 + 0] := Cp.Color.Red / 255.0;
+    Components[I * 4 + 1] := Cp.Color.Green / 255.0;
+    Components[I * 4 + 2] := Cp.Color.Blue / 255.0;
+    Components[I * 4 + 3] := Cp.Color.Alpha / 255.0;
+    Locations[I] := Cp.Offset;
+  end;
+
+  Grad := CGGradientCreateWithColorComponents(FColorSpace,
+    @Components[0], @Locations[0], Count);
+  if Grad = nil then
+  begin
+    CGContextBeginPath(FCG);
+    Exit;
+  end;
+  try
+    CGContextSetLineWidth(FCG, Width);
+    CGContextReplacePathWithStrokedPath(FCG);
+    CGContextSaveGState(FCG);
+    try
+      CGContextClip(FCG);
+      CGContextDrawRadialGradient(FCG, Grad,
+        CGPointMake(Gradient.Position.X, Gradient.Position.Y), 0,
+        CGPointMake(Gradient.Position.X, Gradient.Position.Y),
+        Gradient.Radius.X,
+        kCGGradientDrawsBeforeStartLocation or
+          kCGGradientDrawsAfterEndLocation);
+    finally
+      CGContextRestoreGState(FCG);
+    end;
+  finally
+    CGGradientRelease(Grad);
+  end;
+end;
+
+procedure TPixieCGCanvas.ClipPath(FillRule: TPixieFillRule);
 begin
   if FCG = nil then Exit;
-  CGContextClip(FCG);
+  if FillRule = frEvenOdd then
+    CGContextEOClip(FCG)
+  else
+    CGContextClip(FCG);
 end;
 
 procedure TPixieCGCanvas.ConcatMatrix(A, B, C, D, E, F: Single);

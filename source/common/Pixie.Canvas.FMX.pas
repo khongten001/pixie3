@@ -11,7 +11,7 @@ uses
   System.UIConsts, System.Generics.Collections, System.Math.Vectors,
   FMX.Graphics, FMX.Types, FMX.TextLayout,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription,
+  Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas, Pixie.FontMetrics;
 
 type
@@ -158,11 +158,14 @@ type
     procedure FillAndStrokePath(FillColor: TPixieWebColor;
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); override;
-    procedure ClipPath; override;
+    procedure DiscardPath; override;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
     procedure FillPathLinearGradient(
-      const Gradient: TPixieLinearGradientLayer); override;
+      const Gradient: TPixieLinearGradientLayer;
+      FillRule: TPixieFillRule = frNonZero); override;
     procedure FillPathRadialGradient(
-      const Gradient: TPixieRadialGradientLayer); override;
+      const Gradient: TPixieRadialGradientLayer;
+      FillRule: TPixieFillRule = frNonZero); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     // View / scale
@@ -1164,22 +1167,28 @@ end;
 procedure TPixieFmxCanvas.FillPath(Color: TPixieWebColor;
   FillRule: TPixieFillRule);
 begin
-  if (FCanvas = nil) or (Color.Alpha = 0) then Exit;
-  FBrush.Kind := TBrushKind.Solid;
-  FBrush.Color := ToAlphaColor(Color);
-  FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  if FCanvas = nil then Exit;
+  if Color.Alpha > 0 then
+  begin
+    FBrush.Kind := TBrushKind.Solid;
+    FBrush.Color := ToAlphaColor(Color);
+    FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  end;
   FCurrentPath.Clear;
 end;
 
 procedure TPixieFmxCanvas.StrokePath(Color: TPixieWebColor;
   Width: Single);
 begin
-  if (FCanvas = nil) or (Color.Alpha = 0) then Exit;
-  FStrokeBrush.Kind := TBrushKind.Solid;
-  FStrokeBrush.Color := ToAlphaColor(Color);
-  FStrokeBrush.Thickness := Width;
-  FStrokeBrush.Dash := TStrokeDash.Solid;
-  FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
+  if FCanvas = nil then Exit;
+  if Color.Alpha > 0 then
+  begin
+    FStrokeBrush.Kind := TBrushKind.Solid;
+    FStrokeBrush.Color := ToAlphaColor(Color);
+    FStrokeBrush.Thickness := Width;
+    FStrokeBrush.Dash := TStrokeDash.Solid;
+    FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
+  end;
   FCurrentPath.Clear;
 end;
 
@@ -1205,7 +1214,12 @@ begin
   FCurrentPath.Clear;
 end;
 
-procedure TPixieFmxCanvas.ClipPath;
+procedure TPixieFmxCanvas.DiscardPath;
+begin
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.ClipPath(FillRule: TPixieFillRule);
 var
   R: TRectF;
 begin
@@ -1216,7 +1230,8 @@ begin
 end;
 
 procedure TPixieFmxCanvas.FillPathLinearGradient(
-  const Gradient: TPixieLinearGradientLayer);
+  const Gradient: TPixieLinearGradientLayer;
+  FillRule: TPixieFillRule);
 var
   R: TRectF;
   RW, RH: Single;
@@ -1251,7 +1266,8 @@ begin
 end;
 
 procedure TPixieFmxCanvas.FillPathRadialGradient(
-  const Gradient: TPixieRadialGradientLayer);
+  const Gradient: TPixieRadialGradientLayer;
+  FillRule: TPixieFillRule);
 begin
   if (FCanvas = nil) or (Gradient = nil) then Exit;
   if Gradient.ColorPoints.Count < 2 then

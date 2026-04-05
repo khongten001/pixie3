@@ -12,7 +12,7 @@ interface
 uses
   SysUtils, Math, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.FontDescription,
-  Pixie.Background, Pixie.Borders,
+  Pixie.GradientLayer, Pixie.Borders,
   Pixie.Canvas, Pixie.SvgRenderer;
 
 type
@@ -33,10 +33,13 @@ type
 
     procedure UpdateBBox(X, Y: Single);
     procedure ResetBBox;
-    procedure FillWithGradient(const State: TPixieSvgState);
+    procedure FillWithGradient(const State: TPixieSvgState;
+      FillRule: TPixieFillRule);
+    procedure StrokeWithGradient(const State: TPixieSvgState);
     procedure PopulateStops(Layer: TPixieGradientBase;
-      const Grad: TPixieSvgGradient; FillOpacity: Single);
+      const Grad: TPixieSvgGradient; Opacity: Single);
     procedure RebuildAndStroke(const State: TPixieSvgState);
+    procedure RebuildAndStrokeGradient(const State: TPixieSvgState);
 
     // Path recording — only active when gradient fill + stroke needs replay
     type
@@ -196,7 +199,7 @@ begin
 end;
 
 procedure TPixieSvgCanvasRenderer.PopulateStops(Layer: TPixieGradientBase;
-  const Grad: TPixieSvgGradient; FillOpacity: Single);
+  const Grad: TPixieSvgGradient; Opacity: Single);
 var
   I: Integer;
   Stop: TPixieSvgGradientStop;
@@ -206,7 +209,7 @@ begin
   begin
     Stop := Grad.Stops[I];
     CP := TPixieColorPoint.Create(Stop.Offset, Stop.Color);
-    CP.Color.Alpha := Round(CP.Color.Alpha * FillOpacity);
+    CP.Color.Alpha := Round(CP.Color.Alpha * Opacity);
     Layer.ColorPoints.Add(CP);
   end;
 end;
@@ -216,7 +219,7 @@ end;
 // ===========================================================================
 
 procedure TPixieSvgCanvasRenderer.FillWithGradient(
-  const State: TPixieSvgState);
+  const State: TPixieSvgState; FillRule: TPixieFillRule);
 var
   Grad: TPixieSvgGradient;
   GradLayer: TPixieLinearGradientLayer;
@@ -278,7 +281,7 @@ begin
       GradLayer.StartPt := TPixiePointF.Create(GX1, GY1);
       GradLayer.EndPt := TPixiePointF.Create(GX2, GY2);
       PopulateStops(GradLayer, Grad, State.FillOpacity);
-      FCanvas.FillPathLinearGradient(GradLayer);
+      FCanvas.FillPathLinearGradient(GradLayer, FillRule);
     finally
       GradLayer.Free;
     end;
@@ -311,7 +314,101 @@ begin
       RadLayer.Position := TPixiePointF.Create(GCX, GCY);
       RadLayer.Radius := TPixiePointF.Create(GRX, GRY);
       PopulateStops(RadLayer, Grad, State.FillOpacity);
-      FCanvas.FillPathRadialGradient(RadLayer);
+      FCanvas.FillPathRadialGradient(RadLayer, FillRule);
+    finally
+      RadLayer.Free;
+    end;
+  end;
+end;
+
+procedure TPixieSvgCanvasRenderer.StrokeWithGradient(
+  const State: TPixieSvgState);
+var
+  Grad: TPixieSvgGradient;
+  GradLayer: TPixieLinearGradientLayer;
+  RadLayer: TPixieRadialGradientLayer;
+  BX, BY, BW, BH: Single;
+  GX1, GY1, GX2, GY2: Single;
+  GCX, GCY, GRX, GRY: Single;
+  M: TPixieSvgMatrix;
+  HasTransform: Boolean;
+
+  procedure TransformPt(var X, Y: Single);
+  var
+    TX, TY: Single;
+  begin
+    TX := M.A * X + M.C * Y + M.E;
+    TY := M.B * X + M.D * Y + M.F;
+    X := TX; Y := TY;
+  end;
+
+begin
+  if State.StrokeGradientId = '' then Exit;
+  Grad := ResolveGradientStops(State.StrokeGradientId);
+  if (Grad = nil) or (Grad.Stops.Count < 2) then Exit;
+
+  if not FBBoxValid then Exit;
+  BX := FBBoxMinX;
+  BY := FBBoxMinY;
+  BW := FBBoxMaxX - FBBoxMinX;
+  BH := FBBoxMaxY - FBBoxMinY;
+  if (BW < 0.001) or (BH < 0.001) then Exit;
+
+  HasTransform := Grad.GradientTransform <> '';
+  if HasTransform then
+    M := ParseTransform(Grad.GradientTransform);
+
+  if not Grad.IsRadial then
+  begin
+    GradLayer := TPixieLinearGradientLayer.Create;
+    try
+      if Grad.UserSpaceUnits then
+      begin
+        GX1 := Grad.X1; GY1 := Grad.Y1;
+        GX2 := Grad.X2; GY2 := Grad.Y2;
+      end
+      else
+      begin
+        GX1 := BX + Grad.X1 * BW; GY1 := BY + Grad.Y1 * BH;
+        GX2 := BX + Grad.X2 * BW; GY2 := BY + Grad.Y2 * BH;
+      end;
+      if HasTransform then
+      begin
+        TransformPt(GX1, GY1);
+        TransformPt(GX2, GY2);
+      end;
+      GradLayer.StartPt := TPixiePointF.Create(GX1, GY1);
+      GradLayer.EndPt := TPixiePointF.Create(GX2, GY2);
+      PopulateStops(GradLayer, Grad, State.StrokeOpacity);
+      FCanvas.StrokePathLinearGradient(GradLayer, State.StrokeWidth);
+    finally
+      GradLayer.Free;
+    end;
+  end
+  else
+  begin
+    RadLayer := TPixieRadialGradientLayer.Create;
+    try
+      if Grad.UserSpaceUnits then
+      begin
+        GCX := Grad.CX; GCY := Grad.CY;
+        GRX := Grad.R; GRY := Grad.R;
+      end
+      else
+      begin
+        GCX := BX + Grad.CX * BW; GCY := BY + Grad.CY * BH;
+        GRX := Grad.R * BW; GRY := Grad.R * BH;
+      end;
+      if HasTransform then
+      begin
+        TransformPt(GCX, GCY);
+        GRX := GRX * Sqrt(M.A * M.A + M.B * M.B);
+        GRY := GRY * Sqrt(M.C * M.C + M.D * M.D);
+      end;
+      RadLayer.Position := TPixiePointF.Create(GCX, GCY);
+      RadLayer.Radius := TPixiePointF.Create(GRX, GRY);
+      PopulateStops(RadLayer, Grad, State.StrokeOpacity);
+      FCanvas.StrokePathRadialGradient(RadLayer, State.StrokeWidth);
     finally
       RadLayer.Free;
     end;
@@ -325,7 +422,6 @@ var
   Entry: TPathEntry;
   SC: TPixieWebColor;
 begin
-  // Rebuild the path from recorded entries
   for I := 0 to FPathRecord.Count - 1 do
   begin
     Entry := FPathRecord[I];
@@ -342,6 +438,26 @@ begin
   FCanvas.StrokePath(SC, State.StrokeWidth);
 end;
 
+procedure TPixieSvgCanvasRenderer.RebuildAndStrokeGradient(
+  const State: TPixieSvgState);
+var
+  I: Integer;
+  Entry: TPathEntry;
+begin
+  for I := 0 to FPathRecord.Count - 1 do
+  begin
+    Entry := FPathRecord[I];
+    case Entry.Op of
+      poMoveTo: FCanvas.MoveTo(Entry.X, Entry.Y);
+      poLineTo: FCanvas.LineTo(Entry.X, Entry.Y);
+      poCurveTo: FCanvas.CurveTo(Entry.X, Entry.Y,
+                   Entry.X2, Entry.Y2, Entry.X3, Entry.Y3);
+      poClosePath: FCanvas.ClosePath;
+    end;
+  end;
+  StrokeWithGradient(State);
+end;
+
 // ===========================================================================
 // Fill and stroke
 // ===========================================================================
@@ -350,39 +466,54 @@ procedure TPixieSvgCanvasRenderer.DoFillAndStroke(
   const State: TPixieSvgState);
 var
   FC, SC: TPixieWebColor;
-  HasGradientFill: Boolean;
+  HasGradientFill, HasGradientStroke: Boolean;
+  FR: TPixieFillRule;
 begin
   HasGradientFill := State.FillGradientId <> '';
+  HasGradientStroke := State.HasStroke and (State.StrokeGradientId <> '');
+  if State.EvenOddFill then
+    FR := frEvenOdd
+  else
+    FR := frNonZero;
 
   if HasGradientFill then
   begin
-    // Fill path directly with gradient brush (consumes path)
-    FillWithGradient(State);
-
-    // If also needs stroke, rebuild path and stroke it
+    FillWithGradient(State, FR);
     if State.HasStroke then
-      RebuildAndStroke(State);
-  end
-  else if State.HasFill and State.HasStroke then
-  begin
-    FC := State.FillColor;
-    FC.Alpha := Round(FC.Alpha * State.FillOpacity);
-    SC := State.StrokeColor;
-    SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
-    FCanvas.FillAndStrokePath(FC, SC, State.StrokeWidth);
+    begin
+      if HasGradientStroke then
+        RebuildAndStrokeGradient(State)
+      else
+        RebuildAndStroke(State);
+    end;
   end
   else if State.HasFill then
   begin
     FC := State.FillColor;
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
-    FCanvas.FillPath(FC);
+    if State.HasStroke and not HasGradientStroke then
+    begin
+      SC := State.StrokeColor;
+      SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
+      FCanvas.FillAndStrokePath(FC, SC, State.StrokeWidth, FR);
+    end
+    else
+    begin
+      FCanvas.FillPath(FC, FR);
+      if HasGradientStroke then
+        RebuildAndStrokeGradient(State);
+    end;
   end
+  else if HasGradientStroke then
+    StrokeWithGradient(State)
   else if State.HasStroke then
   begin
     SC := State.StrokeColor;
     SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
     FCanvas.StrokePath(SC, State.StrokeWidth);
-  end;
+  end
+  else
+    FCanvas.DiscardPath;
 
   ResetBBox;
   FPathRecord.Clear;

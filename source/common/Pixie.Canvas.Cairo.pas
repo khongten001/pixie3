@@ -12,7 +12,7 @@ uses
   cairo, glib2, pango, pangocairo,
   Graphics, IntfGraphics, FPImage,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription,
+  Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas;
 
 type
@@ -141,7 +141,12 @@ type
     procedure FillAndStrokePath(FillColor: TPixieWebColor;
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); override;
-    procedure ClipPath; override;
+    procedure DiscardPath; override;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer; Width: Single); override;
+    procedure StrokePathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer; Width: Single); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     function LoadSvgFromData(Data: Pointer;
@@ -1345,22 +1350,32 @@ end;
 procedure TPixieCairoCanvas.FillPath(Color: TPixieWebColor;
   FillRule: TPixieFillRule);
 begin
-  if (FCairo = nil) or (Color.Alpha = 0) then Exit;
-  SetSourceColor(Color);
-  if FillRule = frEvenOdd then
-    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_EVEN_ODD)
+  if FCairo = nil then Exit;
+  if Color.Alpha > 0 then
+  begin
+    SetSourceColor(Color);
+    if FillRule = frEvenOdd then
+      cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_EVEN_ODD)
+    else
+      cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_WINDING);
+    cairo_fill(FCairo);
+  end
   else
-    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_WINDING);
-  cairo_fill(FCairo);
+    cairo_new_path(FCairo);
 end;
 
 procedure TPixieCairoCanvas.StrokePath(Color: TPixieWebColor;
   Width: Single);
 begin
-  if (FCairo = nil) or (Color.Alpha = 0) then Exit;
-  SetSourceColor(Color);
-  cairo_set_line_width(FCairo, Width);
-  cairo_stroke(FCairo);
+  if FCairo = nil then Exit;
+  if Color.Alpha > 0 then
+  begin
+    SetSourceColor(Color);
+    cairo_set_line_width(FCairo, Width);
+    cairo_stroke(FCairo);
+  end
+  else
+    cairo_new_path(FCairo);
 end;
 
 procedure TPixieCairoCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
@@ -1387,9 +1402,98 @@ begin
     cairo_new_path(FCairo);
 end;
 
-procedure TPixieCairoCanvas.ClipPath;
+procedure TPixieCairoCanvas.DiscardPath;
+begin
+  if FCairo <> nil then
+    cairo_new_path(FCairo);
+end;
+
+procedure TPixieCairoCanvas.StrokePathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer; Width: Single);
+var
+  Pattern: Pcairo_pattern_t;
+  I: Integer;
+  Cp: TPixieColorPoint;
+begin
+  if (FCairo = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    cairo_new_path(FCairo);
+    Exit;
+  end;
+  Pattern := cairo_pattern_create_linear(
+    Gradient.StartPt.X, Gradient.StartPt.Y,
+    Gradient.EndPt.X, Gradient.EndPt.Y);
+  try
+    for I := 0 to Gradient.ColorPoints.Count - 1 do
+    begin
+      Cp := Gradient.ColorPoints[I];
+      cairo_pattern_add_color_stop_rgba(Pattern, Cp.Offset,
+        Cp.Color.Red / 255.0, Cp.Color.Green / 255.0,
+        Cp.Color.Blue / 255.0, Cp.Color.Alpha / 255.0);
+    end;
+    cairo_set_source(FCairo, Pattern);
+    cairo_set_line_width(FCairo, Width);
+    cairo_stroke(FCairo);
+  finally
+    cairo_pattern_destroy(Pattern);
+  end;
+end;
+
+procedure TPixieCairoCanvas.StrokePathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer; Width: Single);
+var
+  Pattern: Pcairo_pattern_t;
+  I: Integer;
+  Cp: TPixieColorPoint;
+  Cx, Cy, Rx, Ry: Single;
+begin
+  if (FCairo = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    cairo_new_path(FCairo);
+    Exit;
+  end;
+  Cx := Gradient.Position.X;
+  Cy := Gradient.Position.Y;
+  Rx := Gradient.Radius.X;
+  Ry := Gradient.Radius.Y;
+  if (Rx < 0.001) or (Ry < 0.001) then
+  begin
+    cairo_new_path(FCairo);
+    Exit;
+  end;
+  Pattern := cairo_pattern_create_radial(Cx, Cy * Rx / Ry, 0,
+    Cx, Cy * Rx / Ry, Rx);
+  try
+    for I := 0 to Gradient.ColorPoints.Count - 1 do
+    begin
+      Cp := Gradient.ColorPoints[I];
+      cairo_pattern_add_color_stop_rgba(Pattern, Cp.Offset,
+        Cp.Color.Red / 255.0, Cp.Color.Green / 255.0,
+        Cp.Color.Blue / 255.0, Cp.Color.Alpha / 255.0);
+    end;
+    cairo_save(FCairo);
+    try
+      cairo_scale(FCairo, 1.0, Ry / Rx);
+      cairo_set_source(FCairo, Pattern);
+      cairo_set_line_width(FCairo, Width * Rx / Ry);
+      cairo_stroke(FCairo);
+    finally
+      cairo_restore(FCairo);
+    end;
+  finally
+    cairo_pattern_destroy(Pattern);
+  end;
+end;
+
+procedure TPixieCairoCanvas.ClipPath(FillRule: TPixieFillRule);
 begin
   if FCairo = nil then Exit;
+  if FillRule = frEvenOdd then
+    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_EVEN_ODD)
+  else
+    cairo_set_fill_rule(FCairo, CAIRO_FILL_RULE_WINDING);
   cairo_clip(FCairo);
 end;
 

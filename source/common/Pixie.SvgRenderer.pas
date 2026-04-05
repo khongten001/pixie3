@@ -38,6 +38,7 @@ type
     StrokeOpacity: Single;
     HasFill: Boolean;
     HasStroke: Boolean;
+    EvenOddFill: Boolean;
     FontFamily: string;
     FontSize: Single;
     FontWeight: Integer;
@@ -802,6 +803,15 @@ begin
     Result.TextAnchor := taRight
   else if AnchorStr = 'start' then
     Result.TextAnchor := taLeft;
+
+  // Fill rule
+  AnchorStr := GetAttr(Node, 'fill-rule');
+  if AnchorStr = '' then
+    AnchorStr := ParseStyleAttribute(StyleStr, 'fill-rule');
+  if AnchorStr = 'evenodd' then
+    Result.EvenOddFill := True
+  else if AnchorStr = 'nonzero' then
+    Result.EvenOddFill := False;
 end;
 
 // ===========================================================================
@@ -2405,6 +2415,7 @@ begin
     FInitState.StrokeOpacity := 1.0;
     FInitState.HasFill := True;
     FInitState.HasStroke := False;
+    FInitState.EvenOddFill := False;
     FInitState.FontFamily := 'sans-serif';
     FInitState.FontSize := 16;
     FInitState.FontWeight := 400;

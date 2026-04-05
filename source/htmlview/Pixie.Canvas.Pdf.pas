@@ -12,7 +12,7 @@ interface
 uses
   SysUtils, Classes, Math, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription,
+  Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas, Pixie.TrueType, Pixie.PdfWriter;
 
 type
@@ -195,7 +195,7 @@ type
     procedure FillAndStrokePath(FillColor: TPixieWebColor;
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); override;
-    procedure ClipPath; override;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     property Writer: TPixiePdfWriter read FWriter;
@@ -2020,9 +2020,12 @@ begin
     EmitLn('B');
 end;
 
-procedure TPixiePdfCanvas.ClipPath;
+procedure TPixiePdfCanvas.ClipPath(FillRule: TPixieFillRule);
 begin
-  EmitLn('W n');
+  if FillRule = frEvenOdd then
+    EmitLn('W* n')
+  else
+    EmitLn('W n');
 end;
 
 procedure TPixiePdfCanvas.ConcatMatrix(A, B, C, D, E, F: Single);

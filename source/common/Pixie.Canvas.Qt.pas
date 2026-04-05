@@ -15,7 +15,7 @@ uses
   qtobjects,
   Graphics, IntfGraphics, FPImage,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription,
+  Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas;
 
 type
@@ -142,7 +142,12 @@ type
     procedure FillAndStrokePath(FillColor: TPixieWebColor;
       StrokeColor: TPixieWebColor; StrokeWidth: Single;
       FillRule: TPixieFillRule = frNonZero); override;
-    procedure ClipPath; override;
+    procedure DiscardPath; override;
+    procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer; Width: Single); override;
+    procedure StrokePathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer; Width: Single); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     function LoadSvgFromData(Data: Pointer;
@@ -1306,19 +1311,21 @@ var
   QC: TQColor;
   Brush: QBrushH;
 begin
-  if (FPainter = nil) or (FCurrentPath = nil) or (Color.Alpha = 0) then Exit;
-  if FillRule = frEvenOdd then
-    QPainterPath_setFillRule(FCurrentPath, QtOddEvenFill)
-  else
-    QPainterPath_setFillRule(FCurrentPath, QtWindingFill);
-  MakeColor(Color, QC);
-  Brush := QBrush_Create(@QC);
-  try
-    QPainter_fillPath(FPainter, FCurrentPath, Brush);
-  finally
-    QBrush_Destroy(Brush);
+  if (FPainter = nil) or (FCurrentPath = nil) then Exit;
+  if Color.Alpha > 0 then
+  begin
+    if FillRule = frEvenOdd then
+      QPainterPath_setFillRule(FCurrentPath, QtOddEvenFill)
+    else
+      QPainterPath_setFillRule(FCurrentPath, QtWindingFill);
+    MakeColor(Color, QC);
+    Brush := QBrush_Create(@QC);
+    try
+      QPainter_fillPath(FPainter, FCurrentPath, Brush);
+    finally
+      QBrush_Destroy(Brush);
+    end;
   end;
-  // Clear path so next shape starts fresh
   QPainterPath_Destroy(FCurrentPath);
   FCurrentPath := nil;
 end;
@@ -1329,16 +1336,19 @@ var
   QC: TQColor;
   Pen: QPenH;
 begin
-  if (FPainter = nil) or (FCurrentPath = nil) or (Color.Alpha = 0) then Exit;
-  MakeColor(Color, QC);
-  Pen := QPen_Create(@QC);
-  try
-    QPen_setWidthF(Pen, Width);
-    QPainter_setPen(FPainter, Pen);
-    QPainter_setBrush(FPainter, QtNoBrush);
-    QPainter_drawPath(FPainter, FCurrentPath);
-  finally
-    QPen_Destroy(Pen);
+  if (FPainter = nil) or (FCurrentPath = nil) then Exit;
+  if Color.Alpha > 0 then
+  begin
+    MakeColor(Color, QC);
+    Pen := QPen_Create(@QC);
+    try
+      QPen_setWidthF(Pen, Width);
+      QPainter_setPen(FPainter, Pen);
+      QPainter_setBrush(FPainter, QtNoBrush);
+      QPainter_drawPath(FPainter, FCurrentPath);
+    finally
+      QPen_Destroy(Pen);
+    end;
   end;
   QPainterPath_Destroy(FCurrentPath);
   FCurrentPath := nil;
@@ -1384,9 +1394,115 @@ begin
   FCurrentPath := nil;
 end;
 
-procedure TPixieQtCanvas.ClipPath;
+procedure TPixieQtCanvas.DiscardPath;
+begin
+  if FCurrentPath <> nil then
+  begin
+    QPainterPath_Destroy(FCurrentPath);
+    FCurrentPath := nil;
+  end;
+end;
+
+procedure TPixieQtCanvas.StrokePathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer; Width: Single);
+var
+  Grad: QLinearGradientH;
+  Brush: QBrushH;
+  Pen: QPenH;
+  I: Integer;
+  Cp: TPixieColorPoint;
+  QC: TQColor;
+begin
+  if (FPainter = nil) or (FCurrentPath = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    QPainterPath_Destroy(FCurrentPath);
+    FCurrentPath := nil;
+    Exit;
+  end;
+  Grad := QLinearGradient_Create(
+    Gradient.StartPt.X, Gradient.StartPt.Y,
+    Gradient.EndPt.X, Gradient.EndPt.Y);
+  try
+    for I := 0 to Gradient.ColorPoints.Count - 1 do
+    begin
+      Cp := Gradient.ColorPoints[I];
+      MakeColor(Cp.Color, QC);
+      QGradient_setColorAt(QGradientH(Grad), Cp.Offset, @QC);
+    end;
+    Brush := QBrush_Create(QGradientH(Grad));
+    try
+      Pen := QPen_Create(Brush, Width);
+      try
+        QPainter_setPen(FPainter, Pen);
+        QPainter_setBrush(FPainter, QtNoBrush);
+        QPainter_drawPath(FPainter, FCurrentPath);
+      finally
+        QPen_Destroy(Pen);
+      end;
+    finally
+      QBrush_Destroy(Brush);
+    end;
+  finally
+    QLinearGradient_Destroy(Grad);
+  end;
+  QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := nil;
+end;
+
+procedure TPixieQtCanvas.StrokePathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer; Width: Single);
+var
+  Grad: QRadialGradientH;
+  Brush: QBrushH;
+  Pen: QPenH;
+  I: Integer;
+  Cp: TPixieColorPoint;
+  QC: TQColor;
+begin
+  if (FPainter = nil) or (FCurrentPath = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    QPainterPath_Destroy(FCurrentPath);
+    FCurrentPath := nil;
+    Exit;
+  end;
+  Grad := QRadialGradient_Create(
+    Gradient.Position.X, Gradient.Position.Y, Gradient.Radius.X);
+  try
+    for I := 0 to Gradient.ColorPoints.Count - 1 do
+    begin
+      Cp := Gradient.ColorPoints[I];
+      MakeColor(Cp.Color, QC);
+      QGradient_setColorAt(QGradientH(Grad), Cp.Offset, @QC);
+    end;
+    Brush := QBrush_Create(QGradientH(Grad));
+    try
+      Pen := QPen_Create(Brush, Width);
+      try
+        QPainter_setPen(FPainter, Pen);
+        QPainter_setBrush(FPainter, QtNoBrush);
+        QPainter_drawPath(FPainter, FCurrentPath);
+      finally
+        QPen_Destroy(Pen);
+      end;
+    finally
+      QBrush_Destroy(Brush);
+    end;
+  finally
+    QRadialGradient_Destroy(Grad);
+  end;
+  QPainterPath_Destroy(FCurrentPath);
+  FCurrentPath := nil;
+end;
+
+procedure TPixieQtCanvas.ClipPath(FillRule: TPixieFillRule);
 begin
   if (FPainter = nil) or (FCurrentPath = nil) then Exit;
+  if FillRule = frEvenOdd then
+    QPainterPath_setFillRule(FCurrentPath, QtOddEvenFill)
+  else
+    QPainterPath_setFillRule(FCurrentPath, QtWindingFill);
   QPainter_setClipPath(FPainter, FCurrentPath, QtIntersectClip);
   QPainterPath_Destroy(FCurrentPath);
   FCurrentPath := nil;

@@ -332,7 +332,10 @@ begin
     PdfRef(ShObj.Id) + ' ';
 
   // Clip to path and paint shading
-  EmitLn('W n');
+  if State.EvenOddFill then
+    EmitLn('W* n')
+  else
+    EmitLn('W n');
   EmitLn('/' + ShName + ' sh');
 end;
 
@@ -399,12 +402,18 @@ begin
     SetPdfColor(State.FillColor, True);
     SetPdfColor(State.StrokeColor, False);
     EmitLn(PdfFloat(State.StrokeWidth) + ' w');
-    EmitLn('B');
+    if State.EvenOddFill then
+      EmitLn('B*')
+    else
+      EmitLn('B');
   end
   else if State.HasFill then
   begin
     SetPdfColor(State.FillColor, True);
-    EmitLn('f');
+    if State.EvenOddFill then
+      EmitLn('f*')
+    else
+      EmitLn('f');
   end
   else if State.HasStroke then
   begin
@@ -444,6 +453,7 @@ end;
 procedure TPixieSvgRenderer.DoClipPath;
 begin
   // W n — clip to current path (non-zero winding), then clear path
+  // W* n — even-odd clip rule
   EmitLn('W n');
 end;
 
