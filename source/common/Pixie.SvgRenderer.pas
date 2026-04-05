@@ -1621,6 +1621,18 @@ begin
             if HasDot then Break;
             HasDot := True;
           end;
+          // Handle exponent sign: e.g. 2.81e-07
+          if CharInSet(D[P], ['e', 'E']) then
+          begin
+            NumStr := NumStr + D[P];
+            Inc(P);
+            if (P <= Len) and CharInSet(D[P], ['-', '+']) then
+            begin
+              NumStr := NumStr + D[P];
+              Inc(P);
+            end;
+            Continue;
+          end;
           NumStr := NumStr + D[P];
           Inc(P);
         end;
