@@ -51,6 +51,12 @@ type
     // Gradient helpers
     function BuildType2Function(const C0, C1: TPixieWebColor): Integer;
     function BuildColorFunction(const Grad: TPixieSvgGradient): Integer;
+    function GradientNeedsAlpha(const Grad: TPixieSvgGradient): Boolean;
+    function BuildAlphaType2Function(A0, A1: Byte): Integer;
+    function BuildAlphaFunction(const Grad: TPixieSvgGradient): Integer;
+    function BuildGradientSMask(const Grad: TPixieSvgGradient;
+      IsRadial: Boolean; const CoordsStr: AnsiString;
+      ShadingType: Integer): AnsiString;
     procedure FillGradient(const State: TPixieSvgState);
 
     // Font helpers
@@ -237,12 +243,139 @@ begin
   Result := Obj.Id;
 end;
 
+function TPixieSvgRenderer.GradientNeedsAlpha(
+  const Grad: TPixieSvgGradient): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to Grad.Stops.Count - 1 do
+    if Grad.Stops[I].Color.Alpha < 255 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+function TPixieSvgRenderer.BuildAlphaType2Function(A0, A1: Byte): Integer;
+var
+  Obj: TPixiePdfObject;
+begin
+  Obj := FWriter.AllocObject;
+  Obj.AddEntry('FunctionType', '2');
+  Obj.AddEntry('Domain', '[0 1]');
+  Obj.AddEntry('C0', '[' + PdfFloat(A0 / 255.0) + ']');
+  Obj.AddEntry('C1', '[' + PdfFloat(A1 / 255.0) + ']');
+  Obj.AddEntry('N', '1');
+  Result := Obj.Id;
+end;
+
+function TPixieSvgRenderer.BuildAlphaFunction(
+  const Grad: TPixieSvgGradient): Integer;
+var
+  I, N: Integer;
+  SubIds: array of Integer;
+  FuncsStr, BoundsStr, EncodeStr: AnsiString;
+  Obj: TPixiePdfObject;
+begin
+  N := Grad.Stops.Count;
+  if N < 2 then begin Result := 0; Exit; end;
+
+  if N = 2 then
+  begin
+    Result := BuildAlphaType2Function(
+      Grad.Stops[0].Color.Alpha, Grad.Stops[1].Color.Alpha);
+    Exit;
+  end;
+
+  SetLength(SubIds, N - 1);
+  for I := 0 to N - 2 do
+    SubIds[I] := BuildAlphaType2Function(
+      Grad.Stops[I].Color.Alpha, Grad.Stops[I + 1].Color.Alpha);
+
+  FuncsStr := '[';
+  for I := 0 to N - 2 do
+    FuncsStr := FuncsStr + PdfRef(SubIds[I]) + ' ';
+  FuncsStr := FuncsStr + ']';
+
+  BoundsStr := '[';
+  for I := 1 to N - 2 do
+    BoundsStr := BoundsStr + PdfFloat(Grad.Stops[I].Offset) + ' ';
+  BoundsStr := BoundsStr + ']';
+
+  EncodeStr := '[';
+  for I := 0 to N - 2 do
+    EncodeStr := EncodeStr + '0 1 ';
+  EncodeStr := EncodeStr + ']';
+
+  Obj := FWriter.AllocObject;
+  Obj.AddEntry('FunctionType', '3');
+  Obj.AddEntry('Domain', '[0 1]');
+  Obj.AddEntry('Functions', FuncsStr);
+  Obj.AddEntry('Bounds', BoundsStr);
+  Obj.AddEntry('Encode', EncodeStr);
+  Result := Obj.Id;
+end;
+
+function TPixieSvgRenderer.BuildGradientSMask(
+  const Grad: TPixieSvgGradient; IsRadial: Boolean;
+  const CoordsStr: AnsiString; ShadingType: Integer): AnsiString;
+var
+  AlphaFuncId: Integer;
+  AlphaShObj, FormObj, GsObj: TPixiePdfObject;
+  StreamData: AnsiString;
+  StreamBytes: TBytes;
+  BBoxStr, GsName: AnsiString;
+begin
+  AlphaFuncId := BuildAlphaFunction(Grad);
+  if AlphaFuncId = 0 then begin Result := ''; Exit; end;
+
+  // Grayscale shading for opacity
+  AlphaShObj := FWriter.AllocObject;
+  AlphaShObj.AddEntry('ShadingType', AnsiString(IntToStr(ShadingType)));
+  AlphaShObj.AddEntry('ColorSpace', '/DeviceGray');
+  AlphaShObj.AddEntry('Coords', CoordsStr);
+  AlphaShObj.AddEntry('Function', PdfRef(AlphaFuncId));
+  AlphaShObj.AddEntry('Extend', '[true true]');
+
+  // Form XObject that paints the opacity shading
+  BBoxStr := '[' + PdfFloat(FViewBoxX) + ' ' + PdfFloat(FViewBoxY) + ' ' +
+    PdfFloat(FViewBoxX + FViewBoxW) + ' ' + PdfFloat(FViewBoxY + FViewBoxH) + ']';
+
+  StreamData := '/AlSh sh' + #10;
+  SetLength(StreamBytes, Length(StreamData));
+  Move(StreamData[1], StreamBytes[0], Length(StreamData));
+
+  FormObj := FWriter.AllocObject;
+  FormObj.AddEntry('Type', '/XObject');
+  FormObj.AddEntry('Subtype', '/Form');
+  FormObj.AddEntry('BBox', BBoxStr);
+  FormObj.AddEntry('Group',
+    '<< /Type /Group /S /Transparency /CS /DeviceGray >>');
+  FormObj.AddEntry('Resources',
+    '<< /Shading << /AlSh ' + PdfRef(AlphaShObj.Id) + ' >> >>');
+  FormObj.SetStream(StreamBytes, False);
+
+  // ExtGState with SMask
+  GsObj := FWriter.AllocObject;
+  GsObj.AddEntry('Type', '/ExtGState');
+  GsObj.AddEntry('SMask',
+    '<< /Type /Mask /S /Luminosity /G ' + PdfRef(FormObj.Id) + ' >>');
+
+  Inc(FGsCounter);
+  GsName := 'SvgGS' + AnsiString(IntToStr(FGsCounter));
+  FResourceExtGState := FResourceExtGState + '/' + GsName + ' ' +
+    PdfRef(GsObj.Id) + ' ';
+  Result := GsName;
+end;
+
 procedure TPixieSvgRenderer.FillGradient(const State: TPixieSvgState);
 var
   Grad: TPixieSvgGradient;
   FuncId: Integer;
   ShObj: TPixiePdfObject;
-  ShName: AnsiString;
+  ShName, CoordsStr, GsName: AnsiString;
+  ShadingTypeVal: Integer;
   BX, BY, BW, BH: Single;
   GX1, GY1, GX2, GY2: Single;
   GCX, GCY, GR: Single;
@@ -277,7 +410,7 @@ begin
 
   if not Grad.IsRadial then
   begin
-    ShObj.AddEntry('ShadingType', '2');
+    ShadingTypeVal := 2;
     if Grad.UserSpaceUnits then
     begin
       GX1 := Grad.X1; GY1 := Grad.Y1;
@@ -297,13 +430,12 @@ begin
       TY := M.B * GX2 + M.D * GY2 + M.F;
       GX2 := TX; GY2 := TY;
     end;
-    ShObj.AddEntry('Coords', '[' +
-      PdfFloat(GX1) + ' ' + PdfFloat(GY1) + ' ' +
-      PdfFloat(GX2) + ' ' + PdfFloat(GY2) + ']');
+    CoordsStr := '[' + PdfFloat(GX1) + ' ' + PdfFloat(GY1) + ' ' +
+      PdfFloat(GX2) + ' ' + PdfFloat(GY2) + ']';
   end
   else
   begin
-    ShObj.AddEntry('ShadingType', '3');
+    ShadingTypeVal := 3;
     if Grad.UserSpaceUnits then
     begin
       GCX := Grad.CX; GCY := Grad.CY; GR := Grad.R;
@@ -320,16 +452,26 @@ begin
       GCX := TX; GCY := TY;
       GR := GR * Sqrt(M.A * M.A + M.B * M.B);
     end;
-    ShObj.AddEntry('Coords', '[' +
-      PdfFloat(GCX) + ' ' + PdfFloat(GCY) + ' 0 ' +
-      PdfFloat(GCX) + ' ' + PdfFloat(GCY) + ' ' + PdfFloat(GR) + ']');
+    CoordsStr := '[' + PdfFloat(GCX) + ' ' + PdfFloat(GCY) + ' 0 ' +
+      PdfFloat(GCX) + ' ' + PdfFloat(GCY) + ' ' + PdfFloat(GR) + ']';
   end;
+
+  ShObj.AddEntry('ShadingType', AnsiString(IntToStr(ShadingTypeVal)));
+  ShObj.AddEntry('Coords', CoordsStr);
 
   // Register shading resource
   Inc(FShadingCounter);
   ShName := 'SvgSh' + AnsiString(IntToStr(FShadingCounter));
   FResourceShading := FResourceShading + '/' + ShName + ' ' +
     PdfRef(ShObj.Id) + ' ';
+
+  // Apply soft mask for gradient stop-opacity if needed
+  if GradientNeedsAlpha(Grad) then
+  begin
+    GsName := BuildGradientSMask(Grad, Grad.IsRadial, CoordsStr, ShadingTypeVal);
+    if GsName <> '' then
+      EmitLn('/' + GsName + ' gs');
+  end;
 
   // Clip to path and paint shading
   if State.EvenOddFill then
@@ -388,38 +530,70 @@ begin
 end;
 
 procedure TPixieSvgRenderer.DoFillAndStroke(const State: TPixieSvgState);
+var
+  FillAlpha, StrokeAlpha: Single;
+  DoFill, DoStroke: Boolean;
+  GsObj: TPixiePdfObject;
+  GsName: AnsiString;
 begin
+  FillAlpha := (State.FillColor.Alpha / 255.0) * State.FillOpacity;
+  StrokeAlpha := (State.StrokeColor.Alpha / 255.0) * State.StrokeOpacity;
+  DoFill := State.HasFill and ((State.FillGradientId <> '') or (FillAlpha > 0.001));
+  // Gradient strokes not supported in PDF — skip them
+  DoStroke := State.HasStroke and (State.StrokeGradientId = '') and
+    (StrokeAlpha > 0.001);
+
   if State.FillGradientId <> '' then
   begin
-    // Gradient fill: clip to path and paint shading
     EmitLn('q');
     FillGradient(State);
     EmitLn('Q');
-    // Stroke needs path rebuild — not supported yet for PDF SVG, skip stroke
   end
-  else if State.HasFill and State.HasStroke then
+  else if DoFill or DoStroke then
   begin
-    SetPdfColor(State.FillColor, True);
-    SetPdfColor(State.StrokeColor, False);
-    EmitLn(PdfFloat(State.StrokeWidth) + ' w');
-    if State.EvenOddFill then
-      EmitLn('B*')
+    // Apply fill/stroke opacity via ExtGState if not fully opaque
+    if (DoFill and (FillAlpha < 0.999)) or
+       (DoStroke and (StrokeAlpha < 0.999)) then
+    begin
+      GsObj := FWriter.AllocObject;
+      GsObj.AddEntry('Type', '/ExtGState');
+      if DoFill then
+        GsObj.AddEntry('ca', PdfFloat(FillAlpha));
+      if DoStroke then
+        GsObj.AddEntry('CA', PdfFloat(StrokeAlpha));
+      Inc(FGsCounter);
+      GsName := 'SvgGS' + AnsiString(IntToStr(FGsCounter));
+      FResourceExtGState := FResourceExtGState + '/' + GsName + ' ' +
+        PdfRef(GsObj.Id) + ' ';
+      EmitLn('/' + GsName + ' gs');
+    end;
+
+    if DoFill and DoStroke then
+    begin
+      SetPdfColor(State.FillColor, True);
+      SetPdfColor(State.StrokeColor, False);
+      EmitLn(PdfFloat(State.StrokeWidth) + ' w');
+      if State.EvenOddFill then
+        EmitLn('B*')
+      else
+        EmitLn('B');
+    end
+    else if DoFill then
+    begin
+      SetPdfColor(State.FillColor, True);
+      if State.EvenOddFill then
+        EmitLn('f*')
+      else
+        EmitLn('f');
+    end
+    else if DoStroke then
+    begin
+      SetPdfColor(State.StrokeColor, False);
+      EmitLn(PdfFloat(State.StrokeWidth) + ' w');
+      EmitLn('S');
+    end
     else
-      EmitLn('B');
-  end
-  else if State.HasFill then
-  begin
-    SetPdfColor(State.FillColor, True);
-    if State.EvenOddFill then
-      EmitLn('f*')
-    else
-      EmitLn('f');
-  end
-  else if State.HasStroke then
-  begin
-    SetPdfColor(State.StrokeColor, False);
-    EmitLn(PdfFloat(State.StrokeWidth) + ' w');
-    EmitLn('S');
+      EmitLn('n');
   end
   else
     EmitLn('n');
