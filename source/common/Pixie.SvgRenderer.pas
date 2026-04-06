@@ -1034,26 +1034,33 @@ end;
 procedure TPixieSvgRendererBase.EmitShapeGeometry(Node: Pointer;
   const XForm: TPixieSvgMatrix);
 
+  procedure XFormPt(var PX, PY: Single);
+  var
+    OX: Single;
+  begin
+    OX := PX;
+    PX := XForm.A * OX + XForm.C * PY + XForm.E;
+    PY := XForm.B * OX + XForm.D * PY + XForm.F;
+  end;
+
   procedure XMoveTo(PX, PY: Single);
   begin
-    DoMoveTo(XForm.A * PX + XForm.C * PY + XForm.E,
-             XForm.B * PX + XForm.D * PY + XForm.F);
+    XFormPt(PX, PY);
+    DoMoveTo(PX, PY);
   end;
 
   procedure XLineTo(PX, PY: Single);
   begin
-    DoLineTo(XForm.A * PX + XForm.C * PY + XForm.E,
-             XForm.B * PX + XForm.D * PY + XForm.F);
+    XFormPt(PX, PY);
+    DoLineTo(PX, PY);
   end;
 
   procedure XCurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
   begin
-    DoCurveTo(XForm.A * X1 + XForm.C * Y1 + XForm.E,
-              XForm.B * X1 + XForm.D * Y1 + XForm.F,
-              XForm.A * X2 + XForm.C * Y2 + XForm.E,
-              XForm.B * X2 + XForm.D * Y2 + XForm.F,
-              XForm.A * X3 + XForm.C * Y3 + XForm.E,
-              XForm.B * X3 + XForm.D * Y3 + XForm.F);
+    XFormPt(X1, Y1);
+    XFormPt(X2, Y2);
+    XFormPt(X3, Y3);
+    DoCurveTo(X1, Y1, X2, Y2, X3, Y3);
   end;
 
 var
@@ -1062,6 +1069,8 @@ var
   KX, KY: Single;
   D: string;
   Cmds: TPixieSvgPathCmdList;
+  Cmd: TPixieSvgPathCmd;
+  J, K: Integer;
 begin
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
@@ -1072,6 +1081,65 @@ begin
     begin
       Cmds := ParsePathData(D);
       try
+        // Apply transform to absolute path commands if not identity.
+        // H/V only correct for scale+translate (no rotation/skew).
+        if (Abs(XForm.A - 1) > 0.0001) or (Abs(XForm.D - 1) > 0.0001) or
+           (Abs(XForm.B) > 0.0001) or (Abs(XForm.C) > 0.0001) or
+           (Abs(XForm.E) > 0.0001) or (Abs(XForm.F) > 0.0001) then
+        begin
+          for J := 0 to Cmds.Count - 1 do
+          begin
+            Cmd := Cmds[J];
+            case Cmd.Cmd of
+              'M', 'L', 'T':
+              begin
+                K := 0;
+                while K + 1 < Length(Cmd.Args) do
+                begin
+                  XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
+                  Inc(K, 2);
+                end;
+              end;
+              'H':
+                for K := 0 to High(Cmd.Args) do
+                  Cmd.Args[K] := XForm.A * Cmd.Args[K] + XForm.E;
+              'V':
+                for K := 0 to High(Cmd.Args) do
+                  Cmd.Args[K] := XForm.D * Cmd.Args[K] + XForm.F;
+              'C':
+              begin
+                K := 0;
+                while K + 5 < Length(Cmd.Args) do
+                begin
+                  XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
+                  XFormPt(Cmd.Args[K + 2], Cmd.Args[K + 3]);
+                  XFormPt(Cmd.Args[K + 4], Cmd.Args[K + 5]);
+                  Inc(K, 6);
+                end;
+              end;
+              'S', 'Q':
+              begin
+                K := 0;
+                while K + 3 < Length(Cmd.Args) do
+                begin
+                  XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
+                  XFormPt(Cmd.Args[K + 2], Cmd.Args[K + 3]);
+                  Inc(K, 4);
+                end;
+              end;
+              'A':
+              begin
+                K := 0;
+                while K + 6 < Length(Cmd.Args) do
+                begin
+                  XFormPt(Cmd.Args[K + 5], Cmd.Args[K + 6]);
+                  Inc(K, 7);
+                end;
+              end;
+            end;
+            Cmds[J] := Cmd;
+          end;
+        end;
         EmitPathCommands(Cmds);
       finally
         Cmds.Free;
