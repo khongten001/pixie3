@@ -138,7 +138,8 @@ type
     procedure ApplyNodeTransform(Node: Pointer);
     procedure ApplyOpacity(const State: TPixieSvgState;
       out NeedRestore: Boolean);
-    procedure EmitShapeGeometry(Node: Pointer);
+    procedure EmitShapeGeometry(Node: Pointer;
+      const XForm: TPixieSvgMatrix);
     procedure ApplyClipPath(Node: Pointer);
 
     // CSS <style> support
@@ -986,10 +987,35 @@ begin
   NeedRestore := True;
 end;
 
-procedure TPixieSvgRendererBase.EmitShapeGeometry(Node: Pointer);
+procedure TPixieSvgRendererBase.EmitShapeGeometry(Node: Pointer;
+  const XForm: TPixieSvgMatrix);
+
+  procedure XMoveTo(PX, PY: Single);
+  begin
+    DoMoveTo(XForm.A * PX + XForm.C * PY + XForm.E,
+             XForm.B * PX + XForm.D * PY + XForm.F);
+  end;
+
+  procedure XLineTo(PX, PY: Single);
+  begin
+    DoLineTo(XForm.A * PX + XForm.C * PY + XForm.E,
+             XForm.B * PX + XForm.D * PY + XForm.F);
+  end;
+
+  procedure XCurveTo(X1, Y1, X2, Y2, X3, Y3: Single);
+  begin
+    DoCurveTo(XForm.A * X1 + XForm.C * Y1 + XForm.E,
+              XForm.B * X1 + XForm.D * Y1 + XForm.F,
+              XForm.A * X2 + XForm.C * Y2 + XForm.E,
+              XForm.B * X2 + XForm.D * Y2 + XForm.F,
+              XForm.A * X3 + XForm.C * Y3 + XForm.E,
+              XForm.B * X3 + XForm.D * Y3 + XForm.F);
+  end;
+
 var
   TagName: string;
   X, Y, W, H, CX, CY, R, RX, RY: Single;
+  KX, KY: Single;
   D: string;
   Cmds: TPixieSvgPathCmdList;
 begin
@@ -1014,13 +1040,43 @@ begin
     Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
     W := ParseSvgFloat(GetAttr(Node, 'width', '0'));
     H := ParseSvgFloat(GetAttr(Node, 'height', '0'));
+    RX := ParseSvgFloat(GetAttr(Node, 'rx', '0'));
+    RY := ParseSvgFloat(GetAttr(Node, 'ry', '0'));
+    if (RX > 0) and (RY = 0) then RY := RX;
+    if (RY > 0) and (RX = 0) then RX := RY;
     if (W > 0) and (H > 0) then
     begin
-      DoMoveTo(X, Y);
-      DoLineTo(X + W, Y);
-      DoLineTo(X + W, Y + H);
-      DoLineTo(X, Y + H);
-      DoClosePath;
+      if (RX > 0) or (RY > 0) then
+      begin
+        if RX > W / 2 then RX := W / 2;
+        if RY > H / 2 then RY := H / 2;
+        XMoveTo(X + RX, Y);
+        XLineTo(X + W - RX, Y);
+        XCurveTo(X + W - RX + RX * Kappa, Y,
+                 X + W, Y + RY - RY * Kappa,
+                 X + W, Y + RY);
+        XLineTo(X + W, Y + H - RY);
+        XCurveTo(X + W, Y + H - RY + RY * Kappa,
+                 X + W - RX + RX * Kappa, Y + H,
+                 X + W - RX, Y + H);
+        XLineTo(X + RX, Y + H);
+        XCurveTo(X + RX - RX * Kappa, Y + H,
+                 X, Y + H - RY + RY * Kappa,
+                 X, Y + H - RY);
+        XLineTo(X, Y + RY);
+        XCurveTo(X, Y + RY - RY * Kappa,
+                 X + RX - RX * Kappa, Y,
+                 X + RX, Y);
+        DoClosePath;
+      end
+      else
+      begin
+        XMoveTo(X, Y);
+        XLineTo(X + W, Y);
+        XLineTo(X + W, Y + H);
+        XLineTo(X, Y + H);
+        DoClosePath;
+      end;
     end;
   end
   else if TagName = 'circle' then
@@ -1029,7 +1085,15 @@ begin
     CY := ParseSvgFloat(GetAttr(Node, 'cy', '0'));
     R := ParseSvgFloat(GetAttr(Node, 'r', '0'));
     if R > 0 then
-      EmitBezierEllipse(CX, CY, R, R);
+    begin
+      KX := R * Kappa; KY := KX;
+      XMoveTo(CX, CY - R);
+      XCurveTo(CX + KX, CY - R, CX + R, CY - KY, CX + R, CY);
+      XCurveTo(CX + R, CY + KY, CX + KX, CY + R, CX, CY + R);
+      XCurveTo(CX - KX, CY + R, CX - R, CY + KY, CX - R, CY);
+      XCurveTo(CX - R, CY - KY, CX - KX, CY - R, CX, CY - R);
+      DoClosePath;
+    end;
   end
   else if TagName = 'ellipse' then
   begin
@@ -1038,7 +1102,15 @@ begin
     RX := ParseSvgFloat(GetAttr(Node, 'rx', '0'));
     RY := ParseSvgFloat(GetAttr(Node, 'ry', '0'));
     if (RX > 0) and (RY > 0) then
-      EmitBezierEllipse(CX, CY, RX, RY);
+    begin
+      KX := RX * Kappa; KY := RY * Kappa;
+      XMoveTo(CX, CY - RY);
+      XCurveTo(CX + KX, CY - RY, CX + RX, CY - KY, CX + RX, CY);
+      XCurveTo(CX + RX, CY + KY, CX + KX, CY + RY, CX, CY + RY);
+      XCurveTo(CX - KX, CY + RY, CX - RX, CY + KY, CX - RX, CY);
+      XCurveTo(CX - RX, CY - KY, CX - KX, CY - RY, CX, CY - RY);
+      DoClosePath;
+    end;
   end
   else if TagName = 'polygon' then
   begin
@@ -1060,9 +1132,10 @@ end;
 
 procedure TPixieSvgRendererBase.ApplyClipPath(Node: Pointer);
 var
-  ClipStr, ClipId: string;
+  ClipStr, ClipId, TransStr: string;
   ClipEl: Pointer;
   Child: TDOMNode;
+  M: TPixieSvgMatrix;
 begin
   if FIdMap = nil then Exit;
 
@@ -1074,12 +1147,21 @@ begin
 
   if not FIdMap.TryGetValue(ClipId, ClipEl) then Exit;
 
-  // Emit geometry of all children in the <clipPath> element
+  // Emit geometry of all children in the <clipPath> element.
+  // Each child's transform is applied directly to the emitted
+  // coordinates (canvas transform does not affect path geometry).
   Child := TDOMNode(ClipEl).FirstChild;
   while Child <> nil do
   begin
     if Child.NodeType = ELEMENT_NODE then
-      EmitShapeGeometry(Child);
+    begin
+      TransStr := GetAttr(Child, 'transform');
+      if TransStr <> '' then
+        M := ParseTransform(TransStr)
+      else
+        M := TPixieSvgMatrix.Identity;
+      EmitShapeGeometry(Child, M);
+    end;
     Child := Child.NextSibling;
   end;
 
