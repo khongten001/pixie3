@@ -1654,6 +1654,9 @@ begin
         Box := Boxes[J];
         Box.X := Box.X + X;
         Box.Y := Box.Y + Y;
+        // Inline boxes include margins for layout; shrink to border box
+        // so background and border do not extend into the margin area.
+        Box.SubMargins(RiObj.GetMargins);
 
         if (Clip = nil) or Box.DoesIntersect(Clip^) then
         begin
