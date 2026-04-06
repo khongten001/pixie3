@@ -45,7 +45,6 @@ type
     procedure RebuildAndStrokeGradient(const State: TPixieSvgState);
     function LoadImageFromHref(const Href: string): TPixieImageHandle;
     procedure FreeImageCache;
-    function IsPatternFill(const Id: string): Boolean;
     procedure FillWithPattern(const State: TPixieSvgState;
       FillRule: TPixieFillRule);
 
@@ -734,75 +733,15 @@ end;
 // Pattern fill
 // ===========================================================================
 
-function TPixieSvgCanvasRenderer.IsPatternFill(const Id: string): Boolean;
-var
-  El: Pointer;
-begin
-  Result := False;
-  if (FIdMap = nil) or (Id = '') then Exit;
-  if not FIdMap.TryGetValue(Id, El) then Exit;
-  Result := LowerCase(DomToStr(TDOMElement(El).TagName)) = 'pattern';
-end;
-
 procedure TPixieSvgCanvasRenderer.FillWithPattern(
   const State: TPixieSvgState; FillRule: TPixieFillRule);
 var
-  PatternEl, Child, Target: Pointer;
-  ChildTag, HrefStr, ImgHref: string;
+  ImgHref: string;
   Handle: TPixieImageHandle;
   BX, BY, BW, BH: Single;
-  Depth: Integer;
   NeedOpacity: Boolean;
 begin
-  if (FIdMap = nil) or (State.FillGradientId = '') then Exit;
-  if not FIdMap.TryGetValue(State.FillGradientId, PatternEl) then Exit;
-
-  // Resolve pattern content to an image href.
-  // Walk children: look for <image> directly, or <use> -> <image>.
-  ImgHref := '';
-  Child := TDOMNode(PatternEl).FirstChild;
-  while Child <> nil do
-  begin
-    if TDOMNode(Child).NodeType = ELEMENT_NODE then
-    begin
-      ChildTag := LowerCase(DomToStr(TDOMElement(Child).TagName));
-      if ChildTag = 'image' then
-      begin
-        ImgHref := GetAttr(Child, 'xlink:href');
-        if ImgHref = '' then
-          ImgHref := GetAttr(Child, 'href');
-        Break;
-      end
-      else if ChildTag = 'use' then
-      begin
-        // Resolve <use> chain to find <image> (depth-limited)
-        HrefStr := GetAttr(Child, 'xlink:href');
-        if HrefStr = '' then
-          HrefStr := GetAttr(Child, 'href');
-        Depth := 0;
-        while (HrefStr <> '') and (HrefStr[1] = '#') and (Depth < 10) do
-        begin
-          if not FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
-            Break;
-          if LowerCase(DomToStr(TDOMElement(Target).TagName)) = 'image' then
-          begin
-            ImgHref := GetAttr(Target, 'xlink:href');
-            if ImgHref = '' then
-              ImgHref := GetAttr(Target, 'href');
-            Break;
-          end;
-          // Follow another <use>
-          HrefStr := GetAttr(Target, 'xlink:href');
-          if HrefStr = '' then
-            HrefStr := GetAttr(Target, 'href');
-          Inc(Depth);
-        end;
-        if ImgHref <> '' then Break;
-      end;
-    end;
-    Child := TDOMNode(Child).NextSibling;
-  end;
-
+  ImgHref := ResolvePatternImageHref(State.FillGradientId);
   if ImgHref = '' then
   begin
     FCanvas.DiscardPath;

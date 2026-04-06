@@ -34,6 +34,9 @@ type
     FStream: TMemoryStream;
     FResourceExtGState: AnsiString;
     FResourceShading: AnsiString;
+    FResourceXObject: AnsiString;
+    FImageCounter: Integer;
+    FImageCache: TDictionary<string, AnsiString>;
     FFonts: TPixieSvgFontInfoList;
     FGsCounter: Integer;
     FFontCounter: Integer;
@@ -59,6 +62,11 @@ type
       ShadingType: Integer): AnsiString;
     procedure FillGradient(const State: TPixieSvgState);
 
+    // Image helpers
+    function EmbedImageFromHref(const Href: string;
+      out PdfName: AnsiString): Integer;
+    procedure FillWithPattern(const State: TPixieSvgState);
+
     // Font helpers
     function FindOrCreateSvgFont(const Family: string;
       Weight: Integer): Integer;
@@ -80,6 +88,8 @@ type
     // Override text run rendering for PDF font embedding
     procedure DoRenderTextRun(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
+    procedure DoDrawImage(const Href: string;
+      X, Y, W, H: Single); override;
   public
     constructor Create(AWriter: TPixiePdfWriter;
       AFontCache: TPixieTrueTypeFontCache);
@@ -92,7 +102,9 @@ type
 implementation
 
 uses
-  Math, Pixie.SimpleXml, Pixie.Utf8;
+  Math, Pixie.SimpleXml, Pixie.Utf8, Pixie.DataUri
+  {$IFDEF FPC}, FPImage, FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,
+  Pixie.ImageUtils{$ENDIF};
 
 
 
@@ -111,6 +123,8 @@ begin
   FGsCounter := 0;
   FFontCounter := 0;
   FShadingCounter := 0;
+  FImageCounter := 0;
+  FImageCache := TDictionary<string, AnsiString>.Create;
   FBBoxValid := False;
 end;
 
@@ -121,6 +135,7 @@ begin
   for I := 0 to FFonts.Count - 1 do
     FFonts[I].UsedGlyphs.Free;
   FFonts.Free;
+  FImageCache.Free;
   FStream.Free;
   inherited;
 end;
@@ -540,7 +555,10 @@ begin
   if State.FillGradientId <> '' then
   begin
     EmitLn('q');
-    FillGradient(State);
+    if IsPatternFill(State.FillGradientId) then
+      FillWithPattern(State)
+    else
+      FillGradient(State);
     EmitLn('Q');
   end
   else if DoFill or DoStroke then
@@ -855,6 +873,180 @@ begin
 end;
 
 // ===========================================================================
+// Image embedding and pattern fill
+// ===========================================================================
+
+function TPixieSvgRenderer.EmbedImageFromHref(const Href: string;
+  out PdfName: AnsiString): Integer;
+var
+  CacheKey: string;
+  DataStream: TMemoryStream;
+  ImgObj, SmaskObj: TPixiePdfObject;
+  RgbData, AlphaData: TBytes;
+  X, Y, W, H, Pitch: Integer;
+  Src: PByte;
+  HasAlpha: Boolean;
+  B, G, R, A: Byte;
+  RgbIdx, AlphaIdx: Integer;
+{$IFDEF FPC}
+  Img: TFPMemoryImage;
+  Pixels: PByte;
+{$ENDIF}
+begin
+  Result := 0;
+  PdfName := '';
+
+  if Pos('data:', Href) <> 1 then Exit;
+
+  // Cache key — short fingerprint for large data URIs
+  if Length(Href) > 256 then
+    CacheKey := 'data:' + IntToStr(Length(Href)) + ':' +
+      Copy(Href, Length(Href) - 31, 32)
+  else
+    CacheKey := Href;
+  if FImageCache.TryGetValue(CacheKey, PdfName) then
+  begin
+    Result := 1;
+    Exit;
+  end;
+  if not DecodeDataUri(Href, DataStream) then Exit;
+  try
+  {$IFDEF FPC}
+    Img := TFPMemoryImage.Create(0, 0);
+    try
+      try
+        DataStream.Position := 0;
+        Img.LoadFromStream(DataStream);
+      except
+        Exit;
+      end;
+      ConvertFPImageToBGRA(Img, Pixels, W, H, Pitch);
+      if Pixels = nil then Exit;
+      try
+        SetLength(RgbData, W * H * 3);
+        SetLength(AlphaData, W * H);
+        HasAlpha := False;
+        RgbIdx := 0;
+        AlphaIdx := 0;
+        for Y := 0 to H - 1 do
+        begin
+          Src := Pixels + Y * Pitch;
+          for X := 0 to W - 1 do
+          begin
+            B := Src^; Inc(Src);
+            G := Src^; Inc(Src);
+            R := Src^; Inc(Src);
+            A := Src^; Inc(Src);
+            // Un-premultiply alpha
+            if (A > 0) and (A < 255) then
+            begin
+              R := Min(255, R * 255 div A);
+              G := Min(255, G * 255 div A);
+              B := Min(255, B * 255 div A);
+            end;
+            RgbData[RgbIdx] := R; Inc(RgbIdx);
+            RgbData[RgbIdx] := G; Inc(RgbIdx);
+            RgbData[RgbIdx] := B; Inc(RgbIdx);
+            AlphaData[AlphaIdx] := A; Inc(AlphaIdx);
+            if A <> 255 then HasAlpha := True;
+          end;
+        end;
+
+        // Create SMask if needed
+        SmaskObj := nil;
+        if HasAlpha then
+        begin
+          SmaskObj := FWriter.AllocObject;
+          SmaskObj.AddEntry('Type', '/XObject');
+          SmaskObj.AddEntry('Subtype', '/Image');
+          SmaskObj.AddEntry('Width', AnsiString(IntToStr(W)));
+          SmaskObj.AddEntry('Height', AnsiString(IntToStr(H)));
+          SmaskObj.AddEntry('ColorSpace', '/DeviceGray');
+          SmaskObj.AddEntry('BitsPerComponent', '8');
+          SmaskObj.SetStream(AlphaData, True);
+        end;
+
+        // Create image object
+        ImgObj := FWriter.AllocObject;
+        ImgObj.AddEntry('Type', '/XObject');
+        ImgObj.AddEntry('Subtype', '/Image');
+        ImgObj.AddEntry('Width', AnsiString(IntToStr(W)));
+        ImgObj.AddEntry('Height', AnsiString(IntToStr(H)));
+        ImgObj.AddEntry('ColorSpace', '/DeviceRGB');
+        ImgObj.AddEntry('BitsPerComponent', '8');
+        if SmaskObj <> nil then
+          ImgObj.AddEntry('SMask', PdfRef(SmaskObj.Id));
+        ImgObj.SetStream(RgbData, True);
+
+        Inc(FImageCounter);
+        PdfName := 'SvgIm' + AnsiString(IntToStr(FImageCounter));
+        FResourceXObject := FResourceXObject + '/' + PdfName + ' ' +
+          PdfRef(ImgObj.Id) + ' ';
+        FImageCache.Add(CacheKey, PdfName);
+        Result := ImgObj.Id;
+      finally
+        FreeMem(Pixels);
+      end;
+    finally
+      Img.Free;
+    end;
+  {$ENDIF}
+  finally
+    DataStream.Free;
+  end;
+end;
+
+procedure TPixieSvgRenderer.FillWithPattern(const State: TPixieSvgState);
+var
+  ImgHref: string;
+  PdfName: AnsiString;
+  BX, BY, BW, BH: Single;
+begin
+  ImgHref := ResolvePatternImageHref(State.FillGradientId);
+  if (ImgHref = '') or (EmbedImageFromHref(ImgHref, PdfName) = 0) or
+     not FBBoxValid then
+  begin
+    EmitLn('n');
+    FBBoxValid := False;
+    Exit;
+  end;
+
+  BX := FBBoxMinX;
+  BY := FBBoxMinY;
+  BW := FBBoxMaxX - FBBoxMinX;
+  BH := FBBoxMaxY - FBBoxMinY;
+  FBBoxValid := False;
+
+  if (BW <= 0) or (BH <= 0) then
+  begin
+    EmitLn('n');
+    Exit;
+  end;
+
+  if State.EvenOddFill then
+    EmitLn('W* n')
+  else
+    EmitLn('W n');
+
+  EmitLn(PdfFloat(BW) + ' 0 0 ' + PdfFloat(-BH) + ' ' +
+    PdfFloat(BX) + ' ' + PdfFloat(BY + BH) + ' cm');
+  EmitLn('/' + PdfName + ' Do');
+end;
+
+procedure TPixieSvgRenderer.DoDrawImage(const Href: string;
+  X, Y, W, H: Single);
+var
+  PdfName: AnsiString;
+begin
+  if EmbedImageFromHref(Href, PdfName) = 0 then Exit;
+  EmitLn('q');
+  EmitLn(PdfFloat(W) + ' 0 0 ' + PdfFloat(-H) + ' ' +
+    PdfFloat(X) + ' ' + PdfFloat(Y + H) + ' cm');
+  EmitLn('/' + PdfName + ' Do');
+  EmitLn('Q');
+end;
+
+// ===========================================================================
 // Text run rendering (PDF — uses glyph-based font embedding)
 // ===========================================================================
 
@@ -987,6 +1179,8 @@ begin
       ResourceStr := ResourceStr + '/ExtGState << ' + FResourceExtGState + ' >> ';
     if FResourceShading <> '' then
       ResourceStr := ResourceStr + '/Shading << ' + FResourceShading + ' >> ';
+    if FResourceXObject <> '' then
+      ResourceStr := ResourceStr + '/XObject << ' + FResourceXObject + ' >> ';
     if FFonts.Count > 0 then
     begin
       ResourceStr := ResourceStr + '/Font << ';

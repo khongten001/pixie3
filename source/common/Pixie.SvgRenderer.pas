@@ -158,6 +158,10 @@ type
     function ResolveGradientStops(const Id: string): TPixieSvgGradient;
     class function ExtractUrlId(const S: string): string; static;
 
+    // Pattern/image helpers
+    function IsPatternFill(const Id: string): Boolean;
+    function ResolvePatternImageHref(const PatternId: string): string;
+
     // ID map for <use> element lookup
     procedure BuildIdMap(Node: Pointer);
 
@@ -1318,6 +1322,68 @@ begin
   end;
 end;
 
+function TPixieSvgRendererBase.IsPatternFill(const Id: string): Boolean;
+var
+  El: Pointer;
+begin
+  Result := False;
+  if (FIdMap = nil) or (Id = '') then Exit;
+  if not FIdMap.TryGetValue(Id, El) then Exit;
+  Result := LowerCase(DomToStr(TDOMElement(El).TagName)) = 'pattern';
+end;
+
+function TPixieSvgRendererBase.ResolvePatternImageHref(
+  const PatternId: string): string;
+var
+  PatternEl, Child, Target: Pointer;
+  ChildTag, HrefStr: string;
+  Depth: Integer;
+begin
+  Result := '';
+  if (FIdMap = nil) or (PatternId = '') then Exit;
+  if not FIdMap.TryGetValue(PatternId, PatternEl) then Exit;
+
+  Child := TDOMNode(PatternEl).FirstChild;
+  while Child <> nil do
+  begin
+    if TDOMNode(Child).NodeType = ELEMENT_NODE then
+    begin
+      ChildTag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if ChildTag = 'image' then
+      begin
+        Result := GetAttr(Child, 'xlink:href');
+        if Result = '' then
+          Result := GetAttr(Child, 'href');
+        Exit;
+      end
+      else if ChildTag = 'use' then
+      begin
+        HrefStr := GetAttr(Child, 'xlink:href');
+        if HrefStr = '' then
+          HrefStr := GetAttr(Child, 'href');
+        Depth := 0;
+        while (HrefStr <> '') and (HrefStr[1] = '#') and (Depth < 10) do
+        begin
+          if not FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
+            Break;
+          if LowerCase(DomToStr(TDOMElement(Target).TagName)) = 'image' then
+          begin
+            Result := GetAttr(Target, 'xlink:href');
+            if Result = '' then
+              Result := GetAttr(Target, 'href');
+            Exit;
+          end;
+          HrefStr := GetAttr(Target, 'xlink:href');
+          if HrefStr = '' then
+            HrefStr := GetAttr(Target, 'href');
+          Inc(Depth);
+        end;
+      end;
+    end;
+    Child := TDOMNode(Child).NextSibling;
+  end;
+end;
+
 procedure TPixieSvgRendererBase.ParseGradient(Node: Pointer;
   IsRadial: Boolean);
 var
@@ -2424,7 +2490,8 @@ var
 begin
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
-  IsGroup := (TagName = 'g') or (TagName = 'svg') or (TagName = 'symbol');
+  IsGroup := (TagName = 'g') or (TagName = 'svg') or (TagName = 'symbol') or
+    (TagName = 'a');
 
   if IsGroup then
   begin
