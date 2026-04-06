@@ -39,6 +39,7 @@ type
     function GetTextByPoint(X, Y: TPixiePixel): TPixieElement; override;
     function GetNearestTextByPoint(X, Y: TPixiePixel): TPixieElement; override;
     function GetDrawVerticalOffset: TPixiePixel; override;
+    function GetDrawBottomOffset: TPixiePixel; override;
   end;
 
   { TPixieRenderTablePart — thead/tbody/tfoot }
@@ -568,6 +569,7 @@ begin
       BottomCaptions := BottomCaptions + Caption.Height;
     end;
   end;
+  FGrid.BottomCaptionsHeight := BottomCaptions;
 
   // Position tr render items (FPos relative to table content area)
   if (FGrid.ColsCount > 0) and (FGrid.RowsCount > 0) then
@@ -918,6 +920,14 @@ function TPixieRenderTable.GetDrawVerticalOffset: TPixiePixel;
 begin
   if FGrid <> nil then
     Result := FGrid.TopCaptionsHeight
+  else
+    Result := 0;
+end;
+
+function TPixieRenderTable.GetDrawBottomOffset: TPixiePixel;
+begin
+  if FGrid <> nil then
+    Result := FGrid.BottomCaptionsHeight
   else
     Result := 0;
 end;

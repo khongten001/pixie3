@@ -1468,7 +1468,7 @@ procedure TPixieHtmlTag.DrawBackground(Hdc: PtrUInt; X, Y: TPixiePixel;
 var
   Pos, BorderBox, ContentBox: TPixiePosition;
   RiObj: TPixieRenderItem;
-  VOffset: TPixiePixel;
+  VOffset, BOffset: TPixiePixel;
   Bg: TPixieBackground;
   NumLayers, I: Integer;
   Layer: TPixieBackgroundLayer;
@@ -1586,8 +1586,11 @@ begin
     if ((Clip = nil) or BorderBox.DoesIntersect(Clip^)) or IsRoot then
     begin
       VOffset := RiObj.GetDrawVerticalOffset;
+      BOffset := RiObj.GetDrawBottomOffset;
       Pos.Y := Pos.Y + VOffset;
-      Pos.Height := Pos.Height - VOffset;
+      Pos.Height := Pos.Height - VOffset - BOffset;
+      BorderBox.Y := BorderBox.Y + VOffset;
+      BorderBox.Height := BorderBox.Height - VOffset - BOffset;
 
       Bg := GetBackground;
       if Bg <> nil then

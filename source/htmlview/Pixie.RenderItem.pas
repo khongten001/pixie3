@@ -192,6 +192,7 @@ type
     procedure AddInlineBox(const Box: TPixiePosition); virtual;
     procedure ClearInlineBoxes; virtual;
     function GetDrawVerticalOffset: TPixiePixel; virtual;
+    function GetDrawBottomOffset: TPixiePixel; virtual;
     procedure YShift(Delta: TPixiePixel); virtual;
 
     // Debug
@@ -2477,6 +2478,11 @@ begin
 end;
 
 function TPixieRenderItem.GetDrawVerticalOffset: TPixiePixel;
+begin
+  Result := 0;
+end;
+
+function TPixieRenderItem.GetDrawBottomOffset: TPixiePixel;
 begin
   Result := 0;
 end;
