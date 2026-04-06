@@ -132,6 +132,8 @@
         <DCCReference Include="..\source\htmlview\Pixie.Stylesheet.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.MediaQuery.pas"/>
         <DCCReference Include="..\source\common\Pixie.GradientLayer.pas"/>
+        <DCCReference Include="..\source\common\Pixie.DataUri.pas"/>
+        <DCCReference Include="..\source\common\Pixie.ImageUtils.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.Gradient.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.Background.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.CssProperties.pas"/>

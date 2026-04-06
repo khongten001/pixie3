@@ -173,9 +173,8 @@ type
 implementation
 
 uses
-  {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Base64,{$ENDIF}
-  {$IFNDEF FPC}System.NetEncoding,{$ENDIF}
-  Pixie.Utf8, Pixie.Url;
+  {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,{$ENDIF}
+  Pixie.DataUri, Pixie.Utf8, Pixie.Url;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -284,64 +283,6 @@ begin
     Result := PercentDecode(Src)
   else
     Result := IncludeTrailingPathDelimiter(Base) + PercentDecode(Src);
-end;
-
-function DecodeDataUri(const Src: string;
-  out Stream: TMemoryStream): Boolean;
-var
-  Marker: Integer;
-  B64: string;
-{$IFDEF FPC}
-  Input: TStringStream;
-  Decoder: TBase64DecodingStream;
-  Buf: array[0..4095] of Byte;
-  Count: Integer;
-{$ELSE}
-  Bytes: TBytes;
-{$ENDIF}
-begin
-  Result := False;
-  Stream := nil;
-
-  // Find ;base64, marker
-  Marker := Pos(';base64,', Src);
-  if Marker = 0 then Exit;
-
-  B64 := Copy(Src, Marker + 8, MaxInt);
-  if B64 = '' then Exit;
-
-  Stream := TMemoryStream.Create;
-  try
-  {$IFDEF FPC}
-    Input := TStringStream.Create(B64);
-    try
-      Decoder := TBase64DecodingStream.Create(Input);
-      try
-        repeat
-          Count := Decoder.Read(Buf, SizeOf(Buf));
-          if Count > 0 then
-            Stream.Write(Buf, Count);
-        until Count = 0;
-      finally
-        Decoder.Free;
-      end;
-    finally
-      Input.Free;
-    end;
-  {$ELSE}
-    Bytes := TNetEncoding.Base64.DecodeStringToBytes(B64);
-    if Length(Bytes) > 0 then
-      Stream.Write(Bytes[0], Length(Bytes));
-  {$ENDIF}
-    Result := Stream.Size > 0;
-    if Result then
-      Stream.Position := 0
-    else
-      FreeAndNil(Stream);
-  except
-    FreeAndNil(Stream);
-    Result := False;
-  end;
 end;
 
 function DetectImageAlpha(Stream: TStream): Boolean;
@@ -547,10 +488,7 @@ var
 {$IFDEF FPC}
   Img: TFPMemoryImage;
   Pixels: PByte;
-  Pitch, X, Y, W, H: Integer;
-  Colour: TFPColor;
-  Dst: PByte;
-  A, R, G, B: Byte;
+  Pitch, W, H: Integer;
 {$ENDIF}
 begin
   Result := 0;
@@ -593,50 +531,9 @@ begin
     except
       Exit;
     end;
-
-    W := Img.Width;
-    H := Img.Height;
-    if (W <= 0) or (H <= 0) then Exit;
-
-    Pitch := W * 4;
-    GetMem(Pixels, Pitch * H);
+    ConvertFPImageToBGRA(Img, Pixels, W, H, Pitch);
+    if Pixels <> nil then
     try
-      // Copy pixels as top-down BGRA (premultiplied)
-      for Y := 0 to H - 1 do
-      begin
-        Dst := Pixels + Y * Pitch;
-        for X := 0 to W - 1 do
-        begin
-          Colour := Img.Colors[X, Y];
-          A := Colour.Alpha shr 8;
-          if A = 0 then
-          begin
-            Dst^ := 0; Inc(Dst);
-            Dst^ := 0; Inc(Dst);
-            Dst^ := 0; Inc(Dst);
-            Dst^ := 0; Inc(Dst);
-          end
-          else if A = 255 then
-          begin
-            Dst^ := Colour.Blue shr 8; Inc(Dst);
-            Dst^ := Colour.Green shr 8; Inc(Dst);
-            Dst^ := Colour.Red shr 8; Inc(Dst);
-            Dst^ := A; Inc(Dst);
-          end
-          else
-          begin
-            // Premultiply alpha
-            R := Colour.Red shr 8;
-            G := Colour.Green shr 8;
-            B := Colour.Blue shr 8;
-            Dst^ := B * A div 255; Inc(Dst);
-            Dst^ := G * A div 255; Inc(Dst);
-            Dst^ := R * A div 255; Inc(Dst);
-            Dst^ := A; Inc(Dst);
-          end;
-        end;
-      end;
-
       Result := FCanvas.LoadImageFromPixels(W, H, Pixels, Pitch);
     finally
       FreeMem(Pixels);

@@ -114,6 +114,9 @@ type
     procedure DoClipPath; virtual; abstract;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); virtual;
+    procedure DoDrawImage(const Href: string;
+      X, Y, W, H: Single); virtual;
+    procedure DoClearImages; virtual;
 
     // Attribute parsing
     function GetAttr(Node: Pointer; const Name: string;
@@ -168,6 +171,8 @@ type
     procedure RenderPath(Node: Pointer; const State: TPixieSvgState);
     procedure RenderText(Node: Pointer;
       const State: TPixieSvgState); virtual;
+    procedure RenderImage(Node: Pointer;
+      const State: TPixieSvgState);
   public
     destructor Destroy; override;
 
@@ -190,19 +195,7 @@ uses
 const
   Kappa: Single = 0.5522847498;
 
-// FPC DOM uses WideString; Delphi SimpleXml uses WideString too but
-// string = UnicodeString, so the UTF8Encode/Decode round-trip is not needed.
-{$IFDEF FPC}
-function DomToStr(const S: WideString): string; inline;
-begin Result := UTF8Encode(S); end;
-function StrToDom(const S: string): WideString; inline;
-begin Result := UTF8Decode(S); end;
-{$ELSE}
-function DomToStr(const S: WideString): string; inline;
-begin Result := S; end;
-function StrToDom(const S: string): WideString; inline;
-begin Result := S; end;
-{$ENDIF}
+
 
 // Locale-independent float parse (Val uses '.' regardless of locale)
 function SvgStrToFloat(const S: string): Single;
@@ -363,6 +356,7 @@ end;
 
 procedure TPixieSvgRendererBase.ClearDocument;
 begin
+  DoClearImages;
   FreeAndNil(FGradients);
   FreeAndNil(FIdMap);
   FreeAndNil(FStyleMap);
@@ -382,6 +376,17 @@ procedure TPixieSvgRendererBase.DoDrawText(const Text: string;
   X, Y: Single; const State: TPixieSvgState);
 begin
   // no-op — override in subclass for text rendering
+end;
+
+procedure TPixieSvgRendererBase.DoDrawImage(const Href: string;
+  X, Y, W, H: Single);
+begin
+  // no-op — override in subclass for image rendering
+end;
+
+procedure TPixieSvgRendererBase.DoClearImages;
+begin
+  // no-op — override in subclass to free cached images
 end;
 
 // ===========================================================================
@@ -2281,6 +2286,39 @@ begin
 end;
 
 // ===========================================================================
+// Image rendering
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.RenderImage(Node: Pointer;
+  const State: TPixieSvgState);
+var
+  X, Y, W, H: Single;
+  HrefStr: string;
+  NeedRestore: Boolean;
+begin
+  X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
+  Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
+  W := ParseSvgFloat(GetAttr(Node, 'width', '0'));
+  H := ParseSvgFloat(GetAttr(Node, 'height', '0'));
+
+  HrefStr := GetAttr(Node, 'xlink:href');
+  if HrefStr = '' then
+    HrefStr := GetAttr(Node, 'href');
+  if HrefStr = '' then Exit;
+  if (W <= 0) or (H <= 0) then Exit;
+
+  DoSaveState;
+  ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
+  ApplyOpacity(State, NeedRestore);
+
+  DoDrawImage(HrefStr, X, Y, W, H);
+
+  if NeedRestore then DoEndOpacity;
+  DoRestoreState;
+end;
+
+// ===========================================================================
 // Element rendering (single-node dispatch)
 // ===========================================================================
 
@@ -2318,6 +2356,8 @@ begin
     RenderPath(Node, State)
   else if TagName = 'text' then
     RenderText(Node, State)
+  else if TagName = 'image' then
+    RenderImage(Node, State)
   else if TagName = 'use' then
     RenderUse(Node, State)
   else if TagName = 'defs' then

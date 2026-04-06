@@ -77,7 +77,22 @@ type
 
 procedure ReadXMLFile(out Doc: TXMLDocument; Stream: TStream);
 
+function DomToStr(const S: WideString): string; inline;
+function StrToDom(const S: string): WideString; inline;
+
 implementation
+
+{$IFDEF FPC}
+function DomToStr(const S: WideString): string; inline;
+begin Result := UTF8Encode(S); end;
+function StrToDom(const S: string): WideString; inline;
+begin Result := UTF8Decode(S); end;
+{$ELSE}
+function DomToStr(const S: WideString): string; inline;
+begin Result := S; end;
+function StrToDom(const S: string): WideString; inline;
+begin Result := S; end;
+{$ENDIF}
 
 // ---------------------------------------------------------------------------
 // TDOMNode

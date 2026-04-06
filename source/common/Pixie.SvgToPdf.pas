@@ -94,13 +94,7 @@ implementation
 uses
   Math, Pixie.SimpleXml, Pixie.Utf8;
 
-{$IFDEF FPC}
-function DomToStr(const S: WideString): string; inline;
-begin Result := UTF8Encode(S); end;
-{$ELSE}
-function DomToStr(const S: WideString): string; inline;
-begin Result := S; end;
-{$ENDIF}
+
 
 // ===========================================================================
 // Construction

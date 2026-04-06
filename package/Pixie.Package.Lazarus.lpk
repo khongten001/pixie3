@@ -33,6 +33,14 @@
         <UnitName Value="Pixie.GradientLayer"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.DataUri.pas"/>
+        <UnitName Value="Pixie.DataUri"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/common/Pixie.ImageUtils.pas"/>
+        <UnitName Value="Pixie.ImageUtils"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.Canvas.pas"/>
         <UnitName Value="Pixie.Canvas"/>
       </Item>

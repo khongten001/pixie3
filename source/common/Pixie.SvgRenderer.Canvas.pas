@@ -10,7 +10,7 @@ unit Pixie.SvgRenderer.Canvas;
 interface
 
 uses
-  SysUtils, Math, Generics.Collections,
+  SysUtils, Classes, Math, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.FontDescription,
   Pixie.GradientLayer, Pixie.Borders,
   Pixie.Canvas, Pixie.SvgRenderer;
@@ -31,6 +31,9 @@ type
     FBBoxMinX, FBBoxMinY, FBBoxMaxX, FBBoxMaxY: Single;
     FBBoxValid: Boolean;
 
+    // Image cache for <image> elements (freed on ClearDocument)
+    FImageCache: TDictionary<string, TPixieImageHandle>;
+
     procedure UpdateBBox(X, Y: Single);
     procedure ResetBBox;
     procedure FillWithGradient(const State: TPixieSvgState;
@@ -40,6 +43,11 @@ type
       const Grad: TPixieSvgGradient; Opacity: Single);
     procedure RebuildAndStroke(const State: TPixieSvgState);
     procedure RebuildAndStrokeGradient(const State: TPixieSvgState);
+    function LoadImageFromHref(const Href: string): TPixieImageHandle;
+    procedure FreeImageCache;
+    function IsPatternFill(const Id: string): Boolean;
+    procedure FillWithPattern(const State: TPixieSvgState;
+      FillRule: TPixieFillRule);
 
     // Path recording — only active when gradient fill + stroke needs replay
     type
@@ -65,6 +73,9 @@ type
     procedure DoClipPath; override;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
+    procedure DoDrawImage(const Href: string;
+      X, Y, W, H: Single); override;
+    procedure DoClearImages; override;
   public
     constructor Create(ACanvas: TPixieCanvas);
     destructor Destroy; override;
@@ -74,6 +85,11 @@ type
   end;
 
 implementation
+
+uses
+  Pixie.SimpleXml, Pixie.DataUri
+  {$IFDEF FPC}, FPImage, FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,
+  Pixie.ImageUtils{$ENDIF};
 
 // ===========================================================================
 // Construction
@@ -93,6 +109,7 @@ end;
 
 destructor TPixieSvgCanvasRenderer.Destroy;
 begin
+  FreeImageCache;
   if (FFontHandle <> 0) and (FCanvas <> nil) then
     FCanvas.DeleteFont(FFontHandle);
   FPathRecord.Free;
@@ -476,7 +493,18 @@ begin
   else
     FR := frNonZero;
 
-  if HasGradientFill then
+  if HasGradientFill and IsPatternFill(State.FillGradientId) then
+  begin
+    FillWithPattern(State, FR);
+    if State.HasStroke then
+    begin
+      if HasGradientStroke then
+        RebuildAndStrokeGradient(State)
+      else
+        RebuildAndStroke(State);
+    end;
+  end
+  else if HasGradientFill then
   begin
     FillWithGradient(State, FR);
     if State.HasStroke then
@@ -583,6 +611,222 @@ begin
   // SVG text Y is baseline; DrawText expects top-left Y
   FCanvas.DrawText(Text, FFontHandle, FC,
     X, Y - FFontMetrics.Ascent, TextW + 10, FFontMetrics.Height);
+end;
+
+// ===========================================================================
+// Image support
+// ===========================================================================
+
+procedure TPixieSvgCanvasRenderer.FreeImageCache;
+var
+  Handle: TPixieImageHandle;
+begin
+  if FImageCache <> nil then
+  begin
+    if FCanvas <> nil then
+      for Handle in FImageCache.Values do
+        FCanvas.FreeImage(Handle);
+    FreeAndNil(FImageCache);
+  end;
+end;
+
+function TPixieSvgCanvasRenderer.LoadImageFromHref(
+  const Href: string): TPixieImageHandle;
+var
+  CacheKey: string;
+  DataStream: TMemoryStream;
+{$IFDEF FPC}
+  Img: TFPMemoryImage;
+  Pixels: PByte;
+  Pitch, W, H: Integer;
+{$ENDIF}
+begin
+  Result := 0;
+  if FCanvas = nil then Exit;
+
+  // Use a short key for data: URIs to avoid hashing megabytes of base64
+  if (Length(Href) > 256) and (Pos('data:', Href) = 1) then
+    CacheKey := 'data:' + IntToStr(Length(Href)) + ':' +
+      Copy(Href, Length(Href) - 31, 32)
+  else
+    CacheKey := Href;
+
+  // Check cache
+  if FImageCache <> nil then
+    if FImageCache.TryGetValue(CacheKey, Result) then Exit;
+
+  // Decode data: URI
+  if Pos('data:', Href) = 1 then
+  begin
+    if not DecodeDataUri(Href, DataStream) then Exit;
+    try
+      // Try canvas-native stream loading (D2D/WIC, FMX)
+      Result := FCanvas.LoadImageFromStream(DataStream);
+    {$IFDEF FPC}
+      // FPC backends: FPImage fallback for Cairo/CG/Qt
+      if Result = 0 then
+      begin
+        Img := TFPMemoryImage.Create(0, 0);
+        try
+          try
+            DataStream.Position := 0;
+            Img.LoadFromStream(DataStream);
+          except
+            Exit;
+          end;
+          ConvertFPImageToBGRA(Img, Pixels, W, H, Pitch);
+          if Pixels <> nil then
+          try
+            Result := FCanvas.LoadImageFromPixels(W, H, Pixels, Pitch);
+          finally
+            FreeMem(Pixels);
+          end;
+        finally
+          Img.Free;
+        end;
+      end;
+    {$ENDIF}
+    finally
+      DataStream.Free;
+    end;
+  end
+  else
+    // File path
+    Result := FCanvas.LoadImage(Href);
+
+  // Cache the loaded handle
+  if Result <> 0 then
+  begin
+    if FImageCache = nil then
+      FImageCache := TDictionary<string, TPixieImageHandle>.Create;
+    FImageCache.Add(CacheKey, Result);
+  end;
+end;
+
+procedure TPixieSvgCanvasRenderer.DoDrawImage(const Href: string;
+  X, Y, W, H: Single);
+var
+  Handle: TPixieImageHandle;
+begin
+  Handle := LoadImageFromHref(Href);
+  if Handle = 0 then Exit;
+  FCanvas.DrawImage(Handle, X, Y, W, H);
+end;
+
+procedure TPixieSvgCanvasRenderer.DoClearImages;
+begin
+  FreeImageCache;
+end;
+
+// ===========================================================================
+// Pattern fill
+// ===========================================================================
+
+function TPixieSvgCanvasRenderer.IsPatternFill(const Id: string): Boolean;
+var
+  El: Pointer;
+begin
+  Result := False;
+  if (FIdMap = nil) or (Id = '') then Exit;
+  if not FIdMap.TryGetValue(Id, El) then Exit;
+  Result := LowerCase(DomToStr(TDOMElement(El).TagName)) = 'pattern';
+end;
+
+procedure TPixieSvgCanvasRenderer.FillWithPattern(
+  const State: TPixieSvgState; FillRule: TPixieFillRule);
+var
+  PatternEl, Child, Target: Pointer;
+  ChildTag, HrefStr, ImgHref: string;
+  Handle: TPixieImageHandle;
+  BX, BY, BW, BH: Single;
+  Depth: Integer;
+begin
+  if (FIdMap = nil) or (State.FillGradientId = '') then Exit;
+  if not FIdMap.TryGetValue(State.FillGradientId, PatternEl) then Exit;
+
+  // Resolve pattern content to an image href.
+  // Walk children: look for <image> directly, or <use> -> <image>.
+  ImgHref := '';
+  Child := TDOMNode(PatternEl).FirstChild;
+  while Child <> nil do
+  begin
+    if TDOMNode(Child).NodeType = ELEMENT_NODE then
+    begin
+      ChildTag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if ChildTag = 'image' then
+      begin
+        ImgHref := GetAttr(Child, 'xlink:href');
+        if ImgHref = '' then
+          ImgHref := GetAttr(Child, 'href');
+        Break;
+      end
+      else if ChildTag = 'use' then
+      begin
+        // Resolve <use> chain to find <image> (depth-limited)
+        HrefStr := GetAttr(Child, 'xlink:href');
+        if HrefStr = '' then
+          HrefStr := GetAttr(Child, 'href');
+        Depth := 0;
+        while (HrefStr <> '') and (HrefStr[1] = '#') and (Depth < 10) do
+        begin
+          if not FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
+            Break;
+          if LowerCase(DomToStr(TDOMElement(Target).TagName)) = 'image' then
+          begin
+            ImgHref := GetAttr(Target, 'xlink:href');
+            if ImgHref = '' then
+              ImgHref := GetAttr(Target, 'href');
+            Break;
+          end;
+          // Follow another <use>
+          HrefStr := GetAttr(Target, 'xlink:href');
+          if HrefStr = '' then
+            HrefStr := GetAttr(Target, 'href');
+          Inc(Depth);
+        end;
+        if ImgHref <> '' then Break;
+      end;
+    end;
+    Child := TDOMNode(Child).NextSibling;
+  end;
+
+  if ImgHref = '' then
+  begin
+    FCanvas.DiscardPath;
+    ResetBBox;
+    FPathRecord.Clear;
+    Exit;
+  end;
+
+  Handle := LoadImageFromHref(ImgHref);
+  if Handle = 0 then
+  begin
+    FCanvas.DiscardPath;
+    ResetBBox;
+    FPathRecord.Clear;
+    Exit;
+  end;
+
+  // Clip to current path, then draw image stretched to bounding box
+  FCanvas.ClipPath(FillRule);
+
+  if FBBoxValid then
+  begin
+    BX := FBBoxMinX;
+    BY := FBBoxMinY;
+    BW := FBBoxMaxX - FBBoxMinX;
+    BH := FBBoxMaxY - FBBoxMinY;
+  end
+  else
+  begin
+    BX := 0; BY := 0; BW := 0; BH := 0;
+  end;
+
+  if (BW > 0) and (BH > 0) then
+    FCanvas.DrawImage(Handle, BX, BY, BW, BH);
+
+  ResetBBox;
+  FPathRecord.Clear;
 end;
 
 // ===========================================================================

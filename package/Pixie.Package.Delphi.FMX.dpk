@@ -52,6 +52,8 @@ contains
   Pixie.Stylesheet in '..\source\htmlview\Pixie.Stylesheet.pas',
   Pixie.MediaQuery in '..\source\htmlview\Pixie.MediaQuery.pas',
   Pixie.GradientLayer in '..\source\common\Pixie.GradientLayer.pas',
+  Pixie.DataUri in '..\source\common\Pixie.DataUri.pas',
+  Pixie.ImageUtils in '..\source\common\Pixie.ImageUtils.pas',
   Pixie.Gradient in '..\source\htmlview\Pixie.Gradient.pas',
   Pixie.Background in '..\source\htmlview\Pixie.Background.pas',
   Pixie.CssProperties in '..\source\htmlview\Pixie.CssProperties.pas',
