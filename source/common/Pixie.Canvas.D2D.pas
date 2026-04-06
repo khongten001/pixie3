@@ -60,7 +60,6 @@ type
     function ToColorF(const C: TPixieWebColor): TD2d1ColorF;
     function MakeRectF(X, Y, W, H: Single): TD2d1RectF;
     function MakePoint(X, Y: Single): TD2d1Point2f;
-    function HasRadius(const R: TPixieBorderRadiuses): Boolean;
     procedure CreateRoundedRectGeometry(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses; out Geom: ID2D1PathGeometry);
     function CreateGradientStops(const Points: TPixieColorPointList;
@@ -125,6 +124,9 @@ type
       out W, H: Single); override;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); override;
+    procedure FillTiledImage(Handle: TPixieImageHandle;
+      TileX, TileY, TileW, TileH: Single;
+      FillX, FillY, FillW, FillH: Single); override;
 
     procedure FillEllipse(X, Y, W, H: Single;
       Color: TPixieWebColor); override;
@@ -227,14 +229,6 @@ begin
   Result.y := Y;
 end;
 
-function TPixieD2DCanvas.HasRadius(
-  const R: TPixieBorderRadiuses): Boolean;
-begin
-  Result := (R.TopLeftX > 0) or (R.TopLeftY > 0) or
-            (R.TopRightX > 0) or (R.TopRightY > 0) or
-            (R.BottomRightX > 0) or (R.BottomRightY > 0) or
-            (R.BottomLeftX > 0) or (R.BottomLeftY > 0);
-end;
 
 procedure TPixieD2DCanvas.CreateRoundedRectGeometry(X, Y, W, H: Single;
   const R: TPixieBorderRadiuses; out Geom: ID2D1PathGeometry);
@@ -571,7 +565,7 @@ begin
   if (FTarget = nil) or (Color.Alpha = 0) then Exit;
   FBrush.SetColor(ToColorF(Color));
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     CreateRoundedRectGeometry(X, Y, W, H, Radius, Geom);
     if Geom <> nil then
@@ -607,7 +601,7 @@ begin
   if Failed(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
     LBrush)) then Exit;
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     CreateRoundedRectGeometry(X, Y, W, H, Radius, Geom);
     if Geom <> nil then
@@ -644,7 +638,7 @@ begin
   // Clip to target rect, then fill the full ellipse area
   SaveState;
   try
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
     begin
       CreateRoundedRectGeometry(X, Y, W, H, Radius, Geom);
       if Geom <> nil then
@@ -696,7 +690,7 @@ begin
 
   SaveState;
   try
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
     begin
       SetClipRect(TPixiePosition.Create(X, Y, W, H), Radius);
     end
@@ -851,7 +845,7 @@ begin
   W := Pos.Width;
   H := Pos.Height;
 
-  if HasRadius(Borders.Radius) then
+  if Borders.Radius.HasRadius then
   begin
     if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) then
     begin
@@ -1338,6 +1332,53 @@ begin
   R := MakeRectF(DstX, DstY, DstW, DstH);
   FTarget.DrawBitmap(Info.D2DBitmap, @R, 1.0,
     D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, nil);
+end;
+
+procedure TPixieD2DCanvas.FillTiledImage(Handle: TPixieImageHandle;
+  TileX, TileY, TileW, TileH: Single;
+  FillX, FillY, FillW, FillH: Single);
+var
+  Info: PPixieD2DImage;
+  BmpProps: TD2d1BitmapBrushProperties;
+  BrushProps: TD2d1BrushProperties;
+  BitmapBrush: ID2D1BitmapBrush;
+  R: TD2d1RectF;
+begin
+  if (Handle = 0) or (FTarget = nil) then Exit;
+  Info := PPixieD2DImage(Handle);
+
+  // SVG images: fall back to base-class per-tile loop
+  if Info.SvgRenderer <> nil then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  // Lazy-create D2D bitmap from WIC source
+  if (Info.D2DBitmap = nil) and (Info.WicSource <> nil) then
+    FTarget.CreateBitmapFromWicBitmap(Info.WicSource, nil, Info.D2DBitmap);
+  if Info.D2DBitmap = nil then Exit;
+
+  if (TileW <= 0) or (TileH <= 0) or
+     (Info.ImgWidth = 0) or (Info.ImgHeight = 0) then Exit;
+
+  BmpProps.extendModeX := D2D1_EXTEND_MODE_WRAP;
+  BmpProps.extendModeY := D2D1_EXTEND_MODE_WRAP;
+  BmpProps.interpolationMode := D2D1_BITMAP_INTERPOLATION_MODE_LINEAR;
+
+  BrushProps.opacity := 1.0;
+  BrushProps.transform.m11 := TileW / Info.ImgWidth;
+  BrushProps.transform.m12 := 0;
+  BrushProps.transform.m21 := 0;
+  BrushProps.transform.m22 := TileH / Info.ImgHeight;
+  BrushProps.transform.dx := TileX;
+  BrushProps.transform.dy := TileY;
+
+  if Failed(FTarget.CreateBitmapBrush(Info.D2DBitmap,
+    @BmpProps, @BrushProps, BitmapBrush)) then Exit;
+
+  R := MakeRectF(FillX, FillY, FillW, FillH);
+  FTarget.FillRectangle(@R, BitmapBrush);
 end;
 
 // ---------------------------------------------------------------------------

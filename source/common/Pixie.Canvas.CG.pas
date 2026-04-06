@@ -54,7 +54,6 @@ type
     FStateStack: array[0..63] of TPixieCGSavedState;
     FStateTop: Integer;
 
-    function HasRadius(const R: TPixieBorderRadiuses): Boolean;
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
     procedure SetFillColor(const C: TPixieWebColor);
@@ -73,6 +72,8 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    function SetBlendMode(Mode: TPixieBlendMode): Boolean; override;
+    procedure ResetBlendMode; override;
 
     procedure SetClipRect(const R: TPixiePosition;
       const Radius: TPixieBorderRadiuses); override;
@@ -112,6 +113,9 @@ type
       out W, H: Single); override;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); override;
+    procedure FillTiledImage(Handle: TPixieImageHandle;
+      TileX, TileY, TileW, TileH: Single;
+      FillX, FillY, FillW, FillH: Single); override;
 
     procedure FillEllipse(X, Y, W, H: Single;
       Color: TPixieWebColor); override;
@@ -195,15 +199,6 @@ end;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function TPixieCGCanvas.HasRadius(
-  const R: TPixieBorderRadiuses): Boolean;
-begin
-  Result := (R.TopLeftX > 0) or (R.TopLeftY > 0) or
-            (R.TopRightX > 0) or (R.TopRightY > 0) or
-            (R.BottomRightX > 0) or (R.BottomRightY > 0) or
-            (R.BottomLeftX > 0) or (R.BottomLeftY > 0);
-end;
 
 procedure TPixieCGCanvas.SetFillColor(const C: TPixieWebColor);
 begin
@@ -379,6 +374,38 @@ begin
   CGContextRestoreGState(FCG);
 end;
 
+function TPixieCGCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;
+const
+  CGModes: array[TPixieBlendMode] of CGBlendMode = (
+    kCGBlendModeNormal,      // bmNormal
+    kCGBlendModeMultiply,    // bmMultiply
+    kCGBlendModeScreen,      // bmScreen
+    kCGBlendModeOverlay,     // bmOverlay
+    kCGBlendModeDarken,      // bmDarken
+    kCGBlendModeLighten,     // bmLighten
+    kCGBlendModeColorDodge,  // bmColorDodge
+    kCGBlendModeColorBurn,   // bmColorBurn
+    kCGBlendModeHardLight,   // bmHardLight
+    kCGBlendModeSoftLight,   // bmSoftLight
+    kCGBlendModeDifference,  // bmDifference
+    kCGBlendModeExclusion,   // bmExclusion
+    kCGBlendModeHue,         // bmHue
+    kCGBlendModeSaturation,  // bmSaturation
+    kCGBlendModeColor,       // bmColor
+    kCGBlendModeLuminosity   // bmLuminosity
+  );
+begin
+  Result := FCG <> nil;
+  if Result then
+    CGContextSetBlendMode(FCG, CGModes[Mode]);
+end;
+
+procedure TPixieCGCanvas.ResetBlendMode;
+begin
+  if FCG <> nil then
+    CGContextSetBlendMode(FCG, kCGBlendModeNormal);
+end;
+
 // ---------------------------------------------------------------------------
 // Clipping
 // ---------------------------------------------------------------------------
@@ -390,7 +417,7 @@ begin
 
   CGContextSaveGState(FCG);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     RoundedRectPath(R.X, R.Y, R.Width, R.Height, Radius);
     CGContextClip(FCG);
@@ -420,7 +447,7 @@ begin
   if (FCG = nil) or (Color.Alpha = 0) then Exit;
   SetFillColor(Color);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     RoundedRectPath(X, Y, W, H, Radius);
     CGContextFillPath(FCG);
@@ -466,7 +493,7 @@ begin
   try
     CGContextSaveGState(FCG);
     try
-      if HasRadius(Radius) then
+      if Radius.HasRadius then
       begin
         RoundedRectPath(X, Y, W, H, Radius);
         CGContextClip(FCG);
@@ -530,7 +557,7 @@ begin
       // Scale Y to form ellipse (same technique as Cairo)
       CGContextScaleCTM(FCG, 1.0, Ry / Rx);
 
-      if HasRadius(Radius) then
+      if Radius.HasRadius then
       begin
         RoundedRectPath(X, Y * Rx / Ry, W, H * Rx / Ry, Radius);
         CGContextClip(FCG);
@@ -574,7 +601,7 @@ begin
 
   SaveState;
   try
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
       SetClipRect(TPixiePosition.Create(X, Y, W, H), Radius)
     else
     begin
@@ -718,7 +745,7 @@ begin
   W := Pos.Width;
   H := Pos.Height;
 
-  if HasRadius(Borders.Radius) then
+  if Borders.Radius.HasRadius then
   begin
     if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) then
     begin
@@ -1300,6 +1327,40 @@ begin
     CGContextTranslateCTM(FCG, DstX, DstY + DstH);
     CGContextScaleCTM(FCG, 1, -1);
     CGContextDrawImage(FCG, CGRectMake(0, 0, DstW, DstH), Info.Image);
+  finally
+    CGContextRestoreGState(FCG);
+  end;
+end;
+
+procedure TPixieCGCanvas.FillTiledImage(Handle: TPixieImageHandle;
+  TileX, TileY, TileW, TileH: Single;
+  FillX, FillY, FillW, FillH: Single);
+var
+  Info: TPixieCGImage;
+begin
+  if (Handle = 0) or (FCG = nil) then Exit;
+  Info := TPixieCGImage(Handle);
+  if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
+
+  // SVG images: fall back to base-class per-tile loop
+  if Info.SvgRenderer <> nil then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  if Info.Image = nil then Exit;
+  if (TileW <= 0) or (TileH <= 0) then Exit;
+
+  // CGContextDrawTiledImage tiles across the entire clip region.
+  // Clip to the fill area and flip Y for CG's bottom-up coords.
+  CGContextSaveGState(FCG);
+  try
+    CGContextClipToRect(FCG, CGRectMake(FillX, FillY, FillW, FillH));
+    CGContextTranslateCTM(FCG, TileX, TileY + TileH);
+    CGContextScaleCTM(FCG, 1, -1);
+    CGContextDrawTiledImage(FCG,
+      CGRectMake(0, 0, TileW, TileH), Info.Image);
   finally
     CGContextRestoreGState(FCG);
   end;

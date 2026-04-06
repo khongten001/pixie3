@@ -61,7 +61,6 @@ type
     FBaseState: TCanvasSaveState;
 
     function ToAlphaColor(const C: TPixieWebColor): TAlphaColor;
-    function HasRadius(const R: TPixieBorderRadiuses): Boolean;
     procedure BuildRoundedRectPath(Path: TPathData; X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
     procedure SetupGradientStops(const Points: TPixieColorPointList);
@@ -274,14 +273,6 @@ begin
   Result := Rec.Color;
 end;
 
-function TPixieFmxCanvas.HasRadius(const R: TPixieBorderRadiuses): Boolean;
-begin
-  Result := (R.TopLeftX > 0) or (R.TopLeftY > 0) or
-            (R.TopRightX > 0) or (R.TopRightY > 0) or
-            (R.BottomRightX > 0) or (R.BottomRightY > 0) or
-            (R.BottomLeftX > 0) or (R.BottomLeftY > 0);
-end;
-
 procedure TPixieFmxCanvas.BuildRoundedRectPath(Path: TPathData;
   X, Y, W, H: Single; const R: TPixieBorderRadiuses);
 const
@@ -457,7 +448,7 @@ begin
   FBrush.Kind := TBrushKind.Solid;
   FBrush.Color := ToAlphaColor(Color);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     BuildRoundedRectPath(FPath, X, Y, W, H, Radius);
     FCanvas.FillPath(FPath, FOpacity, FBrush);
@@ -500,7 +491,7 @@ begin
 
   SaveState;
   try
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
     begin
       FCanvas.IntersectClipRect(TRectF.Create(X, Y, X + W, Y + H));
       BuildRoundedRectPath(FPath, X, Y, W, H, Radius);
@@ -540,7 +531,7 @@ begin
 
   SaveState;
   try
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
     begin
       FCanvas.IntersectClipRect(TRectF.Create(X, Y, X + W, Y + H));
       BuildRoundedRectPath(FPath, X, Y, W, H, Radius);
@@ -707,7 +698,7 @@ begin
   H := Pos.Height;
 
   // Rounded borders: draw as single path
-  if HasRadius(Borders.Radius) then
+  if Borders.Radius.HasRadius then
   begin
     if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) then
     begin

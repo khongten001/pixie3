@@ -39,6 +39,7 @@ type
     procedure Init;
     procedure FixValues; overload;
     procedure FixValues(AWidth, AHeight: TPixiePixel); overload;
+    function HasRadius: Boolean;
     procedure AddMargins(const Mg: TPixieMargins);
     procedure SubMargins(const Mg: TPixieMargins);
   end;
@@ -166,6 +167,14 @@ begin
     BottomLeftX := BottomLeftX * Factor;
     BottomLeftY := BottomLeftY * Factor;
   end;
+end;
+
+function TPixieBorderRadiuses.HasRadius: Boolean;
+begin
+  Result := (TopLeftX > 0) or (TopLeftY > 0) or
+            (TopRightX > 0) or (TopRightY > 0) or
+            (BottomRightX > 0) or (BottomRightY > 0) or
+            (BottomLeftX > 0) or (BottomLeftY > 0);
 end;
 
 procedure TPixieBorderRadiuses.AddMargins(const Mg: TPixieMargins);

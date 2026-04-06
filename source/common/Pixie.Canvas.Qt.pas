@@ -59,7 +59,6 @@ type
     FTempRect: QRectFH;
     FCurrentPath: QPainterPathH;
 
-    function HasRadius(const R: TPixieBorderRadiuses): Boolean;
     procedure MakeColor(const C: TPixieWebColor; out QC: TQColor);
     procedure RoundedRectPath(Path: QPainterPathH; X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -78,6 +77,8 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    function SetBlendMode(Mode: TPixieBlendMode): Boolean; override;
+    procedure ResetBlendMode; override;
 
     procedure SetClipRect(const R: TPixiePosition;
       const Radius: TPixieBorderRadiuses); override;
@@ -117,6 +118,9 @@ type
       out W, H: Single); override;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); override;
+    procedure FillTiledImage(Handle: TPixieImageHandle;
+      TileX, TileY, TileW, TileH: Single;
+      FillX, FillY, FillW, FillH: Single); override;
 
     procedure FillEllipse(X, Y, W, H: Single;
       Color: TPixieWebColor); override;
@@ -215,15 +219,6 @@ end;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function TPixieQtCanvas.HasRadius(
-  const R: TPixieBorderRadiuses): Boolean;
-begin
-  Result := (R.TopLeftX > 0) or (R.TopLeftY > 0) or
-            (R.TopRightX > 0) or (R.TopRightY > 0) or
-            (R.BottomRightX > 0) or (R.BottomRightY > 0) or
-            (R.BottomLeftX > 0) or (R.BottomLeftY > 0);
-end;
 
 procedure TPixieQtCanvas.MakeColor(
   const C: TPixieWebColor; out QC: TQColor);
@@ -386,6 +381,36 @@ begin
   QPainter_setOpacity(FPainter, FCurrentOpacity);
 end;
 
+function TPixieQtCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;
+const
+  // Qt supports Multiply..Exclusion but not Hue/Saturation/Color/Luminosity
+  QtModes: array[bmNormal..bmExclusion] of QPainterCompositionMode = (
+    QPainterCompositionMode_SourceOver,  // bmNormal
+    QPainterCompositionMode_Multiply,    // bmMultiply
+    QPainterCompositionMode_Screen,      // bmScreen
+    QPainterCompositionMode_Overlay,     // bmOverlay
+    QPainterCompositionMode_Darken,      // bmDarken
+    QPainterCompositionMode_Lighten,     // bmLighten
+    QPainterCompositionMode_ColorDodge,  // bmColorDodge
+    QPainterCompositionMode_ColorBurn,   // bmColorBurn
+    QPainterCompositionMode_HardLight,   // bmHardLight
+    QPainterCompositionMode_SoftLight,   // bmSoftLight
+    QPainterCompositionMode_Difference,  // bmDifference
+    QPainterCompositionMode_Exclusion    // bmExclusion
+  );
+begin
+  if FPainter = nil then Exit(False);
+  if Mode > bmExclusion then Exit(False); // Hue/Saturation/Color/Luminosity unsupported
+  QPainter_setCompositionMode(FPainter, QtModes[Mode]);
+  Result := True;
+end;
+
+procedure TPixieQtCanvas.ResetBlendMode;
+begin
+  if FPainter <> nil then
+    QPainter_setCompositionMode(FPainter, QPainterCompositionMode_SourceOver);
+end;
+
 // ---------------------------------------------------------------------------
 // Clipping
 // ---------------------------------------------------------------------------
@@ -400,7 +425,7 @@ begin
   // Each clip gets its own QPainter_save so it can be independently undone
   QPainter_save(FPainter);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     Path := QPainterPath_Create;
     try
@@ -445,7 +470,7 @@ begin
   if (FPainter = nil) or (Color.Alpha = 0) then Exit;
   MakeColor(Color, QC);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     Path := QPainterPath_Create;
     Brush := QBrush_Create(@QC);
@@ -495,7 +520,7 @@ begin
 
     Brush := QBrush_Create(QGradientH(Grad));
     try
-      if HasRadius(Radius) then
+      if Radius.HasRadius then
       begin
         Path := QPainterPath_Create;
         try
@@ -556,7 +581,7 @@ begin
       if Abs(Rx - Ry) < 0.001 then
       begin
         // Circular — draw directly
-        if HasRadius(Radius) then
+        if Radius.HasRadius then
         begin
           Path := QPainterPath_Create;
           try
@@ -579,7 +604,7 @@ begin
         try
           QPainter_scale(FPainter, 1.0, Ry / Rx);
 
-          if HasRadius(Radius) then
+          if Radius.HasRadius then
           begin
             Path := QPainterPath_Create;
             try
@@ -642,7 +667,7 @@ begin
 
     Brush := QBrush_Create(QGradientH(Grad));
     try
-      if HasRadius(Radius) then
+      if Radius.HasRadius then
       begin
         Path := QPainterPath_Create;
         try
@@ -766,7 +791,7 @@ begin
   W := Pos.Width;
   H := Pos.Height;
 
-  if HasRadius(Borders.Radius) then
+  if Borders.Radius.HasRadius then
   begin
     if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) then
     begin
@@ -1135,6 +1160,54 @@ begin
 
   QRectF_setRect(FTempRect, DstX, DstY, DstW, DstH);
   QPainter_drawImage(FPainter, FTempRect, Info.Handle);
+end;
+
+procedure TPixieQtCanvas.FillTiledImage(Handle: TPixieImageHandle;
+  TileX, TileY, TileW, TileH: Single;
+  FillX, FillY, FillW, FillH: Single);
+var
+  Info: TPixieQtImage;
+  Brush: QBrushH;
+  Transform: QTransformH;
+  Origin: TQtPointF;
+begin
+  if (Handle = 0) or (FPainter = nil) then Exit;
+  Info := TPixieQtImage(Handle);
+  if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
+
+  // SVG images: fall back to base-class per-tile loop
+  if Info.SvgRenderer <> nil then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  if Info.Handle = nil then Exit;
+  if (TileW <= 0) or (TileH <= 0) then Exit;
+
+  Brush := QBrush_Create(Info.Handle);
+  try
+    // Scale the texture to tile size
+    Transform := QTransform_Create(
+      TileW / Info.ImgWidth, 0,
+      0, TileH / Info.ImgHeight,
+      0, 0);
+    try
+      QBrush_setTransform(Brush, Transform);
+    finally
+      QTransform_Destroy(Transform);
+    end;
+
+    // Position the tile grid origin
+    Origin.X := TileX;
+    Origin.Y := TileY;
+    QPainter_setBrushOrigin(FPainter, PQtPointF(@Origin));
+
+    QRectF_setRect(FTempRect, FillX, FillY, FillW, FillH);
+    QPainter_fillRect(FPainter, FTempRect, Brush);
+  finally
+    QBrush_Destroy(Brush);
+  end;
 end;
 
 // ---------------------------------------------------------------------------

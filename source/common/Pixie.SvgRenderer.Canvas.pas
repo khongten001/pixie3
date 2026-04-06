@@ -483,10 +483,19 @@ procedure TPixieSvgCanvasRenderer.DoFillAndStroke(
   const State: TPixieSvgState);
 var
   FC, SC: TPixieWebColor;
-  HasGradientFill, HasGradientStroke: Boolean;
+  HasGradientFill, HasGradientStroke, SkipFill, BlendSet: Boolean;
   FR: TPixieFillRule;
 begin
-  HasGradientFill := State.FillGradientId <> '';
+  SkipFill := False;
+  BlendSet := False;
+  if State.BlendMode <> bmNormal then
+  begin
+    BlendSet := FCanvas.SetBlendMode(State.BlendMode);
+    if not BlendSet then
+      SkipFill := True;
+  end;
+
+  HasGradientFill := (State.FillGradientId <> '') and not SkipFill;
   HasGradientStroke := State.HasStroke and (State.StrokeGradientId <> '');
   if State.EvenOddFill then
     FR := frEvenOdd
@@ -515,7 +524,7 @@ begin
         RebuildAndStroke(State);
     end;
   end
-  else if State.HasFill then
+  else if State.HasFill and not SkipFill then
   begin
     FC := State.FillColor;
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
@@ -542,6 +551,9 @@ begin
   end
   else
     FCanvas.DiscardPath;
+
+  if BlendSet then
+    FCanvas.ResetBlendMode;
 
   ResetBBox;
   FPathRecord.Clear;
@@ -740,6 +752,7 @@ var
   Handle: TPixieImageHandle;
   BX, BY, BW, BH: Single;
   Depth: Integer;
+  NeedOpacity: Boolean;
 begin
   if (FIdMap = nil) or (State.FillGradientId = '') then Exit;
   if not FIdMap.TryGetValue(State.FillGradientId, PatternEl) then Exit;
@@ -823,7 +836,14 @@ begin
   end;
 
   if (BW > 0) and (BH > 0) then
+  begin
+    NeedOpacity := State.FillOpacity < 1.0;
+    if NeedOpacity then
+      FCanvas.PushOpacity(State.FillOpacity);
     FCanvas.DrawImage(Handle, BX, BY, BW, BH);
+    if NeedOpacity then
+      FCanvas.PopOpacity;
+  end;
 
   ResetBBox;
   FPathRecord.Clear;

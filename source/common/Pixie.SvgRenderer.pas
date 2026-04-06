@@ -12,7 +12,7 @@ interface
 
 uses
   SysUtils, Classes, Generics.Collections,
-  Pixie.Types, Pixie.WebColor;
+  Pixie.Types, Pixie.WebColor, Pixie.Canvas;
 
 type
   { TPixieSvgMatrix - 2D affine transform [a b c d e f] }
@@ -46,6 +46,7 @@ type
     TextAnchor: TPixieTextAlign;
     FillGradientId: string;
     StrokeGradientId: string;
+    BlendMode: TPixieBlendMode;
   end;
 
   { TPixieSvgGradientStop }
@@ -848,6 +849,27 @@ begin
     Result.EvenOddFill := True
   else if AnchorStr = 'nonzero' then
     Result.EvenOddFill := False;
+
+  // Mix blend mode (non-inherited — reset per element)
+  Result.BlendMode := bmNormal;
+  AnchorStr := GetAttr(Node, 'mix-blend-mode');
+  if AnchorStr = '' then
+    AnchorStr := ParseStyleAttribute(StyleStr, 'mix-blend-mode');
+  if AnchorStr = 'multiply' then Result.BlendMode := bmMultiply
+  else if AnchorStr = 'screen' then Result.BlendMode := bmScreen
+  else if AnchorStr = 'overlay' then Result.BlendMode := bmOverlay
+  else if AnchorStr = 'darken' then Result.BlendMode := bmDarken
+  else if AnchorStr = 'lighten' then Result.BlendMode := bmLighten
+  else if AnchorStr = 'color-dodge' then Result.BlendMode := bmColorDodge
+  else if AnchorStr = 'color-burn' then Result.BlendMode := bmColorBurn
+  else if AnchorStr = 'hard-light' then Result.BlendMode := bmHardLight
+  else if AnchorStr = 'soft-light' then Result.BlendMode := bmSoftLight
+  else if AnchorStr = 'difference' then Result.BlendMode := bmDifference
+  else if AnchorStr = 'exclusion' then Result.BlendMode := bmExclusion
+  else if AnchorStr = 'hue' then Result.BlendMode := bmHue
+  else if AnchorStr = 'saturation' then Result.BlendMode := bmSaturation
+  else if AnchorStr = 'color' then Result.BlendMode := bmColor
+  else if AnchorStr = 'luminosity' then Result.BlendMode := bmLuminosity;
 end;
 
 // ===========================================================================
@@ -2587,6 +2609,7 @@ begin
     FInitState.TextAnchor := taLeft;
     FInitState.FillGradientId := '';
     FInitState.StrokeGradientId := '';
+    FInitState.BlendMode := bmNormal;
 
     // Inherit state from the root SVG element
     FInitState := InheritState(SvgRoot, FInitState);

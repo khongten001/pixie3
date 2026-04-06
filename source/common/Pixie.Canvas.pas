@@ -19,6 +19,12 @@ type
   TPixieTextWidthMap = TDictionary<string, TPixiePixel>;
   TPixieTextWidthCache = TDictionary<TPixieFontHandle, TPixieTextWidthMap>;
 
+  TPixieBlendMode = (
+    bmNormal, bmMultiply, bmScreen, bmOverlay, bmDarken, bmLighten,
+    bmColorDodge, bmColorBurn, bmHardLight, bmSoftLight,
+    bmDifference, bmExclusion, bmHue, bmSaturation, bmColor, bmLuminosity
+  );
+
   { TPixieCanvas }
 
   TPixieCanvas = class
@@ -44,6 +50,10 @@ type
     // Opacity layers
     procedure PushOpacity(AOpacity: Single); virtual;
     procedure PopOpacity; virtual;
+
+    // Blend mode — returns True if the backend supports the requested mode
+    function SetBlendMode(Mode: TPixieBlendMode): Boolean; virtual;
+    procedure ResetBlendMode; virtual;
 
     // Clipping
     procedure SetClipRect(const R: TPixiePosition;
@@ -117,6 +127,9 @@ type
       out W, H: Single); virtual; abstract;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); virtual; abstract;
+    procedure FillTiledImage(Handle: TPixieImageHandle;
+      TileX, TileY, TileW, TileH: Single;
+      FillX, FillY, FillW, FillH: Single); virtual;
     function LoadImageFromStream(Stream: TStream): TPixieImageHandle; virtual;
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; virtual;
@@ -180,6 +193,9 @@ type
   end;
 
 implementation
+
+uses
+  Math;
 
 constructor TPixieCanvas.Create;
 begin
@@ -290,6 +306,16 @@ begin
   // no-op by default
 end;
 
+function TPixieCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;
+begin
+  Result := False;
+end;
+
+procedure TPixieCanvas.ResetBlendMode;
+begin
+  // no-op by default
+end;
+
 procedure TPixieCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   // no-op by default
@@ -310,6 +336,23 @@ function TPixieCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 begin
   Result := 0;
+end;
+
+procedure TPixieCanvas.FillTiledImage(Handle: TPixieImageHandle;
+  TileX, TileY, TileW, TileH: Single;
+  FillX, FillY, FillW, FillH: Single);
+var
+  Col, Row, StartCol, EndCol, StartRow, EndRow: Integer;
+begin
+  if (Handle = 0) or (TileW <= 0) or (TileH <= 0) then Exit;
+  StartCol := Floor((FillX - TileX) / TileW);
+  EndCol := Ceil((FillX + FillW - TileX) / TileW) - 1;
+  StartRow := Floor((FillY - TileY) / TileH);
+  EndRow := Ceil((FillY + FillH - TileY) / TileH) - 1;
+  for Row := StartRow to EndRow do
+    for Col := StartCol to EndCol do
+      DrawImage(Handle,
+        TileX + Col * TileW, TileY + Row * TileH, TileW, TileH);
 end;
 
 procedure TPixieCanvas.BeginPath;

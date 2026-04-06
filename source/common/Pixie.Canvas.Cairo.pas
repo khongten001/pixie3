@@ -58,7 +58,6 @@ type
     FOpacityStack: array[0..15] of TPixieOpacityEntry;
     FOpacityTop: Integer;
 
-    function HasRadius(const R: TPixieBorderRadiuses): Boolean;
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
     procedure SetSourceColor(const C: TPixieWebColor);
@@ -77,6 +76,8 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    function SetBlendMode(Mode: TPixieBlendMode): Boolean; override;
+    procedure ResetBlendMode; override;
 
     procedure SetClipRect(const R: TPixiePosition;
       const Radius: TPixieBorderRadiuses); override;
@@ -116,6 +117,9 @@ type
       out W, H: Single); override;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); override;
+    procedure FillTiledImage(Handle: TPixieImageHandle;
+      TileX, TileY, TileW, TileH: Single;
+      FillX, FillY, FillW, FillH: Single); override;
 
     procedure FillEllipse(X, Y, W, H: Single;
       Color: TPixieWebColor); override;
@@ -210,15 +214,6 @@ end;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function TPixieCairoCanvas.HasRadius(
-  const R: TPixieBorderRadiuses): Boolean;
-begin
-  Result := (R.TopLeftX > 0) or (R.TopLeftY > 0) or
-            (R.TopRightX > 0) or (R.TopRightY > 0) or
-            (R.BottomRightX > 0) or (R.BottomRightY > 0) or
-            (R.BottomLeftX > 0) or (R.BottomLeftY > 0);
-end;
 
 procedure TPixieCairoCanvas.SetSourceColor(const C: TPixieWebColor);
 begin
@@ -433,6 +428,38 @@ begin
   cairo_paint_with_alpha(FCairo, Alpha);
 end;
 
+function TPixieCairoCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;
+const
+  CairoOps: array[TPixieBlendMode] of cairo_operator_t = (
+    CAIRO_OPERATOR_OVER,           // bmNormal
+    CAIRO_OPERATOR_MULTIPLY,       // bmMultiply
+    CAIRO_OPERATOR_SCREEN,         // bmScreen
+    CAIRO_OPERATOR_OVERLAY,        // bmOverlay
+    CAIRO_OPERATOR_DARKEN,         // bmDarken
+    CAIRO_OPERATOR_LIGHTEN,        // bmLighten
+    CAIRO_OPERATOR_COLOR_DODGE,    // bmColorDodge
+    CAIRO_OPERATOR_COLOR_BURN,     // bmColorBurn
+    CAIRO_OPERATOR_HARD_LIGHT,     // bmHardLight
+    CAIRO_OPERATOR_SOFT_LIGHT,     // bmSoftLight
+    CAIRO_OPERATOR_DIFFERENCE,     // bmDifference
+    CAIRO_OPERATOR_EXCLUSION,      // bmExclusion
+    CAIRO_OPERATOR_HSL_HUE,        // bmHue
+    CAIRO_OPERATOR_HSL_SATURATION, // bmSaturation
+    CAIRO_OPERATOR_HSL_COLOR,      // bmColor
+    CAIRO_OPERATOR_HSL_LUMINOSITY  // bmLuminosity
+  );
+begin
+  Result := FCairo <> nil;
+  if Result then
+    cairo_set_operator(FCairo, CairoOps[Mode]);
+end;
+
+procedure TPixieCairoCanvas.ResetBlendMode;
+begin
+  if FCairo <> nil then
+    cairo_set_operator(FCairo, CAIRO_OPERATOR_OVER);
+end;
+
 // ---------------------------------------------------------------------------
 // Clipping
 // ---------------------------------------------------------------------------
@@ -445,7 +472,7 @@ begin
   // Each clip gets its own cairo_save so it can be independently undone
   cairo_save(FCairo);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     RoundedRectPath(R.X, R.Y, R.Width, R.Height, Radius);
     cairo_clip(FCairo);
@@ -479,7 +506,7 @@ begin
   if (FCairo = nil) or (Color.Alpha = 0) then Exit;
   SetSourceColor(Color);
 
-  if HasRadius(Radius) then
+  if Radius.HasRadius then
   begin
     RoundedRectPath(X, Y, W, H, Radius);
     cairo_fill(FCairo);
@@ -520,7 +547,7 @@ begin
 
     cairo_set_source(FCairo, Pattern);
 
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
     begin
       RoundedRectPath(X, Y, W, H, Radius);
       cairo_fill(FCairo);
@@ -575,7 +602,7 @@ begin
       cairo_set_source(FCairo, Pattern);
 
       // Clip to target rect (in scaled coordinates)
-      if HasRadius(Radius) then
+      if Radius.HasRadius then
       begin
         RoundedRectPath(X, Y * Rx / Ry, W, H * Rx / Ry, Radius);
         cairo_fill(FCairo);
@@ -616,7 +643,7 @@ begin
 
   SaveState;
   try
-    if HasRadius(Radius) then
+    if Radius.HasRadius then
       SetClipRect(TPixiePosition.Create(X, Y, W, H), Radius)
     else
     begin
@@ -762,7 +789,7 @@ begin
   W := Pos.Width;
   H := Pos.Height;
 
-  if HasRadius(Borders.Radius) then
+  if Borders.Radius.HasRadius then
   begin
     if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) then
     begin
@@ -1209,6 +1236,51 @@ begin
     cairo_paint(FCairo);
   finally
     cairo_restore(FCairo);
+  end;
+end;
+
+procedure TPixieCairoCanvas.FillTiledImage(Handle: TPixieImageHandle;
+  TileX, TileY, TileW, TileH: Single;
+  FillX, FillY, FillW, FillH: Single);
+var
+  Info: TPixieCairoImage;
+  Pattern: Pcairo_pattern_t;
+  Matrix: cairo_matrix_t;
+begin
+  if (Handle = 0) or (FCairo = nil) then Exit;
+  Info := TPixieCairoImage(Handle);
+  if (Info.ImgWidth <= 0) or (Info.ImgHeight <= 0) then Exit;
+
+  // SVG images: fall back to base-class per-tile loop
+  if Info.SvgRenderer <> nil then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  if Info.Surface = nil then Exit;
+  if (TileW <= 0) or (TileH <= 0) then Exit;
+
+  Pattern := cairo_pattern_create_for_surface(Info.Surface);
+  try
+    cairo_pattern_set_extend(Pattern, CAIRO_EXTEND_REPEAT);
+    cairo_pattern_set_filter(Pattern, CAIRO_FILTER_BILINEAR);
+
+    // Pattern matrix maps destination coords to pattern (image) coords.
+    // We need: image_x = (dest_x - TileX) * (ImgW / TileW)
+    //          image_y = (dest_y - TileY) * (ImgH / TileH)
+    cairo_matrix_init(@Matrix,
+      Info.ImgWidth / TileW, 0,
+      0, Info.ImgHeight / TileH,
+      -TileX * Info.ImgWidth / TileW,
+      -TileY * Info.ImgHeight / TileH);
+    cairo_pattern_set_matrix(Pattern, @Matrix);
+
+    cairo_set_source(FCairo, Pattern);
+    cairo_rectangle(FCairo, FillX, FillY, FillW, FillH);
+    cairo_fill(FCairo);
+  finally
+    cairo_pattern_destroy(Pattern);
   end;
 end;
 

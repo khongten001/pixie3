@@ -859,7 +859,7 @@ type
   ID2D1DeviceContext4 = interface;
 
   // Opaque D2D1 interfaces (used only as parameter types)
-  ID2D1BitmapBrush = interface end;
+  ID2D1BitmapBrush = interface;
   ID2D1BitmapRenderTarget = interface end;
   ID2D1Layer = interface end;
   ID2D1Mesh = interface end;
@@ -1000,6 +1000,10 @@ type
     function GetRadiusY: FLOAT; stdcall;
     procedure GetGradientStopCollection(
       out gradientStopCollection: ID2D1GradientStopCollection); stdcall;
+  end;
+
+  ID2D1BitmapBrush = interface(ID2D1Brush)
+  ['{2cd906aa-12e2-11dc-9fed-001143a055f9}']
   end;
 
   ID2D1StrokeStyle = interface(ID2D1Resource)
