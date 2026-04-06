@@ -13,6 +13,7 @@ type
     Family: string;
     Size: TPixiePixel;
     Style: TPixieFontStyle;
+    Variant: TPixieFontVariant;
     Weight: Integer;
     DecorationLine: Integer;
     DecorationThickness: TPixieCssLength;
@@ -34,6 +35,9 @@ type
 
 function PixieResolveFontFamily(const CssFamily: string;
   CheckFont: TPixieFontCheckFunc): string;
+
+const
+  PixieSmallCapsScale = 0.8;
 
 implementation
 
@@ -156,6 +160,7 @@ begin
   Family := '';
   Size := 0;
   Style := fstNormal;
+  Variant := fvNormal;
   Weight := 400;
   DecorationLine := TextDecorationLineNone;
   DecorationStyle := tdsSOlid;
@@ -171,6 +176,7 @@ begin
   Result := Family +
     ':sz=' + FloatToStr(Size) +
     ':st=' + IntToStr(Ord(Style)) +
+    ':va=' + IntToStr(Ord(Variant)) +
     ':w=' + IntToStr(Weight) +
     ':ephs=' + EmphasisStyle +
     ':ephc=' + EmphasisColor.ToString +

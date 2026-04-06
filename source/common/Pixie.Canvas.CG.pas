@@ -21,8 +21,10 @@ type
 
   TPixieCGFont = class
     Font: CTFontRef;
+    SmallFont: CTFontRef;
     Metrics: TPixieFontMetrics;
     DecorationLine: Integer;
+    SmallCaps: Boolean;
     destructor Destroy; override;
   end;
 
@@ -175,6 +177,8 @@ end;
 
 destructor TPixieCGFont.Destroy;
 begin
+  if SmallFont <> nil then
+    CFRelease(SmallFont);
   if Font <> nil then
     CFRelease(Font);
   inherited;
@@ -809,6 +813,12 @@ begin
   end;
 
   Info.Font := BaseFont;
+  Info.SmallCaps := Descr.Variant = fvSmallCaps;
+  if Info.SmallCaps and (BaseFont <> nil) then
+    Info.SmallFont := CTFontCreateCopyWithAttributes(
+      BaseFont, Descr.Size * 72.0 / 96.0 * PixieSmallCapsScale, nil, nil)
+  else
+    Info.SmallFont := nil;
 
   // Get metrics from CoreText
   if BaseFont <> nil then
@@ -845,6 +855,75 @@ begin
     TPixieCGFont(Handle).Free;
 end;
 
+// Builds a small-caps attributed string for CoreText: uppercases the text
+// and applies SmallFont to ranges that were originally lowercase.
+function BuildSmallCapsAttrString(const Text: string;
+  Font, SmallFont: CTFontRef;
+  ExtraAttrName: CFStringRef; ExtraAttrValue: CFTypeRef): CFAttributedStringRef;
+var
+  CFMut: CFMutableStringRef;
+  CFImmut: CFStringRef;
+  MutAttr: CFMutableAttributedStringRef;
+  Len, I, RunStart: CFIndex;
+  OrigCh, UpperCh: UniChar;
+  InLower: Boolean;
+begin
+  Result := nil;
+  CFImmut := CFStringCreateWithCString(nil,
+    PAnsiChar(Text), kCFStringEncodingUTF8);
+  if CFImmut = nil then Exit;
+
+  CFMut := CFStringCreateMutableCopy(nil, 0, CFImmut);
+  Len := CFStringGetLength(CFImmut);
+  CFStringUppercase(CFMut, nil);
+
+  MutAttr := CFAttributedStringCreateMutable(nil, 0);
+  CFAttributedStringReplaceString(MutAttr, CFRangeMake(0, 0), CFMut);
+  CFAttributedStringSetAttribute(MutAttr,
+    CFRangeMake(0, Len), kCTFontAttributeName, Font);
+
+  if ExtraAttrName <> nil then
+    CFAttributedStringSetAttribute(MutAttr,
+      CFRangeMake(0, Len), ExtraAttrName, ExtraAttrValue);
+
+  if SmallFont <> nil then
+  begin
+    RunStart := 0;
+    InLower := False;
+    for I := 0 to Len - 1 do
+    begin
+      OrigCh := CFStringGetCharacterAtIndex(CFImmut, I);
+      UpperCh := CFStringGetCharacterAtIndex(CFMut, I);
+      if OrigCh <> UpperCh then
+      begin
+        if not InLower then
+        begin
+          RunStart := I;
+          InLower := True;
+        end;
+      end
+      else
+      begin
+        if InLower then
+        begin
+          CFAttributedStringSetAttribute(MutAttr,
+            CFRangeMake(RunStart, I - RunStart),
+            kCTFontAttributeName, SmallFont);
+          InLower := False;
+        end;
+      end;
+    end;
+    if InLower then
+      CFAttributedStringSetAttribute(MutAttr,
+        CFRangeMake(RunStart, Len - RunStart),
+        kCTFontAttributeName, SmallFont);
+  end;
+
+  CFRelease(CFMut);
+  CFRelease(CFImmut);
+  Result := CFAttributedStringRef(MutAttr);
+end;
+
 function TPixieCGCanvas.DoMeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
@@ -864,6 +943,26 @@ begin
     Exit;
   end;
   if Text = '' then Exit;
+
+  if Info.SmallCaps then
+  begin
+    AttrStr := BuildSmallCapsAttrString(Text,
+      Info.Font, Info.SmallFont, nil, nil);
+    if AttrStr = nil then Exit;
+    try
+      Line := CTLineCreateWithAttributedString(AttrStr);
+      if Line = nil then Exit;
+      try
+        Width := CTLineGetTypographicBounds(Line, nil, nil, nil);
+        Result := Width;
+      finally
+        CFRelease(Line);
+      end;
+    finally
+      CFRelease(AttrStr);
+    end;
+    Exit;
+  end;
 
   CFText := CFStringCreateWithCString(nil,
     PAnsiChar(Text), kCFStringEncodingUTF8);
@@ -910,17 +1009,50 @@ begin
   if Info.Font = nil then Exit;
   if Text = '' then Exit;
 
+  // Create color for text attribute
+  Components[0] := Color.Red / 255.0;
+  Components[1] := Color.Green / 255.0;
+  Components[2] := Color.Blue / 255.0;
+  Components[3] := Color.Alpha / 255.0;
+  CGColor_ := CGColorCreate(FColorSpace, @Components[0]);
+
+  if Info.SmallCaps then
+  begin
+    AttrStr := BuildSmallCapsAttrString(Text,
+      Info.Font, Info.SmallFont,
+      kCTForegroundColorAttributeName, CGColor_);
+    CGColorRelease(CGColor_);
+    if AttrStr = nil then Exit;
+    try
+      Line := CTLineCreateWithAttributedString(AttrStr);
+      if Line = nil then Exit;
+      try
+        CGContextSaveGState(FCG);
+        try
+          CGContextTranslateCTM(FCG, X, Y + Info.Metrics.Ascent);
+          CGContextScaleCTM(FCG, 1, -1);
+          CGContextSetTextPosition(FCG, 0, 0);
+          CTLineDraw(Line, FCG);
+        finally
+          CGContextRestoreGState(FCG);
+        end;
+      finally
+        CFRelease(Line);
+      end;
+    finally
+      CFRelease(AttrStr);
+    end;
+    Exit;
+  end;
+
   CFText := CFStringCreateWithCString(nil,
     PAnsiChar(Text), kCFStringEncodingUTF8);
-  if CFText = nil then Exit;
+  if CFText = nil then
+  begin
+    CGColorRelease(CGColor_);
+    Exit;
+  end;
   try
-    // Create color for text attribute
-    Components[0] := Color.Red / 255.0;
-    Components[1] := Color.Green / 255.0;
-    Components[2] := Color.Blue / 255.0;
-    Components[3] := Color.Alpha / 255.0;
-    CGColor_ := CGColorCreate(FColorSpace, @Components[0]);
-
     Attrs := CFDictionaryCreateMutable(nil, 2,
       @kCFTypeDictionaryKeyCallBacks, @kCFTypeDictionaryValueCallBacks);
     CFDictionarySetValue(Attrs, kCTFontAttributeName, Info.Font);

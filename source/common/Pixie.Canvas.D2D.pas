@@ -20,6 +20,7 @@ type
     TextFormat: IDWriteTextFormat;
     Metrics: TPixieFontMetrics;
     DecorationLine: Integer;
+    SmallCaps: Boolean;
   end;
 
   PPixieD2DImage = ^TPixieD2DImage;
@@ -905,6 +906,7 @@ begin
   New(Info);
   FillChar(Info^, SizeOf(TPixieD2DFont), 0);
   Info.DecorationLine := Descr.DecorationLine;
+  Info.SmallCaps := Descr.Variant = fvSmallCaps;
 
   // Map font weight and style
   DWWeight := Descr.Weight;
@@ -969,11 +971,59 @@ begin
   Dispose(Info);
 end;
 
+// Applies small-caps simulation: sets a reduced font size on ranges
+// that were originally lowercase, then forces uniform line spacing
+// so the baseline stays anchored even for all-lowercase words.
+procedure ApplySmallCapsToLayout(const Original, Upper: WideString;
+  Layout: IDWriteTextLayout; const Metrics: TPixieFontMetrics);
+var
+  I, RunStart, Len: Integer;
+  SmallSize: Single;
+  Range: TDwriteTextRange;
+  InLower: Boolean;
+begin
+  Len := Length(Original);
+  SmallSize := Metrics.FontSize * PixieSmallCapsScale;
+  RunStart := 0;
+  InLower := False;
+  for I := 1 to Len do
+  begin
+    if Original[I] <> Upper[I] then
+    begin
+      if not InLower then
+      begin
+        RunStart := I;
+        InLower := True;
+      end;
+    end
+    else
+    begin
+      if InLower then
+      begin
+        Range.startPosition := RunStart - 1;
+        Range.length := I - RunStart;
+        Layout.SetFontSize(SmallSize, Range);
+        InLower := False;
+      end;
+    end;
+  end;
+  if InLower then
+  begin
+    Range.startPosition := RunStart - 1;
+    Range.length := Len - RunStart + 1;
+    Layout.SetFontSize(SmallSize, Range);
+  end;
+
+  // Pin the baseline to the full-size font so all-lowercase words
+  // don't float up.  Method 1 = DWRITE_LINE_SPACING_METHOD_UNIFORM.
+  Layout.SetLineSpacing(1, Metrics.Height, Metrics.Ascent);
+end;
+
 function TPixieD2DCanvas.DoMeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: PPixieD2DFont;
-  WText: WideString;
+  WText, WUpper: WideString;
   Layout: IDWriteTextLayout;
   TM: TDwriteTextMetrics;
 begin
@@ -987,11 +1037,28 @@ begin
   end;
 
   WText := WideString(Text);
-  if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WText),
-    Length(WText), Info.TextFormat, 100000, 100000, Layout)) then
+
+  if Info.SmallCaps then
   begin
-    Result := Length(Text) * Info.Metrics.ChWidth;
-    Exit;
+    WUpper := WText;
+    if Length(WUpper) > 0 then
+      CharUpperBuffW(PWideChar(WUpper), Length(WUpper));
+    if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WUpper),
+      Length(WUpper), Info.TextFormat, 100000, 100000, Layout)) then
+    begin
+      Result := Length(Text) * Info.Metrics.ChWidth;
+      Exit;
+    end;
+    ApplySmallCapsToLayout(WText, WUpper, Layout, Info.Metrics);
+  end
+  else
+  begin
+    if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WText),
+      Length(WText), Info.TextFormat, 100000, 100000, Layout)) then
+    begin
+      Result := Length(Text) * Info.Metrics.ChWidth;
+      Exit;
+    end;
   end;
 
   if Succeeded(Layout.GetMetrics(TM)) then
@@ -1005,7 +1072,7 @@ procedure TPixieD2DCanvas.DrawText(const Text: string;
   X, Y, W, H: Single);
 var
   Info: PPixieD2DFont;
-  WText: WideString;
+  WText, WUpper: WideString;
   Layout: IDWriteTextLayout;
 begin
   if (Handle = 0) or (FTarget = nil) then Exit;
@@ -1013,9 +1080,23 @@ begin
   if Info.TextFormat = nil then Exit;
 
   WText := WideString(Text);
-  if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WText),
-    Length(WText), Info.TextFormat, W, H, Layout)) then
-    Exit;
+
+  if Info.SmallCaps then
+  begin
+    WUpper := WText;
+    if Length(WUpper) > 0 then
+      CharUpperBuffW(PWideChar(WUpper), Length(WUpper));
+    if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WUpper),
+      Length(WUpper), Info.TextFormat, W, H, Layout)) then
+      Exit;
+    ApplySmallCapsToLayout(WText, WUpper, Layout, Info.Metrics);
+  end
+  else
+  begin
+    if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WText),
+      Length(WText), Info.TextFormat, W, H, Layout)) then
+      Exit;
+  end;
 
   // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
   // to produce continuous lines spanning inline boxes including spaces.

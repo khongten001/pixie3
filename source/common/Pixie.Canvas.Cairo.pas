@@ -834,6 +834,10 @@ begin
   else
     pango_font_description_set_style(PFontDesc, PANGO_STYLE_NORMAL);
 
+  // Set variant (Pango synthesises small-caps if the font lacks native support)
+  if Descr.Variant = fvSmallCaps then
+    pango_font_description_set_variant(PFontDesc, PANGO_VARIANT_SMALL_CAPS);
+
   Info.FontDesc := PFontDesc;
 
   // Get metrics from Pango context if available

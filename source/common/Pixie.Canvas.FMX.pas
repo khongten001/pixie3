@@ -22,6 +22,7 @@ type
     FmxFont: TFont;
     Metrics: TPixieFontMetrics;
     DecorationLine: Integer;
+    SmallCaps: Boolean;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -753,6 +754,7 @@ var
 begin
   Info := TPixieFmxFont.Create;
   Info.DecorationLine := Descr.DecorationLine;
+  Info.SmallCaps := Descr.Variant = fvSmallCaps;
 
   // Resolve font family
   ResolvedFamily := PixieResolveFontFamily(Descr.Family, FmxCheckFont);
@@ -812,10 +814,65 @@ function TPixieFmxCanvas.DoMeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: TPixieFmxFont;
+  Upper: string;
+  I, RunStart, Len: Integer;
+  InLower: Boolean;
+  SmallSize: Single;
 begin
   Result := 0;
   if Handle = 0 then Exit;
   Info := TPixieFmxFont(Handle);
+
+  if Info.SmallCaps then
+  begin
+    Upper := UpperCase(Text);
+    Len := Length(Text);
+    SmallSize := Info.FmxFont.Size * PixieSmallCapsScale;
+    FTextLayout.Font.Family := Info.FmxFont.Family;
+    FTextLayout.Font.Style := Info.FmxFont.Style;
+    FTextLayout.MaxSize := TSizeF.Create(100000, 100000);
+    FTextLayout.WordWrap := False;
+    FTextLayout.Trimming := TTextTrimming.None;
+    RunStart := 1;
+    InLower := False;
+    for I := 1 to Len do
+    begin
+      if (Text[I] <> Upper[I]) <> InLower then
+      begin
+        if I > RunStart then
+        begin
+          FTextLayout.BeginUpdate;
+          try
+            if InLower then
+              FTextLayout.Font.Size := SmallSize
+            else
+              FTextLayout.Font.Size := Info.FmxFont.Size;
+            FTextLayout.Text := Copy(Upper, RunStart, I - RunStart);
+          finally
+            FTextLayout.EndUpdate;
+          end;
+          Result := Result + FTextLayout.TextWidth;
+        end;
+        RunStart := I;
+        InLower := Text[I] <> Upper[I];
+      end;
+    end;
+    if RunStart <= Len then
+    begin
+      FTextLayout.BeginUpdate;
+      try
+        if InLower then
+          FTextLayout.Font.Size := SmallSize
+        else
+          FTextLayout.Font.Size := Info.FmxFont.Size;
+        FTextLayout.Text := Copy(Upper, RunStart, Len - RunStart + 1);
+      finally
+        FTextLayout.EndUpdate;
+      end;
+      Result := Result + FTextLayout.TextWidth;
+    end;
+    Exit;
+  end;
 
   FTextLayout.BeginUpdate;
   try
@@ -838,20 +895,89 @@ procedure TPixieFmxCanvas.DrawText(const Text: string;
 var
   Info: TPixieFmxFont;
   R: TRectF;
-  SavedStyle: TFontStyles;
+  Seg, Upper: string;
+  I, RunStart, Len: Integer;
+  InLower: Boolean;
+  SmallSize, SegW, CurX, SegY, BaselineShift: Single;
 begin
   if (FCanvas = nil) or (Handle = 0) then Exit;
   Info := TPixieFmxFont(Handle);
 
-  // Set fill brush for text color
   FCanvas.Fill.Kind := TBrushKind.Solid;
   FCanvas.Fill.Color := ToAlphaColor(Color);
 
-  // Set font
-  SavedStyle := Info.FmxFont.Style;
+  if Info.SmallCaps then
+  begin
+    Upper := UpperCase(Text);
+    Len := Length(Text);
+    CurX := X;
+    SmallSize := Info.FmxFont.Size * PixieSmallCapsScale;
+    // FillText aligns from the top; shift small segments down so baselines match
+    BaselineShift := Info.Metrics.Ascent * (1 - PixieSmallCapsScale);
+    FCanvas.Font.Family := Info.FmxFont.Family;
+    FCanvas.Font.Style := Info.FmxFont.Style;
+    FTextLayout.Font.Family := Info.FmxFont.Family;
+    FTextLayout.Font.Style := Info.FmxFont.Style;
+    FTextLayout.MaxSize := TSizeF.Create(100000, 100000);
+    FTextLayout.WordWrap := False;
+    RunStart := 1;
+    InLower := False;
+    for I := 1 to Len do
+    begin
+      if (Text[I] <> Upper[I]) <> InLower then
+      begin
+        if I > RunStart then
+        begin
+          if InLower then
+          begin
+            FCanvas.Font.Size := SmallSize;
+            SegY := Y + BaselineShift;
+          end
+          else
+          begin
+            FCanvas.Font.Size := Info.FmxFont.Size;
+            SegY := Y;
+          end;
+          Seg := Copy(Upper, RunStart, I - RunStart);
+          FTextLayout.BeginUpdate;
+          try
+            FTextLayout.Font.Size := FCanvas.Font.Size;
+            FTextLayout.Text := Seg;
+          finally
+            FTextLayout.EndUpdate;
+          end;
+          SegW := FTextLayout.TextWidth;
+          R := TRectF.Create(CurX, SegY, CurX + SegW, SegY + H);
+          FCanvas.FillText(R, Seg,
+            False, FOpacity, [], TTextAlign.Leading, TTextAlign.Leading);
+          CurX := CurX + SegW;
+        end;
+        RunStart := I;
+        InLower := Text[I] <> Upper[I];
+      end;
+    end;
+    if RunStart <= Len then
+    begin
+      if InLower then
+      begin
+        FCanvas.Font.Size := SmallSize;
+        SegY := Y + BaselineShift;
+      end
+      else
+      begin
+        FCanvas.Font.Size := Info.FmxFont.Size;
+        SegY := Y;
+      end;
+      R := TRectF.Create(CurX, SegY, CurX + W - (CurX - X), SegY + H);
+      FCanvas.FillText(R, Copy(Upper, RunStart, Len - RunStart + 1),
+        False, FOpacity, [], TTextAlign.Leading, TTextAlign.Leading);
+    end;
+    Exit;
+  end;
+
   FCanvas.Font.Family := Info.FmxFont.Family;
   FCanvas.Font.Size := Info.FmxFont.Size;
-  FCanvas.Font.Style := SavedStyle;
+  FCanvas.Font.Style := Info.FmxFont.Style;
 
   // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
 

@@ -57,6 +57,7 @@ type
     FListStyleType: TPixieListStyleType;
     FListStylePosition: TPixieListStylePosition;
     FFontStyle: TPixieFontStyle;
+    FFontVariant: TPixieFontVariant;
     FFlexDirection: TPixieFlexDirection;
     FFlexWrap: TPixieFlexWrap;
     FFlexJustifyContent: TPixieFlexJustifyContent;
@@ -181,6 +182,7 @@ type
     property ListStyleType: TPixieListStyleType read FListStyleType write FListStyleType;
     property ListStylePosition: TPixieListStylePosition read FListStylePosition write FListStylePosition;
     property FontStyle_: TPixieFontStyle read FFontStyle write FFontStyle;
+    property FontVariant: TPixieFontVariant read FFontVariant write FFontVariant;
     property FlexDirection: TPixieFlexDirection read FFlexDirection write FFlexDirection;
     property FlexWrap: TPixieFlexWrap read FFlexWrap write FFlexWrap;
     property FlexJustifyContent: TPixieFlexJustifyContent read FFlexJustifyContent write FFlexJustifyContent;
@@ -415,6 +417,7 @@ begin
   FListStyleType := lstNone;
   FListStylePosition := lspOutside;
   FFontStyle := fstNormal;
+  FFontVariant := fvNormal;
   FFlexDirection := fdRow;
   FFlexWrap := fwrNowrap;
   FFlexJustifyContent := fjcFlexStart;
@@ -652,6 +655,10 @@ begin
   FFontStyle := TPixieFontStyle(Tag.GetPropertyInt(Ord(psid_font_style), True,
     Ord(fstNormal), PtrUInt(@FFontStyle) - PtrUInt(Self)));
 
+  // Font variant
+  FFontVariant := TPixieFontVariant(Tag.GetPropertyInt(Ord(psid_font_variant),
+    True, Ord(fvNormal), PtrUInt(@FFontVariant) - PtrUInt(Self)));
+
   // Text decoration propagation
   PropagateDecoration :=
     not (FDisplay in [displayInlineBlock, displayInlineTable, displayInlineFlex]) and
@@ -754,6 +761,7 @@ begin
   Descr.Family := FFontFamily;
   Descr.Size := Round(FS);
   Descr.Style := FFontStyle;
+  Descr.Variant := FFontVariant;
   Descr.Weight := Round(FCssFontWeight.Val);
   Descr.DecorationLine := FTextDecorationLine;
   Descr.DecorationThickness := FTextDecorationThickness;

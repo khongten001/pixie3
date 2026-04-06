@@ -850,6 +850,10 @@ begin
   // Set style
   QFont_setItalic(FontH, Descr.Style = fstItalic);
 
+  // Set small-caps (Qt synthesises if the font lacks native support)
+  if Descr.Variant = fvSmallCaps then
+    QFont_setCapitalization(FontH, QFontSmallCaps);
+
   Info.Handle := FontH;
 
   // Get metrics — QFontMetrics works without an active painter
