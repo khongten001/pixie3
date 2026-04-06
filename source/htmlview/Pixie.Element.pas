@@ -751,9 +751,10 @@ var
   CounterNameId: Integer;
   Delims: string;
   Values: TPixieStringVector;
-  Current: TPixieElement;
+  Siblings: TPixieElementList;
+  Current, Sib: TPixieElement;
   Val: Integer;
-  I: Integer;
+  I, J: Integer;
 begin
   Result := '';
   if Params.Count < 2 then
@@ -765,23 +766,41 @@ begin
 
   Values := TPixieStringVector.Create;
   try
+    // Collect all counter instances in scope: walk ancestors and
+    // check preceding siblings at each level (CSS counter scoping
+    // extends to following siblings and their descendants).
     Current := Self;
     while Current <> nil do
     begin
       if (Current.FCounterValues <> nil) and
          Current.FCounterValues.TryGetValue(CounterNameId, Val) then
-        Values.Add(IntToStr(Val));
+        Values.Add(IntToStr(Val))
+      else
+      begin
+        Siblings := Current.GetSiblingsBefore;
+        try
+          for J := Siblings.Count - 1 downto 0 do
+          begin
+            Sib := Siblings[J];
+            if (Sib.GetTag = Ord(psid__tag_before)) or
+               (Sib.GetTag = Ord(psid__tag_after)) then
+              Continue;
+            if (Sib.FCounterValues <> nil) and
+               Sib.FCounterValues.TryGetValue(CounterNameId, Val) then
+            begin
+              Values.Add(IntToStr(Val));
+              Break;
+            end;
+          end;
+        finally
+          Siblings.Free;
+        end;
+      end;
       Current := Current.Parent;
     end;
 
     if Values.Count = 0 then
-    begin
-      // If no counter is found, instance one with value 0
-      if FCounterValues = nil then
-        FCounterValues := TPixieIntIntMap.Create;
-      FCounterValues.AddOrSetValue(CounterNameId, 0);
-      Result := '0';
-    end
+      Result := '0'
     else
     begin
       // Reverse the values (collected from child to root)
@@ -802,10 +821,10 @@ function TPixieElement.FindCounter(CounterNameId: Integer;
   out FoundEl: TPixieElement; out FoundValue: Integer): Boolean;
 var
   Current: TPixieElement;
-  Siblings: TPixieElementList;
-  I: Integer;
   Val: Integer;
 begin
+  // Walk ancestors only — CSS spec says counter-increment looks for
+  // the innermost counter set by counter-reset on self or an ancestor.
   Current := Self;
   while Current <> nil do
   begin
@@ -816,25 +835,6 @@ begin
       FoundValue := Val;
       Exit(True);
     end;
-
-    // Search previous siblings on each level
-    Siblings := Current.GetSiblingsBefore;
-    try
-      for I := Siblings.Count - 1 downto 0 do
-      begin
-        if (Siblings[I].FCounterValues <> nil) and
-           Siblings[I].FCounterValues.TryGetValue(
-           CounterNameId, Val) then
-        begin
-          FoundEl := Siblings[I];
-          FoundValue := Val;
-          Exit(True);
-        end;
-      end;
-    finally
-      Siblings.Free;
-    end;
-
     Current := Current.Parent;
   end;
 
@@ -860,7 +860,7 @@ end;
 procedure TPixieElement.IncrementCounter(CounterNameId: Integer;
   Increment: Integer);
 var
-  FoundEl: TPixieElement;
+  FoundEl, TargetEl: TPixieElement;
   FoundValue: Integer;
 begin
   if FindCounter(CounterNameId, FoundEl, FoundValue) then
@@ -872,9 +872,19 @@ begin
   end
   else
   begin
-    if FCounterValues = nil then
-      FCounterValues := TPixieIntIntMap.Create;
-    FCounterValues.AddOrSetValue(CounterNameId, Increment);
+    // No counter in scope — auto-create on the originating element
+    // (parent for pseudo-elements, self otherwise).
+    if (GetTag = Ord(psid__tag_before)) or
+       (GetTag = Ord(psid__tag_after)) then
+      TargetEl := Parent
+    else
+      TargetEl := Self;
+    if TargetEl <> nil then
+    begin
+      if TargetEl.FCounterValues = nil then
+        TargetEl.FCounterValues := TPixieIntIntMap.Create;
+      TargetEl.FCounterValues.AddOrSetValue(CounterNameId, Increment);
+    end;
   end;
 end;
 
