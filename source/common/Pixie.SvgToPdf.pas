@@ -77,8 +77,8 @@ type
     procedure DoEndOpacity; override;
     procedure DoClipPath; override;
 
-    // Override text rendering for PDF font embedding
-    procedure RenderText(Node: Pointer;
+    // Override text run rendering for PDF font embedding
+    procedure DoRenderTextRun(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
   public
     constructor Create(AWriter: TPixiePdfWriter;
@@ -855,14 +855,12 @@ begin
 end;
 
 // ===========================================================================
-// Text rendering (PDF — uses glyph-based font embedding)
+// Text run rendering (PDF — uses glyph-based font embedding)
 // ===========================================================================
 
-procedure TPixieSvgRenderer.RenderText(Node: Pointer;
-  const State: TPixieSvgState);
+procedure TPixieSvgRenderer.DoRenderTextRun(const Text: string;
+  X, Y: Single; const State: TPixieSvgState);
 var
-  X, Y: Single;
-  TextContent: string;
   FontIdx: Integer;
   Info: TPixieSvgFontInfo;
   PtSize, Scale: Single;
@@ -870,26 +868,8 @@ var
   Codepoint: UInt32;
   GlyphId: UInt16;
   HexStr: AnsiString;
-  NeedRestore: Boolean;
-  Child: TDOMNode;
   TotalWidth, GlyphW: Single;
 begin
-  X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
-  Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
-
-  // Collect text from child text nodes
-  TextContent := '';
-  Child := TDOMNode(Node).FirstChild;
-  while Child <> nil do
-  begin
-    if Child.NodeType = TEXT_NODE then
-      TextContent := TextContent + DomToStr(Child.NodeValue);
-    Child := Child.NextSibling;
-  end;
-
-  TextContent := Trim(TextContent);
-  if TextContent = '' then Exit;
-
   FontIdx := FindOrCreateSvgFont(State.FontFamily, State.FontWeight);
   if FontIdx < 0 then Exit;
 
@@ -899,28 +879,27 @@ begin
   PtSize := State.FontSize;
   Scale := PtSize / Info.TtFont.UnitsPerEm;
 
-  DoSaveState;
-  ApplyNodeTransform(Node);
-  ApplyOpacity(State, NeedRestore);
-
   SetPdfColor(State.FillColor, True);
 
   // Handle text-anchor
-  if GetAttr(Node, 'text-anchor') = 'middle' then
+  if (State.TextAnchor = taCenter) or (State.TextAnchor = taRight) then
   begin
     TotalWidth := 0;
     I := 1;
-    Len := Length(TextContent);
+    Len := Length(Text);
     while I <= Len do
     begin
-      Codepoint := ReadUtf8Char(TextContent, I);
+      Codepoint := ReadUtf8Char(Text, I);
       if Codepoint = 0 then Break;
       GlyphId := Info.TtFont.CharToGlyph(Codepoint);
       TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
       if State.LetterSpacing > 0 then
         TotalWidth := TotalWidth + State.LetterSpacing;
     end;
-    X := X - TotalWidth / 2;
+    if State.TextAnchor = taCenter then
+      X := X - TotalWidth / 2
+    else
+      X := X - TotalWidth;
   end;
 
   EmitLn('BT');
@@ -930,10 +909,10 @@ begin
   if (State.LetterSpacing > 0) then
   begin
     I := 1;
-    Len := Length(TextContent);
+    Len := Length(Text);
     while I <= Len do
     begin
-      Codepoint := ReadUtf8Char(TextContent, I);
+      Codepoint := ReadUtf8Char(Text, I);
       if Codepoint = 0 then Break;
       GlyphId := Info.TtFont.CharToGlyph(Codepoint);
       if not Info.UsedGlyphs.ContainsKey(GlyphId) then
@@ -944,16 +923,15 @@ begin
       EmitLn(HexStr + ' Tj');
       EmitLn(PdfFloat(GlyphW) + ' 0 Td');
     end;
-    FFonts[FontIdx] := Info;
   end
   else
   begin
     HexStr := '<';
     I := 1;
-    Len := Length(TextContent);
+    Len := Length(Text);
     while I <= Len do
     begin
-      Codepoint := ReadUtf8Char(TextContent, I);
+      Codepoint := ReadUtf8Char(Text, I);
       if Codepoint = 0 then Break;
       GlyphId := Info.TtFont.CharToGlyph(Codepoint);
       if not Info.UsedGlyphs.ContainsKey(GlyphId) then
@@ -962,12 +940,10 @@ begin
     end;
     HexStr := HexStr + '>';
     EmitLn(HexStr + ' Tj');
-    FFonts[FontIdx] := Info;
   end;
 
+  FFonts[FontIdx] := Info;
   EmitLn('ET');
-  if NeedRestore then DoEndOpacity;
-  DoRestoreState;
 end;
 
 // ===========================================================================
@@ -1026,8 +1002,9 @@ begin
     FormObj := FWriter.AllocObject;
     FormObj.AddEntry('Type', '/XObject');
     FormObj.AddEntry('Subtype', '/Form');
-    FormObj.AddEntry('BBox', '[0 0 ' + PdfFloat(FViewBoxW) + ' ' +
-      PdfFloat(FViewBoxH) + ']');
+    FormObj.AddEntry('BBox', '[' + PdfFloat(FViewBoxX) + ' ' +
+      PdfFloat(FViewBoxY) + ' ' + PdfFloat(FViewBoxX + FViewBoxW) + ' ' +
+      PdfFloat(FViewBoxY + FViewBoxH) + ']');
     FormObj.AddEntry('Matrix', MatrixStr);
     FormObj.AddEntry('Resources', ResourceStr);
 

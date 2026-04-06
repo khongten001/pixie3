@@ -108,8 +108,8 @@ var
   S: string;
   I: Integer;
 begin
-  // Format with up to 4 decimal places, no trailing zeros
-  S := FormatFloat('0.####', V);
+  // Format with up to 8 decimal places, no trailing zeros
+  S := FormatFloat('0.########', V);
   // Ensure decimal separator is always '.'
   for I := 1 to Length(S) do
     if S[I] = ',' then S[I] := '.';

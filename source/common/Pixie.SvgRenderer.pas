@@ -115,6 +115,8 @@ type
     procedure DoClipPath; virtual; abstract;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); virtual;
+    procedure DoRenderTextRun(const Text: string; X, Y: Single;
+      const State: TPixieSvgState); virtual;
     procedure DoDrawImage(const Href: string;
       X, Y, W, H: Single); virtual;
     procedure DoClearImages; virtual;
@@ -172,6 +174,11 @@ type
     procedure RenderPath(Node: Pointer; const State: TPixieSvgState);
     procedure RenderText(Node: Pointer;
       const State: TPixieSvgState); virtual;
+    function CollectAllText(Node: Pointer): string;
+    function ResolveTextState(Node: Pointer;
+      const State: TPixieSvgState): TPixieSvgState;
+    procedure RenderTextSpans(Node: Pointer;
+      const State: TPixieSvgState; X, Y: Single);
     procedure RenderImage(Node: Pointer;
       const State: TPixieSvgState);
   public
@@ -377,6 +384,12 @@ procedure TPixieSvgRendererBase.DoDrawText(const Text: string;
   X, Y: Single; const State: TPixieSvgState);
 begin
   // no-op — override in subclass for text rendering
+end;
+
+procedure TPixieSvgRendererBase.DoRenderTextRun(const Text: string;
+  X, Y: Single; const State: TPixieSvgState);
+begin
+  DoDrawText(Text, X, Y, State);
 end;
 
 procedure TPixieSvgRendererBase.DoDrawImage(const Href: string;
@@ -1266,7 +1279,7 @@ end;
 
 procedure TPixieSvgRendererBase.BuildIdMap(Node: Pointer);
 var
-  Child, TextChild: TDOMNode;
+  Child: TDOMNode;
   El: TDOMElement;
   IdStr, TagName, CSS: string;
 begin
@@ -1295,14 +1308,7 @@ begin
         ParseGradient(Child, True)
       else if TagName = 'style' then
       begin
-        CSS := '';
-        TextChild := Child.FirstChild;
-        while TextChild <> nil do
-        begin
-          if TextChild.NodeType = TEXT_NODE then
-            CSS := CSS + DomToStr(TextChild.NodeValue);
-          TextChild := TextChild.NextSibling;
-        end;
+        CSS := CollectAllText(Child);
         if CSS <> '' then
           ParseStyleElement(CSS);
       end;
@@ -2270,39 +2276,105 @@ begin
 end;
 
 // ===========================================================================
-// Text rendering (default implementation — calls DoDrawText)
+// Text rendering — handles <tspan> nesting (calls DoRenderTextRun)
 // ===========================================================================
+
+function TPixieSvgRendererBase.CollectAllText(Node: Pointer): string;
+var
+  Child: TDOMNode;
+begin
+  Result := '';
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = TEXT_NODE then
+      Result := Result + DomToStr(Child.NodeValue)
+    else if Child.NodeType = ELEMENT_NODE then
+      Result := Result + CollectAllText(Child);
+    Child := Child.NextSibling;
+  end;
+end;
+
+function TPixieSvgRendererBase.ResolveTextState(Node: Pointer;
+  const State: TPixieSvgState): TPixieSvgState;
+var
+  Child: TDOMNode;
+begin
+  Result := State;
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+    begin
+      Result := InheritState(Child, Result);
+      Result := ResolveTextState(Child, Result);
+      Exit;
+    end;
+    Child := Child.NextSibling;
+  end;
+end;
+
+procedure TPixieSvgRendererBase.RenderTextSpans(Node: Pointer;
+  const State: TPixieSvgState; X, Y: Single);
+var
+  Child: TDOMNode;
+  ChildState: TPixieSvgState;
+  XStr, YStr: string;
+  TextContent: string;
+begin
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = TEXT_NODE then
+    begin
+      TextContent := Trim(DomToStr(Child.NodeValue));
+      if TextContent <> '' then
+        DoRenderTextRun(TextContent, X, Y, State);
+    end
+    else if (Child.NodeType = ELEMENT_NODE) and
+            (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'tspan') then
+    begin
+      ChildState := InheritState(Child, State);
+      XStr := GetAttr(Child, 'x');
+      YStr := GetAttr(Child, 'y');
+      if (XStr <> '') or (YStr <> '') then
+      begin
+        // Positioned tspan — collect all text below and draw as one run
+        if XStr <> '' then X := ParseSvgFloat(XStr);
+        if YStr <> '' then Y := ParseSvgFloat(YStr);
+        TextContent := Trim(CollectAllText(Child));
+        if TextContent <> '' then
+        begin
+          ChildState := ResolveTextState(Child, ChildState);
+          DoRenderTextRun(TextContent, X, Y, ChildState);
+        end;
+      end
+      else
+        // Non-positioned tspan — inherit state and recurse
+        RenderTextSpans(Child, ChildState, X, Y);
+    end;
+    Child := Child.NextSibling;
+  end;
+end;
 
 procedure TPixieSvgRendererBase.RenderText(Node: Pointer;
   const State: TPixieSvgState);
 var
   X, Y: Single;
-  TextContent: string;
   NeedRestore: Boolean;
-  Child: TDOMNode;
 begin
+  if Trim(CollectAllText(Node)) = '' then Exit;
+
   X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
   Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
-
-  // Collect text from child text nodes
-  TextContent := '';
-  Child := TDOMNode(Node).FirstChild;
-  while Child <> nil do
-  begin
-    if Child.NodeType = TEXT_NODE then
-      TextContent := TextContent + DomToStr(Child.NodeValue);
-    Child := Child.NextSibling;
-  end;
-
-  TextContent := Trim(TextContent);
-  if TextContent = '' then Exit;
 
   DoSaveState;
   ApplyNodeTransform(Node);
   ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
-  DoDrawText(TextContent, X, Y, State);
+  RenderTextSpans(Node, State, X, Y);
+
   if NeedRestore then DoEndOpacity;
   DoRestoreState;
 end;
