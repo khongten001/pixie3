@@ -1131,9 +1131,16 @@ begin
     end
     else if InlineBoxesDims.Count <> 0 then
     begin
-      FHeight := InlineBoxesDims.Height;
-      TopShift := Abs(InlineBoxesDims.Top);
-      FBaseline := InlineBoxesDims.Bottom;
+      // The strut (CSS2 §10.8.1) is an imaginary zero-width inline box
+      // with the block container's font and line-height.  Even when no text
+      // items remain on the line (e.g. trailing <br> was removed), the
+      // strut still contributes to the line box height.
+      TopShiftCorrection := (LineHeightVal - FFontMetrics.Height) / 2;
+      TopShift := Max(Abs(InlineBoxesDims.Top),
+        FFontMetrics.Ascent + TopShiftCorrection);
+      FBaseline := Max(InlineBoxesDims.Bottom,
+        FFontMetrics.Descent + TopShiftCorrection);
+      FHeight := TopShift + FBaseline;
     end
     else
       TopShift := 0;
