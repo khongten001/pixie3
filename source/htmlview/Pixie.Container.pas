@@ -13,7 +13,8 @@ interface
 uses
   SysUtils,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription, Pixie.CssLength;
+  Pixie.GradientLayer, Pixie.Background,
+  Pixie.FontDescription, Pixie.CssLength;
 
 type
   TPixieTextPieceKind = (tpWord, tpSpace);

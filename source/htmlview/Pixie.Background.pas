@@ -17,7 +17,7 @@ uses
   SysUtils, Math, Generics.Collections,
   Pixie.Types, Pixie.StringId,
   Pixie.CssLength, Pixie.WebColor, Pixie.Borders,
-  Pixie.Gradient;
+  Pixie.GradientLayer, Pixie.Gradient;
 
 type
   TPixieBackgroundLayerType = (
@@ -29,17 +29,6 @@ type
     bltConicGradient
   );
 
-  { TPixieColorPoint - normalized color stop for computed gradient layers }
-  TPixieColorPoint = record
-    Offset: Single;
-    Color: TPixieWebColor;
-    Hint: Single;
-    HasHint: Boolean;
-    class function Create(AOffset: Single; const AColor: TPixieWebColor): TPixieColorPoint; static;
-  end;
-
-  TPixieColorPointList = TList<TPixieColorPoint>;
-
   { TPixieBackgroundLayer - computed layer with box model info }
   TPixieBackgroundLayer = record
     BorderBox: TPixiePosition;
@@ -50,43 +39,6 @@ type
     Repeat_: TPixieBackgroundRepeat;
     IsRoot: Boolean;
     procedure Init;
-  end;
-
-  { TPixieGradientBase - base for computed gradient layers }
-  TPixieGradientBase = class
-  public
-    ColorPoints: TPixieColorPointList;
-    ColorSpace: TPixieColorSpace;
-    HueInterpolation: TPixieHueInterpolation;
-
-    constructor Create;
-    destructor Destroy; override;
-
-    procedure ColorPointsTransparentFix;
-    function PrepareColorPoints(LineLen: Single; GradType: Integer;
-      Colors: TPixieGradientColorStopList): Boolean;
-  end;
-
-  { TPixieLinearGradientLayer }
-  TPixieLinearGradientLayer = class(TPixieGradientBase)
-  public
-    StartPt: TPixiePointF;
-    EndPt: TPixiePointF;
-  end;
-
-  { TPixieRadialGradientLayer }
-  TPixieRadialGradientLayer = class(TPixieGradientBase)
-  public
-    Position: TPixiePointF;
-    Radius: TPixiePointF;
-  end;
-
-  { TPixieConicGradientLayer }
-  TPixieConicGradientLayer = class(TPixieGradientBase)
-  public
-    Position: TPixiePointF;
-    Angle: Single;
-    Radius: Single;
   end;
 
   { TPixieBackgroundImage - layer content: image URL }
@@ -152,17 +104,6 @@ implementation
 uses
   Pixie.Container, Pixie.Element, Pixie.RenderItem, Pixie.Document;
 
-{ TPixieColorPoint }
-
-class function TPixieColorPoint.Create(AOffset: Single;
-  const AColor: TPixieWebColor): TPixieColorPoint;
-begin
-  Result.Offset := AOffset;
-  Result.Color := AColor;
-  Result.Hint := 0;
-  Result.HasHint := False;
-end;
-
 { TPixieBackgroundLayer }
 
 procedure TPixieBackgroundLayer.Init;
@@ -174,22 +115,6 @@ begin
   Attachment := baScroll;
   Repeat_ := brRepeat;
   IsRoot := False;
-end;
-
-{ TPixieGradientBase }
-
-constructor TPixieGradientBase.Create;
-begin
-  inherited Create;
-  ColorPoints := TPixieColorPointList.Create;
-  ColorSpace := csNone;
-  HueInterpolation := hiNone;
-end;
-
-destructor TPixieGradientBase.Destroy;
-begin
-  ColorPoints.Free;
-  inherited;
 end;
 
 // Normalize a CSS length into a value between 0 and 1
@@ -261,58 +186,10 @@ begin
   end;
 end;
 
-procedure TPixieGradientBase.ColorPointsTransparentFix;
-var
-  I, Cnt: Integer;
-  Cpt: TPixieColorPoint;
-begin
-  I := 0;
-  while I < ColorPoints.Count do
-  begin
-    Cnt := ColorPoints.Count;
-    if ColorPoints[I].Color.Alpha = 0 then
-    begin
-      if I = 0 then
-      begin
-        if I + 1 < Cnt then
-        begin
-          Cpt := ColorPoints[I];
-          Cpt.Color := ColorPoints[I + 1].Color;
-          Cpt.Color.Alpha := 0;
-          ColorPoints[I] := Cpt;
-        end;
-      end
-      else if I + 1 = Cnt then
-      begin
-        Cpt := ColorPoints[I];
-        Cpt.Color := ColorPoints[I - 1].Color;
-        Cpt.Color.Alpha := 0;
-        ColorPoints[I] := Cpt;
-      end
-      else
-      begin
-        // Split: insert copy with previous color's RGB before current
-        Cpt.Color := ColorPoints[I - 1].Color;
-        Cpt.Color.Alpha := 0;
-        Cpt.Offset := ColorPoints[I].Offset;
-        Cpt.Hint := 0;
-        Cpt.HasHint := False;
-        ColorPoints.Insert(I, Cpt);
-        // Fix current (now at I+1) to use next color's RGB
-        Cpt := ColorPoints[I + 1];
-        Cpt.Color := ColorPoints[I + 2].Color;
-        Cpt.Color.Alpha := 0;
-        ColorPoints[I + 1] := Cpt;
-        Inc(I); // skip the newly inserted one
-      end;
-    end;
-    Inc(I);
-  end;
-end;
-
-function TPixieGradientBase.PrepareColorPoints(LineLen: Single;
+function PrepareColorPoints(Layer: TPixieGradientBase; LineLen: Single;
   GradType: Integer; Colors: TPixieGradientColorStopList): Boolean;
 var
+  ColorPoints: TPixieColorPointList;
   Repeating: Boolean;
   NoneUnits: Integer;
   HasTransparent: Boolean;
@@ -321,6 +198,8 @@ var
   Cpt, LastCpt: TPixieColorPoint;
   Sum, StepOffset: Single;
 begin
+  ColorPoints := Layer.ColorPoints;
+
   if GradType = Ord(psid_linear_gradient) then
     Repeating := False
   else if GradType = Ord(psid_radial_gradient) then
@@ -445,7 +324,7 @@ begin
 
   // Process transparent
   if HasTransparent then
-    ColorPointsTransparentFix;
+    Layer.ColorPointsTransparentFix;
 
   if Repeating then
     RepeatColorPoints(ColorPoints);
@@ -748,7 +627,7 @@ begin
     Ret.ColorSpace := Grad.ColorSpace;
     Ret.HueInterpolation := Grad.HueInterpolation;
 
-    if not Ret.PrepareColorPoints(LineLen, Grad.GradientType, Grad.Colors) then
+    if not PrepareColorPoints(Ret, LineLen, Grad.GradientType, Grad.Colors) then
     begin
       Ret.Free;
       Exit;
@@ -932,7 +811,7 @@ begin
     Ret.ColorSpace := Grad.ColorSpace;
     Ret.HueInterpolation := Grad.HueInterpolation;
 
-    if Ret.PrepareColorPoints(Ret.Radius.X, Grad.GradientType, Grad.Colors) then
+    if PrepareColorPoints(Ret, Ret.Radius.X, Grad.GradientType, Grad.Colors) then
       Result := Ret
     else
       Ret.Free;
@@ -975,7 +854,7 @@ begin
       TPixiePointF.Create(Layer.OriginBox.Right, Layer.OriginBox.Bottom));
     Ret.Radius := Max(Max(Corner1, Corner2), Max(Corner3, Corner4));
 
-    if Ret.PrepareColorPoints(0, Grad.GradientType, Grad.Colors) then
+    if PrepareColorPoints(Ret, 0, Grad.GradientType, Grad.Colors) then
       Result := Ret
     else
       Ret.Free;

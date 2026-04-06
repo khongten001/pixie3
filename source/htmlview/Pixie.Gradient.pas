@@ -12,7 +12,7 @@ interface
 uses
   SysUtils, Math, Generics.Collections,
   Pixie.Types, Pixie.StringId, Pixie.Html,
-  Pixie.CssLength, Pixie.WebColor,
+  Pixie.CssLength, Pixie.WebColor, Pixie.GradientLayer,
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.Style;
 
 const
@@ -38,18 +38,6 @@ type
 
   TPixieRadialExtent = (reNone, reClosestCorner, reClosestSide,
     reFarthestCorner, reFarthestSide);
-
-  TPixieColorSpace = (
-    csNone,
-    // rectangular
-    csSrgb, csSrgbLinear, csDisplayP3, csA98Rgb, csProphotoRgb, csRec2020,
-    csLab, csOklab, csXyz, csXyzD50, csXyzD65,
-    // polar (csHsl marks start of polar spaces)
-    csHsl, csHwb, csLch, csOklch
-  );
-
-  TPixieHueInterpolation = (hiNone, hiShorter, hiLonger,
-    hiIncreasing, hiDecreasing);
 
   TPixieImageType = (itNone, itUrl, itGradient);
 

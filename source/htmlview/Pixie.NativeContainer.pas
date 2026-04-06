@@ -13,7 +13,8 @@ uses
   SysUtils, Classes, Math, Generics.Collections,
   {$IFDEF FPC}LCLType, FPImage,{$ELSE}{$IFDEF MSWINDOWS}Windows,{$ENDIF}{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.Background, Pixie.FontDescription, Pixie.CssLength,
+  Pixie.GradientLayer, Pixie.Background,
+  Pixie.FontDescription, Pixie.CssLength,
   Pixie.Container, Pixie.Canvas;
 
 type

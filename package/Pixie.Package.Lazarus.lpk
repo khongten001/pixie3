@@ -29,6 +29,10 @@
            - Pixie.Canvas.Cairo.pas (Linux)
            - Pixie.Canvas.CG.pas (macOS) -->
       <Item>
+        <Filename Value="../source/common/Pixie.GradientLayer.pas"/>
+        <UnitName Value="Pixie.GradientLayer"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.Canvas.pas"/>
         <UnitName Value="Pixie.Canvas"/>
       </Item>
