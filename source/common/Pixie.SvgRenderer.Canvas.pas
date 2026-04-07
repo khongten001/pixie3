@@ -817,11 +817,13 @@ begin
         FCanvas.ConcatMatrix(1, 0, 0, 1, OffX, OffY);
       FCanvas.ConcatMatrix(Scale, 0, 0, Scale, 0, 0);
 
-      // Clip to viewBox (SVG default overflow=hidden).
-      // Use (0,0) origin because the viewBox offset translation is applied after.
-      ClipPos := TPixiePosition.Create(0, 0, FViewBoxW, FViewBoxH);
-      ClipRadius.Init;
-      FCanvas.SetClipRect(ClipPos, ClipRadius);
+      // Clip to viewBox unless overflow is visible (e.g. no explicit size)
+      if not FOverflowVisible then
+      begin
+        ClipPos := TPixiePosition.Create(0, 0, FViewBoxW, FViewBoxH);
+        ClipRadius.Init;
+        FCanvas.SetClipRect(ClipPos, ClipRadius);
+      end;
     end;
 
     // Apply viewBox offset

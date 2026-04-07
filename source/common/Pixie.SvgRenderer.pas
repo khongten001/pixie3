@@ -96,6 +96,7 @@ type
     FSvgRoot: Pointer;
     FInitState: TPixieSvgState;
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
+    FOverflowVisible: Boolean;
     FGradients: TPixieSvgGradientMap;
     FIdMap: TPixieSvgIdMap;
     FStyleMap: TPixieSvgStyleMap;
@@ -124,6 +125,7 @@ type
     // Attribute parsing
     function GetAttr(Node: Pointer; const Name: string;
       const Default: string = ''): string;
+    function GetHref(Node: Pointer): string;
     function ParseSvgFloat(const S: string): Single;
     function ParseSvgColor(const S: string;
       out Color: TPixieWebColor): Boolean;
@@ -423,6 +425,13 @@ begin
   Attr := El.Attributes.GetNamedItem(StrToDom(Name));
   if Attr <> nil then
     Result := DomToStr(Attr.NodeValue);
+end;
+
+function TPixieSvgRendererBase.GetHref(Node: Pointer): string;
+begin
+  Result := GetAttr(Node, 'xlink:href');
+  if Result = '' then
+    Result := GetAttr(Node, 'href');
 end;
 
 function TPixieSvgRendererBase.ParseSvgFloat(const S: string): Single;
@@ -1402,54 +1411,52 @@ end;
 
 function TPixieSvgRendererBase.ResolvePatternImageHref(
   const PatternId: string): string;
+
+  function FindImageHref(Node: Pointer; Depth: Integer): string;
+  var
+    Tag, HrefStr: string;
+    Child, Target: Pointer;
+  begin
+    Result := '';
+    if (Node = nil) or (Depth >= 10) then Exit;
+
+    Tag := LowerCase(DomToStr(TDOMElement(Node).TagName));
+
+    if Tag = 'image' then
+    begin
+      Result := GetHref(Node);
+      Exit;
+    end;
+
+    if Tag = 'use' then
+    begin
+      HrefStr := GetHref(Node);
+      if (HrefStr <> '') and (HrefStr[1] = '#') and
+        FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
+        Result := FindImageHref(Target, Depth + 1);
+      Exit;
+    end;
+
+    // Container (pattern, g, svg, symbol, a, etc.) — search children
+    Child := TDOMNode(Node).FirstChild;
+    while Child <> nil do
+    begin
+      if TDOMNode(Child).NodeType = ELEMENT_NODE then
+      begin
+        Result := FindImageHref(Child, Depth + 1);
+        if Result <> '' then Exit;
+      end;
+      Child := TDOMNode(Child).NextSibling;
+    end;
+  end;
+
 var
-  PatternEl, Child, Target: Pointer;
-  ChildTag, HrefStr: string;
-  Depth: Integer;
+  PatternEl: Pointer;
 begin
   Result := '';
   if (FIdMap = nil) or (PatternId = '') then Exit;
   if not FIdMap.TryGetValue(PatternId, PatternEl) then Exit;
-
-  Child := TDOMNode(PatternEl).FirstChild;
-  while Child <> nil do
-  begin
-    if TDOMNode(Child).NodeType = ELEMENT_NODE then
-    begin
-      ChildTag := LowerCase(DomToStr(TDOMElement(Child).TagName));
-      if ChildTag = 'image' then
-      begin
-        Result := GetAttr(Child, 'xlink:href');
-        if Result = '' then
-          Result := GetAttr(Child, 'href');
-        Exit;
-      end
-      else if ChildTag = 'use' then
-      begin
-        HrefStr := GetAttr(Child, 'xlink:href');
-        if HrefStr = '' then
-          HrefStr := GetAttr(Child, 'href');
-        Depth := 0;
-        while (HrefStr <> '') and (HrefStr[1] = '#') and (Depth < 10) do
-        begin
-          if not FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
-            Break;
-          if LowerCase(DomToStr(TDOMElement(Target).TagName)) = 'image' then
-          begin
-            Result := GetAttr(Target, 'xlink:href');
-            if Result = '' then
-              Result := GetAttr(Target, 'href');
-            Exit;
-          end;
-          HrefStr := GetAttr(Target, 'xlink:href');
-          if HrefStr = '' then
-            HrefStr := GetAttr(Target, 'href');
-          Inc(Depth);
-        end;
-      end;
-    end;
-    Child := TDOMNode(Child).NextSibling;
-  end;
+  Result := FindImageHref(PatternEl, 0);
 end;
 
 procedure TPixieSvgRendererBase.ParseGradient(Node: Pointer;
@@ -1483,9 +1490,7 @@ begin
   Grad.UserSpaceUnits := (LowerCase(Units) = 'userspaceonuse');
 
   // xlink:href / href
-  HrefStr := DomToStr(El.GetAttribute('xlink:href'));
-  if HrefStr = '' then
-    HrefStr := DomToStr(El.GetAttribute('href'));
+  HrefStr := GetHref(Node);
   if (HrefStr <> '') and (HrefStr[1] = '#') then
     Grad.HrefId := Copy(HrefStr, 2, MaxInt);
 
@@ -2529,9 +2534,7 @@ begin
   W := ParseSvgFloat(GetAttr(Node, 'width', '0'));
   H := ParseSvgFloat(GetAttr(Node, 'height', '0'));
 
-  HrefStr := GetAttr(Node, 'xlink:href');
-  if HrefStr = '' then
-    HrefStr := GetAttr(Node, 'href');
+  HrefStr := GetHref(Node);
   if HrefStr = '' then Exit;
   if (W <= 0) or (H <= 0) then Exit;
 
@@ -2616,9 +2619,7 @@ begin
   if FUseDepth >= 10 then Exit;
 
   // Resolve href
-  HrefStr := GetAttr(Node, 'xlink:href');
-  if HrefStr = '' then
-    HrefStr := GetAttr(Node, 'href');
+  HrefStr := GetHref(Node);
   if (HrefStr = '') or (HrefStr[1] <> '#') then Exit;
 
   TargetId := Copy(HrefStr, 2, MaxInt);
@@ -2683,7 +2684,7 @@ var
   Doc: TXMLDocument;
   SvgRoot: TDOMElement;
   MemStream: TMemoryStream;
-  VbStr, WidthStr, HeightStr: string;
+  VbStr, WidthStr, HeightStr, OverflowStr: string;
   Parts: array[0..3] of string;
   P, Idx: Integer;
   SvgStr: string;
@@ -2776,11 +2777,28 @@ begin
     if WidthStr <> '' then
       W := ParseSvgFloat(WidthStr)
     else
-      W := FViewBoxW;
+      W := 0;
     if HeightStr <> '' then
       H := ParseSvgFloat(HeightStr)
     else
-      H := FViewBoxH;
+      H := 0;
+
+    // Determine overflow: when the SVG has no valid explicit dimensions and
+    // doesn't say overflow="hidden", browsers render with visible overflow
+    // (content outside the viewBox is not clipped)
+    OverflowStr := LowerCase(Trim(
+      DomToStr(SvgRoot.GetAttribute('overflow'))));
+    if OverflowStr = 'visible' then
+      FOverflowVisible := True
+    else if OverflowStr = 'hidden' then
+      FOverflowVisible := False
+    else
+      FOverflowVisible := (W <= 0) and (H <= 0);
+
+    // Fall back to viewBox dimensions when width/height couldn't be parsed
+    // (e.g. malformed values like width="px" with no numeric part)
+    if (W <= 0) and (FViewBoxW > 0) then W := FViewBoxW;
+    if (H <= 0) and (FViewBoxH > 0) then H := FViewBoxH;
 
     // If only one dimension given, derive the other from viewBox aspect ratio
     if (W <= 0) and (H > 0) and (FViewBoxW > 0) and (FViewBoxH > 0) then
