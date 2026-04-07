@@ -33,6 +33,9 @@ function PixieIsLikelySvg(const Content: string): Boolean;
 
 implementation
 
+uses
+  Pixie.Encoding;
+
 function PixieTrim(const S: string; const CharsToTrim: string): string;
 var
   I, J, Len: Integer;
@@ -678,15 +681,30 @@ begin
   if Count > 0 then
     Move(Bytes[Offset], Result[1], Count);
 end;
+
+function DecodeViaCodePage(const Bytes: TBytes; CodePage: Integer): string;
+var
+  S: RawByteString;
+begin
+  SetLength(S, Length(Bytes));
+  if Length(Bytes) > 0 then
+    Move(Bytes[0], S[1], Length(Bytes));
+  SetCodePage(S, CodePage, False);
+  SetCodePage(S, 65001, True);
+  Result := S;
+end;
 {$ENDIF}
 
 function PixieDecodeHtmlBytes(const Bytes: TBytes): string;
 var
   Charset: string;
   CodePage: Integer;
+  HasMultiByte: Boolean;
+  {$IFNDEF FPC}
   Enc: TEncoding;
+  {$ENDIF}
 begin
-  // Check for UTF-8 BOM
+  // 1. BOM detection
   if (Length(Bytes) >= 3) and
      (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
   begin
@@ -697,21 +715,39 @@ begin
     {$ENDIF}
   end;
 
-  // Check for UTF-16 LE BOM
   if (Length(Bytes) >= 2) and (Bytes[0] = $FF) and (Bytes[1] = $FE) then
     Exit(TEncoding.Unicode.GetString(Bytes, 2, Length(Bytes) - 2));
 
-  // Check for UTF-16 BE BOM
   if (Length(Bytes) >= 2) and (Bytes[0] = $FE) and (Bytes[1] = $FF) then
     Exit(TEncoding.BigEndianUnicode.GetString(Bytes, 2, Length(Bytes) - 2));
 
-  // Detect charset from meta tag
+  // 2. Meta charset prescan
   Charset := PixieDetectCharset(Bytes, Length(Bytes));
   CodePage := PixieCharsetToCodePage(Charset);
 
+  // 3. No declaration — auto-detect
+  if (CodePage = 0) and (Charset = '') then
+  begin
+    if PixieIsValidUtf8(Bytes, Length(Bytes), HasMultiByte) and HasMultiByte then
+      CodePage := 0
+    else
+    begin
+      CodePage := PixieGuessCodePage(Bytes, Length(Bytes));
+      if CodePage = 0 then
+      begin
+        if (DefaultSystemCodePage = 874) or
+           ((DefaultSystemCodePage >= 1250) and (DefaultSystemCodePage <= 1258)) or
+           (DefaultSystemCodePage = 20866) or (DefaultSystemCodePage = 21866) then
+          CodePage := DefaultSystemCodePage
+        else
+          CodePage := 1252;
+      end;
+    end;
+  end;
+
+  // Decode
   if CodePage = 0 then
   begin
-    // UTF-8 or unknown — interpret as UTF-8
     {$IFDEF FPC}
     Result := BytesToUtf8(Bytes, 0, Length(Bytes));
     {$ELSE}
@@ -720,12 +756,16 @@ begin
   end
   else
   begin
+    {$IFDEF FPC}
+    Result := DecodeViaCodePage(Bytes, CodePage);
+    {$ELSE}
     Enc := TEncoding.GetEncoding(CodePage);
     try
       Result := Enc.GetString(Bytes);
     finally
       Enc.Free;
     end;
+    {$ENDIF}
   end;
 end;
 

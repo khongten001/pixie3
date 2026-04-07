@@ -53,6 +53,7 @@ contains
   Pixie.MediaQuery in '..\source\htmlview\Pixie.MediaQuery.pas',
   Pixie.GradientLayer in '..\source\common\Pixie.GradientLayer.pas',
   Pixie.DataUri in '..\source\common\Pixie.DataUri.pas',
+  Pixie.Encoding in '..\source\common\Pixie.Encoding.pas',
   Pixie.ImageUtils in '..\source\common\Pixie.ImageUtils.pas',
   Pixie.Gradient in '..\source\htmlview\Pixie.Gradient.pas',
   Pixie.Background in '..\source\htmlview\Pixie.Background.pas',

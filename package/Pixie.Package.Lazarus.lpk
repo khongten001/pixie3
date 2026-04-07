@@ -37,6 +37,10 @@
         <UnitName Value="Pixie.DataUri"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.Encoding.pas"/>
+        <UnitName Value="Pixie.Encoding"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.ImageUtils.pas"/>
         <UnitName Value="Pixie.ImageUtils"/>
       </Item>
