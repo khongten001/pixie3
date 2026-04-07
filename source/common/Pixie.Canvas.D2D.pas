@@ -815,9 +815,18 @@ begin
   if DashStyle <> D2D1_DASH_STYLE_SOLID then
   begin
     FillChar(StrokeProps, SizeOf(StrokeProps), 0);
-    StrokeProps.startCap := D2D1_CAP_STYLE_FLAT;
-    StrokeProps.endCap := D2D1_CAP_STYLE_FLAT;
-    StrokeProps.dashCap := D2D1_CAP_STYLE_FLAT;
+    if Border.Style = bsDotted then
+    begin
+      StrokeProps.startCap := D2D1_CAP_STYLE_ROUND;
+      StrokeProps.endCap := D2D1_CAP_STYLE_ROUND;
+      StrokeProps.dashCap := D2D1_CAP_STYLE_ROUND;
+    end
+    else
+    begin
+      StrokeProps.startCap := D2D1_CAP_STYLE_FLAT;
+      StrokeProps.endCap := D2D1_CAP_STYLE_FLAT;
+      StrokeProps.dashCap := D2D1_CAP_STYLE_FLAT;
+    end;
     StrokeProps.lineJoin := D2D1_LINE_JOIN_MITER;
     StrokeProps.miterLimit := 10;
     StrokeProps.dashStyle := DashStyle;

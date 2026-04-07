@@ -680,7 +680,10 @@ begin
     FStrokeBrush.Dash := TStrokeDash.Solid;
   end;
 
-  FStrokeBrush.Cap := TStrokeCap.Flat;
+  if Border.Style = bsDotted then
+    FStrokeBrush.Cap := TStrokeCap.Round
+  else
+    FStrokeBrush.Cap := TStrokeCap.Flat;
   FCanvas.DrawLine(PointF(X1, Y1), PointF(X2, Y2), FOpacity, FStrokeBrush);
 end;
 

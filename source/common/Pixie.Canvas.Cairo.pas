@@ -754,8 +754,9 @@ begin
   case Border.Style of
     bsDotted:
     begin
-      Dashes[0] := Border.Width;
-      Dashes[1] := Border.Width;
+      cairo_set_line_cap(FCairo, CAIRO_LINE_CAP_ROUND);
+      Dashes[0] := 0;
+      Dashes[1] := Border.Width * 2;
       cairo_set_dash(FCairo, @Dashes[0], 2, 0);
     end;
     bsDashed:
@@ -772,7 +773,9 @@ begin
   cairo_line_to(FCairo, X2, Y2);
   cairo_stroke(FCairo);
 
-  // Reset dash
+  // Reset dash and line cap
+  if Border.Style = bsDotted then
+    cairo_set_line_cap(FCairo, CAIRO_LINE_CAP_BUTT);
   cairo_set_dash(FCairo, nil, 0, 0);
 end;
 

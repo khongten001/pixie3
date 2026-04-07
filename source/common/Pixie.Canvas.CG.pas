@@ -710,8 +710,9 @@ begin
   case Border.Style of
     bsDotted:
     begin
-      Dashes[0] := Border.Width;
-      Dashes[1] := Border.Width;
+      CGContextSetLineCap(FCG, kCGLineCapRound);
+      Dashes[0] := 0;
+      Dashes[1] := Border.Width * 2;
       CGContextSetLineDash(FCG, 0, @Dashes[0], 2);
     end;
     bsDashed:
@@ -729,6 +730,8 @@ begin
   CGContextAddLineToPoint(FCG, X2, Y2);
   CGContextStrokePath(FCG);
 
+  if Border.Style = bsDotted then
+    CGContextSetLineCap(FCG, kCGLineCapButt);
   CGContextSetLineDash(FCG, 0, nil, 0);
 end;
 

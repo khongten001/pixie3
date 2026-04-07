@@ -1250,18 +1250,25 @@ procedure TPixiePdfCanvas.DrawBorders(const Borders: TPixieBorders;
     SetPdfColor(Border.Color, False);
     EmitLn(PdfFloat(PW) + ' w');
 
-    // Dash pattern
+    // Dash pattern and line cap
     case Border.Style of
+      bsDotted:
+      begin
+        EmitLn('1 J'); // round cap for round dots
+        EmitLn('[0 ' + PdfFloat(PW * 2) + '] 0 d');
+      end;
       bsDashed:
         EmitLn('[' + PdfFloat(PW * 3) + ' ' + PdfFloat(PW * 3) + '] 0 d');
-      bsDotted:
-        EmitLn('[' + PdfFloat(PW) + ' ' + PdfFloat(PW) + '] 0 d');
     else
       EmitLn('[] 0 d');
     end;
 
     EmitLn(PdfFloat(PX1) + ' ' + PdfFloat(PY1) + ' m ' +
            PdfFloat(PX2) + ' ' + PdfFloat(PY2) + ' l S');
+
+    // Reset line cap if changed
+    if Border.Style = bsDotted then
+      EmitLn('0 J');
   end;
 
 var
@@ -1291,15 +1298,20 @@ begin
       SetPdfColor(Borders.Top.Color, False);
       EmitLn(PdfFloat(PW) + ' w');
       case Borders.Top.Style of
+        bsDotted:
+        begin
+          EmitLn('1 J');
+          EmitLn('[0 ' + PdfFloat(PW * 2) + '] 0 d');
+        end;
         bsDashed:
           EmitLn('[' + PdfFloat(PW * 3) + ' ' + PdfFloat(PW * 3) + '] 0 d');
-        bsDotted:
-          EmitLn('[' + PdfFloat(PW) + ' ' + PdfFloat(PW) + '] 0 d');
       else
         EmitLn('[] 0 d');
       end;
       BuildRoundedRectPath(X, Y, W, H, Borders.Radius);
       EmitLn('S');
+      if Borders.Top.Style = bsDotted then
+        EmitLn('0 J');
     end;
     Exit;
   end;
