@@ -181,6 +181,14 @@ const
   // Kappa constant for quarter-circle bezier approximation
   BezierKappa = 0.5522847498;
 
+  // Line cap/join mapping
+  // FMX has no square cap — Flat is the closest.
+  // FMX has no MiterOrBevel — Bevel avoids degenerate miter spikes.
+  CapMap: array[TPixieLineCap] of TStrokeCap = (
+    TStrokeCap.Flat, TStrokeCap.Round, TStrokeCap.Flat);
+  JoinMap: array[TPixieLineJoin] of TStrokeJoin = (
+    TStrokeJoin.Bevel, TStrokeJoin.Round, TStrokeJoin.Bevel);
+
 // ---------------------------------------------------------------------------
 // Font check callback for PixieResolveFontFamily
 // ---------------------------------------------------------------------------
@@ -1307,6 +1315,8 @@ begin
     FStrokeBrush.Color := ToAlphaColor(Color);
     FStrokeBrush.Thickness := Width;
     FStrokeBrush.Dash := TStrokeDash.Solid;
+    FStrokeBrush.Cap := CapMap[FPathLineCap];
+    FStrokeBrush.Join := JoinMap[FPathLineJoin];
     FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
   end;
   FCurrentPath.Clear;
@@ -1329,6 +1339,8 @@ begin
     FStrokeBrush.Color := ToAlphaColor(StrokeColor);
     FStrokeBrush.Thickness := StrokeWidth;
     FStrokeBrush.Dash := TStrokeDash.Solid;
+    FStrokeBrush.Cap := CapMap[FPathLineCap];
+    FStrokeBrush.Join := JoinMap[FPathLineJoin];
     FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
   end;
   FCurrentPath.Clear;

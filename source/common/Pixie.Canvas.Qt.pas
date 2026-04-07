@@ -166,6 +166,14 @@ implementation
 uses
   Pixie.SvgRenderer.Canvas;
 
+const
+  CapMap: array[TPixieLineCap] of QtPenCapStyle = (
+    QtFlatCap, QtRoundCap, QtSquareCap);
+  // QtSvgMiterJoin auto-bevels when miter limit is exceeded, matching SVG spec
+  // and avoiding spike artifacts on degenerate 180-degree paths.
+  JoinMap: array[TPixieLineJoin] of QtPenJoinStyle = (
+    QtSvgMiterJoin, QtRoundJoin, QtBevelJoin);
+
 // ---------------------------------------------------------------------------
 // Font check callback for PixieResolveFontFamily
 // ---------------------------------------------------------------------------
@@ -1420,6 +1428,8 @@ begin
     Pen := QPen_Create(@QC);
     try
       QPen_setWidthF(Pen, Width);
+      QPen_setCapStyle(Pen, CapMap[FPathLineCap]);
+      QPen_setJoinStyle(Pen, JoinMap[FPathLineJoin]);
       QPainter_setPen(FPainter, Pen);
       QPainter_setBrush(FPainter, QtNoBrush);
       QPainter_drawPath(FPainter, FCurrentPath);
@@ -1460,6 +1470,8 @@ begin
     Pen := QPen_Create(@QC);
     try
       QPen_setWidthF(Pen, StrokeWidth);
+      QPen_setCapStyle(Pen, CapMap[FPathLineCap]);
+      QPen_setJoinStyle(Pen, JoinMap[FPathLineJoin]);
       QPainter_setPen(FPainter, Pen);
       QPainter_setBrush(FPainter, QtNoBrush);
       QPainter_drawPath(FPainter, FCurrentPath);

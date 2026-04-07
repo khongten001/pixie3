@@ -193,6 +193,12 @@ type
     bsOutset
   );
 
+  // SVG stroke line cap
+  TPixieLineCap = (lcButt, lcRound, lcSquare);
+
+  // SVG stroke line join
+  TPixieLineJoin = (ljMiter, ljRound, ljBevel);
+
   // Element float
   // 'none;left;right'
   TPixieElementFloat = (

@@ -31,6 +31,8 @@ type
   private
     FTextWidthCache: TPixieTextWidthCache;
   protected
+    FPathLineCap: TPixieLineCap;
+    FPathLineJoin: TPixieLineJoin;
     function DoMeasureText(const Text: string;
       Handle: TPixieFontHandle): TPixiePixel; virtual; abstract;
     procedure DoDeleteFont(Handle: TPixieFontHandle); virtual; abstract;
@@ -54,6 +56,9 @@ type
     // Blend mode — returns True if the backend supports the requested mode
     function SetBlendMode(Mode: TPixieBlendMode): Boolean; virtual;
     procedure ResetBlendMode; virtual;
+
+    // Path stroke style (line cap/join for SVG path operations)
+    procedure SetPathStrokeStyle(Cap: TPixieLineCap; Join: TPixieLineJoin); virtual;
 
     // Clipping
     procedure SetClipRect(const R: TPixiePosition;
@@ -314,6 +319,13 @@ end;
 procedure TPixieCanvas.ResetBlendMode;
 begin
   // no-op by default
+end;
+
+procedure TPixieCanvas.SetPathStrokeStyle(Cap: TPixieLineCap;
+  Join: TPixieLineJoin);
+begin
+  FPathLineCap := Cap;
+  FPathLineJoin := Join;
 end;
 
 procedure TPixieCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);

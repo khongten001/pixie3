@@ -1451,7 +1451,17 @@ begin
   begin
     SetSourceColor(Color);
     cairo_set_line_width(FCairo, Width);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      cairo_set_line_cap(FCairo, cairo_line_cap_t(Ord(FPathLineCap)));
+      cairo_set_line_join(FCairo, cairo_line_join_t(Ord(FPathLineJoin)));
+    end;
     cairo_stroke(FCairo);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      cairo_set_line_cap(FCairo, CAIRO_LINE_CAP_BUTT);
+      cairo_set_line_join(FCairo, CAIRO_LINE_JOIN_MITER);
+    end;
   end
   else
     cairo_new_path(FCairo);
@@ -1475,7 +1485,17 @@ begin
   begin
     SetSourceColor(StrokeColor);
     cairo_set_line_width(FCairo, StrokeWidth);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      cairo_set_line_cap(FCairo, cairo_line_cap_t(Ord(FPathLineCap)));
+      cairo_set_line_join(FCairo, cairo_line_join_t(Ord(FPathLineJoin)));
+    end;
     cairo_stroke(FCairo);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      cairo_set_line_cap(FCairo, CAIRO_LINE_CAP_BUTT);
+      cairo_set_line_join(FCairo, CAIRO_LINE_JOIN_MITER);
+    end;
   end
   else
     cairo_new_path(FCairo);

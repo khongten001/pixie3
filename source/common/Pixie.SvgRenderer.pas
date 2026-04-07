@@ -33,6 +33,8 @@ type
     FillColor: TPixieWebColor;
     StrokeColor: TPixieWebColor;
     StrokeWidth: Single;
+    LineCap: TPixieLineCap;
+    LineJoin: TPixieLineJoin;
     Opacity: Single;
     FillOpacity: Single;
     StrokeOpacity: Single;
@@ -684,6 +686,7 @@ var
   StyleStr, ClassStr, ClassDecl, InlineStyleStr: string;
   FontFamilyStr, FontSizeStr, FontWeightStr: string;
   LetterSpacingStr: string;
+  LineCapStr, LineJoinStr: string;
   AnchorStr: string;
   Color: TPixieWebColor;
   SpacePos: Integer;
@@ -787,6 +790,28 @@ begin
     StrokeWStr := ParseStyleAttribute(StyleStr, 'stroke-width');
   if StrokeWStr <> '' then
     Result.StrokeWidth := ParseSvgFloat(StrokeWStr);
+
+  // Stroke line cap
+  LineCapStr := GetAttr(Node, 'stroke-linecap');
+  if LineCapStr = '' then
+    LineCapStr := ParseStyleAttribute(StyleStr, 'stroke-linecap');
+  if LineCapStr = 'round' then
+    Result.LineCap := lcRound
+  else if LineCapStr = 'square' then
+    Result.LineCap := lcSquare
+  else if LineCapStr = 'butt' then
+    Result.LineCap := lcButt;
+
+  // Stroke line join
+  LineJoinStr := GetAttr(Node, 'stroke-linejoin');
+  if LineJoinStr = '' then
+    LineJoinStr := ParseStyleAttribute(StyleStr, 'stroke-linejoin');
+  if LineJoinStr = 'round' then
+    Result.LineJoin := ljRound
+  else if LineJoinStr = 'bevel' then
+    Result.LineJoin := ljBevel
+  else if LineJoinStr = 'miter' then
+    Result.LineJoin := ljMiter;
 
   // Opacity
   OpacStr := GetAttr(Node, 'opacity');
@@ -1916,7 +1941,7 @@ procedure TPixieSvgRendererBase.EmitPathCommands(
   Cmds: TPixieSvgPathCmdList);
 var
   I, J, ArgIdx, ArgLen: Integer;
-  Cmd, NextCmd: TPixieSvgPathCmd;
+  Cmd: TPixieSvgPathCmd;
   CurX, CurY, StartX, StartY: Single;
   X, Y, X1, Y1, X2, Y2: Single;
   PrevCpX, PrevCpY: Single;
@@ -1932,8 +1957,7 @@ begin
   PrevQpX := 0; PrevQpY := 0;
   PrevCmd := #0;
 
-  I := 0;
-  while I < Cmds.Count do
+  for I := 0 to Cmds.Count - 1 do
   begin
     Cmd := Cmds[I];
     ArgIdx := 0;
@@ -1984,21 +2008,6 @@ begin
         begin
           X := Cmd.Args[ArgIdx]; Y := Cmd.Args[ArgIdx + 1];
           Inc(ArgIdx, 2);
-
-          // Degenerate spike: L X,Y then L back to CurX,CurY produces
-          // double-miter stroke artifacts in D2D.  Skip both segments.
-          if (ArgIdx >= ArgLen) and (I + 1 < Cmds.Count) then
-          begin
-            NextCmd := Cmds[I + 1];
-            if (NextCmd.Cmd = 'L') and (Length(NextCmd.Args) = 2) and
-               (Abs(NextCmd.Args[0] - CurX) < 0.001) and
-               (Abs(NextCmd.Args[1] - CurY) < 0.001) then
-            begin
-              Inc(I);
-              Continue;
-            end;
-          end;
-
           DoLineTo(X, Y);
           CurX := X; CurY := Y;
         end;
@@ -2010,20 +2019,6 @@ begin
         begin
           X := CurX + Cmd.Args[ArgIdx]; Y := CurY + Cmd.Args[ArgIdx + 1];
           Inc(ArgIdx, 2);
-
-          // Same spike detection for relative l
-          if (ArgIdx >= ArgLen) and (I + 1 < Cmds.Count) then
-          begin
-            NextCmd := Cmds[I + 1];
-            if (NextCmd.Cmd = 'l') and (Length(NextCmd.Args) = 2) and
-               (Abs(X + NextCmd.Args[0] - CurX) < 0.001) and
-               (Abs(Y + NextCmd.Args[1] - CurY) < 0.001) then
-            begin
-              Inc(I);
-              Continue;
-            end;
-          end;
-
           DoLineTo(X, Y);
           CurX := X; CurY := Y;
         end;
@@ -2277,7 +2272,6 @@ begin
     end;
 
     PrevCmd := Cmd.Cmd;
-    Inc(I);
   end;
 end;
 
@@ -2852,6 +2846,8 @@ begin
     FInitState.FillColor := TPixieWebColor.Black;
     FInitState.StrokeColor := TPixieWebColor.Black;
     FInitState.StrokeWidth := 1;
+    FInitState.LineCap := lcButt;
+    FInitState.LineJoin := ljMiter;
     FInitState.Opacity := 1.0;
     FInitState.FillOpacity := 1.0;
     FInitState.StrokeOpacity := 1.0;

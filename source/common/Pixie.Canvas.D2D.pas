@@ -65,6 +65,7 @@ type
     function CreateGradientStops(const Points: TPixieColorPointList;
       out Collection: ID2D1GradientStopCollection): Boolean;
     procedure ApplyFillRule(FillRule: TPixieFillRule);
+    function CreatePathStrokeStyle: ID2D1StrokeStyle;
     procedure FinalizePath;
     function FindFontMetrics(const Family: WideString;
       Weight: TDwriteFontWeight; Style: TDwriteFontStyle;
@@ -1514,6 +1515,30 @@ begin
   end;
 end;
 
+function TPixieD2DCanvas.CreatePathStrokeStyle: ID2D1StrokeStyle;
+const
+  CapMap: array[TPixieLineCap] of Integer = (
+    D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_SQUARE);
+  // D2D's plain MITER does not auto-bevel at degenerate turns (unlike Cairo/CG/Qt),
+  // causing spike artifacts on 180-degree back-and-forth paths.
+  // MITER_OR_BEVEL automatically falls back to bevel when the miter limit is
+  // exceeded, matching SVG spec and other backends' behaviour.
+  JoinMap: array[TPixieLineJoin] of Integer = (
+    D2D1_LINE_JOIN_MITER_OR_BEVEL, D2D1_LINE_JOIN_ROUND, D2D1_LINE_JOIN_BEVEL);
+var
+  Props: TD2d1StrokeStyleProperties;
+begin
+  Result := nil;
+  FillChar(Props, SizeOf(Props), 0);
+  Props.startCap := CapMap[FPathLineCap];
+  Props.endCap := CapMap[FPathLineCap];
+  Props.dashCap := CapMap[FPathLineCap];
+  Props.lineJoin := JoinMap[FPathLineJoin];
+  Props.miterLimit := 4;
+  Props.dashStyle := D2D1_DASH_STYLE_SOLID;
+  FFactory.CreateStrokeStyle(Props, nil, 0, Result);
+end;
+
 procedure TPixieD2DCanvas.FinalizePath;
 begin
   if FPathSink <> nil then
@@ -1598,14 +1623,17 @@ begin
 end;
 
 procedure TPixieD2DCanvas.StrokePath(Color: TPixieWebColor; Width: Single);
+var
+  Style: ID2D1StrokeStyle;
 begin
   if FTarget = nil then Exit;
   FinalizePath;
   if FPathGeometry = nil then Exit;
   if Color.Alpha > 0 then
   begin
+    Style := CreatePathStrokeStyle;
     FBrush.SetColor(ToColorF(Color));
-    FTarget.DrawGeometry(FPathGeometry, FBrush, Width, nil);
+    FTarget.DrawGeometry(FPathGeometry, FBrush, Width, Style);
   end;
   FPathGeometry := nil;
 end;
@@ -1613,6 +1641,8 @@ end;
 procedure TPixieD2DCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
   StrokeColor: TPixieWebColor; StrokeWidth: Single;
   FillRule: TPixieFillRule);
+var
+  Style: ID2D1StrokeStyle;
 begin
   if FTarget = nil then Exit;
   ApplyFillRule(FillRule);
@@ -1625,8 +1655,9 @@ begin
   end;
   if StrokeColor.Alpha > 0 then
   begin
+    Style := CreatePathStrokeStyle;
     FBrush.SetColor(ToColorF(StrokeColor));
-    FTarget.DrawGeometry(FPathGeometry, FBrush, StrokeWidth, nil);
+    FTarget.DrawGeometry(FPathGeometry, FBrush, StrokeWidth, Style);
   end;
   FPathGeometry := nil;
 end;
@@ -1732,7 +1763,7 @@ begin
   Props.endPoint := MakePoint(Gradient.EndPt.X, Gradient.EndPt.Y);
   if Succeeded(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
     LBrush)) then
-    FTarget.DrawGeometry(FPathGeometry, LBrush, Width, nil);
+    FTarget.DrawGeometry(FPathGeometry, LBrush, Width, CreatePathStrokeStyle);
   FPathGeometry := nil;
 end;
 
@@ -1757,7 +1788,7 @@ begin
   Props.radiusY := Gradient.Radius.Y;
   if Succeeded(FTarget.CreateRadialGradientBrush(@Props, nil, Stops,
     RBrush)) then
-    FTarget.DrawGeometry(FPathGeometry, RBrush, Width, nil);
+    FTarget.DrawGeometry(FPathGeometry, RBrush, Width, CreatePathStrokeStyle);
   FPathGeometry := nil;
 end;
 

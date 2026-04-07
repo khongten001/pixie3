@@ -582,6 +582,8 @@ begin
 
     if DoFill and DoStroke then
     begin
+      EmitLn(IntToStr(Ord(State.LineCap)) + ' J');
+      EmitLn(IntToStr(Ord(State.LineJoin)) + ' j');
       SetPdfColor(State.FillColor, True);
       SetPdfColor(State.StrokeColor, False);
       EmitLn(PdfFloat(State.StrokeWidth) + ' w');
@@ -600,6 +602,8 @@ begin
     end
     else if DoStroke then
     begin
+      EmitLn(IntToStr(Ord(State.LineCap)) + ' J');
+      EmitLn(IntToStr(Ord(State.LineJoin)) + ' j');
       SetPdfColor(State.StrokeColor, False);
       EmitLn(PdfFloat(State.StrokeWidth) + ' w');
       EmitLn('S');

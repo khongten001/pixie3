@@ -1506,7 +1506,17 @@ begin
   begin
     SetStrokeColor(Color);
     CGContextSetLineWidth(FCG, Width);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      CGContextSetLineCap(FCG, Ord(FPathLineCap));
+      CGContextSetLineJoin(FCG, Ord(FPathLineJoin));
+    end;
     CGContextDrawPath(FCG, kCGPathStroke);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      CGContextSetLineCap(FCG, kCGLineCapButt);
+      CGContextSetLineJoin(FCG, kCGLineJoinMiter);
+    end;
   end
   else
     CGContextBeginPath(FCG);
@@ -1522,10 +1532,20 @@ begin
     SetFillColor(FillColor);
     SetStrokeColor(StrokeColor);
     CGContextSetLineWidth(FCG, StrokeWidth);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      CGContextSetLineCap(FCG, Ord(FPathLineCap));
+      CGContextSetLineJoin(FCG, Ord(FPathLineJoin));
+    end;
     if FillRule = frEvenOdd then
       CGContextDrawPath(FCG, kCGPathEOFillStroke)
     else
       CGContextDrawPath(FCG, kCGPathFillStroke);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      CGContextSetLineCap(FCG, kCGLineCapButt);
+      CGContextSetLineJoin(FCG, kCGLineJoinMiter);
+    end;
   end
   else if FillColor.Alpha > 0 then
   begin
@@ -1539,7 +1559,17 @@ begin
   begin
     SetStrokeColor(StrokeColor);
     CGContextSetLineWidth(FCG, StrokeWidth);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      CGContextSetLineCap(FCG, Ord(FPathLineCap));
+      CGContextSetLineJoin(FCG, Ord(FPathLineJoin));
+    end;
     CGContextDrawPath(FCG, kCGPathStroke);
+    if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
+    begin
+      CGContextSetLineCap(FCG, kCGLineCapButt);
+      CGContextSetLineJoin(FCG, kCGLineJoinMiter);
+    end;
   end
   else
     CGContextBeginPath(FCG);

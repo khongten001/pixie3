@@ -2014,6 +2014,10 @@ procedure TPixiePdfCanvas.StrokePath(Color: TPixieWebColor;
   Width: Single);
 begin
   if Color.Alpha = 0 then Exit;
+  if FPathLineCap <> lcButt then
+    EmitLn(AnsiString(IntToStr(Ord(FPathLineCap)) + ' J'));
+  if FPathLineJoin <> ljMiter then
+    EmitLn(AnsiString(IntToStr(Ord(FPathLineJoin)) + ' j'));
   SetPdfColor(Color, False);
   EmitLn(PdfFloat(PxToPt(Width)) + ' w');
   EmitLn('S');
@@ -2023,6 +2027,10 @@ procedure TPixiePdfCanvas.FillAndStrokePath(FillColor: TPixieWebColor;
   StrokeColor: TPixieWebColor; StrokeWidth: Single;
   FillRule: TPixieFillRule);
 begin
+  if FPathLineCap <> lcButt then
+    EmitLn(AnsiString(IntToStr(Ord(FPathLineCap)) + ' J'));
+  if FPathLineJoin <> ljMiter then
+    EmitLn(AnsiString(IntToStr(Ord(FPathLineJoin)) + ' j'));
   SetPdfColor(FillColor, True);
   SetPdfColor(StrokeColor, False);
   EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');
