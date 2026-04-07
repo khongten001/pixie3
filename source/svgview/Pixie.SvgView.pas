@@ -42,6 +42,10 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure LoadFromFile(const FileName: string);
+    procedure LoadFromStream(Stream: TStream);
+    procedure LoadFromResource(const ResName: string); overload;
+    procedure LoadFromResource(Instance: THandle; const ResName: string); overload;
   published
     property Lines: TStrings read GetLines write SetLines;
     property Alignment: TPixieSvgAlign
@@ -115,6 +119,38 @@ begin
   begin
     FAlignment := Value;
     Invalidate;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// Loading
+// ---------------------------------------------------------------------------
+
+procedure TPixieSvgView.LoadFromFile(const FileName: string);
+begin
+  FLines.LoadFromFile(FileName);
+end;
+
+procedure TPixieSvgView.LoadFromStream(Stream: TStream);
+begin
+  FLines.LoadFromStream(Stream);
+end;
+
+procedure TPixieSvgView.LoadFromResource(const ResName: string);
+begin
+  LoadFromResource(HInstance, ResName);
+end;
+
+procedure TPixieSvgView.LoadFromResource(Instance: THandle;
+  const ResName: string);
+var
+  Stream: TResourceStream;
+begin
+  Stream := TResourceStream.Create(Instance, ResName, PChar(10)); // RT_RCDATA
+  try
+    LoadFromStream(Stream);
+  finally
+    Stream.Free;
   end;
 end;
 
