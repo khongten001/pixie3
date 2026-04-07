@@ -31,12 +31,27 @@ type
     FSvgW: Single;
     FSvgH: Single;
     FParsed: Boolean;
+    FColorInner: TColor;
+    FColorInnerBorder: TColor;
+    FColorCheckers: TColor;
+    FCheckersSize: Integer;
+    FZoom: Double;
 
     procedure LinesChanged(Sender: TObject);
     procedure ParseSvg;
+    procedure EnsureParsed;
     function GetLines: TStrings;
     procedure SetLines(Value: TStrings);
     procedure SetAlignment(Value: TPixieSvgAlign);
+    procedure SetColorInner(Value: TColor);
+    procedure SetColorInnerBorder(Value: TColor);
+    procedure SetColorCheckers(Value: TColor);
+    procedure SetCheckersSize(Value: Integer);
+    procedure SetZoom(const Value: Double);
+    function GetImageWidth: Single;
+    function GetImageHeight: Single;
+    procedure DrawCheckerboard(X, Y, W, H: Single;
+      const C1, C2: TPixieWebColor; CellSize: Integer);
   protected
     procedure DoPaint; override;
   public
@@ -46,10 +61,22 @@ type
     procedure LoadFromStream(Stream: TStream);
     procedure LoadFromResource(const ResName: string); overload;
     procedure LoadFromResource(Instance: THandle; const ResName: string); overload;
+    property ImageWidth: Single read GetImageWidth;
+    property ImageHeight: Single read GetImageHeight;
   published
     property Lines: TStrings read GetLines write SetLines;
     property Alignment: TPixieSvgAlign
       read FAlignment write SetAlignment default saCenterBoth;
+    property ColorInner: TColor
+      read FColorInner write SetColorInner default clNone;
+    property ColorInnerBorder: TColor
+      read FColorInnerBorder write SetColorInnerBorder default clNone;
+    property ColorCheckers: TColor
+      read FColorCheckers write SetColorCheckers default clNone;
+    property CheckersSize: Integer
+      read FCheckersSize write SetCheckersSize default 8;
+    property Zoom: Double
+      read FZoom write SetZoom;
 
     property Align;
     property Anchors;
@@ -90,6 +117,11 @@ begin
   FSvgW := 0;
   FSvgH := 0;
   FParsed := False;
+  FColorInner := clNone;
+  FColorInnerBorder := clNone;
+  FColorCheckers := clNone;
+  FCheckersSize := 8;
+  FZoom := 1.0;
 end;
 
 destructor TPixieSvgView.Destroy;
@@ -120,6 +152,95 @@ begin
     FAlignment := Value;
     Invalidate;
   end;
+end;
+
+procedure TPixieSvgView.SetColorInner(Value: TColor);
+begin
+  if FColorInner <> Value then
+  begin
+    FColorInner := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TPixieSvgView.SetColorInnerBorder(Value: TColor);
+begin
+  if FColorInnerBorder <> Value then
+  begin
+    FColorInnerBorder := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TPixieSvgView.SetColorCheckers(Value: TColor);
+begin
+  if FColorCheckers <> Value then
+  begin
+    FColorCheckers := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TPixieSvgView.SetCheckersSize(Value: Integer);
+begin
+  if Value < 1 then Value := 1;
+  if FCheckersSize <> Value then
+  begin
+    FCheckersSize := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TPixieSvgView.SetZoom(const Value: Double);
+var
+  NewZoom: Double;
+begin
+  NewZoom := Value;
+  if NewZoom < 0.25 then NewZoom := 0.25;
+  if NewZoom > 4.0 then NewZoom := 4.0;
+  if FZoom = NewZoom then Exit;
+  FZoom := NewZoom;
+  Invalidate;
+end;
+
+function TPixieSvgView.GetImageWidth: Single;
+begin
+  EnsureParsed;
+  Result := FSvgW;
+end;
+
+function TPixieSvgView.GetImageHeight: Single;
+begin
+  EnsureParsed;
+  Result := FSvgH;
+end;
+
+procedure TPixieSvgView.EnsureParsed;
+begin
+  if not FParsed then
+    ParseSvg;
+end;
+
+procedure TPixieSvgView.DrawCheckerboard(X, Y, W, H: Single;
+  const C1, C2: TPixieWebColor; CellSize: Integer);
+var
+  Row, Col, Cols, Rows: Integer;
+  CX, CY, CW, CH: Single;
+begin
+  PixieCanvas.FillRect(X, Y, W, H, C1);
+  Cols := Ceil(W / CellSize);
+  Rows := Ceil(H / CellSize);
+  for Row := 0 to Rows - 1 do
+    for Col := 0 to Cols - 1 do
+      if Odd(Row + Col) then
+      begin
+        CX := X + Col * CellSize;
+        CY := Y + Row * CellSize;
+        CW := Min(CellSize, X + W - CX);
+        CH := Min(CellSize, Y + H - CY);
+        if (CW > 0) and (CH > 0) then
+          PixieCanvas.FillRect(CX, CY, CW, CH, C2);
+      end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -187,7 +308,7 @@ procedure TPixieSvgView.DoPaint;
 var
   CW, CH: Single;
   Sx, Sy, Scale, DstW, DstH, OffX, OffY: Single;
-  BgColor: TPixieWebColor;
+  BgColor, InnerColor, Inner2Color, BorderColor: TPixieWebColor;
 begin
   CW := ClientWidth;
   CH := ClientHeight;
@@ -195,7 +316,7 @@ begin
   PixieCanvas.SetViewSize(Round(CW), Round(CH), GetCanvasScaleFactor);
   PixieCanvas.BeginPaint(GetPaintHandle);
   try
-    // Background: use parent colour when Color = clNone (simulate transparency)
+    // Outer background: use parent colour when Color = clNone
     if Color = clNone then
       BgColor := GetBackgroundColor(ColorToRGB(clBtnFace))
     else
@@ -208,35 +329,50 @@ begin
 
     if (FSvgW < 0.01) or (FSvgH < 0.01) then Exit;
 
-    // Calculate proportional scale
+    // Calculate proportional scale with zoom
     Sx := CW / FSvgW;
     Sy := CH / FSvgH;
-    Scale := Min(Sx, Sy);
+    Scale := Min(Sx, Sy) * FZoom;
     DstW := FSvgW * Scale;
     DstH := FSvgH * Scale;
 
     // Alignment offset
+    OffX := 0;
+    OffY := 0;
     case FAlignment of
-      saTopLeft:
-        begin
-          OffX := 0;
-          OffY := 0;
-        end;
       saCenterHorz:
-        begin
-          OffX := (CW - DstW) * 0.5;
-          OffY := 0;
-        end;
+        OffX := (CW - DstW) * 0.5;
       saCenterVert:
-        begin
-          OffX := 0;
-          OffY := (CH - DstH) * 0.5;
-        end;
+        OffY := (CH - DstH) * 0.5;
       saCenterBoth:
         begin
           OffX := (CW - DstW) * 0.5;
           OffY := (CH - DstH) * 0.5;
         end;
+    end;
+
+    // Inner area background and checkerboard
+    if FColorCheckers <> clNone then
+    begin
+      InnerColor := GetBackgroundColor(ColorToRGB(FColorInner));
+      Inner2Color := GetBackgroundColor(ColorToRGB(FColorCheckers));
+      DrawCheckerboard(OffX, OffY, DstW, DstH, InnerColor, Inner2Color,
+        FCheckersSize);
+    end
+    else if FColorInner <> clNone then
+    begin
+      InnerColor := GetBackgroundColor(ColorToRGB(FColorInner));
+      PixieCanvas.FillRect(OffX, OffY, DstW, DstH, InnerColor);
+    end;
+
+    // Inner border
+    if FColorInnerBorder <> clNone then
+    begin
+      BorderColor := GetBackgroundColor(ColorToRGB(FColorInnerBorder));
+      PixieCanvas.FillRect(OffX, OffY, DstW, 1, BorderColor);
+      PixieCanvas.FillRect(OffX, OffY + DstH - 1, DstW, 1, BorderColor);
+      PixieCanvas.FillRect(OffX, OffY, 1, DstH, BorderColor);
+      PixieCanvas.FillRect(OffX + DstW - 1, OffY, 1, DstH, BorderColor);
     end;
 
     FRenderer.RenderToRect(OffX, OffY, DstW, DstH);
