@@ -485,9 +485,13 @@ var
   HasGradientFill, HasGradientStroke, SkipFill, BlendSet: Boolean;
   FR: TPixieFillRule;
 begin
-  // Set line cap/join for this stroke operation
+  // Set line cap/join and dash style for this stroke operation
   if State.HasStroke then
+  begin
     FCanvas.SetPathStrokeStyle(State.LineCap, State.LineJoin);
+    if Length(State.DashArray) > 0 then
+      FCanvas.SetPathDashStyle(State.DashArray, State.DashOffset);
+  end;
 
   SkipFill := False;
   BlendSet := False;
@@ -560,6 +564,7 @@ begin
 
   // Reset stroke style to defaults
   FCanvas.SetPathStrokeStyle(lcButt, ljMiter);
+  FCanvas.ClearPathDashStyle;
 
   ResetBBox;
   FPathRecord.Clear;

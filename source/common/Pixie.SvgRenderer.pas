@@ -27,6 +27,8 @@ type
     class function CreateRotateAt(Angle, CX, CY: Single): TPixieSvgMatrix; static;
   end;
 
+  TPixieSingleArray = array of Single;
+
   { TPixieSvgState - inherited graphics state }
 
   TPixieSvgState = record
@@ -35,6 +37,8 @@ type
     StrokeWidth: Single;
     LineCap: TPixieLineCap;
     LineJoin: TPixieLineJoin;
+    DashArray: TPixieSingleArray;
+    DashOffset: Single;
     Opacity: Single;
     FillOpacity: Single;
     StrokeOpacity: Single;
@@ -136,6 +140,7 @@ type
     function InheritState(Node: Pointer;
       const ParentState: TPixieSvgState): TPixieSvgState;
     function ParseTransform(const S: string): TPixieSvgMatrix;
+    function ParseDashArray(const S: string): TPixieSingleArray;
 
     // Path data parsing
     function ParsePathData(const D: string): TPixieSvgPathCmdList;
@@ -499,6 +504,56 @@ begin
     Result := Result * Scale;
 end;
 
+function TPixieSvgRendererBase.ParseDashArray(
+  const S: string): TPixieSingleArray;
+var
+  P, I, Len, Count: Integer;
+  NumStr: string;
+begin
+  SetLength(Result, 0);
+  Count := 0;
+  P := 1;
+  Len := Length(S);
+  while P <= Len do
+  begin
+    // Skip separators
+    while (P <= Len) and CharInSet(S[P], [' ', ',', #9, #10, #13]) do Inc(P);
+    if P > Len then Break;
+    NumStr := '';
+    if (P <= Len) and CharInSet(S[P], ['-', '+']) then
+    begin
+      NumStr := NumStr + S[P];
+      Inc(P);
+    end;
+    while (P <= Len) and CharInSet(S[P], ['0'..'9', '.']) do
+    begin
+      NumStr := NumStr + S[P];
+      Inc(P);
+    end;
+    if NumStr <> '' then
+    begin
+      if Count >= Length(Result) then
+        SetLength(Result, Length(Result) + 8);
+      Result[Count] := SvgStrToFloat(NumStr);
+      Inc(Count);
+    end;
+  end;
+  SetLength(Result, Count);
+  // SVG spec: negative values invalidate the entire dash array
+  for I := 0 to Count - 1 do
+    if Result[I] < 0 then
+    begin
+      SetLength(Result, 0);
+      Exit;
+    end;
+  // SVG spec: odd-length dash arrays are repeated to make even length
+  if (Count > 0) and (Count mod 2 = 1) then
+  begin
+    SetLength(Result, Count * 2);
+    Move(Result[0], Result[Count], Count * SizeOf(Single));
+  end;
+end;
+
 function TPixieSvgRendererBase.ParseSvgColor(const S: string;
   out Color: TPixieWebColor): Boolean;
 var
@@ -687,6 +742,7 @@ var
   FontFamilyStr, FontSizeStr, FontWeightStr: string;
   LetterSpacingStr: string;
   LineCapStr, LineJoinStr: string;
+  DashArrayStr, DashOffsetStr: string;
   AnchorStr: string;
   Color: TPixieWebColor;
   SpacePos: Integer;
@@ -812,6 +868,26 @@ begin
     Result.LineJoin := ljBevel
   else if LineJoinStr = 'miter' then
     Result.LineJoin := ljMiter;
+
+  // Stroke dash array
+  DashArrayStr := GetAttr(Node, 'stroke-dasharray');
+  if DashArrayStr = '' then
+    DashArrayStr := ParseStyleAttribute(StyleStr, 'stroke-dasharray');
+  if DashArrayStr <> '' then
+  begin
+    DashArrayStr := Trim(DashArrayStr);
+    if (DashArrayStr = 'none') or (DashArrayStr = 'inherit') then
+      SetLength(Result.DashArray, 0)
+    else
+      Result.DashArray := ParseDashArray(DashArrayStr);
+  end;
+
+  // Stroke dash offset
+  DashOffsetStr := GetAttr(Node, 'stroke-dashoffset');
+  if DashOffsetStr = '' then
+    DashOffsetStr := ParseStyleAttribute(StyleStr, 'stroke-dashoffset');
+  if DashOffsetStr <> '' then
+    Result.DashOffset := ParseSvgFloat(DashOffsetStr);
 
   // Opacity
   OpacStr := GetAttr(Node, 'opacity');
@@ -2862,6 +2938,8 @@ begin
     FInitState.FillGradientId := '';
     FInitState.StrokeGradientId := '';
     FInitState.BlendMode := bmNormal;
+    SetLength(FInitState.DashArray, 0);
+    FInitState.DashOffset := 0;
 
     // Inherit state from the root SVG element
     FInitState := InheritState(SvgRoot, FInitState);

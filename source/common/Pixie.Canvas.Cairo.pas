@@ -61,6 +61,8 @@ type
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
     procedure SetSourceColor(const C: TPixieWebColor);
+    procedure ApplyDashPattern;
+    procedure ClearDashPattern;
     procedure DrawBorderSide(const Border: TPixieBorder;
       X1, Y1, X2, Y2: Single);
     function DecodeImageFile(const Path: string): TPixieImageHandle;
@@ -220,6 +222,26 @@ begin
   cairo_set_source_rgba(FCairo,
     C.Red / 255.0, C.Green / 255.0,
     C.Blue / 255.0, C.Alpha / 255.0);
+end;
+
+procedure TPixieCairoCanvas.ApplyDashPattern;
+var
+  CairoDashes: array of Double;
+  I: Integer;
+begin
+  if Length(FPathDashArray) > 0 then
+  begin
+    SetLength(CairoDashes, Length(FPathDashArray));
+    for I := 0 to High(FPathDashArray) do
+      CairoDashes[I] := FPathDashArray[I];
+    cairo_set_dash(FCairo, @CairoDashes[0], Length(CairoDashes), FPathDashOffset);
+  end;
+end;
+
+procedure TPixieCairoCanvas.ClearDashPattern;
+begin
+  if Length(FPathDashArray) > 0 then
+    cairo_set_dash(FCairo, nil, 0, 0);
 end;
 
 procedure TPixieCairoCanvas.RoundedRectPath(X, Y, W, H: Single;
@@ -1456,7 +1478,9 @@ begin
       cairo_set_line_cap(FCairo, cairo_line_cap_t(Ord(FPathLineCap)));
       cairo_set_line_join(FCairo, cairo_line_join_t(Ord(FPathLineJoin)));
     end;
+    ApplyDashPattern;
     cairo_stroke(FCairo);
+    ClearDashPattern;
     if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
     begin
       cairo_set_line_cap(FCairo, CAIRO_LINE_CAP_BUTT);
@@ -1490,7 +1514,9 @@ begin
       cairo_set_line_cap(FCairo, cairo_line_cap_t(Ord(FPathLineCap)));
       cairo_set_line_join(FCairo, cairo_line_join_t(Ord(FPathLineJoin)));
     end;
+    ApplyDashPattern;
     cairo_stroke(FCairo);
+    ClearDashPattern;
     if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
     begin
       cairo_set_line_cap(FCairo, CAIRO_LINE_CAP_BUTT);
@@ -1533,7 +1559,9 @@ begin
     end;
     cairo_set_source(FCairo, Pattern);
     cairo_set_line_width(FCairo, Width);
+    ApplyDashPattern;
     cairo_stroke(FCairo);
+    ClearDashPattern;
   finally
     cairo_pattern_destroy(Pattern);
   end;
@@ -1577,6 +1605,7 @@ begin
       cairo_scale(FCairo, 1.0, Ry / Rx);
       cairo_set_source(FCairo, Pattern);
       cairo_set_line_width(FCairo, Width * Rx / Ry);
+      ApplyDashPattern;
       cairo_stroke(FCairo);
     finally
       cairo_restore(FCairo);

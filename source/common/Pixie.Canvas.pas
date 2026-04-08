@@ -33,6 +33,8 @@ type
   protected
     FPathLineCap: TPixieLineCap;
     FPathLineJoin: TPixieLineJoin;
+    FPathDashArray: array of Single;
+    FPathDashOffset: Single;
     function DoMeasureText(const Text: string;
       Handle: TPixieFontHandle): TPixiePixel; virtual; abstract;
     procedure DoDeleteFont(Handle: TPixieFontHandle); virtual; abstract;
@@ -59,6 +61,9 @@ type
 
     // Path stroke style (line cap/join for SVG path operations)
     procedure SetPathStrokeStyle(Cap: TPixieLineCap; Join: TPixieLineJoin); virtual;
+    procedure SetPathDashStyle(const DashArray: array of Single;
+      DashOffset: Single); virtual;
+    procedure ClearPathDashStyle; virtual;
 
     // Clipping
     procedure SetClipRect(const R: TPixiePosition;
@@ -326,6 +331,23 @@ procedure TPixieCanvas.SetPathStrokeStyle(Cap: TPixieLineCap;
 begin
   FPathLineCap := Cap;
   FPathLineJoin := Join;
+end;
+
+procedure TPixieCanvas.SetPathDashStyle(const DashArray: array of Single;
+  DashOffset: Single);
+var
+  I: Integer;
+begin
+  SetLength(FPathDashArray, Length(DashArray));
+  for I := 0 to High(DashArray) do
+    FPathDashArray[I] := DashArray[I];
+  FPathDashOffset := DashOffset;
+end;
+
+procedure TPixieCanvas.ClearPathDashStyle;
+begin
+  SetLength(FPathDashArray, 0);
+  FPathDashOffset := 0;
 end;
 
 procedure TPixieCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);

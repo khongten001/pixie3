@@ -58,6 +58,8 @@ type
       const R: TPixieBorderRadiuses);
     procedure SetFillColor(const C: TPixieWebColor);
     procedure SetStrokeColor(const C: TPixieWebColor);
+    procedure ApplyDashPattern;
+    procedure ClearDashPattern;
     procedure DrawBorderSide(const Border: TPixieBorder;
       X1, Y1, X2, Y2: Single);
     function LoadSvgFile(const Path: string): TPixieImageHandle;
@@ -212,6 +214,26 @@ begin
   CGContextSetRGBStrokeColor(FCG,
     C.Red / 255.0, C.Green / 255.0,
     C.Blue / 255.0, C.Alpha / 255.0);
+end;
+
+procedure TPixieCGCanvas.ApplyDashPattern;
+var
+  CGDashes: array of CGFloat;
+  I: Integer;
+begin
+  if Length(FPathDashArray) > 0 then
+  begin
+    SetLength(CGDashes, Length(FPathDashArray));
+    for I := 0 to High(FPathDashArray) do
+      CGDashes[I] := FPathDashArray[I];
+    CGContextSetLineDash(FCG, FPathDashOffset, @CGDashes[0], Length(CGDashes));
+  end;
+end;
+
+procedure TPixieCGCanvas.ClearDashPattern;
+begin
+  if Length(FPathDashArray) > 0 then
+    CGContextSetLineDash(FCG, 0, nil, 0);
 end;
 
 procedure TPixieCGCanvas.RoundedRectPath(X, Y, W, H: Single;
@@ -1511,7 +1533,9 @@ begin
       CGContextSetLineCap(FCG, Ord(FPathLineCap));
       CGContextSetLineJoin(FCG, Ord(FPathLineJoin));
     end;
+    ApplyDashPattern;
     CGContextDrawPath(FCG, kCGPathStroke);
+    ClearDashPattern;
     if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
     begin
       CGContextSetLineCap(FCG, kCGLineCapButt);
@@ -1537,10 +1561,12 @@ begin
       CGContextSetLineCap(FCG, Ord(FPathLineCap));
       CGContextSetLineJoin(FCG, Ord(FPathLineJoin));
     end;
+    ApplyDashPattern;
     if FillRule = frEvenOdd then
       CGContextDrawPath(FCG, kCGPathEOFillStroke)
     else
       CGContextDrawPath(FCG, kCGPathFillStroke);
+    ClearDashPattern;
     if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
     begin
       CGContextSetLineCap(FCG, kCGLineCapButt);
@@ -1564,7 +1590,9 @@ begin
       CGContextSetLineCap(FCG, Ord(FPathLineCap));
       CGContextSetLineJoin(FCG, Ord(FPathLineJoin));
     end;
+    ApplyDashPattern;
     CGContextDrawPath(FCG, kCGPathStroke);
+    ClearDashPattern;
     if (FPathLineCap <> lcButt) or (FPathLineJoin <> ljMiter) then
     begin
       CGContextSetLineCap(FCG, kCGLineCapButt);
@@ -1619,7 +1647,9 @@ begin
   end;
   try
     CGContextSetLineWidth(FCG, Width);
+    ApplyDashPattern;
     CGContextReplacePathWithStrokedPath(FCG);
+    ClearDashPattern;
     CGContextSaveGState(FCG);
     try
       CGContextClip(FCG);
@@ -1674,7 +1704,9 @@ begin
   end;
   try
     CGContextSetLineWidth(FCG, Width);
+    ApplyDashPattern;
     CGContextReplacePathWithStrokedPath(FCG);
+    ClearDashPattern;
     CGContextSaveGState(FCG);
     try
       CGContextClip(FCG);

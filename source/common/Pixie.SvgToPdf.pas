@@ -48,6 +48,7 @@ type
 
     procedure Emit(const S: AnsiString);
     procedure EmitLn(const S: AnsiString);
+    procedure EmitDashPattern(const State: TPixieSvgState);
     procedure SetPdfColor(const Color: TPixieWebColor; Fill: Boolean);
     procedure UpdateBBox(X, Y: Single);
 
@@ -153,6 +154,24 @@ end;
 procedure TPixieSvgRenderer.EmitLn(const S: AnsiString);
 begin
   Emit(S + #10);
+end;
+
+procedure TPixieSvgRenderer.EmitDashPattern(const State: TPixieSvgState);
+var
+  DashStr: AnsiString;
+  I: Integer;
+begin
+  if Length(State.DashArray) > 0 then
+  begin
+    DashStr := '[';
+    for I := 0 to High(State.DashArray) do
+    begin
+      if I > 0 then DashStr := DashStr + ' ';
+      DashStr := DashStr + PdfFloat(State.DashArray[I]);
+    end;
+    DashStr := DashStr + '] ' + PdfFloat(State.DashOffset) + ' d';
+    EmitLn(DashStr);
+  end;
 end;
 
 procedure TPixieSvgRenderer.SetPdfColor(const Color: TPixieWebColor;
@@ -584,6 +603,7 @@ begin
     begin
       EmitLn(IntToStr(Ord(State.LineCap)) + ' J');
       EmitLn(IntToStr(Ord(State.LineJoin)) + ' j');
+      EmitDashPattern(State);
       SetPdfColor(State.FillColor, True);
       SetPdfColor(State.StrokeColor, False);
       EmitLn(PdfFloat(State.StrokeWidth) + ' w');
@@ -604,6 +624,7 @@ begin
     begin
       EmitLn(IntToStr(Ord(State.LineCap)) + ' J');
       EmitLn(IntToStr(Ord(State.LineJoin)) + ' j');
+      EmitDashPattern(State);
       SetPdfColor(State.StrokeColor, False);
       EmitLn(PdfFloat(State.StrokeWidth) + ' w');
       EmitLn('S');

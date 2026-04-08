@@ -83,6 +83,7 @@ type
 
     procedure Emit(const S: AnsiString);
     procedure EmitLn(const S: AnsiString);
+    procedure EmitDashPattern;
     function PxToPt(V: Single): Single;
     function PxToY(V: Single): Single;
     procedure SetPdfColor(const C: TPixieWebColor; Fill: Boolean);
@@ -273,6 +274,24 @@ end;
 procedure TPixiePdfCanvas.EmitLn(const S: AnsiString);
 begin
   Emit(S + #10);
+end;
+
+procedure TPixiePdfCanvas.EmitDashPattern;
+var
+  DashStr: AnsiString;
+  I: Integer;
+begin
+  if Length(FPathDashArray) > 0 then
+  begin
+    DashStr := '[';
+    for I := 0 to High(FPathDashArray) do
+    begin
+      if I > 0 then DashStr := DashStr + ' ';
+      DashStr := DashStr + PdfFloat(PxToPt(FPathDashArray[I]));
+    end;
+    DashStr := DashStr + '] ' + PdfFloat(PxToPt(FPathDashOffset)) + ' d';
+    EmitLn(DashStr);
+  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -2018,6 +2037,7 @@ begin
     EmitLn(AnsiString(IntToStr(Ord(FPathLineCap)) + ' J'));
   if FPathLineJoin <> ljMiter then
     EmitLn(AnsiString(IntToStr(Ord(FPathLineJoin)) + ' j'));
+  EmitDashPattern;
   SetPdfColor(Color, False);
   EmitLn(PdfFloat(PxToPt(Width)) + ' w');
   EmitLn('S');
@@ -2031,6 +2051,7 @@ begin
     EmitLn(AnsiString(IntToStr(Ord(FPathLineCap)) + ' J'));
   if FPathLineJoin <> ljMiter then
     EmitLn(AnsiString(IntToStr(Ord(FPathLineJoin)) + ' j'));
+  EmitDashPattern;
   SetPdfColor(FillColor, True);
   SetPdfColor(StrokeColor, False);
   EmitLn(PdfFloat(PxToPt(StrokeWidth)) + ' w');

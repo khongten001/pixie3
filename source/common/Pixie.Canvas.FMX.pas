@@ -61,6 +61,7 @@ type
     FBaseState: TCanvasSaveState;
 
     function ToAlphaColor(const C: TPixieWebColor): TAlphaColor;
+    procedure ApplyDashPattern(Width: Single);
     procedure BuildRoundedRectPath(Path: TPathData; X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
     procedure SetupGradientStops(const Points: TPixieColorPointList);
@@ -279,6 +280,22 @@ begin
   Rec.B := C.Blue;
   Rec.A := C.Alpha;
   Result := Rec.Color;
+end;
+
+procedure TPixieFmxCanvas.ApplyDashPattern(Width: Single);
+var
+  FmxDashes: TDashArray;
+  I: Integer;
+begin
+  if (Length(FPathDashArray) > 0) and (Width > 0) then
+  begin
+    SetLength(FmxDashes, Length(FPathDashArray));
+    for I := 0 to High(FPathDashArray) do
+      FmxDashes[I] := FPathDashArray[I] / Width;
+    FStrokeBrush.SetCustomDash(FmxDashes, FPathDashOffset / Width);
+  end
+  else
+    FStrokeBrush.Dash := TStrokeDash.Solid;
 end;
 
 procedure TPixieFmxCanvas.BuildRoundedRectPath(Path: TPathData;
@@ -1314,7 +1331,7 @@ begin
     FStrokeBrush.Kind := TBrushKind.Solid;
     FStrokeBrush.Color := ToAlphaColor(Color);
     FStrokeBrush.Thickness := Width;
-    FStrokeBrush.Dash := TStrokeDash.Solid;
+    ApplyDashPattern(Width);
     FStrokeBrush.Cap := CapMap[FPathLineCap];
     FStrokeBrush.Join := JoinMap[FPathLineJoin];
     FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
@@ -1338,7 +1355,7 @@ begin
     FStrokeBrush.Kind := TBrushKind.Solid;
     FStrokeBrush.Color := ToAlphaColor(StrokeColor);
     FStrokeBrush.Thickness := StrokeWidth;
-    FStrokeBrush.Dash := TStrokeDash.Solid;
+    ApplyDashPattern(StrokeWidth);
     FStrokeBrush.Cap := CapMap[FPathLineCap];
     FStrokeBrush.Join := JoinMap[FPathLineJoin];
     FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);

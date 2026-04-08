@@ -65,7 +65,7 @@ type
     function CreateGradientStops(const Points: TPixieColorPointList;
       out Collection: ID2D1GradientStopCollection): Boolean;
     procedure ApplyFillRule(FillRule: TPixieFillRule);
-    function CreatePathStrokeStyle: ID2D1StrokeStyle;
+    function CreatePathStrokeStyle(StrokeWidth: Single): ID2D1StrokeStyle;
     procedure FinalizePath;
     function FindFontMetrics(const Family: WideString;
       Weight: TDwriteFontWeight; Style: TDwriteFontStyle;
@@ -1515,7 +1515,8 @@ begin
   end;
 end;
 
-function TPixieD2DCanvas.CreatePathStrokeStyle: ID2D1StrokeStyle;
+function TPixieD2DCanvas.CreatePathStrokeStyle(
+  StrokeWidth: Single): ID2D1StrokeStyle;
 const
   CapMap: array[TPixieLineCap] of Integer = (
     D2D1_CAP_STYLE_FLAT, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_SQUARE);
@@ -1527,6 +1528,8 @@ const
     D2D1_LINE_JOIN_MITER_OR_BEVEL, D2D1_LINE_JOIN_ROUND, D2D1_LINE_JOIN_BEVEL);
 var
   Props: TD2d1StrokeStyleProperties;
+  Normalized: array of Single;
+  I: Integer;
 begin
   Result := nil;
   FillChar(Props, SizeOf(Props), 0);
@@ -1535,8 +1538,22 @@ begin
   Props.dashCap := CapMap[FPathLineCap];
   Props.lineJoin := JoinMap[FPathLineJoin];
   Props.miterLimit := 4;
-  Props.dashStyle := D2D1_DASH_STYLE_SOLID;
-  FFactory.CreateStrokeStyle(Props, nil, 0, Result);
+  // D2D custom dash values are in stroke-width multiples
+  if (Length(FPathDashArray) > 0) and (StrokeWidth > 0) then
+  begin
+    Props.dashStyle := D2D1_DASH_STYLE_CUSTOM;
+    Props.dashOffset := FPathDashOffset / StrokeWidth;
+    SetLength(Normalized, Length(FPathDashArray));
+    for I := 0 to High(FPathDashArray) do
+      Normalized[I] := FPathDashArray[I] / StrokeWidth;
+    FFactory.CreateStrokeStyle(Props, @Normalized[0],
+      Length(Normalized), Result);
+  end
+  else
+  begin
+    Props.dashStyle := D2D1_DASH_STYLE_SOLID;
+    FFactory.CreateStrokeStyle(Props, nil, 0, Result);
+  end;
 end;
 
 procedure TPixieD2DCanvas.FinalizePath;
@@ -1631,7 +1648,7 @@ begin
   if FPathGeometry = nil then Exit;
   if Color.Alpha > 0 then
   begin
-    Style := CreatePathStrokeStyle;
+    Style := CreatePathStrokeStyle(Width);
     FBrush.SetColor(ToColorF(Color));
     FTarget.DrawGeometry(FPathGeometry, FBrush, Width, Style);
   end;
@@ -1655,7 +1672,7 @@ begin
   end;
   if StrokeColor.Alpha > 0 then
   begin
-    Style := CreatePathStrokeStyle;
+    Style := CreatePathStrokeStyle(StrokeWidth);
     FBrush.SetColor(ToColorF(StrokeColor));
     FTarget.DrawGeometry(FPathGeometry, FBrush, StrokeWidth, Style);
   end;
@@ -1763,7 +1780,7 @@ begin
   Props.endPoint := MakePoint(Gradient.EndPt.X, Gradient.EndPt.Y);
   if Succeeded(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
     LBrush)) then
-    FTarget.DrawGeometry(FPathGeometry, LBrush, Width, CreatePathStrokeStyle);
+    FTarget.DrawGeometry(FPathGeometry, LBrush, Width, CreatePathStrokeStyle(Width));
   FPathGeometry := nil;
 end;
 
@@ -1788,7 +1805,7 @@ begin
   Props.radiusY := Gradient.Radius.Y;
   if Succeeded(FTarget.CreateRadialGradientBrush(@Props, nil, Stops,
     RBrush)) then
-    FTarget.DrawGeometry(FPathGeometry, RBrush, Width, CreatePathStrokeStyle);
+    FTarget.DrawGeometry(FPathGeometry, RBrush, Width, CreatePathStrokeStyle(Width));
   FPathGeometry := nil;
 end;
 

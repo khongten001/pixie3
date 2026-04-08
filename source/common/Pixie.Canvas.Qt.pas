@@ -60,6 +60,7 @@ type
     FCurrentPath: QPainterPathH;
 
     procedure MakeColor(const C: TPixieWebColor; out QC: TQColor);
+    procedure ApplyDashPattern(Pen: QPenH; Width: Single);
     procedure RoundedRectPath(Path: QPainterPathH; X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
     procedure DrawBorderSide(const Border: TPixieBorder;
@@ -237,6 +238,21 @@ begin
   QC.g := C.Green * 257;
   QC.b := C.Blue * 257;
   QC.Pad := 0;
+end;
+
+procedure TPixieQtCanvas.ApplyDashPattern(Pen: QPenH; Width: Single);
+var
+  Dashes: TQRealArray;
+  I: Integer;
+begin
+  if (Length(FPathDashArray) > 0) and (Width > 0) then
+  begin
+    SetLength(Dashes, Length(FPathDashArray));
+    for I := 0 to High(FPathDashArray) do
+      Dashes[I] := FPathDashArray[I] / Width;
+    QPen_setDashPattern(Pen, @Dashes);
+    QPen_setDashOffset(Pen, FPathDashOffset / Width);
+  end;
 end;
 
 procedure TPixieQtCanvas.RoundedRectPath(Path: QPainterPathH;
@@ -1430,6 +1446,7 @@ begin
       QPen_setWidthF(Pen, Width);
       QPen_setCapStyle(Pen, CapMap[FPathLineCap]);
       QPen_setJoinStyle(Pen, JoinMap[FPathLineJoin]);
+      ApplyDashPattern(Pen, Width);
       QPainter_setPen(FPainter, Pen);
       QPainter_setBrush(FPainter, QtNoBrush);
       QPainter_drawPath(FPainter, FCurrentPath);
@@ -1472,6 +1489,7 @@ begin
       QPen_setWidthF(Pen, StrokeWidth);
       QPen_setCapStyle(Pen, CapMap[FPathLineCap]);
       QPen_setJoinStyle(Pen, JoinMap[FPathLineJoin]);
+      ApplyDashPattern(Pen, StrokeWidth);
       QPainter_setPen(FPainter, Pen);
       QPainter_setBrush(FPainter, QtNoBrush);
       QPainter_drawPath(FPainter, FCurrentPath);
@@ -1523,6 +1541,7 @@ begin
     try
       Pen := QPen_Create(Brush, Width);
       try
+        ApplyDashPattern(Pen, Width);
         QPainter_setPen(FPainter, Pen);
         QPainter_setBrush(FPainter, QtNoBrush);
         QPainter_drawPath(FPainter, FCurrentPath);
@@ -1569,6 +1588,7 @@ begin
     try
       Pen := QPen_Create(Brush, Width);
       try
+        ApplyDashPattern(Pen, Width);
         QPainter_setPen(FPainter, Pen);
         QPainter_setBrush(FPainter, QtNoBrush);
         QPainter_drawPath(FPainter, FCurrentPath);
