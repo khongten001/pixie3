@@ -1743,36 +1743,40 @@ function TPixieHtmlTag.IsNthChild(El: TPixieElement;
   Num, Off: Integer; OfType: Boolean;
   SelectorList: TPixieCssSelectorList): Boolean;
 var
-  Idx, I: Integer;
+  Idx, I, ChildTag: Integer;
   Child: TPixieElement;
 begin
   Idx := 1;
   for I := 0 to FChildren.Count - 1 do
   begin
     Child := FChildren[I];
-    if Child.Css.Display <> displayInlineText then
+    if Child.Css.Display = displayInlineText then
+      Continue;
+    // Skip ::before/::after pseudo-elements — they are not real DOM children
+    ChildTag := Child.GetTag;
+    if (ChildTag = Ord(psid__tag_before)) or
+       (ChildTag = Ord(psid__tag_after)) then
+      Continue;
+    if (not OfType and ((SelectorList = nil) or (SelectorList.Count = 0))) or
+       (OfType and (ChildTag = El.GetTag)) or
+       ((SelectorList <> nil) and (SelectorList.Count > 0) and
+        (Child.Select(SelectorList) <> SelectNoMatch)) then
     begin
-      if (not OfType and ((SelectorList = nil) or (SelectorList.Count = 0))) or
-         (OfType and (Child.GetTag = El.GetTag)) or
-         ((SelectorList <> nil) and (SelectorList.Count > 0) and
-          (Child.Select(SelectorList) <> SelectNoMatch)) then
-      begin
-        if El = Child then
-        begin
-          if Num <> 0 then
-          begin
-            if ((Idx - Off) * Num >= 0) and ((Idx - Off) mod Num = 0) then
-              Exit(True);
-          end
-          else if Idx = Off then
-            Exit(True);
-          Exit(False);
-        end;
-        Inc(Idx);
-      end;
       if El = Child then
-        Break;
+      begin
+        if Num <> 0 then
+        begin
+          if ((Idx - Off) * Num >= 0) and ((Idx - Off) mod Num = 0) then
+            Exit(True);
+        end
+        else if Idx = Off then
+          Exit(True);
+        Exit(False);
+      end;
+      Inc(Idx);
     end;
+    if El = Child then
+      Break;
   end;
   Result := False;
 end;
@@ -1781,36 +1785,40 @@ function TPixieHtmlTag.IsNthLastChild(El: TPixieElement;
   Num, Off: Integer; OfType: Boolean;
   SelectorList: TPixieCssSelectorList): Boolean;
 var
-  Idx, I: Integer;
+  Idx, I, ChildTag: Integer;
   Child: TPixieElement;
 begin
   Idx := 1;
   for I := FChildren.Count - 1 downto 0 do
   begin
     Child := FChildren[I];
-    if Child.Css.Display <> displayInlineText then
+    if Child.Css.Display = displayInlineText then
+      Continue;
+    // Skip ::before/::after pseudo-elements — they are not real DOM children
+    ChildTag := Child.GetTag;
+    if (ChildTag = Ord(psid__tag_before)) or
+       (ChildTag = Ord(psid__tag_after)) then
+      Continue;
+    if (not OfType and ((SelectorList = nil) or (SelectorList.Count = 0))) or
+       (OfType and (ChildTag = El.GetTag)) or
+       ((SelectorList <> nil) and (SelectorList.Count > 0) and
+        (Child.Select(SelectorList) <> SelectNoMatch)) then
     begin
-      if (not OfType and ((SelectorList = nil) or (SelectorList.Count = 0))) or
-         (OfType and (Child.GetTag = El.GetTag)) or
-         ((SelectorList <> nil) and (SelectorList.Count > 0) and
-          (Child.Select(SelectorList) <> SelectNoMatch)) then
-      begin
-        if El = Child then
-        begin
-          if Num <> 0 then
-          begin
-            if ((Idx - Off) * Num >= 0) and ((Idx - Off) mod Num = 0) then
-              Exit(True);
-          end
-          else if Idx = Off then
-            Exit(True);
-          Exit(False);
-        end;
-        Inc(Idx);
-      end;
       if El = Child then
-        Break;
+      begin
+        if Num <> 0 then
+        begin
+          if ((Idx - Off) * Num >= 0) and ((Idx - Off) mod Num = 0) then
+            Exit(True);
+        end
+        else if Idx = Off then
+          Exit(True);
+        Exit(False);
+      end;
+      Inc(Idx);
     end;
+    if El = Child then
+      Break;
   end;
   Result := False;
 end;
@@ -1818,20 +1826,24 @@ end;
 function TPixieHtmlTag.IsOnlyChild(El: TPixieElement;
   OfType: Boolean): Boolean;
 var
-  ChildCount, I: Integer;
+  ChildCount, I, ChildTag: Integer;
   Child: TPixieElement;
 begin
   ChildCount := 0;
   for I := 0 to FChildren.Count - 1 do
   begin
     Child := FChildren[I];
-    if Child.Css.Display <> displayInlineText then
-    begin
-      if not OfType or (Child.GetTag = El.GetTag) then
-        Inc(ChildCount);
-      if ChildCount > 1 then
-        Break;
-    end;
+    if Child.Css.Display = displayInlineText then
+      Continue;
+    // Skip ::before/::after pseudo-elements — they are not real DOM children
+    ChildTag := Child.GetTag;
+    if (ChildTag = Ord(psid__tag_before)) or
+       (ChildTag = Ord(psid__tag_after)) then
+      Continue;
+    if not OfType or (ChildTag = El.GetTag) then
+      Inc(ChildCount);
+    if ChildCount > 1 then
+      Break;
   end;
   Result := ChildCount <= 1;
 end;
