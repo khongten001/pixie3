@@ -20,6 +20,7 @@ type
     FOnPaint: TPixiePaintEvent;
   protected
     procedure DoPaint; override;
+    procedure Resize; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -59,6 +60,12 @@ destructor TPixiePaintBox.Destroy;
 begin
   FDrawingCanvas.Free;
   inherited Destroy;
+end;
+
+procedure TPixiePaintBox.Resize;
+begin
+  inherited Resize;
+  Invalidate;
 end;
 
 procedure TPixiePaintBox.DoPaint;

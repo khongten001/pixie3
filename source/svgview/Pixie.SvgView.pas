@@ -54,6 +54,7 @@ type
       const C1, C2: TPixieWebColor; CellSize: Integer);
   protected
     procedure DoPaint; override;
+    procedure Resize; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -303,6 +304,12 @@ end;
 // ---------------------------------------------------------------------------
 // Painting
 // ---------------------------------------------------------------------------
+
+procedure TPixieSvgView.Resize;
+begin
+  inherited Resize;
+  Invalidate;
+end;
 
 procedure TPixieSvgView.DoPaint;
 var
