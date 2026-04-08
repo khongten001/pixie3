@@ -2720,7 +2720,7 @@ procedure TPixieSvgRendererBase.RenderTextSpans(Node: Pointer;
 var
   Child: TDOMNode;
   ChildState: TPixieSvgState;
-  XStr, YStr: string;
+  XStr, YStr, DxStr, DyStr: string;
   TextContent: string;
 begin
   Child := TDOMNode(Node).FirstChild;
@@ -2738,11 +2738,15 @@ begin
       ChildState := InheritState(Child, State);
       XStr := GetAttr(Child, 'x');
       YStr := GetAttr(Child, 'y');
-      if (XStr <> '') or (YStr <> '') then
+      DxStr := GetAttr(Child, 'dx');
+      DyStr := GetAttr(Child, 'dy');
+      if (XStr <> '') or (YStr <> '') or (DxStr <> '') or (DyStr <> '') then
       begin
-        // Positioned tspan — collect all text below and draw as one run
+        // Positioned tspan — apply absolute then relative offsets
         if XStr <> '' then X := ParseSvgFloat(XStr);
         if YStr <> '' then Y := ParseSvgFloat(YStr);
+        if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
+        if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
         TextContent := Trim(CollectAllText(Child));
         if TextContent <> '' then
         begin
@@ -2762,12 +2766,17 @@ procedure TPixieSvgRendererBase.RenderText(Node: Pointer;
   const State: TPixieSvgState);
 var
   X, Y: Single;
+  DxStr, DyStr: string;
   NeedRestore: Boolean;
 begin
   if Trim(CollectAllText(Node)) = '' then Exit;
 
   X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
   Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
+  DxStr := GetAttr(Node, 'dx');
+  DyStr := GetAttr(Node, 'dy');
+  if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
+  if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
 
   DoSaveState;
   ApplyNodeTransform(Node);
