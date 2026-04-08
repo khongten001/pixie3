@@ -945,7 +945,8 @@ begin
   if DashOffsetStr <> '' then
     Result.DashOffset := ParseSvgFloat(DashOffsetStr);
 
-  // Opacity
+  // Opacity (not inherited — each element defaults to 1.0 unless explicitly set)
+  Result.Opacity := 1.0;
   OpacStr := GetAttr(Node, 'opacity');
   if OpacStr = '' then
     OpacStr := ParseStyleAttribute(StyleStr, 'opacity');
@@ -2818,7 +2819,7 @@ procedure TPixieSvgRendererBase.RenderElement(Node: Pointer;
   const State: TPixieSvgState);
 var
   TagName: string;
-  IsGroup: Boolean;
+  IsGroup, NeedRestore: Boolean;
 begin
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
@@ -2830,7 +2831,9 @@ begin
     DoSaveState;
     ApplyNodeTransform(Node);
     ApplyClipPath(Node);
+    ApplyOpacity(State, NeedRestore);
     RenderGroup(Node, State);
+    if NeedRestore then DoEndOpacity;
     DoRestoreState;
   end
   else if TagName = 'rect' then
@@ -2871,6 +2874,7 @@ var
   HrefStr, TargetId: string;
   Target: Pointer;
   X, Y: Single;
+  NeedRestore: Boolean;
   M: TPixieSvgMatrix;
   TargetState: TPixieSvgState;
 begin
@@ -2894,6 +2898,8 @@ begin
 
   // Apply <use> element's own transform, then x/y translation
   ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
+  ApplyOpacity(State, NeedRestore);
   if (Abs(X) > 0.0001) or (Abs(Y) > 0.0001) then
   begin
     M := TPixieSvgMatrix.CreateTranslate(X, Y);
@@ -2909,6 +2915,7 @@ begin
     Dec(FUseDepth);
   end;
 
+  if NeedRestore then DoEndOpacity;
   DoRestoreState;
 end;
 
