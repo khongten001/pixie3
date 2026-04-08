@@ -61,7 +61,63 @@ implementation
 
 uses
   SysUtils,
+  Pixie.StringId, Pixie.Html,
   Pixie.Document;
+
+procedure ApplyColWidths(TableEl: TPixieElement; Grid: TPixieTableGrid);
+var
+  I, J, ColIdx, Span, K, Code: Integer;
+  Child, ColEl: TPixieElement;
+  WidthStr, Trimmed: string;
+  X: Single;
+  IsPct: Boolean;
+  Len: TPixieCssLength;
+begin
+  ColIdx := 0;
+  for I := 0 to TableEl.Children.Count - 1 do
+  begin
+    Child := TableEl.Children[I];
+    if Child.GetTag <> Ord(psid_colgroup) then
+      Continue;
+
+    for J := 0 to Child.Children.Count - 1 do
+    begin
+      ColEl := Child.Children[J];
+      if ColEl.GetTag <> Ord(psid_col) then
+        Continue;
+
+      Span := StrToIntDef(ColEl.GetAttr('span', '1'), 1);
+      if Span < 1 then
+        Span := 1;
+
+      WidthStr := ColEl.GetAttr('width');
+      if WidthStr <> '' then
+      begin
+        Trimmed := PixieTrim(WidthStr);
+        IsPct := False;
+        if (Trimmed <> '') and (Trimmed[Length(Trimmed)] = '%') then
+        begin
+          IsPct := True;
+          Trimmed := Copy(Trimmed, 1, Length(Trimmed) - 1);
+        end;
+        System.Val(Trimmed, X, Code);
+        if Code = 0 then
+        begin
+          if IsPct then
+            Len := TPixieCssLength.Create(X, cssUnitsPercentage)
+          else
+            Len := TPixieCssLength.Create(X, cssUnitsPx);
+          for K := 0 to Span - 1 do
+            if (ColIdx + K < Grid.ColsCount) and
+               Grid.GetColumnPtr(ColIdx + K)^.CssWidth.IsPredefined then
+              Grid.GetColumnPtr(ColIdx + K)^.CssWidth := Len;
+        end;
+      end;
+
+      ColIdx := ColIdx + Span;
+    end;
+  end;
+end;
 
 { TPixieRenderTable }
 
@@ -172,6 +228,9 @@ begin
       ProcessSection(FChildren[I]);
 
   FGrid.Finish;
+
+  // Apply <col> width attributes to grid columns
+  ApplyColWidths(SrcEl, FGrid);
 
   // Compute border spacing
   if SrcEl.Css.BorderCollapse = bcSeparate then

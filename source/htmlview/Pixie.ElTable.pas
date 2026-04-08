@@ -57,7 +57,8 @@ var
 begin
   ChildTag := El.GetTag;
   if (ChildTag = Ord(psid_tbody)) or (ChildTag = Ord(psid_thead)) or
-     (ChildTag = Ord(psid_tfoot)) or (ChildTag = Ord(psid_caption)) then
+     (ChildTag = Ord(psid_tfoot)) or (ChildTag = Ord(psid_caption)) or
+     (ChildTag = Ord(psid_colgroup)) then
     Result := inherited AppendChild(El)
   else
     Result := False;

@@ -114,6 +114,7 @@ type
 
     function GetCell(Col, Row: Integer): PPixieTableCell;
     function GetColumn(C: Integer): TPixieTableColumn;
+    function GetColumnPtr(C: Integer): PPixieTableColumn;
     procedure SetColumn(C: Integer; const Col: TPixieTableColumn);
     function GetRow(R: Integer): TPixieTableRow;
     procedure SetRow(R: Integer; const ARow: TPixieTableRow);
@@ -428,6 +429,11 @@ begin
   Result := FColumns[C];
 end;
 
+function TPixieTableGrid.GetColumnPtr(C: Integer): PPixieTableColumn;
+begin
+  Result := FColumns.Ptr(C);
+end;
+
 procedure TPixieTableGrid.SetColumn(C: Integer; const Col: TPixieTableColumn);
 begin
   FColumns[C] := Col;
@@ -614,8 +620,7 @@ var
   CurWidth, MaxW, MinW, FixedWidth, Percent, Scale: TPixiePixel;
   Col: Integer;
   ColP: PPixieTableColumn;
-  W: TPixieCssLength;
-  Excess, ShrinkableWidth, Reduction: TPixiePixel;
+  Excess, ScaledPct, NeededBase: TPixiePixel;
 begin
   MinTableWidth := 0;
   MaxTableWidth := 0;
@@ -694,52 +699,36 @@ begin
     if Percent > 0 then
     begin
       Scale := 100.0 / Percent;
-      CurWidth := 0;
+
+      // Find the minimum base that keeps percentage columns proportional
+      // while satisfying all minWidth constraints
+      NeededBase := BlockWidth - FixedWidth;
       for Col := 0 to FColsCount - 1 do
       begin
         ColP := FColumns.Ptr(Col);
         if (not ColP^.CssWidth.IsPredefined) and
            (ColP^.CssWidth.Units = cssUnitsPercentage) then
         begin
-          W.SetValue(ColP^.CssWidth.Val * Scale, cssUnitsPercentage);
-          ColP^.Width := W.CalcPercent(BlockWidth - FixedWidth);
-          if ColP^.Width < ColP^.MinWidth then
-            ColP^.Width := ColP^.MinWidth;
+          ScaledPct := ColP^.CssWidth.Val * Scale;
+          if ScaledPct > 0 then
+          begin
+            Excess := ColP^.MinWidth * 100 / ScaledPct;
+            if Excess > NeededBase then
+              NeededBase := Excess;
+          end;
         end;
-        CurWidth := CurWidth + ColP^.Width;
       end;
-    end;
 
-    // Proportional shrink
-    if CurWidth > BlockWidth then
-    begin
-      Excess := CurWidth - BlockWidth;
-      ShrinkableWidth := 0;
+      // Redistribute using the adjusted base
+      CurWidth := FixedWidth;
       for Col := 0 to FColsCount - 1 do
       begin
         ColP := FColumns.Ptr(Col);
         if (not ColP^.CssWidth.IsPredefined) and
-           (ColP^.CssWidth.Units = cssUnitsPercentage) and
-           (ColP^.Width > ColP^.MinWidth) then
-          ShrinkableWidth := ShrinkableWidth + (ColP^.Width - ColP^.MinWidth);
-      end;
-      if ShrinkableWidth > 0 then
-      begin
-        if Excess > ShrinkableWidth then
-          Excess := ShrinkableWidth;
-        for Col := 0 to FColsCount - 1 do
+           (ColP^.CssWidth.Units = cssUnitsPercentage) then
         begin
-          ColP := FColumns.Ptr(Col);
-          if (not ColP^.CssWidth.IsPredefined) and
-             (ColP^.CssWidth.Units = cssUnitsPercentage) and
-             (ColP^.Width > ColP^.MinWidth) then
-          begin
-            Reduction := Excess * (ColP^.Width - ColP^.MinWidth) / ShrinkableWidth;
-            ColP^.Width := ColP^.Width - Reduction;
-            if ColP^.Width < ColP^.MinWidth then
-              ColP^.Width := ColP^.MinWidth;
-            CurWidth := CurWidth - Reduction;
-          end;
+          ColP^.Width := ColP^.CssWidth.Val * Scale / 100 * NeededBase;
+          CurWidth := CurWidth + ColP^.Width;
         end;
       end;
     end;

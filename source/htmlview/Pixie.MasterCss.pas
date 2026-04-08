@@ -239,6 +239,14 @@ const
     '  margin-right: auto;' +
     '}' +
 
+    'colgroup {' +
+    '  display: table-column-group;' +
+    '}' +
+
+    'col {' +
+    '  display: table-column;' +
+    '}' +
+
     'caption {' +
     '  display: table-caption;' +
     '  text-align: center;' +
