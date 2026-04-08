@@ -649,7 +649,12 @@ begin
   FPos.Height := TableHeight + TopCaptions + BottomCaptions;
 
   if SelfSize.Width.ValueType <> cbcAbsolute then
-    Result := Min(TableWidth, MaxTableWidth) + ContentOffsetWidth
+  begin
+    if FGrid.HasPercentColumns then
+      Result := TableWidth + ContentOffsetWidth
+    else
+      Result := Min(TableWidth, MaxTableWidth) + ContentOffsetWidth;
+  end
   else
     Result := TableWidth + ContentOffsetWidth;
 end;

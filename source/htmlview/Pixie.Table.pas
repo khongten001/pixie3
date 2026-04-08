@@ -91,6 +91,7 @@ type
     FCaptions: TPixiePointerList;
     FTopCaptionsHeight: TPixiePixel;
     FBottomCaptionsHeight: TPixiePixel;
+    FHasPercentColumns: Boolean;
 
     function GetColumnField(const Col: TPixieTableColumn;
       Field: TPixieColumnField): TPixiePixel;
@@ -131,6 +132,7 @@ type
     function GetCaptions: TPixiePointerList;
 
     property RowsCount: Integer read FRowsCount;
+    property HasPercentColumns: Boolean read FHasPercentColumns;
     property ColsCount: Integer read FColsCount;
     property TopCaptionsHeight: TPixiePixel read FTopCaptionsHeight
       write FTopCaptionsHeight;
@@ -617,6 +619,7 @@ var
 begin
   MinTableWidth := 0;
   MaxTableWidth := 0;
+  FHasPercentColumns := False;
 
   CurWidth := 0;
   MaxW := 0;
@@ -630,6 +633,8 @@ begin
     ColP := FColumns.Ptr(Col);
     if not ColP^.CssWidth.IsPredefined then
     begin
+      if ColP^.CssWidth.Units = cssUnitsPercentage then
+        FHasPercentColumns := True;
       ColP^.Width := ColP^.CssWidth.CalcPercent(BlockWidth);
       if ColP^.Width < ColP^.MinWidth then
         ColP^.Width := ColP^.MinWidth;
