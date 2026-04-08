@@ -139,6 +139,9 @@ type
       const StyleStr, PropName: string): string;
     function InheritState(Node: Pointer;
       const ParentState: TPixieSvgState): TPixieSvgState;
+    procedure ParseFontShorthand(const S: string;
+      var State: TPixieSvgState);
+    function NormalizeFontFamily(const S: string): string;
     function ParseTransform(const S: string): TPixieSvgMatrix;
     function ParseDashArray(const S: string): TPixieSingleArray;
 
@@ -661,7 +664,17 @@ end;
 procedure TPixieSvgRendererBase.ParseStyleElement(const CSS: string);
 var
   P, Len, BraceStart, BraceEnd: Integer;
-  Selector, Declarations: string;
+  Selector, Declarations, KeySel, Existing: string;
+  SpacePos, DotPos: Integer;
+
+  procedure MergeStyle(const Key, Decl: string);
+  begin
+    if FStyleMap.TryGetValue(Key, Existing) then
+      FStyleMap.AddOrSetValue(Key, Existing + ';' + Decl)
+    else
+      FStyleMap.Add(Key, Decl);
+  end;
+
 begin
   if FStyleMap = nil then
     FStyleMap := TPixieSvgStyleMap.Create;
@@ -694,10 +707,34 @@ begin
     Declarations := Trim(Copy(CSS, BraceStart + 1, BraceEnd - BraceStart - 1));
     P := BraceEnd + 1;
 
-    // Handle simple class selectors: .className
-    if (Length(Selector) > 1) and (Selector[1] = '.') and
-       (Pos(' ', Selector) = 0) and (Pos(',', Selector) = 0) then
-      FStyleMap.AddOrSetValue(Copy(Selector, 2, MaxInt), Declarations);
+    if (Declarations = '') or (Selector = '') then Continue;
+    // Skip comma-separated selector lists
+    if Pos(',', Selector) > 0 then Continue;
+
+    // Extract key selector (last whitespace-delimited segment)
+    // e.g. "svg.railroad-diagram path" -> "path"
+    SpacePos := Length(Selector);
+    while (SpacePos > 0) and (Selector[SpacePos] <> ' ') do Dec(SpacePos);
+    if SpacePos > 0 then
+      KeySel := Copy(Selector, SpacePos + 1, MaxInt)
+    else
+      KeySel := Selector;
+
+    if KeySel = '' then Continue;
+
+    if KeySel[1] = '.' then
+    begin
+      if Length(KeySel) > 1 then
+        MergeStyle(Copy(KeySel, 2, MaxInt), Declarations);
+    end
+    else
+    begin
+      DotPos := Pos('.', KeySel);
+      if DotPos > 1 then
+        MergeStyle('@' + LowerCase(KeySel), Declarations)
+      else if CharInSet(KeySel[1], ['A'..'Z', 'a'..'z']) then
+        MergeStyle('@' + LowerCase(KeySel), Declarations);
+    end;
   end;
 end;
 
@@ -738,8 +775,8 @@ function TPixieSvgRendererBase.InheritState(Node: Pointer;
 var
   FillStr, StrokeStr, StrokeWStr, OpacStr: string;
   FillOpStr, StrokeOpStr: string;
-  StyleStr, ClassStr, ClassDecl, InlineStyleStr: string;
-  FontFamilyStr, FontSizeStr, FontWeightStr: string;
+  StyleStr, ClassStr, ClassDecl, InlineStyleStr, NodeTag: string;
+  FontFamilyStr, FontSizeStr, FontWeightStr, FontShorthand: string;
   LetterSpacingStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
@@ -750,10 +787,16 @@ var
 begin
   Result := ParentState;
 
-  // Resolve class-based styles from <style> element
+  // Resolve styles from <style> element: type selectors, class, type.class
   StyleStr := '';
   if FStyleMap <> nil then
   begin
+    NodeTag := LowerCase(DomToStr(TDOMElement(Node).TagName));
+
+    // Type selector: @tag (lowest specificity)
+    if (NodeTag <> '') and FStyleMap.TryGetValue('@' + NodeTag, ClassDecl) then
+      StyleStr := ClassDecl;
+
     ClassStr := GetAttr(Node, 'class');
     if ClassStr <> '' then
     begin
@@ -771,7 +814,20 @@ begin
           ClassName := ClassStr;
           ClassStr := '';
         end;
-        if (ClassName <> '') and FStyleMap.TryGetValue(ClassName, ClassDecl) then
+        if ClassName = '' then Continue;
+
+        // Class selector: .className
+        if FStyleMap.TryGetValue(ClassName, ClassDecl) then
+        begin
+          if StyleStr <> '' then
+            StyleStr := StyleStr + ';' + ClassDecl
+          else
+            StyleStr := ClassDecl;
+        end;
+
+        // Type.class selector: @tag.className (higher specificity)
+        if (NodeTag <> '') and
+           FStyleMap.TryGetValue('@' + NodeTag + '.' + ClassName, ClassDecl) then
         begin
           if StyleStr <> '' then
             StyleStr := StyleStr + ';' + ClassDecl
@@ -910,19 +966,18 @@ begin
   if StrokeOpStr <> '' then
     Result.StrokeOpacity := ParseSvgFloat(StrokeOpStr);
 
+  // Font shorthand: font: [style] [weight] size[/line-height] family[, ...]
+  // Parsed first so individual properties can override below
+  FontShorthand := ParseStyleAttribute(StyleStr, 'font');
+  if FontShorthand <> '' then
+    ParseFontShorthand(FontShorthand, Result);
+
   // Font family
   FontFamilyStr := GetAttr(Node, 'font-family');
   if FontFamilyStr = '' then
     FontFamilyStr := ParseStyleAttribute(StyleStr, 'font-family');
   if FontFamilyStr <> '' then
-  begin
-    // Strip quotes and use first family
-    FontFamilyStr := StringReplace(FontFamilyStr, '''', '', [rfReplaceAll]);
-    FontFamilyStr := StringReplace(FontFamilyStr, '"', '', [rfReplaceAll]);
-    if Pos(',', FontFamilyStr) > 0 then
-      FontFamilyStr := Trim(Copy(FontFamilyStr, 1, Pos(',', FontFamilyStr) - 1));
-    Result.FontFamily := FontFamilyStr;
-  end;
+    Result.FontFamily := NormalizeFontFamily(FontFamilyStr);
 
   // Font size
   FontSizeStr := GetAttr(Node, 'font-size');
@@ -997,6 +1052,101 @@ begin
   else if AnchorStr = 'saturation' then Result.BlendMode := bmSaturation
   else if AnchorStr = 'color' then Result.BlendMode := bmColor
   else if AnchorStr = 'luminosity' then Result.BlendMode := bmLuminosity;
+end;
+
+// ===========================================================================
+// Font shorthand parsing
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.ParseFontShorthand(const S: string;
+  var State: TPixieSvgState);
+// Parses CSS font shorthand: [style] [variant] [weight] size[/line-height] family
+// Examples: "bold 14px monospace", "italic 12px sans-serif", "700 16px/1.2 Arial, Helvetica"
+var
+  P, Len, TokenStart: Integer;
+  Token, FamilyStr: string;
+  SizeFound: Boolean;
+begin
+  P := 1;
+  Len := Length(S);
+  SizeFound := False;
+
+  while P <= Len do
+  begin
+    // Skip whitespace
+    while (P <= Len) and (S[P] = ' ') do Inc(P);
+    if P > Len then Break;
+
+    TokenStart := P;
+    while (P <= Len) and (S[P] <> ' ') do Inc(P);
+    Token := Copy(S, TokenStart, P - TokenStart);
+    if Token = '' then Continue;
+
+    if not SizeFound then
+    begin
+      // Check for font-style keywords
+      if (Token = 'italic') or (Token = 'oblique') then
+        Continue  // recognised but not stored (no FontStyle in TPixieSvgState)
+      // Check for font-variant
+      else if Token = 'small-caps' then
+        Continue
+      // Check for font-weight keywords/numbers
+      else if Token = 'bold' then
+        State.FontWeight := 700
+      else if Token = 'bolder' then
+        State.FontWeight := 700
+      else if Token = 'lighter' then
+        State.FontWeight := 300
+      else if Token = 'normal' then
+        Continue  // could be style, weight, or variant — no-op
+      else if (Token[1] >= '0') and (Token[1] <= '9') then
+      begin
+        // Could be weight (100-900) or size (with unit)
+        if (Pos('px', Token) > 0) or (Pos('pt', Token) > 0) or
+           (Pos('em', Token) > 0) or (Pos('/', Token) > 0) then
+        begin
+          // Size value — strip /line-height if present
+          if Pos('/', Token) > 0 then
+            Token := Copy(Token, 1, Pos('/', Token) - 1);
+          State.FontSize := ParseSvgFloat(Token);
+          SizeFound := True;
+        end
+        else
+        begin
+          // Bare number — weight if 100-900 range
+          State.FontWeight := Round(ParseSvgFloat(Token));
+        end;
+      end
+      else
+      begin
+        // Unrecognised token before size — treat as size if it has units
+        if (Pos('px', Token) > 0) or (Pos('pt', Token) > 0) or
+           (Pos('em', Token) > 0) then
+        begin
+          State.FontSize := ParseSvgFloat(Token);
+          SizeFound := True;
+        end;
+      end;
+    end
+    else
+    begin
+      // Everything after size is font-family
+      FamilyStr := NormalizeFontFamily(
+        Trim(Copy(S, TokenStart, Len - TokenStart + 1)));
+      if FamilyStr <> '' then
+        State.FontFamily := FamilyStr;
+      Break;
+    end;
+  end;
+end;
+
+function TPixieSvgRendererBase.NormalizeFontFamily(const S: string): string;
+begin
+  // Strip quotes and return first family name
+  Result := StringReplace(S, '''', '', [rfReplaceAll]);
+  Result := StringReplace(Result, '"', '', [rfReplaceAll]);
+  if Pos(',', Result) > 0 then
+    Result := Trim(Copy(Result, 1, Pos(',', Result) - 1));
 end;
 
 // ===========================================================================
