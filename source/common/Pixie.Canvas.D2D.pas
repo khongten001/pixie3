@@ -1818,13 +1818,14 @@ begin
   New_.m11 := A;  New_.m12 := B;
   New_.m21 := C;  New_.m22 := D;
   New_.dx  := E;  New_.dy  := F;
-  // Combined = Current * New_ (post-multiply: new transform applied in local space)
-  Combined.m11 := Current.m11 * New_.m11 + Current.m12 * New_.m21;
-  Combined.m12 := Current.m11 * New_.m12 + Current.m12 * New_.m22;
-  Combined.m21 := Current.m21 * New_.m11 + Current.m22 * New_.m21;
-  Combined.m22 := Current.m21 * New_.m12 + Current.m22 * New_.m22;
-  Combined.dx  := Current.dx + Current.m11 * New_.dx + Current.m12 * New_.dy;
-  Combined.dy  := Current.dy + Current.m21 * New_.dx + Current.m22 * New_.dy;
+  // SVG column-vector: Combined = Current * New_ (new transform in local space)
+  // D2D stores transposed 2x2, so row-vector order is New_ * Current
+  Combined.m11 := Current.m11 * New_.m11 + Current.m21 * New_.m12;
+  Combined.m12 := Current.m12 * New_.m11 + Current.m22 * New_.m12;
+  Combined.m21 := Current.m11 * New_.m21 + Current.m21 * New_.m22;
+  Combined.m22 := Current.m12 * New_.m21 + Current.m22 * New_.m22;
+  Combined.dx  := Current.m11 * New_.dx + Current.m21 * New_.dy + Current.dx;
+  Combined.dy  := Current.m12 * New_.dx + Current.m22 * New_.dy + Current.dy;
   FTarget.SetTransform(@Combined);
 end;
 
