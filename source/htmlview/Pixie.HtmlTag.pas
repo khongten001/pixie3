@@ -1615,6 +1615,19 @@ begin
           Layer.ClipBox.DoRound;
           Layer.OriginBox.DoRound;
 
+          // Clamp origin box so rounding doesn't push it outside the clip.
+          // Round(A+B) <> Round(A)+Round(B), so the origin's right/bottom
+          // edge can end up 1 px past the clip boundary after independent
+          // rounding of position and size.
+          if Layer.OriginBox.X + Layer.OriginBox.Width >
+             Layer.ClipBox.X + Layer.ClipBox.Width then
+            Layer.OriginBox.X :=
+              Layer.ClipBox.X + Layer.ClipBox.Width - Layer.OriginBox.Width;
+          if Layer.OriginBox.Y + Layer.OriginBox.Height >
+             Layer.ClipBox.Y + Layer.ClipBox.Height then
+            Layer.OriginBox.Y :=
+              Layer.ClipBox.Y + Layer.ClipBox.Height - Layer.OriginBox.Height;
+
           Bg.DrawLayer(Hdc, I, Layer, Doc.Container);
         end;
       end;
