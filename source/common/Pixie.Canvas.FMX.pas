@@ -64,7 +64,8 @@ type
     procedure ApplyDashPattern(Width: Single);
     procedure BuildRoundedRectPath(Path: TPathData; X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
-    procedure SetupGradientStops(const Points: TPixieColorPointList);
+    procedure SetupGradientStops(const Points: TPixieColorPointList;
+      ABrush: TBrush = nil);
     procedure DrawBorderSide(const Border: TPixieBorder;
       X1, Y1, X2, Y2: Single);
   public
@@ -167,6 +168,12 @@ type
     procedure FillPathRadialGradient(
       const Gradient: TPixieRadialGradientLayer;
       FillRule: TPixieFillRule = frNonZero); override;
+    procedure StrokePathLinearGradient(
+      const Gradient: TPixieLinearGradientLayer;
+      Width: Single); override;
+    procedure StrokePathRadialGradient(
+      const Gradient: TPixieRadialGradientLayer;
+      Width: Single); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     // View / scale
@@ -360,15 +367,17 @@ begin
 end;
 
 procedure TPixieFmxCanvas.SetupGradientStops(
-  const Points: TPixieColorPointList);
+  const Points: TPixieColorPointList; ABrush: TBrush);
 var
   I: Integer;
   GradPt: TGradientPoint;
+  Target: TBrush;
 begin
-  FBrush.Gradient.Points.Clear;
+  if ABrush <> nil then Target := ABrush else Target := FBrush;
+  Target.Gradient.Points.Clear;
   for I := 0 to Points.Count - 1 do
   begin
-    GradPt := TGradientPoint(FBrush.Gradient.Points.Add);
+    GradPt := TGradientPoint(Target.Gradient.Points.Add);
     GradPt.Offset := Points[I].Offset;
     GradPt.Color := ToAlphaColor(Points[I].Color);
   end;
@@ -1417,6 +1426,10 @@ end;
 procedure TPixieFmxCanvas.FillPathRadialGradient(
   const Gradient: TPixieRadialGradientLayer;
   FillRule: TPixieFillRule);
+var
+  R: TRectF;
+  I: Integer;
+  GradPt: TGradientPoint;
 begin
   if (FCanvas = nil) or (Gradient = nil) then Exit;
   if Gradient.ColorPoints.Count < 2 then
@@ -1425,11 +1438,129 @@ begin
     Exit;
   end;
 
+  R := FCurrentPath.GetBounds;
+  if (R.Width <= 0) or (R.Height <= 0) then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
   FBrush.Kind := TBrushKind.Gradient;
   FBrush.Gradient.Style := TGradientStyle.Radial;
-  SetupGradientStops(Gradient.ColorPoints);
+
+  // FMX D2D sets gradient centre = (BBox.Width * RC.X, BBox.Height * RC.Y)
+  // without adding BBox.Left/Top, so RC must use absolute user-space coords
+  // divided by the bbox dimensions.
+  FBrush.Gradient.RadialTransform.RotationCenter.X :=
+    Gradient.Position.X / R.Width;
+  FBrush.Gradient.RadialTransform.RotationCenter.Y :=
+    Gradient.Position.Y / R.Height;
+  FBrush.Gradient.RadialTransform.Scale.X := 1;
+  FBrush.Gradient.RadialTransform.Scale.Y := 1;
+  FBrush.Gradient.RadialTransform.RotationAngle := 0;
+
+  // FMX internally reverses stop positions for radial gradients (its
+  // convention is center=1, edge=0 while SVG/D2D use center=0, edge=1).
+  // Map SVG offsets to FMX convention (1-offset) and iterate in reverse
+  // to keep ascending order — FMX's boundary logic requires sorted stops.
+  FBrush.Gradient.Points.Clear;
+  for I := Gradient.ColorPoints.Count - 1 downto 0 do
+  begin
+    GradPt := TGradientPoint(FBrush.Gradient.Points.Add);
+    GradPt.Offset := 1 - Gradient.ColorPoints[I].Offset;
+    GradPt.Color := ToAlphaColor(Gradient.ColorPoints[I].Color);
+  end;
 
   FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.StrokePathLinearGradient(
+  const Gradient: TPixieLinearGradientLayer; Width: Single);
+var
+  R: TRectF;
+  RW, RH: Single;
+begin
+  if (FCanvas = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  R := FCurrentPath.GetBounds;
+  RW := R.Width;
+  RH := R.Height;
+  if (RW <= 0) or (RH <= 0) then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  FStrokeBrush.Kind := TBrushKind.Gradient;
+  FStrokeBrush.Gradient.Style := TGradientStyle.Linear;
+  FStrokeBrush.Gradient.StartPosition.X := (Gradient.StartPt.X - R.Left) / RW;
+  FStrokeBrush.Gradient.StartPosition.Y := (Gradient.StartPt.Y - R.Top) / RH;
+  FStrokeBrush.Gradient.StopPosition.X := (Gradient.EndPt.X - R.Left) / RW;
+  FStrokeBrush.Gradient.StopPosition.Y := (Gradient.EndPt.Y - R.Top) / RH;
+  SetupGradientStops(Gradient.ColorPoints, FStrokeBrush);
+  FStrokeBrush.Thickness := Width;
+  ApplyDashPattern(Width);
+  FStrokeBrush.Cap := CapMap[FPathLineCap];
+  FStrokeBrush.Join := JoinMap[FPathLineJoin];
+
+  FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
+  FCurrentPath.Clear;
+end;
+
+procedure TPixieFmxCanvas.StrokePathRadialGradient(
+  const Gradient: TPixieRadialGradientLayer; Width: Single);
+var
+  R: TRectF;
+  I: Integer;
+  GradPt: TGradientPoint;
+begin
+  if (FCanvas = nil) or (Gradient = nil) then Exit;
+  if Gradient.ColorPoints.Count < 2 then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  R := FCurrentPath.GetBounds;
+  if (R.Width <= 0) or (R.Height <= 0) then
+  begin
+    FCurrentPath.Clear;
+    Exit;
+  end;
+
+  FStrokeBrush.Kind := TBrushKind.Gradient;
+  FStrokeBrush.Gradient.Style := TGradientStyle.Radial;
+
+  // Same centre formula as FillPathRadialGradient — absolute coords / bbox size
+  FStrokeBrush.Gradient.RadialTransform.RotationCenter.X :=
+    Gradient.Position.X / R.Width;
+  FStrokeBrush.Gradient.RadialTransform.RotationCenter.Y :=
+    Gradient.Position.Y / R.Height;
+  FStrokeBrush.Gradient.RadialTransform.Scale.X := 1;
+  FStrokeBrush.Gradient.RadialTransform.Scale.Y := 1;
+  FStrokeBrush.Gradient.RadialTransform.RotationAngle := 0;
+
+  // Reverse stops in descending order for ascending FMX offsets
+  FStrokeBrush.Gradient.Points.Clear;
+  for I := Gradient.ColorPoints.Count - 1 downto 0 do
+  begin
+    GradPt := TGradientPoint(FStrokeBrush.Gradient.Points.Add);
+    GradPt.Offset := 1 - Gradient.ColorPoints[I].Offset;
+    GradPt.Color := ToAlphaColor(Gradient.ColorPoints[I].Color);
+  end;
+
+  FStrokeBrush.Thickness := Width;
+  ApplyDashPattern(Width);
+  FStrokeBrush.Cap := CapMap[FPathLineCap];
+  FStrokeBrush.Join := JoinMap[FPathLineJoin];
+
+  FCanvas.DrawPath(FCurrentPath, FOpacity, FStrokeBrush);
   FCurrentPath.Clear;
 end;
 
