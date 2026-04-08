@@ -235,36 +235,97 @@ begin
     Inc(P.Pos);
 end;
 
-function DecodeEntity(const S: string): WideString;
+function DecodeEntity(const Data: string; EntStart, EntLen: Integer): WideString;
 var
-  Code: Integer;
+  Code, I: Integer;
+  C: Char;
 begin
-  if S = 'lt' then Result := '<'
-  else if S = 'gt' then Result := '>'
-  else if S = 'amp' then Result := '&'
-  else if S = 'quot' then Result := '"'
-  else if S = 'apos' then Result := ''''
-  else if (Length(S) >= 2) and (S[1] = '#') then
+  // Named entities — compare directly from buffer, no allocation
+  case EntLen of
+    2: begin
+         if (Data[EntStart] = 'l') and (Data[EntStart + 1] = 't') then
+           Exit('<');
+         if (Data[EntStart] = 'g') and (Data[EntStart + 1] = 't') then
+           Exit('>');
+       end;
+    3: if (Data[EntStart] = 'a') and (Data[EntStart + 1] = 'm') and
+          (Data[EntStart + 2] = 'p') then
+         Exit('&');
+    4: begin
+         if (Data[EntStart] = 'q') and (Data[EntStart + 1] = 'u') and
+            (Data[EntStart + 2] = 'o') and (Data[EntStart + 3] = 't') then
+           Exit('"');
+         if (Data[EntStart] = 'a') and (Data[EntStart + 1] = 'p') and
+            (Data[EntStart + 2] = 'o') and (Data[EntStart + 3] = 's') then
+           Exit('''');
+       end;
+  end;
+
+  // Numeric entity: &#NNN; or &#xHHH; — parse inline, no StrToIntDef/Copy
+  if (EntLen >= 2) and (Data[EntStart] = '#') then
   begin
-    if (Length(S) >= 3) and ((S[2] = 'x') or (S[2] = 'X')) then
-      Code := StrToIntDef('$' + Copy(S, 3, Length(S)), 0)
+    Code := 0;
+    if (EntLen >= 3) and ((Data[EntStart + 1] = 'x') or
+       (Data[EntStart + 1] = 'X')) then
+    begin
+      for I := EntStart + 2 to EntStart + EntLen - 1 do
+      begin
+        C := Data[I];
+        case C of
+          '0'..'9': Code := Code * 16 + Ord(C) - Ord('0');
+          'a'..'f': Code := Code * 16 + Ord(C) - Ord('a') + 10;
+          'A'..'F': Code := Code * 16 + Ord(C) - Ord('A') + 10;
+        else Code := 0; Break;
+        end;
+      end;
+    end
     else
-      Code := StrToIntDef(Copy(S, 2, Length(S)), 0);
+    begin
+      for I := EntStart + 1 to EntStart + EntLen - 1 do
+      begin
+        C := Data[I];
+        if (C >= '0') and (C <= '9') then
+          Code := Code * 10 + Ord(C) - Ord('0')
+        else begin Code := 0; Break; end;
+      end;
+    end;
     if Code > 0 then
-      Result := WideChar(Code)
-    else
-      Result := '&' + WideString(S) + ';';
-  end
-  else
-    Result := '&' + WideString(S) + ';';
+      Exit(WideChar(Code));
+  end;
+
+  // Unknown entity — keep as-is
+  Result := '&' + WideString(Copy(Data, EntStart, EntLen)) + ';';
 end;
 
 function ReadText(var P: TXmlParser; StopChar: Char): WideString;
 var
-  Start, EntStart: Integer;
-  EntName: string;
+  Start, ScanPos, EntStart, EntLen: Integer;
 begin
-  Result := '';
+  // Pass 1: scan ahead to check for entity references
+  ScanPos := P.Pos;
+  while (ScanPos <= P.Len) and (P.Data[ScanPos] <> StopChar) do
+  begin
+    if P.Data[ScanPos] = '&' then Break;
+    Inc(ScanPos);
+  end;
+
+  // Fast path: no entities — single copy, no per-segment concatenation
+  if (ScanPos > P.Len) or (P.Data[ScanPos] <> '&') then
+  begin
+    Start := P.Pos;
+    P.Pos := ScanPos;
+    Result := WideString(Copy(P.Data, Start, ScanPos - Start));
+    Exit;
+  end;
+
+  // Pass 2: copy clean prefix before first entity, then decode
+  Start := P.Pos;
+  if ScanPos > Start then
+    Result := WideString(Copy(P.Data, Start, ScanPos - Start))
+  else
+    Result := '';
+  P.Pos := ScanPos;
+
   while (P.Pos <= P.Len) and (P.Data[P.Pos] <> StopChar) do
   begin
     if P.Data[P.Pos] = '&' then
@@ -273,9 +334,9 @@ begin
       EntStart := P.Pos;
       while (P.Pos <= P.Len) and (P.Data[P.Pos] <> ';') do
         Inc(P.Pos);
-      EntName := Copy(P.Data, EntStart, P.Pos - EntStart);
+      EntLen := P.Pos - EntStart;
       if P.Pos <= P.Len then Inc(P.Pos); // skip ';'
-      Result := Result + DecodeEntity(EntName);
+      Result := Result + DecodeEntity(P.Data, EntStart, EntLen);
     end
     else
     begin
