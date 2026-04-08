@@ -67,7 +67,7 @@ type
     procedure ApplyFillRule(FillRule: TPixieFillRule);
     function CreatePathStrokeStyle(StrokeWidth: Single): ID2D1StrokeStyle;
     procedure FinalizePath;
-    function FindFontMetrics(const Family: WideString;
+    function FindFontMetrics(const Family: UnicodeString;
       Weight: TDwriteFontWeight; Style: TDwriteFontStyle;
       out FM: TDwriteFontMetrics): Boolean;
     procedure DrawBorderSide(const Border: TPixieBorder;
@@ -189,7 +189,7 @@ var
   FM: TDwriteFontMetrics;
 begin
   Result := GCheckFontCanvas.FindFontMetrics(
-    WideString(Name), GCheckFontWeight, GCheckFontStyle, FM);
+    UnicodeString(Name), GCheckFontWeight, GCheckFontStyle, FM);
 end;
 
 function CoCreateInstance(const clsid: TGUID; unkOuter: Pointer;
@@ -199,6 +199,7 @@ function CoCreateInstance(const clsid: TGUID; unkOuter: Pointer;
 
 const
   CLSCTX_INPROC_SERVER = $1;
+  D2D1_LAYER_OPTIONS_INITIALIZE_FOR_CLEARTYPE = 1;
 
   GUID_WICPixelFormat32bppPBGRA: TGUID = (
     D1: $6FDDC324; D2: $4E03; D3: $4BFE;
@@ -337,7 +338,7 @@ begin
     Collection));
 end;
 
-function TPixieD2DCanvas.FindFontMetrics(const Family: WideString;
+function TPixieD2DCanvas.FindFontMetrics(const Family: UnicodeString;
   Weight: TDwriteFontWeight; Style: TDwriteFontStyle;
   out FM: TDwriteFontMetrics): Boolean;
 var
@@ -507,7 +508,7 @@ begin
   Params.maskTransform._11 := 1;
   Params.maskTransform._22 := 1;
   Params.opacity := AOpacity;
-  Params.layerOptions := 0; // D2D1_LAYER_OPTIONS_NONE
+  Params.layerOptions := D2D1_LAYER_OPTIONS_INITIALIZE_FOR_CLEARTYPE;
   FTarget.PushLayer(@Params, nil);
 
   if FStateTop > 0 then
@@ -897,8 +898,8 @@ function TPixieD2DCanvas.CreateFont(
   out Metrics: TPixieFontMetrics): TPixieFontHandle;
 var
   Info: PPixieD2DFont;
-  WFamily: WideString;
-  WLocale: WideString;
+  WFamily: UnicodeString;
+  WLocale: UnicodeString;
   DWWeight: TDwriteFontWeight;
   DWStyle: TDwriteFontStyle;
   FM: TDwriteFontMetrics;
@@ -923,7 +924,7 @@ begin
   GCheckFontCanvas := Self;
   GCheckFontWeight := DWWeight;
   GCheckFontStyle := DWStyle;
-  WFamily := WideString(PixieResolveFontFamily(Descr.Family, CheckFontCb));
+  WFamily := UnicodeString(PixieResolveFontFamily(Descr.Family, CheckFontCb));
   FindFontMetrics(WFamily, DWWeight, DWStyle, FM);
 
   // Create text format with resolved family
@@ -978,7 +979,7 @@ end;
 // Applies small-caps simulation: sets a reduced font size on ranges
 // that were originally lowercase, then forces uniform line spacing
 // so the baseline stays anchored even for all-lowercase words.
-procedure ApplySmallCapsToLayout(const Original, Upper: WideString;
+procedure ApplySmallCapsToLayout(const Original, Upper: UnicodeString;
   Layout: IDWriteTextLayout; const Metrics: TPixieFontMetrics);
 var
   I, RunStart, Len: Integer;
@@ -1027,7 +1028,7 @@ function TPixieD2DCanvas.DoMeasureText(const Text: string;
   Handle: TPixieFontHandle): TPixiePixel;
 var
   Info: PPixieD2DFont;
-  WText, WUpper: WideString;
+  WText, WUpper: UnicodeString;
   Layout: IDWriteTextLayout;
   TM: TDwriteTextMetrics;
 begin
@@ -1040,7 +1041,7 @@ begin
     Exit;
   end;
 
-  WText := WideString(Text);
+  WText := UnicodeString(Text);
 
   if Info.SmallCaps then
   begin
@@ -1076,14 +1077,14 @@ procedure TPixieD2DCanvas.DrawText(const Text: string;
   X, Y, W, H: Single);
 var
   Info: PPixieD2DFont;
-  WText, WUpper: WideString;
+  WText, WUpper: UnicodeString;
   Layout: IDWriteTextLayout;
 begin
   if (Handle = 0) or (FTarget = nil) then Exit;
   Info := PPixieD2DFont(Handle);
   if Info.TextFormat = nil then Exit;
 
-  WText := WideString(Text);
+  WText := UnicodeString(Text);
 
   if Info.SmallCaps then
   begin
@@ -1172,7 +1173,7 @@ function TPixieD2DCanvas.LoadImage(
 var
   Info: PPixieD2DImage;
   Resolved: string;
-  WPath: WideString;
+  WPath: UnicodeString;
   Decoder: IWICBitmapDecoder;
   Frame: IWICBitmapFrameDecode;
   Converter: IWICFormatConverter;
@@ -1190,7 +1191,7 @@ begin
   end;
 
   if FWicFactory = nil then Exit;
-  WPath := WideString(Resolved);
+  WPath := UnicodeString(Resolved);
 
   if Failed(FWicFactory.CreateDecoderFromFilename(PWideChar(WPath),
     GUID_NULL, GENERIC_READ, 0, Decoder)) then
@@ -1703,6 +1704,7 @@ begin
   LayerParams.maskTransform.m11 := 1;
   LayerParams.maskTransform.m22 := 1;
   LayerParams.opacity := 1.0;
+  LayerParams.layerOptions := D2D1_LAYER_OPTIONS_INITIALIZE_FOR_CLEARTYPE;
   FTarget.PushLayer(@LayerParams, nil);
   if FStateTop > 0 then
     Inc(FStateStack[FStateTop - 1].LayersPushed);

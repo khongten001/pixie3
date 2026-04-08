@@ -25,7 +25,7 @@ type
   TDOMNode = class
   private
     FNodeType: Integer;
-    FNodeValue: WideString;
+    FNodeValue: UnicodeString;
     FFirstChild: TDOMNode;
     FLastChild: TDOMNode;
     FNextSibling: TDOMNode;
@@ -33,7 +33,7 @@ type
     destructor Destroy; override;
     procedure AppendChild(Child: TDOMNode);
     property NodeType: Integer read FNodeType;
-    property NodeValue: WideString read FNodeValue write FNodeValue;
+    property NodeValue: UnicodeString read FNodeValue write FNodeValue;
     property FirstChild: TDOMNode read FFirstChild;
     property NextSibling: TDOMNode read FNextSibling;
   end;
@@ -42,7 +42,7 @@ type
 
   TDOMElement = class(TDOMNode)
   private
-    FTagName: WideString;
+    FTagName: UnicodeString;
     FAttrNames: TStringList;
     FAttrValues: TStringList;
     FAttrNode: TDOMNode;
@@ -50,8 +50,8 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    function GetAttribute(const Name: WideString): WideString;
-    property TagName: WideString read FTagName;
+    function GetAttribute(const Name: UnicodeString): UnicodeString;
+    property TagName: UnicodeString read FTagName;
     property Attributes: TDOMNamedNodeMap read FAttributes;
   end;
 
@@ -62,7 +62,7 @@ type
     FOwner: TDOMElement;
   public
     constructor Create(AOwner: TDOMElement);
-    function GetNamedItem(const Name: WideString): TDOMNode;
+    function GetNamedItem(const Name: UnicodeString): TDOMNode;
   end;
 
   { TXMLDocument }
@@ -77,20 +77,20 @@ type
 
 procedure ReadXMLFile(out Doc: TXMLDocument; Stream: TStream);
 
-function DomToStr(const S: WideString): string; inline;
-function StrToDom(const S: string): WideString; inline;
+function DomToStr(const S: UnicodeString): string; inline;
+function StrToDom(const S: string): UnicodeString; inline;
 
 implementation
 
 {$IFDEF FPC}
-function DomToStr(const S: WideString): string; inline;
+function DomToStr(const S: UnicodeString): string; inline;
 begin Result := UTF8Encode(S); end;
-function StrToDom(const S: string): WideString; inline;
+function StrToDom(const S: string): UnicodeString; inline;
 begin Result := UTF8Decode(S); end;
 {$ELSE}
-function DomToStr(const S: WideString): string; inline;
+function DomToStr(const S: UnicodeString): string; inline;
 begin Result := S; end;
-function StrToDom(const S: string): WideString; inline;
+function StrToDom(const S: string): UnicodeString; inline;
 begin Result := S; end;
 {$ENDIF}
 
@@ -144,13 +144,13 @@ begin
   inherited;
 end;
 
-function TDOMElement.GetAttribute(const Name: WideString): WideString;
+function TDOMElement.GetAttribute(const Name: UnicodeString): UnicodeString;
 var
   Idx: Integer;
 begin
   Idx := FAttrNames.IndexOf(string(Name));
   if Idx >= 0 then
-    Result := WideString(FAttrValues[Idx])
+    Result := UnicodeString(FAttrValues[Idx])
   else
     Result := '';
 end;
@@ -165,14 +165,14 @@ begin
   FOwner := AOwner;
 end;
 
-function TDOMNamedNodeMap.GetNamedItem(const Name: WideString): TDOMNode;
+function TDOMNamedNodeMap.GetNamedItem(const Name: UnicodeString): TDOMNode;
 var
   Idx: Integer;
 begin
   Idx := FOwner.FAttrNames.IndexOf(string(Name));
   if Idx >= 0 then
   begin
-    FOwner.FAttrNode.FNodeValue := WideString(FOwner.FAttrValues[Idx]);
+    FOwner.FAttrNode.FNodeValue := UnicodeString(FOwner.FAttrValues[Idx]);
     Result := FOwner.FAttrNode;
   end
   else
@@ -235,7 +235,7 @@ begin
     Inc(P.Pos);
 end;
 
-function DecodeEntity(const Data: string; EntStart, EntLen: Integer): WideString;
+function DecodeEntity(const Data: string; EntStart, EntLen: Integer): UnicodeString;
 var
   Code, I: Integer;
   C: Char;
@@ -294,10 +294,10 @@ begin
   end;
 
   // Unknown entity — keep as-is
-  Result := '&' + WideString(Copy(Data, EntStart, EntLen)) + ';';
+  Result := '&' + UnicodeString(Copy(Data, EntStart, EntLen)) + ';';
 end;
 
-function ReadText(var P: TXmlParser; StopChar: Char): WideString;
+function ReadText(var P: TXmlParser; StopChar: Char): UnicodeString;
 var
   Start, ScanPos, EntStart, EntLen: Integer;
 begin
@@ -314,14 +314,14 @@ begin
   begin
     Start := P.Pos;
     P.Pos := ScanPos;
-    Result := WideString(Copy(P.Data, Start, ScanPos - Start));
+    Result := UnicodeString(Copy(P.Data, Start, ScanPos - Start));
     Exit;
   end;
 
   // Pass 2: copy clean prefix before first entity, then decode
   Start := P.Pos;
   if ScanPos > Start then
-    Result := WideString(Copy(P.Data, Start, ScanPos - Start))
+    Result := UnicodeString(Copy(P.Data, Start, ScanPos - Start))
   else
     Result := '';
   P.Pos := ScanPos;
@@ -344,12 +344,12 @@ begin
       while (P.Pos <= P.Len) and (P.Data[P.Pos] <> StopChar) and
             (P.Data[P.Pos] <> '&') do
         Inc(P.Pos);
-      Result := Result + WideString(Copy(P.Data, Start, P.Pos - Start));
+      Result := Result + UnicodeString(Copy(P.Data, Start, P.Pos - Start));
     end;
   end;
 end;
 
-function ReadAttrValue(var P: TXmlParser): WideString;
+function ReadAttrValue(var P: TXmlParser): UnicodeString;
 var
   Quote: Char;
 begin
@@ -416,7 +416,7 @@ begin
   end;
 end;
 
-function ReadCDATA(var P: TXmlParser): WideString;
+function ReadCDATA(var P: TXmlParser): UnicodeString;
 var
   Start: Integer;
 begin
@@ -425,13 +425,13 @@ begin
   begin
     if Matches(P, ']]>') then
     begin
-      Result := WideString(Copy(P.Data, Start, P.Pos - Start));
+      Result := UnicodeString(Copy(P.Data, Start, P.Pos - Start));
       Skip(P, 3);
       Exit;
     end;
     Inc(P.Pos);
   end;
-  Result := WideString(Copy(P.Data, Start, P.Pos - Start));
+  Result := UnicodeString(Copy(P.Data, Start, P.Pos - Start));
 end;
 
 function ParseElement(var P: TXmlParser): TDOMElement; forward;
@@ -439,7 +439,7 @@ function ParseElement(var P: TXmlParser): TDOMElement; forward;
 procedure ParseChildren(var P: TXmlParser; Parent: TDOMNode;
   const ParentTag: string);
 var
-  TextVal: WideString;
+  TextVal: UnicodeString;
   TextNode: TDOMNode;
   ChildEl: TDOMElement;
   CloseName: string;
@@ -523,7 +523,7 @@ function ParseElement(var P: TXmlParser): TDOMElement;
 var
   El: TDOMElement;
   TagName, AttrName: string;
-  AttrValue: WideString;
+  AttrValue: UnicodeString;
   SelfClosing: Boolean;
 begin
   Result := nil;
@@ -534,7 +534,7 @@ begin
   if TagName = '' then Exit;
 
   El := TDOMElement.Create;
-  El.FTagName := WideString(TagName);
+  El.FTagName := UnicodeString(TagName);
 
   // Parse attributes
   while not AtEnd(P) do
@@ -557,7 +557,7 @@ begin
       AttrValue := ReadAttrValue(P);
     end
     else
-      AttrValue := WideString(AttrName); // boolean attribute
+      AttrValue := UnicodeString(AttrName); // boolean attribute
 
     El.FAttrNames.Add(AttrName);
     El.FAttrValues.Add(string(AttrValue));

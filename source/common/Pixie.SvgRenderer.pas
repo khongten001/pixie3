@@ -2672,6 +2672,7 @@ end;
 function TPixieSvgRendererBase.CollectAllText(Node: Pointer): string;
 var
   Child: TDOMNode;
+  Tag: string;
 begin
   Result := '';
   Child := TDOMNode(Node).FirstChild;
@@ -2680,7 +2681,11 @@ begin
     if Child.NodeType = TEXT_NODE then
       Result := Result + DomToStr(Child.NodeValue)
     else if Child.NodeType = ELEMENT_NODE then
-      Result := Result + CollectAllText(Child);
+    begin
+      Tag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if (Tag <> 'desc') and (Tag <> 'title') and (Tag <> 'metadata') then
+        Result := Result + CollectAllText(Child);
+    end;
     Child := Child.NextSibling;
   end;
 end;
@@ -2689,6 +2694,7 @@ function TPixieSvgRendererBase.ResolveTextState(Node: Pointer;
   const State: TPixieSvgState): TPixieSvgState;
 var
   Child: TDOMNode;
+  Tag: string;
 begin
   Result := State;
   Child := TDOMNode(Node).FirstChild;
@@ -2696,9 +2702,13 @@ begin
   begin
     if Child.NodeType = ELEMENT_NODE then
     begin
-      Result := InheritState(Child, Result);
-      Result := ResolveTextState(Child, Result);
-      Exit;
+      Tag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if (Tag <> 'desc') and (Tag <> 'title') and (Tag <> 'metadata') then
+      begin
+        Result := InheritState(Child, Result);
+        Result := ResolveTextState(Child, Result);
+        Exit;
+      end;
     end;
     Child := Child.NextSibling;
   end;
