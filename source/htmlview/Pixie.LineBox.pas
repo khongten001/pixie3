@@ -121,6 +121,7 @@ type
     FBaseline: TPixiePixel;
     FTextAlign: TPixieTextAlign;
     FMinWidth: TPixiePixel;
+    FSuppressStrut: Boolean;
     FItems: TPixieLineBoxItemList;
 
     function HaveLastSpace: Boolean;
@@ -128,7 +129,8 @@ type
   public
     constructor Create(ATop, ALeft, ARight: TPixiePixel;
       const ALineHeight: TPixieCssLineHeight;
-      const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign);
+      const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign;
+      ASuppressStrut: Boolean = False);
     destructor Destroy; override;
 
     function Bottom: TPixiePixel;
@@ -508,7 +510,8 @@ end;
 
 constructor TPixieLineBox.Create(ATop, ALeft, ARight: TPixiePixel;
   const ALineHeight: TPixieCssLineHeight;
-  const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign);
+  const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign;
+  ASuppressStrut: Boolean);
 begin
   inherited Create;
   FTop := ATop;
@@ -521,6 +524,7 @@ begin
   FBaseline := 0;
   FTextAlign := AAlign;
   FMinWidth := 0;
+  FSuppressStrut := ASuppressStrut;
   FItems := TPixieLineBoxItemList.Create(True);
 end;
 
@@ -819,7 +823,7 @@ var
   LineMaxHeight, TopAlignedMaxHeight, BottomAlignedMaxHeight,
     InlineBoxesDims: TItemsDimensions;
   Bl, ContentOffset, TopShift: TPixiePixel;
-  IsTopBottomBox, Ignore: Boolean;
+  IsTopBottomBox, Ignore, HasTextContent: Boolean;
   TopDownHeight: TPixiePixel;
   Diff1, Diff2: TPixiePixel;
   TopShiftCorrection: TPixiePixel;
@@ -936,6 +940,8 @@ begin
     LineHeightVal := FDefaultLineHeight.ComputedValue
   else
     LineHeightVal := 0;
+
+  HasTextContent := False;
 
   CurrentContext.Baseline := 0;
   CurrentContext.Fm := FFontMetrics;
@@ -1073,7 +1079,11 @@ begin
     else
     begin
       if not Lbi.GetEl.SrcEl.IsInlineBox then
-        LineMaxHeight.AddItem(Lbi)
+      begin
+        LineMaxHeight.AddItem(Lbi);
+        if Lbi.GetItemType = lbiTextPart then
+          HasTextContent := True;
+      end
       else
         InlineBoxesDims.AddItem(Lbi);
     end;
@@ -1109,7 +1119,7 @@ begin
   if HasLineHeight then
   begin
     FHeight := LineHeightVal;
-    if LineMaxHeight.Count <> 0 then
+    if (LineMaxHeight.Count <> 0) and (HasTextContent or not FSuppressStrut) then
     begin
       TopShift := Abs(LineMaxHeight.Top);
       TopShiftCorrection := (LineHeightVal - LineMaxHeight.Height) / 2;
@@ -1135,12 +1145,23 @@ begin
       // with the block container's font and line-height.  Even when no text
       // items remain on the line (e.g. trailing <br> was removed), the
       // strut still contributes to the line box height.
-      TopShiftCorrection := (LineHeightVal - FFontMetrics.Height) / 2;
-      TopShift := Max(Abs(InlineBoxesDims.Top),
-        FFontMetrics.Ascent + TopShiftCorrection);
-      FBaseline := Max(InlineBoxesDims.Bottom,
-        FFontMetrics.Descent + TopShiftCorrection);
-      FHeight := TopShift + FBaseline;
+      // In limited quirks / quirks mode, the strut is suppressed for lines
+      // inside table cells that contain only replaced elements (images).
+      if FSuppressStrut then
+      begin
+        TopShift := Abs(InlineBoxesDims.Top);
+        FBaseline := InlineBoxesDims.Bottom;
+        FHeight := TopShift + FBaseline;
+      end
+      else
+      begin
+        TopShiftCorrection := (LineHeightVal - FFontMetrics.Height) / 2;
+        TopShift := Max(Abs(InlineBoxesDims.Top),
+          FFontMetrics.Ascent + TopShiftCorrection);
+        FBaseline := Max(InlineBoxesDims.Bottom,
+          FFontMetrics.Descent + TopShiftCorrection);
+        FHeight := TopShift + FBaseline;
+      end;
     end
     else
       TopShift := 0;
@@ -1152,19 +1173,32 @@ begin
         TopShift := TopShift + BottomAlignedMaxHeight.Height - FHeight;
       FHeight := TopDownHeight;
     end;
+
   end
   else
   begin
     // No explicit line-height — add inline boxes dimensions
-    LineMaxHeight.Top := Min(LineMaxHeight.Top, InlineBoxesDims.Top);
-    LineMaxHeight.Bottom := Max(LineMaxHeight.Bottom, InlineBoxesDims.Bottom);
+    if FSuppressStrut and (not HasTextContent) and (InlineBoxesDims.Count > 0) then
+    begin
+      // Quirks mode table cell with only replaced elements:
+      // ignore inline marker dimensions, use only replaced element dims
+      FHeight := Max(InlineBoxesDims.Height,
+        Max(TopAlignedMaxHeight.Height, BottomAlignedMaxHeight.Height));
+      TopShift := Abs(InlineBoxesDims.Top);
+      FBaseline := InlineBoxesDims.Bottom;
+    end
+    else
+    begin
+      LineMaxHeight.Top := Min(LineMaxHeight.Top, InlineBoxesDims.Top);
+      LineMaxHeight.Bottom := Max(LineMaxHeight.Bottom, InlineBoxesDims.Bottom);
 
-    FHeight := Max(LineMaxHeight.Height,
-      Max(TopAlignedMaxHeight.Height, BottomAlignedMaxHeight.Height));
+      FHeight := Max(LineMaxHeight.Height,
+        Max(TopAlignedMaxHeight.Height, BottomAlignedMaxHeight.Height));
 
-    TopShift := -Min(LineMaxHeight.Top,
-      LineMaxHeight.Bottom - BottomAlignedMaxHeight.Height);
-    FBaseline := LineMaxHeight.Bottom;
+      TopShift := -Min(LineMaxHeight.Top,
+        LineMaxHeight.Bottom - BottomAlignedMaxHeight.Height);
+      FBaseline := LineMaxHeight.Bottom;
+    end;
   end;
 
   // ========================

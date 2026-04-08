@@ -785,6 +785,8 @@ begin
       El := TPixieElBase.Create(Self)
     else if TagName = 'body' then
       El := TPixieElBody.Create(Self)
+    else if TagName = 'hr' then
+      El := TPixieElHr.Create(Self)
     else if TagName = 'div' then
       El := TPixieElDiv.Create(Self)
     else if TagName = 'script' then

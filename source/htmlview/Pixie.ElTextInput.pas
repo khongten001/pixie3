@@ -1444,7 +1444,7 @@ begin
 
   Cv := GetCanvas(Self);
   if Cv <> nil then
-    Sz.Width := Cv.MeasureText(StringOfChar('m', CharCount), FCss.Font)
+    Sz.Width := Cv.MeasureText(StringOfChar('0', CharCount), FCss.Font)
   else
     Sz.Width := CharCount * FCss.FontMetrics.ChWidth;
   Sz.Height := FCss.FontMetrics.Height;
@@ -1510,7 +1510,7 @@ var
 begin
   Cv := GetCanvas(Self);
   if Cv <> nil then
-    Sz.Width := Cv.MeasureText(StringOfChar('m', FCols), FCss.Font)
+    Sz.Width := Cv.MeasureText(StringOfChar('0', FCols), FCss.Font)
   else
     Sz.Width := FCols * FCss.FontMetrics.ChWidth;
   Sz.Height := FRows * FCss.FontMetrics.Height;

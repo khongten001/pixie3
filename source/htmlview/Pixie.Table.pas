@@ -747,12 +747,13 @@ var
 begin
   if Bc = bcSeparate then
   begin
+    // Round to prevent sub-pixel gaps between adjacent cells
     L := BdrSpaceX;
     for I := 0 to FColsCount - 1 do
     begin
       ColP := FColumns.Ptr(I);
-      ColP^.Left := L;
-      ColP^.Right := ColP^.Left + ColP^.Width;
+      ColP^.Left := Round(L);
+      ColP^.Right := Round(L + ColP^.Width);
       L := ColP^.Right + BdrSpaceX;
     end;
   end
@@ -787,8 +788,8 @@ begin
     for I := 0 to FRowsCount - 1 do
     begin
       RowP := FRows.Ptr(I);
-      RowP^.Top := T;
-      RowP^.Bottom := RowP^.Top + RowP^.Height;
+      RowP^.Top := Round(T);
+      RowP^.Bottom := Round(T + RowP^.Height);
       T := RowP^.Bottom + BdrSpaceY;
     end;
   end

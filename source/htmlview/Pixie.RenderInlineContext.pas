@@ -28,6 +28,7 @@ type
     FIterWasSpace: Boolean;
     FIterSelfSize: TPixieContainingBlockContext;
     FIterFmtCtx: TPixieFormattingContext;
+    FSuppressStrut: Boolean;
 
     function FinishLastBox(EndOfRender: Boolean;
       const SelfSize: TPixieContainingBlockContext): TPixieLineBoxItemList;
@@ -125,9 +126,20 @@ function TPixieRenderInlineContext._RenderContent(X, Y: TPixiePixel;
 var
   Ws: TPixieWhiteSpace;
   OldTop: TPixiePixel;
+  Doc: TObject;
 begin
   FLineBoxes.Clear;
   FMaxLineWidth := 0;
+
+  // In limited quirks / quirks mode, suppress the strut in table cells
+  // so images don't get extra descent space below them
+  FSuppressStrut := False;
+  if SrcEl.Css.Display = displayTableCell then
+  begin
+    Doc := SrcEl.GetDocument;
+    if (Doc <> nil) and (Doc is TPixieDocument) then
+      FSuppressStrut := TPixieDocument(Doc).Mode <> dmNoQuirks;
+  end;
 
   Ws := SrcEl.Css.WhiteSpace;
   FIterSkipSpaces := (Ws = wsNormal) or (Ws = wsNowrap) or (Ws = wsPreLine);
@@ -243,7 +255,8 @@ begin
       LineCtx.Right,
       Css.LineHeight,
       Css.FontMetrics,
-      Css.TextAlign));
+      Css.TextAlign,
+      FSuppressStrut));
 
     // Re-add overflow items from the finished line box
     for I := 0 to Items.Count - 1 do

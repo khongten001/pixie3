@@ -7,7 +7,7 @@ unit Pixie.ElMisc;
 interface
 
 uses
-  SysUtils, Generics.Collections,
+  SysUtils, Math, Generics.Collections,
   Pixie.Types, Pixie.CssProperties,
   Pixie.Style, Pixie.Stylesheet,
   Pixie.Element, Pixie.HtmlTag;
@@ -80,6 +80,14 @@ type
   { TPixieElUl }
 
   TPixieElUl = class(TPixieHtmlTag)
+  public
+    constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
+  end;
+
+  { TPixieElHr }
+
+  TPixieElHr = class(TPixieHtmlTag)
   public
     constructor Create(ADoc: TObject);
     procedure ParseAttributes; override;
@@ -389,6 +397,54 @@ begin
   Val := GetAttr('align');
   if Val <> '' then
     MapAlignToTextAlign(Val);
+  inherited ParseAttributes;
+end;
+
+{ TPixieElHr }
+
+constructor TPixieElHr.Create(ADoc: TObject);
+begin
+  inherited Create(ADoc);
+end;
+
+procedure TPixieElHr.ParseAttributes;
+var
+  ColorVal, SizeVal, WidthVal: string;
+  HasNoshade, HasColor: Boolean;
+  Sz: Integer;
+begin
+  ColorVal := GetAttr('color');
+  SizeVal := GetAttr('size');
+  WidthVal := GetAttr('width');
+  HasNoshade := GetAttr('noshade', #1) <> #1;
+  HasColor := ColorVal <> '';
+
+  if HasNoshade or HasColor then
+    FStyle.AddProperty(Ord(psid_border_style), 'solid');
+
+  if HasColor then
+  begin
+    FStyle.AddProperty(Ord(psid_border_color), ColorVal);
+    FStyle.AddProperty(Ord(psid_background_color), ColorVal);
+  end;
+
+  if SizeVal <> '' then
+  begin
+    Sz := StrToIntDef(SizeVal, -1);
+    if Sz >= 1 then
+    begin
+      // Total height = size; subtract 2px for top+bottom borders
+      MapToPixelLengthProperty(Ord(psid_height), IntToStr(Max(Sz - 2, 0)));
+      // size=1 with noshade/color: remove bottom border for 1px total
+      if (Sz = 1) and (HasNoshade or HasColor) then
+        MapToPixelLengthProperty(Ord(psid_border_bottom_width), '0');
+    end;
+  end;
+
+  // width -> can be percentage or pixel
+  if WidthVal <> '' then
+    MapToDimensionProperty(Ord(psid_width), WidthVal);
+
   inherited ParseAttributes;
 end;
 
