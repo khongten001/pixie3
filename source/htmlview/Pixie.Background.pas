@@ -79,15 +79,19 @@ type
     function GetImageLayer(Idx: Integer): TPixieBackgroundImage;
     function GetColorLayer(Idx: Integer): TPixieBackgroundColor;
     function GetLinearGradientLayer(Idx: Integer;
-      const Layer: TPixieBackgroundLayer): TPixieLinearGradientLayer;
+      const Layer: TPixieBackgroundLayer;
+      const ACurrentColor: TPixieWebColor): TPixieLinearGradientLayer;
     function GetRadialGradientLayer(Idx: Integer;
-      const Layer: TPixieBackgroundLayer): TPixieRadialGradientLayer;
+      const Layer: TPixieBackgroundLayer;
+      const ACurrentColor: TPixieWebColor): TPixieRadialGradientLayer;
     function GetConicGradientLayer(Idx: Integer;
-      const Layer: TPixieBackgroundLayer): TPixieConicGradientLayer;
+      const Layer: TPixieBackgroundLayer;
+      const ACurrentColor: TPixieWebColor): TPixieConicGradientLayer;
     function GetLayer(Idx: Integer; Pos: TPixiePosition;
       El: TObject; Ri: TObject; out Layer: TPixieBackgroundLayer): Boolean;
     procedure DrawLayer(Hdc: PtrUInt; Idx: Integer;
-      const Layer: TPixieBackgroundLayer; Container: TObject);
+      const Layer: TPixieBackgroundLayer; Container: TObject;
+      const ACurrentColor: TPixieWebColor);
   end;
 
 // Static helpers exposed for testing
@@ -120,7 +124,14 @@ end;
 // Normalize a CSS length into a value between 0 and 1
 function NormalizeLength(const Len: TPixieCssLength; LineLen: Single): Single;
 begin
-  if Len.Units = cssUnitsPercentage then
+  if Len.Units = cssUnitsCalc then
+  begin
+    if LineLen <> 0 then
+      Result := Len.CalcPercentCoeff / 100 + Len.Val / LineLen
+    else
+      Result := 0;
+  end
+  else if Len.Units = cssUnitsPercentage then
     Result := Len.Val / 100.0
   else if LineLen <> 0 then
     Result := Len.Val / LineLen
@@ -187,7 +198,8 @@ begin
 end;
 
 function PrepareColorPoints(Layer: TPixieGradientBase; LineLen: Single;
-  GradType: Integer; Colors: TPixieGradientColorStopList): Boolean;
+  GradType: Integer; Colors: TPixieGradientColorStopList;
+  const ACurrentColor: TPixieWebColor): Boolean;
 var
   ColorPoints: TPixieColorPointList;
   Repeating: Boolean;
@@ -197,6 +209,7 @@ var
   Item: TPixieGradientColorStop;
   Cpt, LastCpt: TPixieColorPoint;
   Sum, StepOffset: Single;
+  StopColor: TPixieWebColor;
 begin
   ColorPoints := Layer.ColorPoints;
 
@@ -236,24 +249,30 @@ begin
       Continue;
     end;
 
-    if Item.Color.Alpha = 0 then
+    // Resolve currentColor to the element's computed color
+    if Item.Color.IsCurrentColor then
+      StopColor := ACurrentColor
+    else
+      StopColor := Item.Color;
+
+    if StopColor.Alpha = 0 then
       HasTransparent := True;
 
     if Item.HasLength then
     begin
       ColorPoints.Add(TPixieColorPoint.Create(
-        NormalizeLength(Item.Length, LineLen), Item.Color));
+        NormalizeLength(Item.Length, LineLen), StopColor));
     end
     else if Item.HasAngle then
     begin
       ColorPoints.Add(TPixieColorPoint.Create(
-        Item.Angle / 360, Item.Color));
+        Item.Angle / 360, StopColor));
     end
     else
     begin
       if ColorPoints.Count > 0 then
         Inc(NoneUnits);
-      ColorPoints.Add(TPixieColorPoint.Create(0.0, Item.Color));
+      ColorPoints.Add(TPixieColorPoint.Create(0.0, StopColor));
     end;
   end;
 
@@ -583,7 +602,8 @@ begin
 end;
 
 function TPixieBackground.GetLinearGradientLayer(Idx: Integer;
-  const Layer: TPixieBackgroundLayer): TPixieLinearGradientLayer;
+  const Layer: TPixieBackgroundLayer;
+  const ACurrentColor: TPixieWebColor): TPixieLinearGradientLayer;
 var
   Grad: TPixieGradient;
   Ret: TPixieLinearGradientLayer;
@@ -627,7 +647,8 @@ begin
     Ret.ColorSpace := Grad.ColorSpace;
     Ret.HueInterpolation := Grad.HueInterpolation;
 
-    if not PrepareColorPoints(Ret, LineLen, Grad.GradientType, Grad.Colors) then
+    if not PrepareColorPoints(Ret, LineLen, Grad.GradientType, Grad.Colors,
+      ACurrentColor) then
     begin
       Ret.Free;
       Exit;
@@ -667,7 +688,8 @@ begin
 end;
 
 function TPixieBackground.GetRadialGradientLayer(Idx: Integer;
-  const Layer: TPixieBackgroundLayer): TPixieRadialGradientLayer;
+  const Layer: TPixieBackgroundLayer;
+  const ACurrentColor: TPixieWebColor): TPixieRadialGradientLayer;
 var
   Grad: TPixieGradient;
   Ret: TPixieRadialGradientLayer;
@@ -811,7 +833,8 @@ begin
     Ret.ColorSpace := Grad.ColorSpace;
     Ret.HueInterpolation := Grad.HueInterpolation;
 
-    if PrepareColorPoints(Ret, Ret.Radius.X, Grad.GradientType, Grad.Colors) then
+    if PrepareColorPoints(Ret, Ret.Radius.X, Grad.GradientType, Grad.Colors,
+      ACurrentColor) then
       Result := Ret
     else
       Ret.Free;
@@ -822,7 +845,8 @@ begin
 end;
 
 function TPixieBackground.GetConicGradientLayer(Idx: Integer;
-  const Layer: TPixieBackgroundLayer): TPixieConicGradientLayer;
+  const Layer: TPixieBackgroundLayer;
+  const ACurrentColor: TPixieWebColor): TPixieConicGradientLayer;
 var
   Grad: TPixieGradient;
   Ret: TPixieConicGradientLayer;
@@ -854,7 +878,8 @@ begin
       TPixiePointF.Create(Layer.OriginBox.Right, Layer.OriginBox.Bottom));
     Ret.Radius := Max(Max(Corner1, Corner2), Max(Corner3, Corner4));
 
-    if PrepareColorPoints(Ret, 0, Grad.GradientType, Grad.Colors) then
+    if PrepareColorPoints(Ret, 0, Grad.GradientType, Grad.Colors,
+      ACurrentColor) then
       Result := Ret
     else
       Ret.Free;
@@ -1085,7 +1110,8 @@ begin
 end;
 
 procedure TPixieBackground.DrawLayer(Hdc: PtrUInt; Idx: Integer;
-  const Layer: TPixieBackgroundLayer; Container: TObject);
+  const Layer: TPixieBackgroundLayer; Container: TObject;
+  const ACurrentColor: TPixieWebColor);
 var
   ColorLayer: TPixieBackgroundColor;
   ImgLayer: TPixieBackgroundImage;
@@ -1130,7 +1156,7 @@ begin
       if (Layer.OriginBox.Width <> 0) and
          (Layer.OriginBox.Height <> 0) then
       begin
-        LinearGrad := GetLinearGradientLayer(Idx, Layer);
+        LinearGrad := GetLinearGradientLayer(Idx, Layer, ACurrentColor);
         if LinearGrad <> nil then
         try
           Cont.DrawLinearGradient(Hdc, Layer, LinearGrad);
@@ -1145,7 +1171,7 @@ begin
       if (Layer.OriginBox.Width <> 0) and
          (Layer.OriginBox.Height <> 0) then
       begin
-        RadialGrad := GetRadialGradientLayer(Idx, Layer);
+        RadialGrad := GetRadialGradientLayer(Idx, Layer, ACurrentColor);
         if RadialGrad <> nil then
         try
           Cont.DrawRadialGradient(Hdc, Layer, RadialGrad);
@@ -1160,7 +1186,7 @@ begin
       if (Layer.OriginBox.Width <> 0) and
          (Layer.OriginBox.Height <> 0) then
       begin
-        ConicGrad := GetConicGradientLayer(Idx, Layer);
+        ConicGrad := GetConicGradientLayer(Idx, Layer, ACurrentColor);
         if ConicGrad <> nil then
         try
           Cont.DrawConicGradient(Hdc, Layer, ConicGrad);

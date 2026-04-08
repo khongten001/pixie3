@@ -1628,7 +1628,7 @@ begin
             Layer.OriginBox.Y :=
               Layer.ClipBox.Y + Layer.ClipBox.Height - Layer.OriginBox.Height;
 
-          Bg.DrawLayer(Hdc, I, Layer, Doc.Container);
+          Bg.DrawLayer(Hdc, I, Layer, Doc.Container, FCss.Color);
         end;
       end;
 
@@ -1716,7 +1716,7 @@ begin
               Layer.BorderBox.DoRound;
               Layer.ClipBox.DoRound;
               Layer.OriginBox.DoRound;
-              Bg.DrawLayer(Hdc, I, Layer, Doc.Container);
+              Bg.DrawLayer(Hdc, I, Layer, Doc.Container, FCss.Color);
             end;
           end;
 
