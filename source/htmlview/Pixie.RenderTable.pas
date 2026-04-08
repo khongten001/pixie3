@@ -117,7 +117,7 @@ var
   var
     Idx: Integer;
   begin
-    FGrid.BeginRow(Row);
+    FGrid.BeginRow(Row, Row.SrcEl.Css.CssHeight);
     for Idx := 0 to Row.FChildren.Count - 1 do
     begin
       if Row.FChildren[Idx].SrcEl.Css.Display = displayTableCell then

@@ -104,7 +104,7 @@ type
     destructor Destroy; override;
 
     procedure Clear;
-    procedure BeginRow(Row: Pointer);
+    procedure BeginRow(Row: Pointer; const ACssHeight: TPixieCssLength);
     procedure AddCell(El: Pointer; AColspan, ARowspan: Integer;
       const ABorders: TPixieMargins;
       const ACssWidth, ACssHeight: TPixieCssLength);
@@ -268,7 +268,8 @@ begin
   FRows.Clear;
 end;
 
-procedure TPixieTableGrid.BeginRow(Row: Pointer);
+procedure TPixieTableGrid.BeginRow(Row: Pointer;
+  const ACssHeight: TPixieCssLength);
 var
   RowRec: TPixieTableRow;
   CellRow: TPixieTableCellList;
@@ -276,7 +277,7 @@ begin
   CellRow := TPixieTableCellList.Create;
   FCells.Add(CellRow);
 
-  RowRec.InitWithRow(0, Row, TPixieCssLength.PredefValue(0));
+  RowRec.InitWithRow(0, Row, ACssHeight);
   FRows.Add(RowRec);
 end;
 
