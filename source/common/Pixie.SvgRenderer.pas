@@ -1247,6 +1247,18 @@ var
       end;
       while (P <= Len) and CharInSet(S[P], ['0'..'9', '.', 'e', 'E']) do
       begin
+        // Handle exponent sign: e.g. -4e-6
+        if CharInSet(S[P], ['e', 'E']) then
+        begin
+          NumStr := NumStr + S[P];
+          Inc(P);
+          if (P <= Len) and CharInSet(S[P], ['-', '+']) then
+          begin
+            NumStr := NumStr + S[P];
+            Inc(P);
+          end;
+          Continue;
+        end;
         NumStr := NumStr + S[P];
         Inc(P);
       end;
