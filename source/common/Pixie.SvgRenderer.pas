@@ -180,6 +180,7 @@ type
     // Shape renderers (call abstract drawing primitives)
     procedure RenderElement(Node: Pointer; const State: TPixieSvgState);
     procedure RenderGroup(Node: Pointer; const State: TPixieSvgState);
+    procedure RenderSwitch(Node: Pointer; const State: TPixieSvgState);
     procedure RenderUse(Node: Pointer; const State: TPixieSvgState);
     procedure RenderRect(Node: Pointer; const State: TPixieSvgState);
     procedure RenderCircle(Node: Pointer; const State: TPixieSvgState);
@@ -723,7 +724,7 @@ begin
     if KeySel[1] = '.' then
     begin
       if Length(KeySel) > 1 then
-        MergeStyle(Copy(KeySel, 2, MaxInt), Declarations);
+        MergeStyle(LowerCase(Copy(KeySel, 2, MaxInt)), Declarations);
     end
     else
     begin
@@ -759,10 +760,7 @@ begin
       Value := Trim(Copy(Key, ColonPos + 1, MaxInt));
       Key := Trim(Copy(Key, 1, ColonPos - 1));
       if LowerCase(Key) = LowerCase(PropName) then
-      begin
         Result := Value;
-        Exit;
-      end;
     end;
     P := SemiPos + 1;
   end;
@@ -815,7 +813,7 @@ begin
         if ClassName = '' then Continue;
 
         // Class selector: .className
-        if FStyleMap.TryGetValue(ClassName, ClassDecl) then
+        if FStyleMap.TryGetValue(LowerCase(ClassName), ClassDecl) then
         begin
           if StyleStr <> '' then
             StyleStr := StyleStr + ';' + ClassDecl
@@ -825,7 +823,7 @@ begin
 
         // Type.class selector: @tag.className (higher specificity)
         if (NodeTag <> '') and
-           FStyleMap.TryGetValue('@' + NodeTag + '.' + ClassName, ClassDecl) then
+           FStyleMap.TryGetValue('@' + NodeTag + '.' + LowerCase(ClassName), ClassDecl) then
         begin
           if StyleStr <> '' then
             StyleStr := StyleStr + ';' + ClassDecl
@@ -2827,6 +2825,8 @@ begin
     RenderImage(Node, State)
   else if TagName = 'use' then
     RenderUse(Node, State)
+  else if TagName = 'switch' then
+    RenderSwitch(Node, State)
   else if TagName = 'defs' then
     CollectDefs(Node)
   else if TagName = 'lineargradient' then
@@ -2911,6 +2911,47 @@ begin
 
     Child := Child.NextSibling;
   end;
+end;
+
+// ===========================================================================
+// <switch> conditional processing
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.RenderSwitch(Node: Pointer;
+  const State: TPixieSvgState);
+var
+  Child: TDOMNode;
+  ChildState: TPixieSvgState;
+  NeedRestore: Boolean;
+begin
+  // SVG <switch> renders only the first child whose conditional attributes
+  // (systemLanguage, requiredFeatures, requiredExtensions) are satisfied.
+  // We pick the first child that has none of these attributes (the fallback).
+  DoSaveState;
+  ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
+  ApplyOpacity(State, NeedRestore);
+
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+    begin
+      if (GetAttr(Child, 'systemLanguage') = '') and
+         (GetAttr(Child, 'requiredFeatures') = '') and
+         (GetAttr(Child, 'requiredExtensions') = '') then
+      begin
+        ChildState := InheritState(Child, State);
+        RenderElement(Child, ChildState);
+        Break;
+      end;
+    end;
+
+    Child := Child.NextSibling;
+  end;
+
+  if NeedRestore then DoEndOpacity;
+  DoRestoreState;
 end;
 
 // ===========================================================================
