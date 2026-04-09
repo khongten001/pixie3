@@ -60,6 +60,7 @@ type
     FillGradientId: string;
     StrokeGradientId: string;
     BlendMode: TPixieBlendMode;
+    XmlSpacePreserve: Boolean;
   end;
 
   { TPixieSvgGradientStop }
@@ -98,6 +99,16 @@ type
 
   TPixieSvgPathCmdList = TList<TPixieSvgPathCmd>;
 
+  { TPixieSvgPathStats - geometry summary of a path for marker placement }
+
+  TPixieSvgPathStats = record
+    StartX, StartY: Single;             // path origin (first moveto target)
+    EndX, EndY: Single;                 // current point after last command
+    FirstSegEndX, FirstSegEndY: Single; // end of first drawing segment
+    LastSegStartX, LastSegStartY: Single; // start of last drawing segment
+    HasSegment: Boolean;
+  end;
+
   { TPixieSvgRendererBase - abstract SVG renderer }
 
   TPixieSvgIdMap = TDictionary<string, Pointer>;
@@ -131,6 +142,8 @@ type
       const State: TPixieSvgState); virtual;
     procedure DoRenderTextRun(const Text: string; X, Y: Single;
       const State: TPixieSvgState); virtual;
+    function DoMeasureTextRun(const Text: string;
+      const State: TPixieSvgState): Single; virtual; abstract;
     procedure DoDrawImage(const Href: string;
       X, Y, W, H: Single); virtual;
     procedure DoClearImages; virtual;
@@ -155,6 +168,8 @@ type
     // Path data parsing
     function ParsePathData(const D: string): TPixieSvgPathCmdList;
     procedure EmitPathCommands(Cmds: TPixieSvgPathCmdList);
+    procedure ComputePathStats(Cmds: TPixieSvgPathCmdList;
+      out Stats: TPixieSvgPathStats);
     procedure ArcToBezier(X1, Y1, RX, RY, XRotation: Single;
       LargeArc, Sweep: Boolean; X2, Y2: Single);
 
@@ -199,8 +214,14 @@ type
     procedure RenderText(Node: Pointer;
       const State: TPixieSvgState); virtual;
     function CollectAllText(Node: Pointer): string;
-    procedure RenderTextSpans(Node: Pointer;
+    function NormalizeTextNode(const Raw: string;
+      Preserve: Boolean): string;
+    procedure RenderTextChunk(Node: Pointer;
       const State: TPixieSvgState; var X, Y: Single);
+    procedure RenderTextChunkContents(Node: Pointer;
+      const State: TPixieSvgState; var X, Y: Single);
+    function MeasureTextChunkWidth(Node: Pointer;
+      const State: TPixieSvgState): Single;
     procedure RenderImage(Node: Pointer;
       const State: TPixieSvgState);
     procedure RenderMarkerAt(const MarkerId: string;
@@ -1086,6 +1107,13 @@ begin
     Result.EvenOddFill := True
   else if AnchorStr = 'nonzero' then
     Result.EvenOddFill := False;
+
+  // xml:space (inherited; "preserve" keeps all whitespace verbatim)
+  AnchorStr := GetAttr(Node, 'xml:space');
+  if AnchorStr = 'preserve' then
+    Result.XmlSpacePreserve := True
+  else if AnchorStr = 'default' then
+    Result.XmlSpacePreserve := False;
 
   // Mix blend mode (non-inherited — reset per element)
   Result.BlendMode := bmNormal;
@@ -2591,6 +2619,201 @@ begin
   end;
 end;
 
+procedure TPixieSvgRendererBase.ComputePathStats(
+  Cmds: TPixieSvgPathCmdList; out Stats: TPixieSvgPathStats);
+var
+  I, ArgIdx, ArgLen: Integer;
+  Cmd: TPixieSvgPathCmd;
+  CurX, CurY, SubpathStartX, SubpathStartY: Single;
+  NewX, NewY: Single;
+
+  procedure RecordSegment(NX, NY: Single);
+  begin
+    Stats.LastSegStartX := CurX;
+    Stats.LastSegStartY := CurY;
+    if not Stats.HasSegment then
+    begin
+      Stats.FirstSegEndX := NX;
+      Stats.FirstSegEndY := NY;
+      Stats.HasSegment := True;
+    end;
+    CurX := NX;
+    CurY := NY;
+  end;
+
+begin
+  Stats.StartX := 0; Stats.StartY := 0;
+  Stats.EndX := 0; Stats.EndY := 0;
+  Stats.FirstSegEndX := 0; Stats.FirstSegEndY := 0;
+  Stats.LastSegStartX := 0; Stats.LastSegStartY := 0;
+  Stats.HasSegment := False;
+
+  CurX := 0; CurY := 0;
+  SubpathStartX := 0; SubpathStartY := 0;
+
+  for I := 0 to Cmds.Count - 1 do
+  begin
+    Cmd := Cmds[I];
+    ArgIdx := 0;
+    ArgLen := Length(Cmd.Args);
+
+    case Cmd.Cmd of
+      'M':
+      begin
+        if ArgIdx + 1 < ArgLen then
+        begin
+          NewX := Cmd.Args[ArgIdx]; NewY := Cmd.Args[ArgIdx + 1];
+          Inc(ArgIdx, 2);
+          if I = 0 then begin Stats.StartX := NewX; Stats.StartY := NewY; end;
+          CurX := NewX; CurY := NewY;
+          SubpathStartX := NewX; SubpathStartY := NewY;
+        end;
+        while ArgIdx + 1 < ArgLen do
+        begin
+          NewX := Cmd.Args[ArgIdx]; NewY := Cmd.Args[ArgIdx + 1];
+          Inc(ArgIdx, 2);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'm':
+      begin
+        if ArgIdx + 1 < ArgLen then
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx];
+          NewY := CurY + Cmd.Args[ArgIdx + 1];
+          Inc(ArgIdx, 2);
+          if I = 0 then begin Stats.StartX := NewX; Stats.StartY := NewY; end;
+          CurX := NewX; CurY := NewY;
+          SubpathStartX := NewX; SubpathStartY := NewY;
+        end;
+        while ArgIdx + 1 < ArgLen do
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx];
+          NewY := CurY + Cmd.Args[ArgIdx + 1];
+          Inc(ArgIdx, 2);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'L', 'T':
+      begin
+        while ArgIdx + 1 < ArgLen do
+        begin
+          NewX := Cmd.Args[ArgIdx]; NewY := Cmd.Args[ArgIdx + 1];
+          Inc(ArgIdx, 2);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'l', 't':
+      begin
+        while ArgIdx + 1 < ArgLen do
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx];
+          NewY := CurY + Cmd.Args[ArgIdx + 1];
+          Inc(ArgIdx, 2);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'H':
+      begin
+        while ArgIdx < ArgLen do
+        begin
+          NewX := Cmd.Args[ArgIdx]; Inc(ArgIdx);
+          RecordSegment(NewX, CurY);
+        end;
+      end;
+      'h':
+      begin
+        while ArgIdx < ArgLen do
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx]; Inc(ArgIdx);
+          RecordSegment(NewX, CurY);
+        end;
+      end;
+      'V':
+      begin
+        while ArgIdx < ArgLen do
+        begin
+          NewY := Cmd.Args[ArgIdx]; Inc(ArgIdx);
+          RecordSegment(CurX, NewY);
+        end;
+      end;
+      'v':
+      begin
+        while ArgIdx < ArgLen do
+        begin
+          NewY := CurY + Cmd.Args[ArgIdx]; Inc(ArgIdx);
+          RecordSegment(CurX, NewY);
+        end;
+      end;
+      'C':
+      begin
+        while ArgIdx + 5 < ArgLen do
+        begin
+          NewX := Cmd.Args[ArgIdx + 4]; NewY := Cmd.Args[ArgIdx + 5];
+          Inc(ArgIdx, 6);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'c':
+      begin
+        while ArgIdx + 5 < ArgLen do
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx + 4];
+          NewY := CurY + Cmd.Args[ArgIdx + 5];
+          Inc(ArgIdx, 6);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'S', 'Q':
+      begin
+        while ArgIdx + 3 < ArgLen do
+        begin
+          NewX := Cmd.Args[ArgIdx + 2]; NewY := Cmd.Args[ArgIdx + 3];
+          Inc(ArgIdx, 4);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      's', 'q':
+      begin
+        while ArgIdx + 3 < ArgLen do
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx + 2];
+          NewY := CurY + Cmd.Args[ArgIdx + 3];
+          Inc(ArgIdx, 4);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'A':
+      begin
+        while ArgIdx + 6 < ArgLen do
+        begin
+          NewX := Cmd.Args[ArgIdx + 5]; NewY := Cmd.Args[ArgIdx + 6];
+          Inc(ArgIdx, 7);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'a':
+      begin
+        while ArgIdx + 6 < ArgLen do
+        begin
+          NewX := CurX + Cmd.Args[ArgIdx + 5];
+          NewY := CurY + Cmd.Args[ArgIdx + 6];
+          Inc(ArgIdx, 7);
+          RecordSegment(NewX, NewY);
+        end;
+      end;
+      'Z', 'z':
+      begin
+        if (CurX <> SubpathStartX) or (CurY <> SubpathStartY) then
+          RecordSegment(SubpathStartX, SubpathStartY);
+      end;
+    end;
+  end;
+
+  Stats.EndX := CurX;
+  Stats.EndY := CurY;
+end;
+
 // ===========================================================================
 // Arc-to-Bezier conversion (SVG spec Appendix F)
 // ===========================================================================
@@ -2734,10 +2957,8 @@ var
   D: string;
   Cmds: TPixieSvgPathCmdList;
   NeedRestore: Boolean;
-  I, N: Integer;
-  StartX, StartY, EndX, EndY, PrevX, PrevY: Single;
+  Stats: TPixieSvgPathStats;
   Angle1, Angle2: Single;
-  Cmd: TPixieSvgPathCmd;
 begin
   D := GetAttr(Node, 'd');
   if D = '' then Exit;
@@ -2750,78 +2971,27 @@ begin
   Cmds := ParsePathData(D);
   try
     EmitPathCommands(Cmds);
-
-    // Extract start/end points and angles for markers
-    StartX := 0; StartY := 0; EndX := 0; EndY := 0;
-    PrevX := 0; PrevY := 0;
-    for I := 0 to Cmds.Count - 1 do
-    begin
-      Cmd := Cmds[I];
-      N := Length(Cmd.Args);
-      case Cmd.Cmd of
-        'M': if N >= 2 then
-             begin
-               if I = 0 then begin StartX := Cmd.Args[0]; StartY := Cmd.Args[1]; end;
-               PrevX := Cmd.Args[N - 2]; PrevY := Cmd.Args[N - 1];
-               EndX := PrevX; EndY := PrevY;
-             end;
-        'm': if N >= 2 then
-             begin
-               if I = 0 then begin StartX := EndX + Cmd.Args[0]; StartY := EndY + Cmd.Args[1]; end;
-               PrevX := EndX + Cmd.Args[N - 2]; PrevY := EndY + Cmd.Args[N - 1];
-               EndX := PrevX; EndY := PrevY;
-             end;
-        'L', 'T': if N >= 2 then
-             begin PrevX := EndX; PrevY := EndY; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
-        'l', 't': if N >= 2 then
-             begin PrevX := EndX; PrevY := EndY; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
-        'H': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndX := Cmd.Args[N - 1]; end;
-        'h': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndX := EndX + Cmd.Args[N - 1]; end;
-        'V': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndY := Cmd.Args[N - 1]; end;
-        'v': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndY := EndY + Cmd.Args[N - 1]; end;
-        'C': if N >= 6 then
-             begin PrevX := Cmd.Args[N - 4]; PrevY := Cmd.Args[N - 3]; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
-        'c': if N >= 6 then
-             begin PrevX := EndX + Cmd.Args[N - 4]; PrevY := EndY + Cmd.Args[N - 3]; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
-        'S', 'Q': if N >= 4 then
-             begin PrevX := Cmd.Args[N - 4]; PrevY := Cmd.Args[N - 3]; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
-        's', 'q': if N >= 4 then
-             begin PrevX := EndX + Cmd.Args[N - 4]; PrevY := EndY + Cmd.Args[N - 3]; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
-        'A': if N >= 7 then
-             begin PrevX := EndX; PrevY := EndY; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
-        'a': if N >= 7 then
-             begin PrevX := EndX; PrevY := EndY; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
-      end;
-    end;
-    // Start angle: direction from start point toward second command's target
-    Angle1 := 0;
-    if Cmds.Count >= 2 then
-    begin
-      Cmd := Cmds[1];
-      N := Length(Cmd.Args);
-      case Cmd.Cmd of
-        'H': if N >= 1 then Angle1 := ArcTan2(0, Cmd.Args[0] - StartX) * 180 / Pi;
-        'h': if N >= 1 then Angle1 := ArcTan2(0, Cmd.Args[0]) * 180 / Pi;
-        'V': if N >= 1 then Angle1 := ArcTan2(Cmd.Args[0] - StartY, 0) * 180 / Pi;
-        'v': if N >= 1 then Angle1 := ArcTan2(Cmd.Args[0], 0) * 180 / Pi;
-      else
-        if N >= 2 then
-        begin
-          if Cmd.Cmd < 'a' then
-            Angle1 := ArcTan2(Cmd.Args[1] - StartY, Cmd.Args[0] - StartX) * 180 / Pi
-          else
-            Angle1 := ArcTan2(Cmd.Args[1], Cmd.Args[0]) * 180 / Pi;
-        end;
-      end;
-    end;
-    // End angle: direction from penultimate point to endpoint
-    Angle2 := ArcTan2(EndY - PrevY, EndX - PrevX) * 180 / Pi;
+    ComputePathStats(Cmds, Stats);
   finally
     Cmds.Free;
   end;
 
+  if Stats.HasSegment then
+  begin
+    Angle1 := ArcTan2(Stats.FirstSegEndY - Stats.StartY,
+      Stats.FirstSegEndX - Stats.StartX) * 180 / Pi;
+    Angle2 := ArcTan2(Stats.EndY - Stats.LastSegStartY,
+      Stats.EndX - Stats.LastSegStartX) * 180 / Pi;
+  end
+  else
+  begin
+    Angle1 := 0;
+    Angle2 := 0;
+  end;
+
   DoFillAndStroke(State);
-  RenderMarkers(Node, State, StartX, StartY, EndX, EndY, Angle1, Angle2);
+  RenderMarkers(Node, State, Stats.StartX, Stats.StartY,
+    Stats.EndX, Stats.EndY, Angle1, Angle2);
   if NeedRestore then DoEndOpacity;
   DoRestoreState;
 end;
@@ -2985,22 +3155,99 @@ begin
   end;
 end;
 
-procedure TPixieSvgRendererBase.RenderTextSpans(Node: Pointer;
+function TPixieSvgRendererBase.NormalizeTextNode(const Raw: string;
+  Preserve: Boolean): string;
+var
+  I: Integer;
+  PrevSpace: Boolean;
+  Ch: Char;
+begin
+  if Preserve then
+  begin
+    SetLength(Result, Length(Raw));
+    for I := 1 to Length(Raw) do
+    begin
+      Ch := Raw[I];
+      if (Ch = #9) or (Ch = #10) or (Ch = #13) then
+        Result[I] := ' '
+      else
+        Result[I] := Ch;
+    end;
+    Exit;
+  end;
+  Result := '';
+  PrevSpace := False;
+  for I := 1 to Length(Raw) do
+  begin
+    Ch := Raw[I];
+    if (Ch = #10) or (Ch = #13) then Continue;
+    if Ch = #9 then Ch := ' ';
+    if Ch = ' ' then
+    begin
+      if PrevSpace then Continue;
+      PrevSpace := True;
+    end
+    else
+      PrevSpace := False;
+    Result := Result + Ch;
+  end;
+  Result := Trim(Result);
+end;
+
+function TPixieSvgRendererBase.MeasureTextChunkWidth(Node: Pointer;
+  const State: TPixieSvgState): Single;
+var
+  Child: TDOMNode;
+  ChildState: TPixieSvgState;
+  TextContent: string;
+begin
+  Result := 0;
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = TEXT_NODE then
+    begin
+      TextContent := NormalizeTextNode(DomToStr(Child.NodeValue),
+        State.XmlSpacePreserve);
+      if TextContent <> '' then
+        Result := Result + DoMeasureTextRun(TextContent, State);
+    end
+    else if (Child.NodeType = ELEMENT_NODE) and
+            (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'tspan') then
+    begin
+      // A tspan with explicit x= starts a new anchored chunk and is measured
+      // separately. Otherwise it continues this chunk.
+      if GetAttr(Child, 'x') = '' then
+      begin
+        ChildState := InheritState(Child, State);
+        Result := Result + MeasureTextChunkWidth(Child, ChildState);
+      end;
+    end;
+    Child := Child.NextSibling;
+  end;
+end;
+
+procedure TPixieSvgRendererBase.RenderTextChunkContents(Node: Pointer;
   const State: TPixieSvgState; var X, Y: Single);
 var
   Child: TDOMNode;
   ChildState: TPixieSvgState;
   XStr, YStr, DxStr, DyStr: string;
   TextContent: string;
+  NewX, NewY: Single;
 begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
     if Child.NodeType = TEXT_NODE then
     begin
-      TextContent := Trim(DomToStr(Child.NodeValue));
+      TextContent := NormalizeTextNode(DomToStr(Child.NodeValue),
+        State.XmlSpacePreserve);
       if TextContent <> '' then
+      begin
         DoRenderTextRun(TextContent, X, Y, State);
+        X := X + DoMeasureTextRun(TextContent, State);
+      end;
     end
     else if (Child.NodeType = ELEMENT_NODE) and
             (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'tspan') then
@@ -3010,14 +3257,51 @@ begin
       YStr := GetAttr(Child, 'y');
       DxStr := GetAttr(Child, 'dx');
       DyStr := GetAttr(Child, 'dy');
-      if XStr <> '' then X := ParseSvgFloat(XStr);
-      if YStr <> '' then Y := ParseSvgFloat(YStr);
-      if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
-      if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
-      RenderTextSpans(Child, ChildState, X, Y);
+      if XStr <> '' then
+      begin
+        // New anchored chunk
+        NewX := ParseSvgFloat(XStr);
+        if YStr <> '' then NewY := ParseSvgFloat(YStr) else NewY := Y;
+        if DxStr <> '' then NewX := NewX + ParseSvgFloat(DxStr);
+        if DyStr <> '' then NewY := NewY + ParseSvgFloat(DyStr);
+        RenderTextChunk(Child, ChildState, NewX, NewY);
+        // SVG "current text position" carries forward — siblings without
+        // their own x=/y= continue from where this chunk ended (including
+        // any internal y/dy updates inside the chunk).
+        X := NewX;
+        Y := NewY;
+      end
+      else
+      begin
+        // Continues the current anchored chunk
+        if YStr <> '' then Y := ParseSvgFloat(YStr);
+        if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
+        if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
+        RenderTextChunkContents(Child, ChildState, X, Y);
+      end;
     end;
     Child := Child.NextSibling;
   end;
+end;
+
+// X, Y are in/out: on entry they hold the chunk's anchor position; on exit
+// they hold the pen position after the chunk (caller propagates this as the
+// SVG "current text position" for subsequent siblings).
+procedure TPixieSvgRendererBase.RenderTextChunk(Node: Pointer;
+  const State: TPixieSvgState; var X, Y: Single);
+var
+  ChunkWidth: Single;
+begin
+  // Pre-measure the entire anchored chunk so text-anchor (middle/right) can
+  // offset the start position once. Without this, runs from font changes
+  // (mixed-font tspans) get centered individually and overlap.
+  ChunkWidth := MeasureTextChunkWidth(Node, State);
+  if State.TextAnchor = taCenter then
+    X := X - ChunkWidth / 2
+  else if State.TextAnchor = taRight then
+    X := X - ChunkWidth;
+
+  RenderTextChunkContents(Node, State, X, Y);
 end;
 
 procedure TPixieSvgRendererBase.RenderText(Node: Pointer;
@@ -3041,7 +3325,7 @@ begin
   ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
-  RenderTextSpans(Node, State, X, Y);
+  RenderTextChunk(Node, State, X, Y);
 
   if NeedRestore then DoEndOpacity;
   DoRestoreState;

@@ -112,6 +112,9 @@ type
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
+    procedure DrawTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; X, BaselineY: Single); override;
     function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
@@ -1119,6 +1122,32 @@ begin
   FBrush.SetColor(ToColorF(Color));
   FTarget.DrawTextLayout(MakePoint(X, Y), Layout, FBrush,
     D2D1_DRAW_TEXT_OPTIONS_NONE);
+end;
+
+procedure TPixieD2DCanvas.DrawTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; X, BaselineY: Single);
+var
+  Info: PPixieD2DFont;
+  WText: UnicodeString;
+  Layout: IDWriteTextLayout;
+begin
+  if (Handle = 0) or (FTarget = nil) then Exit;
+  Info := PPixieD2DFont(Handle);
+  if Info.TextFormat = nil then Exit;
+
+  WText := UnicodeString(Text);
+  if Failed(FDWriteFactory.CreateTextLayout(PWideChar(WText),
+    Length(WText), Info.TextFormat, 1.0e6, Metrics.Height, Layout)) then
+    Exit;
+
+  // Pin layout baseline to Ascent from the top so different fonts on the
+  // same SVG text line align (DWrite default would shift by lineGap).
+  Layout.SetLineSpacing(1, Metrics.Height, Metrics.Ascent);
+
+  FBrush.SetColor(ToColorF(Color));
+  FTarget.DrawTextLayout(MakePoint(X, BaselineY - Metrics.Ascent),
+    Layout, FBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
 end;
 
 function TPixieD2DCanvas.PtToPx(Pt: Single): TPixiePixel;

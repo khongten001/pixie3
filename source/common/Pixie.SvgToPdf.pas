@@ -91,6 +91,8 @@ type
     // Override text run rendering for PDF font embedding
     procedure DoRenderTextRun(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
+    function DoMeasureTextRun(const Text: string;
+      const State: TPixieSvgState): Single; override;
     procedure DoDrawImage(const Href: string;
       X, Y, W, H: Single); override;
   public
@@ -1081,6 +1083,35 @@ end;
 // Text run rendering (PDF — uses glyph-based font embedding)
 // ===========================================================================
 
+function TPixieSvgRenderer.DoMeasureTextRun(const Text: string;
+  const State: TPixieSvgState): Single;
+var
+  FontIdx: Integer;
+  Info: TPixieSvgFontInfo;
+  Scale: Single;
+  I, Len: Integer;
+  Codepoint: UInt32;
+  GlyphId: UInt16;
+begin
+  Result := 0;
+  FontIdx := FindOrCreateSvgFont(State.FontFamily, State.FontWeight, State.FontItalic);
+  if FontIdx < 0 then Exit;
+  Info := FFonts[FontIdx];
+  if Info.TtFont = nil then Exit;
+  Scale := State.FontSize / Info.TtFont.UnitsPerEm;
+  I := 1;
+  Len := Length(Text);
+  while I <= Len do
+  begin
+    Codepoint := ReadUtf8Char(Text, I);
+    if Codepoint = 0 then Break;
+    GlyphId := Info.TtFont.CharToGlyph(Codepoint);
+    Result := Result + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
+    if State.LetterSpacing > 0 then
+      Result := Result + State.LetterSpacing;
+  end;
+end;
+
 procedure TPixieSvgRenderer.DoRenderTextRun(const Text: string;
   X, Y: Single; const State: TPixieSvgState);
 var
@@ -1103,26 +1134,6 @@ begin
   Scale := PtSize / Info.TtFont.UnitsPerEm;
 
   SetPdfColor(State.FillColor, True);
-
-  // Measure total text width (needed for text-anchor and decoration lines)
-  TotalWidth := 0;
-  I := 1;
-  Len := Length(Text);
-  while I <= Len do
-  begin
-    Codepoint := ReadUtf8Char(Text, I);
-    if Codepoint = 0 then Break;
-    GlyphId := Info.TtFont.CharToGlyph(Codepoint);
-    TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
-    if State.LetterSpacing > 0 then
-      TotalWidth := TotalWidth + State.LetterSpacing;
-  end;
-
-  // Handle text-anchor
-  if State.TextAnchor = taCenter then
-    X := X - TotalWidth / 2
-  else if State.TextAnchor = taRight then
-    X := X - TotalWidth;
 
   EmitLn('BT');
   EmitLn('/' + Info.PdfName + ' ' + PdfFloat(PtSize) + ' Tf');
@@ -1170,6 +1181,7 @@ begin
   // Draw text-decoration lines
   if State.TextDecoration <> TextDecorationLineNone then
   begin
+    TotalWidth := DoMeasureTextRun(Text, State);
     FontAscent := Info.TtFont.Ascent * Scale;
     FontXHeight := Info.TtFont.XHeight * Scale;
     SetPdfColor(State.FillColor, False);

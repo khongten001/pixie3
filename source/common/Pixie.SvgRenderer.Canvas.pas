@@ -73,9 +73,13 @@ type
     procedure DoClipPath; override;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
+    function DoMeasureTextRun(const Text: string;
+      const State: TPixieSvgState): Single; override;
     procedure DoDrawImage(const Href: string;
       X, Y, W, H: Single); override;
     procedure DoClearImages; override;
+  private
+    procedure EnsureFont(const State: TPixieSvgState);
   public
     constructor Create(ACanvas: TPixieCanvas);
     destructor Destroy; override;
@@ -594,51 +598,62 @@ end;
 // Text
 // ===========================================================================
 
+procedure TPixieSvgCanvasRenderer.EnsureFont(const State: TPixieSvgState);
+var
+  Desc: TPixieFontDescription;
+begin
+  if (FFontHandle <> 0) and (FFontFamily = State.FontFamily) and
+     (Abs(FFontSize - State.FontSize) <= 0.01) and
+     (FFontWeight = State.FontWeight) and
+     (FFontItalic = State.FontItalic) then Exit;
+
+  if FFontHandle <> 0 then
+    FCanvas.DeleteFont(FFontHandle);
+  Desc.Init;
+  Desc.Family := State.FontFamily;
+  Desc.Size := State.FontSize;
+  Desc.Weight := State.FontWeight;
+  if State.FontItalic then
+    Desc.Style := fstItalic;
+  FFontHandle := FCanvas.CreateFont(Desc, FFontMetrics);
+  FFontFamily := State.FontFamily;
+  FFontSize := State.FontSize;
+  FFontWeight := State.FontWeight;
+  FFontItalic := State.FontItalic;
+end;
+
+function TPixieSvgCanvasRenderer.DoMeasureTextRun(const Text: string;
+  const State: TPixieSvgState): Single;
+begin
+  EnsureFont(State);
+  if FFontHandle = 0 then
+    Result := 0
+  else
+    Result := FCanvas.MeasureText(Text, FFontHandle);
+end;
+
 procedure TPixieSvgCanvasRenderer.DoDrawText(const Text: string;
   X, Y: Single; const State: TPixieSvgState);
 var
-  Desc: TPixieFontDescription;
   TextW: TPixiePixel;
   FC: TPixieWebColor;
 begin
-  // Create or reuse cached font
-  if (FFontHandle = 0) or (FFontFamily <> State.FontFamily) or
-     (Abs(FFontSize - State.FontSize) > 0.01) or
-     (FFontWeight <> State.FontWeight) or
-     (FFontItalic <> State.FontItalic) then
-  begin
-    if FFontHandle <> 0 then
-      FCanvas.DeleteFont(FFontHandle);
-    Desc.Init;
-    Desc.Family := State.FontFamily;
-    Desc.Size := State.FontSize;
-    Desc.Weight := State.FontWeight;
-    if State.FontItalic then
-      Desc.Style := fstItalic;
-    FFontHandle := FCanvas.CreateFont(Desc, FFontMetrics);
-    FFontFamily := State.FontFamily;
-    FFontSize := State.FontSize;
-    FFontWeight := State.FontWeight;
-    FFontItalic := State.FontItalic;
-  end;
-
+  EnsureFont(State);
   if FFontHandle = 0 then Exit;
 
   TextW := FCanvas.MeasureText(Text, FFontHandle);
 
-  // Apply text-anchor using real measured width
-  if State.TextAnchor = taCenter then
-    X := X - TextW * 0.5
-  else if State.TextAnchor = taRight then
-    X := X - TextW;
+  // Note: text-anchor offset is applied once per anchored chunk by the base
+  // class (RenderTextChunk), not per text run.
 
   FC := State.FillColor;
   if State.HasFill then
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
 
-  // SVG text Y is baseline; DrawText expects top-left Y
-  FCanvas.DrawText(Text, FFontHandle, FC,
-    X, Y - FFontMetrics.Ascent, TextW + 10, FFontMetrics.Height);
+  // SVG Y is the baseline. DrawTextAtBaseline pins the layout baseline to
+  // Ascent, so mixed-font runs on the same line share a baseline (DWrite's
+  // default line spacing offsets by lineGap).
+  FCanvas.DrawTextAtBaseline(Text, FFontHandle, FFontMetrics, FC, X, Y);
 
   // Draw text-decoration lines
   if State.TextDecoration <> TextDecorationLineNone then

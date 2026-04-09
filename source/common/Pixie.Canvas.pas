@@ -108,6 +108,14 @@ type
       Handle: TPixieFontHandle): TPixiePixel;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); virtual; abstract;
+    // Draws a single text run anchored to BaselineY (used by SVG text where
+    // mixed-font runs on the same line must share a baseline). Default impl
+    // forwards to DrawText with Y = BaselineY - Metrics.Ascent; backends may
+    // override to pin the layout baseline more precisely (DWrite/D2D's default
+    // line baseline includes lineGap which would offset mixed-font runs).
+    procedure DrawTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; X, BaselineY: Single); virtual;
 
     // ---- Convenience methods (non-abstract, call through to abstract) ----
 
@@ -281,6 +289,14 @@ procedure TPixieCanvas.DrawSimpleText(const Text: string;
   Handle: TPixieFontHandle; Color: TPixieWebColor; X, Y: Single);
 begin
   DrawText(Text, Handle, Color, X, Y, 1e6, 1e6);
+end;
+
+procedure TPixieCanvas.DrawTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; X, BaselineY: Single);
+begin
+  DrawText(Text, Handle, Color, X, BaselineY - Metrics.Ascent,
+    1e6, Metrics.Height);
 end;
 
 procedure TPixieCanvas.TextRect(const Text: string;
