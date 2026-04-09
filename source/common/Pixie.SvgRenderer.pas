@@ -14,6 +14,10 @@ uses
   SysUtils, Classes, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Canvas;
 
+const
+  SvgDecorationThickness: Single = 0.05;       // fraction of font size
+  SvgDecorationUnderlineOffset: Single = 0.15;  // fraction of font size
+
 type
   { TPixieSvgMatrix - 2D affine transform [a b c d e f] }
 
@@ -52,6 +56,7 @@ type
     FontItalic: Boolean;
     LetterSpacing: Single;
     TextAnchor: TPixieTextAlign;
+    TextDecoration: Integer;
     FillGradientId: string;
     StrokeGradientId: string;
     BlendMode: TPixieBlendMode;
@@ -779,7 +784,7 @@ var
   FillOpStr, StrokeOpStr, ColorStr: string;
   StyleStr, ClassStr, ClassDecl, InlineStyleStr, NodeTag: string;
   FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
-  LetterSpacingStr: string;
+  LetterSpacingStr, TextDecStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
   AnchorStr: string;
@@ -1051,6 +1056,27 @@ begin
     Result.TextAnchor := taRight
   else if AnchorStr = 'start' then
     Result.TextAnchor := taLeft;
+
+  // Text decoration
+  TextDecStr := GetAttr(Node, 'text-decoration');
+  if TextDecStr = '' then
+    TextDecStr := ParseStyleAttribute(StyleStr, 'text-decoration');
+  if TextDecStr <> '' then
+  begin
+    TextDecStr := LowerCase(TextDecStr);
+    if TextDecStr = 'none' then
+      Result.TextDecoration := TextDecorationLineNone
+    else
+    begin
+      Result.TextDecoration := TextDecorationLineNone;
+      if Pos('underline', TextDecStr) > 0 then
+        Result.TextDecoration := Result.TextDecoration or TextDecorationLineUnderline;
+      if Pos('overline', TextDecStr) > 0 then
+        Result.TextDecoration := Result.TextDecoration or TextDecorationLineOverline;
+      if Pos('line-through', TextDecStr) > 0 then
+        Result.TextDecoration := Result.TextDecoration or TextDecorationLineLineThrough;
+    end;
+  end;
 
   // Fill rule
   AnchorStr := GetAttr(Node, 'fill-rule');
@@ -3376,6 +3402,7 @@ begin
     FInitState.FontItalic := False;
     FInitState.LetterSpacing := 0;
     FInitState.TextAnchor := taLeft;
+    FInitState.TextDecoration := TextDecorationLineNone;
     FInitState.FillGradientId := '';
     FInitState.StrokeGradientId := '';
     FInitState.BlendMode := bmNormal;

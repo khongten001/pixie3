@@ -639,6 +639,21 @@ begin
   // SVG text Y is baseline; DrawText expects top-left Y
   FCanvas.DrawText(Text, FFontHandle, FC,
     X, Y - FFontMetrics.Ascent, TextW + 10, FFontMetrics.Height);
+
+  // Draw text-decoration lines
+  if State.TextDecoration <> TextDecorationLineNone then
+  begin
+    if (State.TextDecoration and TextDecorationLineUnderline) <> 0 then
+      FCanvas.DrawLine(X, Y + State.FontSize * SvgDecorationUnderlineOffset,
+        X + TextW, Y + State.FontSize * SvgDecorationUnderlineOffset,
+        FC, State.FontSize * SvgDecorationThickness);
+    if (State.TextDecoration and TextDecorationLineOverline) <> 0 then
+      FCanvas.DrawLine(X, Y - FFontMetrics.Ascent, X + TextW,
+        Y - FFontMetrics.Ascent, FC, State.FontSize * SvgDecorationThickness);
+    if (State.TextDecoration and TextDecorationLineLineThrough) <> 0 then
+      FCanvas.DrawLine(X, Y - FFontMetrics.XHeight / 2, X + TextW,
+        Y - FFontMetrics.XHeight / 2, FC, State.FontSize * SvgDecorationThickness);
+  end;
 end;
 
 // ===========================================================================

@@ -1091,7 +1091,7 @@ var
   Codepoint: UInt32;
   GlyphId: UInt16;
   HexStr: AnsiString;
-  TotalWidth, GlyphW: Single;
+  TotalWidth, GlyphW, DecY, FontAscent, FontXHeight: Single;
 begin
   FontIdx := FindOrCreateSvgFont(State.FontFamily, State.FontWeight, State.FontItalic);
   if FontIdx < 0 then Exit;
@@ -1104,26 +1104,25 @@ begin
 
   SetPdfColor(State.FillColor, True);
 
-  // Handle text-anchor
-  if (State.TextAnchor = taCenter) or (State.TextAnchor = taRight) then
+  // Measure total text width (needed for text-anchor and decoration lines)
+  TotalWidth := 0;
+  I := 1;
+  Len := Length(Text);
+  while I <= Len do
   begin
-    TotalWidth := 0;
-    I := 1;
-    Len := Length(Text);
-    while I <= Len do
-    begin
-      Codepoint := ReadUtf8Char(Text, I);
-      if Codepoint = 0 then Break;
-      GlyphId := Info.TtFont.CharToGlyph(Codepoint);
-      TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
-      if State.LetterSpacing > 0 then
-        TotalWidth := TotalWidth + State.LetterSpacing;
-    end;
-    if State.TextAnchor = taCenter then
-      X := X - TotalWidth / 2
-    else
-      X := X - TotalWidth;
+    Codepoint := ReadUtf8Char(Text, I);
+    if Codepoint = 0 then Break;
+    GlyphId := Info.TtFont.CharToGlyph(Codepoint);
+    TotalWidth := TotalWidth + Info.TtFont.GetGlyphWidth(GlyphId) * Scale;
+    if State.LetterSpacing > 0 then
+      TotalWidth := TotalWidth + State.LetterSpacing;
   end;
+
+  // Handle text-anchor
+  if State.TextAnchor = taCenter then
+    X := X - TotalWidth / 2
+  else if State.TextAnchor = taRight then
+    X := X - TotalWidth;
 
   EmitLn('BT');
   EmitLn('/' + Info.PdfName + ' ' + PdfFloat(PtSize) + ' Tf');
@@ -1167,6 +1166,33 @@ begin
 
   FFonts[FontIdx] := Info;
   EmitLn('ET');
+
+  // Draw text-decoration lines
+  if State.TextDecoration <> TextDecorationLineNone then
+  begin
+    FontAscent := Info.TtFont.Ascent * Scale;
+    FontXHeight := Info.TtFont.XHeight * Scale;
+    SetPdfColor(State.FillColor, False);
+    EmitLn(PdfFloat(PtSize * SvgDecorationThickness) + ' w');
+    if (State.TextDecoration and TextDecorationLineUnderline) <> 0 then
+    begin
+      DecY := Y + PtSize * SvgDecorationUnderlineOffset;
+      EmitLn(PdfFloat(X) + ' ' + PdfFloat(DecY) + ' m ' +
+        PdfFloat(X + TotalWidth) + ' ' + PdfFloat(DecY) + ' l S');
+    end;
+    if (State.TextDecoration and TextDecorationLineOverline) <> 0 then
+    begin
+      DecY := Y - FontAscent;
+      EmitLn(PdfFloat(X) + ' ' + PdfFloat(DecY) + ' m ' +
+        PdfFloat(X + TotalWidth) + ' ' + PdfFloat(DecY) + ' l S');
+    end;
+    if (State.TextDecoration and TextDecorationLineLineThrough) <> 0 then
+    begin
+      DecY := Y - FontXHeight / 2;
+      EmitLn(PdfFloat(X) + ' ' + PdfFloat(DecY) + ' m ' +
+        PdfFloat(X + TotalWidth) + ' ' + PdfFloat(DecY) + ' l S');
+    end;
+  end;
 end;
 
 // ===========================================================================
