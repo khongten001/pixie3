@@ -21,6 +21,8 @@ type
     PdfName: AnsiString;
     Type0ObjId: Integer;
     UsedGlyphs: TPixieGlyphMap;
+    Weight: Integer;
+    Italic: Boolean;
   end;
 
   TPixieSvgFontInfoList = TList<TPixieSvgFontInfo>;
@@ -70,7 +72,7 @@ type
 
     // Font helpers
     function FindOrCreateSvgFont(const Family: string;
-      Weight: Integer): Integer;
+      Weight: Integer; Italic: Boolean): Integer;
     procedure BuildSvgFontObjects;
   protected
     // Override abstract drawing primitives with PDF operators
@@ -673,7 +675,7 @@ end;
 // ===========================================================================
 
 function TPixieSvgRenderer.FindOrCreateSvgFont(const Family: string;
-  Weight: Integer): Integer;
+  Weight: Integer; Italic: Boolean): Integer;
 var
   I: Integer;
   FilePath: string;
@@ -681,11 +683,13 @@ var
   Key: string;
   Info: TPixieSvgFontInfo;
 begin
-  // Check existing
+  // Check existing — match family, weight, and italic
   for I := 0 to FFonts.Count - 1 do
   begin
     if (FFonts[I].TtFont <> nil) and
-       (LowerCase(FFonts[I].TtFont.FamilyName) = LowerCase(Family)) then
+       (LowerCase(FFonts[I].TtFont.FamilyName) = LowerCase(Family)) and
+       (FFonts[I].Weight = Weight) and
+       (FFonts[I].Italic = Italic) then
     begin
       Result := I;
       Exit;
@@ -693,23 +697,23 @@ begin
   end;
 
   // Find font file
-  Key := LowerCase(Family) + ':' + IntToStr(Weight) + ':0';
+  Key := LowerCase(Family) + ':' + IntToStr(Weight) + ':' + IntToStr(Ord(Italic));
   if not FFontCache.TryGetValue(Key, TtFont) then
   begin
-    FilePath := PixieFindFontFile(Family, Weight, False);
+    FilePath := PixieFindFontFile(Family, Weight, Italic);
     if FilePath = '' then
     begin
       // Try fallbacks
       {$IFDEF MSWINDOWS}
-      FilePath := PixieFindFontFile('Segoe UI', Weight, False);
+      FilePath := PixieFindFontFile('Segoe UI', Weight, Italic);
       if FilePath = '' then
-        FilePath := PixieFindFontFile('Arial', Weight, False);
+        FilePath := PixieFindFontFile('Arial', Weight, Italic);
       {$ENDIF}
       {$IFDEF LINUX}
-      FilePath := PixieFindFontFile('DejaVu Sans', Weight, False);
+      FilePath := PixieFindFontFile('DejaVu Sans', Weight, Italic);
       {$ENDIF}
       {$IFDEF DARWIN}
-      FilePath := PixieFindFontFile('Helvetica', Weight, False);
+      FilePath := PixieFindFontFile('Helvetica', Weight, Italic);
       {$ENDIF}
     end;
 
@@ -729,6 +733,8 @@ begin
   Info.PdfName := 'SvgF' + AnsiString(IntToStr(FFontCounter));
   Info.Type0ObjId := 0;
   Info.UsedGlyphs := TPixieGlyphMap.Create;
+  Info.Weight := Weight;
+  Info.Italic := Italic;
   FFonts.Add(Info);
   Result := FFonts.Count - 1;
 end;
@@ -1087,7 +1093,7 @@ var
   HexStr: AnsiString;
   TotalWidth, GlyphW: Single;
 begin
-  FontIdx := FindOrCreateSvgFont(State.FontFamily, State.FontWeight);
+  FontIdx := FindOrCreateSvgFont(State.FontFamily, State.FontWeight, State.FontItalic);
   if FontIdx < 0 then Exit;
 
   Info := FFonts[FontIdx];

@@ -26,6 +26,7 @@ type
     FFontFamily: string;
     FFontSize: Single;
     FFontWeight: Integer;
+    FFontItalic: Boolean;
 
     // Bounding box of the current path (for gradient coordinate mapping)
     FBBoxMinX, FBBoxMinY, FBBoxMaxX, FBBoxMaxY: Single;
@@ -603,7 +604,8 @@ begin
   // Create or reuse cached font
   if (FFontHandle = 0) or (FFontFamily <> State.FontFamily) or
      (Abs(FFontSize - State.FontSize) > 0.01) or
-     (FFontWeight <> State.FontWeight) then
+     (FFontWeight <> State.FontWeight) or
+     (FFontItalic <> State.FontItalic) then
   begin
     if FFontHandle <> 0 then
       FCanvas.DeleteFont(FFontHandle);
@@ -611,10 +613,13 @@ begin
     Desc.Family := State.FontFamily;
     Desc.Size := State.FontSize;
     Desc.Weight := State.FontWeight;
+    if State.FontItalic then
+      Desc.Style := fstItalic;
     FFontHandle := FCanvas.CreateFont(Desc, FFontMetrics);
     FFontFamily := State.FontFamily;
     FFontSize := State.FontSize;
     FFontWeight := State.FontWeight;
+    FFontItalic := State.FontItalic;
   end;
 
   if FFontHandle = 0 then Exit;

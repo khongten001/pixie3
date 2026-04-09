@@ -48,6 +48,7 @@ type
     FontFamily: string;
     FontSize: Single;
     FontWeight: Integer;
+    FontItalic: Boolean;
     LetterSpacing: Single;
     TextAnchor: TPixieTextAlign;
     FillGradientId: string;
@@ -772,7 +773,7 @@ var
   FillStr, StrokeStr, StrokeWStr, OpacStr: string;
   FillOpStr, StrokeOpStr: string;
   StyleStr, ClassStr, ClassDecl, InlineStyleStr, NodeTag: string;
-  FontFamilyStr, FontSizeStr, FontWeightStr, FontShorthand: string;
+  FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
   LetterSpacingStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
@@ -997,6 +998,13 @@ begin
       Result.FontWeight := Round(ParseSvgFloat(FontWeightStr));
   end;
 
+  // Font style
+  FontStyleStr := GetAttr(Node, 'font-style');
+  if FontStyleStr = '' then
+    FontStyleStr := ParseStyleAttribute(StyleStr, 'font-style');
+  if FontStyleStr <> '' then
+    Result.FontItalic := (FontStyleStr = 'italic') or (FontStyleStr = 'oblique');
+
   // Letter spacing
   LetterSpacingStr := GetAttr(Node, 'letter-spacing');
   if LetterSpacingStr = '' then
@@ -1083,7 +1091,10 @@ begin
     begin
       // Check for font-style keywords
       if (Token = 'italic') or (Token = 'oblique') then
-        Continue  // recognised but not stored (no FontStyle in TPixieSvgState)
+      begin
+        State.FontItalic := True;
+        Continue;
+      end
       // Check for font-variant
       else if Token = 'small-caps' then
         Continue
@@ -1095,7 +1106,12 @@ begin
       else if Token = 'lighter' then
         State.FontWeight := 300
       else if Token = 'normal' then
-        Continue  // could be style, weight, or variant — no-op
+      begin
+        // Resets style, weight, or variant — apply all initial values
+        State.FontItalic := False;
+        State.FontWeight := 400;
+        Continue;
+      end
       else if (Token[1] >= '0') and (Token[1] <= '9') then
       begin
         // Could be weight (100-900) or size (with unit)
@@ -3112,6 +3128,7 @@ begin
     FInitState.FontFamily := 'sans-serif';
     FInitState.FontSize := 16;
     FInitState.FontWeight := 400;
+    FInitState.FontItalic := False;
     FInitState.LetterSpacing := 0;
     FInitState.TextAnchor := taLeft;
     FInitState.FillGradientId := '';
