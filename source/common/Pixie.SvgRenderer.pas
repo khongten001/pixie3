@@ -34,6 +34,7 @@ type
   TPixieSvgState = record
     FillColor: TPixieWebColor;
     StrokeColor: TPixieWebColor;
+    Color: TPixieWebColor;         // CSS 'color' property (for currentColor)
     StrokeWidth: Single;
     LineCap: TPixieLineCap;
     LineJoin: TPixieLineJoin;
@@ -775,7 +776,7 @@ function TPixieSvgRendererBase.InheritState(Node: Pointer;
   const ParentState: TPixieSvgState): TPixieSvgState;
 var
   FillStr, StrokeStr, StrokeWStr, OpacStr: string;
-  FillOpStr, StrokeOpStr: string;
+  FillOpStr, StrokeOpStr, ColorStr: string;
   StyleStr, ClassStr, ClassDecl, InlineStyleStr, NodeTag: string;
   FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
   LetterSpacingStr: string;
@@ -849,6 +850,13 @@ begin
       StyleStr := InlineStyleStr;
   end;
 
+  // CSS color property (resolve before fill/stroke for currentColor)
+  ColorStr := GetAttr(Node, 'color');
+  if ColorStr = '' then
+    ColorStr := ParseStyleAttribute(StyleStr, 'color');
+  if (ColorStr <> '') and (ColorStr <> 'inherit') and ParseSvgColor(ColorStr, Color) then
+    Result.Color := Color;
+
   // Fill
   FillStr := GetAttr(Node, 'fill');
   if FillStr = '' then
@@ -864,6 +872,12 @@ begin
     begin
       Result.FillGradientId := ExtractUrlId(FillStr);
       Result.HasFill := True;
+    end
+    else if SameText(FillStr, 'currentColor') then
+    begin
+      Result.FillColor := Result.Color;
+      Result.HasFill := True;
+      Result.FillGradientId := '';
     end
     else if (FillStr <> 'inherit') and ParseSvgColor(FillStr, Color) then
     begin
@@ -888,6 +902,12 @@ begin
     begin
       Result.StrokeGradientId := ExtractUrlId(StrokeStr);
       Result.HasStroke := True;
+    end
+    else if SameText(StrokeStr, 'currentColor') then
+    begin
+      Result.StrokeColor := Result.Color;
+      Result.HasStroke := True;
+      Result.StrokeGradientId := '';
     end
     else if (StrokeStr <> 'inherit') and ParseSvgColor(StrokeStr, Color) then
     begin
@@ -2854,8 +2874,9 @@ begin
   DoSaveState;
   DoSetTransform(M);
 
-  // Render marker children — inherit state from marker element, then per child
-  MarkerState := InheritState(MarkerNode, State);
+  // Render marker children — per SVG spec, marker contents inherit from the
+  // marker element itself (its DOM position), not from the referencing shape
+  MarkerState := InheritState(MarkerNode, FInitState);
   RenderGroup(MarkerNode, MarkerState);
 
   DoRestoreState;
@@ -3339,6 +3360,7 @@ begin
     // Initialise default state
     FInitState.FillColor := TPixieWebColor.Black;
     FInitState.StrokeColor := TPixieWebColor.Black;
+    FInitState.Color := TPixieWebColor.Black;
     FInitState.StrokeWidth := 1;
     FInitState.LineCap := lcButt;
     FInitState.LineJoin := ljMiter;
