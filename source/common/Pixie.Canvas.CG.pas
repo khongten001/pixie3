@@ -48,7 +48,6 @@ type
   private
     FCG: CGContextRef;
     FColorSpace: CGColorSpaceRef;
-    FScale: Single;
     FCanvasScale: Single;
     FViewWidth, FViewHeight: Integer;
     FStateStack: array[0..63] of TPixieCGSavedState;
@@ -155,7 +154,6 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
-    procedure SetScale(Scale: Single); override;
   end;
 
 implementation
@@ -316,7 +314,6 @@ begin
   inherited Create;
   FCG := nil;
   FColorSpace := CGColorSpaceCreateDeviceRGB;
-  FScale := 1.0;
   FCanvasScale := 1.0;
   FViewWidth := 800;
   FViewHeight := 600;
@@ -1755,9 +1752,5 @@ begin
   FCanvasScale := ACanvasScale;
 end;
 
-procedure TPixieCGCanvas.SetScale(Scale: Single);
-begin
-  FScale := Scale;
-end;
 
 end.

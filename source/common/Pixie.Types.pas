@@ -928,11 +928,15 @@ begin
 end;
 
 procedure TPixiePosition.DoRound;
+var
+  R, B: TPixiePixel;
 begin
+  R := Round(X + Width);
+  B := Round(Y + Height);
   X := Round(X);
   Y := Round(Y);
-  Width := Round(Width);
-  Height := Round(Height);
+  Width := R - X;
+  Height := B - Y;
 end;
 
 procedure TPixiePosition.AddMargins(const Mg: TPixieMargins);

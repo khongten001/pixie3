@@ -50,7 +50,6 @@ type
     FBrush: ID2D1SolidColorBrush;
     FViewWidth: Integer;
     FViewHeight: Integer;
-    FScale: Single;
     FPathGeometry: ID2D1PathGeometry;
     FPathSink: ID2D1GeometrySink;
     FPathFigureOpen: Boolean;
@@ -171,7 +170,6 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
-    procedure SetScale(Scale: Single); override;
   end;
 
 implementation
@@ -219,10 +217,12 @@ end;
 
 function TPixieD2DCanvas.MakeRectF(X, Y, W, H: Single): TD2d1RectF;
 begin
-  Result.left := X;
-  Result.top := Y;
-  Result.right := X + W;
-  Result.bottom := Y + H;
+  // Snap edges to device pixels to prevent sub-pixel seams between
+  // adjacent filled rectangles (D2D anti-aliases at non-integer coords)
+  Result.left   := Round(X * FScale) / FScale;
+  Result.top    := Round(Y * FScale) / FScale;
+  Result.right  := Round((X + W) * FScale) / FScale;
+  Result.bottom := Round((Y + H) * FScale) / FScale;
 end;
 
 function TPixieD2DCanvas.MakePoint(X, Y: Single): TD2d1Point2f;
@@ -230,7 +230,6 @@ begin
   Result.x := X;
   Result.y := Y;
 end;
-
 
 procedure TPixieD2DCanvas.CreateRoundedRectGeometry(X, Y, W, H: Single;
   const R: TPixieBorderRadiuses; out Geom: ID2D1PathGeometry);
@@ -374,7 +373,6 @@ var
   C: TD2d1ColorF;
 begin
   inherited Create;
-  FScale := 1.0;
   FViewWidth := 800;
   FViewHeight := 600;
   FStateTop := 0;
@@ -535,7 +533,6 @@ var
 begin
   if FTarget = nil then Exit;
 
-  // Use axis-aligned clip for all cases (rounded corners handled by geometry fill)
   Rect := MakeRectF(R.X, R.Y, R.Width, R.Height);
   FTarget.PushAxisAlignedClip(@Rect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 
@@ -1841,9 +1838,5 @@ begin
   FViewHeight := H;
 end;
 
-procedure TPixieD2DCanvas.SetScale(Scale: Single);
-begin
-  FScale := Scale;
-end;
 
 end.

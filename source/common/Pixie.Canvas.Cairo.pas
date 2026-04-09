@@ -51,7 +51,6 @@ type
     FCairo: Pcairo_t;
     FPersistentContext: PPangoContext;  // always available for metrics/measure
     FPangoContext: PPangoContext;       // paint-time context (may equal FPersistentContext)
-    FScale: Single;
     FViewWidth, FViewHeight: Integer;
     FStateStack: array[0..63] of TPixieCairoSavedState;
     FStateTop: Integer;
@@ -159,7 +158,6 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
-    procedure SetScale(Scale: Single); override;
   end;
 
 implementation
@@ -326,7 +324,6 @@ begin
   FCairo := nil;
   FPangoContext := nil;
   FPersistentContext := nil;
-  FScale := 1.0;
   FViewWidth := 800;
   FViewHeight := 600;
   FStateTop := 0;
@@ -1644,9 +1641,5 @@ begin
   FViewHeight := H;
 end;
 
-procedure TPixieCairoCanvas.SetScale(Scale: Single);
-begin
-  FScale := Scale;
-end;
 
 end.

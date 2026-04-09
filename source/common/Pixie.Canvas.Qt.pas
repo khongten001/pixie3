@@ -49,7 +49,6 @@ type
   TPixieQtCanvas = class(TPixieCanvas)
   private
     FPainter: QPainterH;
-    FScale: Single;
     FViewWidth, FViewHeight: Integer;
     FStateStack: array[0..63] of TPixieQtSavedState;
     FStateTop: Integer;
@@ -159,7 +158,6 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
-    procedure SetScale(Scale: Single); override;
   end;
 
 implementation
@@ -311,7 +309,6 @@ constructor TPixieQtCanvas.Create;
 begin
   inherited Create;
   FPainter := nil;
-  FScale := 1.0;
   FViewWidth := 800;
   FViewHeight := 600;
   FStateTop := 0;
@@ -1696,9 +1693,5 @@ begin
   FViewHeight := H;
 end;
 
-procedure TPixieQtCanvas.SetScale(Scale: Single);
-begin
-  FScale := Scale;
-end;
 
 end.

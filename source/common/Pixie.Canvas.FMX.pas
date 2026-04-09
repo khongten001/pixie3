@@ -50,7 +50,6 @@ type
     FOpacity: Single;
     FOpacityStack: array[0..31] of Single;
     FOpacityTop: Integer;
-    FScale: Single;
     FBrush: TBrush;
     FStrokeBrush: TStrokeBrush;
     FPath: TPathData;
@@ -177,7 +176,6 @@ type
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
     // View / scale
-    procedure SetScale(Scale: Single); override;
   end;
 
 implementation
@@ -254,7 +252,6 @@ begin
   FCanvas := nil;
   FOpacity := 1.0;
   FOpacityTop := 0;
-  FScale := 1.0;
   FStateTop := 0;
   FBaseState := nil;
   FBrush := TBrush.Create(TBrushKind.Solid, claBlack);
@@ -1284,10 +1281,6 @@ end;
 // View / scale
 // ---------------------------------------------------------------------------
 
-procedure TPixieFmxCanvas.SetScale(Scale: Single);
-begin
-  FScale := Scale;
-end;
 
 // ---------------------------------------------------------------------------
 // Path API

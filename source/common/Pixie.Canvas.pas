@@ -31,6 +31,7 @@ type
   private
     FTextWidthCache: TPixieTextWidthCache;
   protected
+    FScale: Single;
     FPathLineCap: TPixieLineCap;
     FPathLineJoin: TPixieLineJoin;
     FPathDashArray: array of Single;
@@ -200,6 +201,7 @@ type
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); virtual;
     // Scale/zoom — applies a uniform scale transform to all drawing
     procedure SetScale(Scale: Single); virtual;
+    property Scale: Single read FScale;
   end;
 
 implementation
@@ -210,6 +212,7 @@ uses
 constructor TPixieCanvas.Create;
 begin
   inherited Create;
+  FScale := 1.0;
   FTextWidthCache := TPixieTextWidthCache.Create;
 end;
 
@@ -357,7 +360,7 @@ end;
 
 procedure TPixieCanvas.SetScale(Scale: Single);
 begin
-  // no-op by default
+  FScale := Scale;
 end;
 
 function TPixieCanvas.LoadImageFromStream(
