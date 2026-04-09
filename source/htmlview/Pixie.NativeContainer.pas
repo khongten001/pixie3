@@ -595,7 +595,7 @@ begin
   FPendingImages := TPixiePendingImageMap.Create;
   FCssCache := TPixieCssCache.Create;
   FDefaultFontSize := 16;
-  FDefaultFontName := 'Times New Roman';
+  FDefaultFontName := 'serif';
   FViewportWidth := 1024;
   FViewportHeight := 768;
 end;
