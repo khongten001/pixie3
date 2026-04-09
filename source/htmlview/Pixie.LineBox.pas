@@ -125,8 +125,8 @@ type
     FItems: TPixieLineBoxItemList;
 
     function HaveLastSpace: Boolean;
-    function IsBreakOnly: Boolean;
   public
+    function IsBreakOnly: Boolean;
     constructor Create(ATop, ALeft, ARight: TPixiePixel;
       const ALineHeight: TPixieCssLineHeight;
       const AFm: TPixieFontMetrics; AAlign: TPixieTextAlign;
@@ -898,8 +898,18 @@ begin
 
   if IsEmpty or ((not IsEmpty) and LastBox and IsBreakOnly) then
   begin
+    // Default: use block container's strut
     FHeight := FDefaultLineHeight.ComputedValue;
     FBaseline := FFontMetrics.BaseLine;
+    // Quirks mode: suppress the strut and use the <br>'s own line-height
+    if FSuppressStrut then
+      for I := 0 to FItems.Count - 1 do
+        if FItems[I].GetEl.SrcEl.IsBreak then
+        begin
+          FHeight := FItems[I].GetEl.Css.LineHeight.ComputedValue;
+          FBaseline := FItems[I].GetEl.Css.FontMetrics.BaseLine;
+          Break;
+        end;
     Result := RetItems;
     Exit;
   end;
@@ -910,7 +920,7 @@ begin
   ShiftX := 0;
 
   case FTextAlign of
-    taRight:
+    taRight, taBlockRight:
       if FWidth < (FRight - FLeft) then
         ShiftX := (FRight - FLeft) - FWidth;
     taCenter, taBlockCenter:

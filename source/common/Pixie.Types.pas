@@ -289,7 +289,9 @@ type
     taRight,
     taCenter,
     taJustify,
-    taBlockCenter
+    taBlockCenter,
+    taBlockLeft,
+    taBlockRight
   );
 
   // Text transform
@@ -580,7 +582,10 @@ const
   BackgroundPositionStrings = 'left;right;top;bottom;center';
   ElementPositionStrings = 'static;relative;absolute;fixed';
   SPixieBlockCenter = '-webkit-center';
-  TextAlignStrings = 'left;right;center;justify;' + SPixieBlockCenter;
+  SPixieBlockLeft = '-webkit-left';
+  SPixieBlockRight = '-webkit-right';
+  TextAlignStrings = 'left;right;center;justify;' + SPixieBlockCenter +
+    ';' + SPixieBlockLeft + ';' + SPixieBlockRight;
   TextTransformStrings = 'none;capitalize;uppercase;lowercase';
   WhiteSpaceStrings = 'normal;nowrap;pre;pre-line;pre-wrap';
   OverflowWrapStrings = 'normal;break-word;anywhere';

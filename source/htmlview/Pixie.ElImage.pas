@@ -66,6 +66,20 @@ begin
   if Val <> '' then
     MapToDimensionProperty(Ord(psid_height), Val);
 
+  Val := GetAttr('hspace');
+  if Val <> '' then
+  begin
+    MapToPixelLengthProperty(Ord(psid_margin_left), Val);
+    MapToPixelLengthProperty(Ord(psid_margin_right), Val);
+  end;
+
+  Val := GetAttr('vspace');
+  if Val <> '' then
+  begin
+    MapToPixelLengthProperty(Ord(psid_margin_top), Val);
+    MapToPixelLengthProperty(Ord(psid_margin_bottom), Val);
+  end;
+
   inherited ParseAttributes;
 end;
 

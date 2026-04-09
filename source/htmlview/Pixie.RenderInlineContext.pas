@@ -132,9 +132,13 @@ begin
   FMaxLineWidth := 0;
 
   // In limited quirks / quirks mode, suppress the strut in table cells
-  // so images don't get extra descent space below them
+  // so images don't get extra descent space below them.
+  // Also applies to anonymous blocks created inside table cells when
+  // inline content is split by block-level elements.
   FSuppressStrut := False;
-  if SrcEl.Css.Display = displayTableCell then
+  if (SrcEl.Css.Display = displayTableCell) or
+     ((SrcEl.Parent <> nil) and
+      (SrcEl.Parent.Css.Display = displayTableCell)) then
   begin
     Doc := SrcEl.GetDocument;
     if (Doc <> nil) and (Doc is TPixieDocument) then
@@ -184,7 +188,8 @@ begin
   if FLineBoxes.Count > 0 then
   begin
     Result := FLineBoxes[FLineBoxes.Count - 1].Finish(EndOfRender, SelfSize);
-    if FLineBoxes[FLineBoxes.Count - 1].IsEmpty and EndOfRender then
+    if FLineBoxes[FLineBoxes.Count - 1].IsEmpty and EndOfRender and
+       (not FLineBoxes[FLineBoxes.Count - 1].IsBreakOnly) then
       FLineBoxes.Delete(FLineBoxes.Count - 1)
     else
       FMaxLineWidth := Max(FMaxLineWidth,

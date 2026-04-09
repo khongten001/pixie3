@@ -749,8 +749,9 @@ end;
 
 function TPixieRenderItem.CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
 var
-  ElWidth: TPixiePixel;
+  ElWidth, Remaining: TPixiePixel;
   CenterByParent: Boolean;
+  ParentAlign: TPixieTextAlign;
 begin
   Result := 0;
   if ((FElement.Css.Display = displayBlock) or
@@ -758,17 +759,38 @@ begin
      (FElement.Css.ElPosition <> epAbsolute) and
      (FElement.Css.Float_ = efNone) then
   begin
-    // Browsers use -webkit-center / -moz-center to center block children
-    // when align="center" is used. We map this to taBlockCenter and then
-    // treat the child as margin:auto.
-    CenterByParent := (FElement.Parent <> nil) and
-      (FElement.Parent.Css.TextAlign = taBlockCenter);
+    // Browsers use -webkit-center / -webkit-left / -webkit-right to
+    // align block children when align="center/left/right" is used on
+    // a parent block element.
+    if FElement.Parent <> nil then
+      ParentAlign := FElement.Parent.Css.TextAlign
+    else
+      ParentAlign := taLeft;
+    CenterByParent := ParentAlign in
+      [taBlockCenter, taBlockLeft, taBlockRight];
     if (FElement.Css.CssMargins.Left.IsPredefined and
        FElement.Css.CssMargins.Right.IsPredefined) or CenterByParent then
     begin
       ElWidth := FPos.Width + FBorders.Left + FBorders.Right +
         FPadding.Left + FPadding.Right;
-      if ElWidth <= ParentWidth then
+      if CenterByParent and (ParentAlign in [taBlockLeft, taBlockRight]) then
+      begin
+        if ElWidth <= ParentWidth then
+          Remaining := ParentWidth - ElWidth
+        else
+          Remaining := 0;
+        if ParentAlign = taBlockRight then
+        begin
+          FMargins.Left := Remaining;
+          FMargins.Right := 0;
+        end
+        else
+        begin
+          FMargins.Left := 0;
+          FMargins.Right := Remaining;
+        end;
+      end
+      else if ElWidth <= ParentWidth then
       begin
         FMargins.Left := (ParentWidth - ElWidth) / 2;
         FMargins.Right := (ParentWidth - ElWidth) - FMargins.Left;

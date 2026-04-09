@@ -210,7 +210,22 @@ begin
 
   Val := GetAttr('align');
   if Val <> '' then
-    MapAlignToTextAlign(Val);
+    MapAlignToTextAlign(Val)
+  else
+  begin
+    // HTML spec presentational hint: when no align attribute exists on
+    // the cell or any ancestor in the table hierarchy, td defaults to
+    // 'start' (left) and th defaults to 'center'.  Check parent <tr>
+    // first; if it has align, inherit that; otherwise apply the default.
+    if Parent <> nil then
+      Val := Parent.GetAttr('align');
+    if Val <> '' then
+      MapAlignToTextAlign(Val)
+    else if Tag = PixieId('th') then
+      FStyle.AddProperty(Ord(psid_text_align), 'center')
+    else
+      FStyle.AddProperty(Ord(psid_text_align), 'left');
+  end;
 
   Val := GetAttr('valign');
   if Val <> '' then

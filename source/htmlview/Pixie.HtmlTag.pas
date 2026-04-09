@@ -2137,6 +2137,10 @@ procedure TPixieHtmlTag.MapAlignToTextAlign(const AttrValue: string);
 begin
   if SameText(AttrValue, 'center') then
     FStyle.AddProperty(Ord(psid_text_align), SPixieBlockCenter)
+  else if SameText(AttrValue, 'left') then
+    FStyle.AddProperty(Ord(psid_text_align), SPixieBlockLeft)
+  else if SameText(AttrValue, 'right') then
+    FStyle.AddProperty(Ord(psid_text_align), SPixieBlockRight)
   else
     FStyle.AddProperty(Ord(psid_text_align), AttrValue);
 end;
