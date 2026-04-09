@@ -1466,6 +1466,8 @@ var
   Cmds: TPixieSvgPathCmdList;
   Cmd: TPixieSvgPathCmd;
   J, K: Integer;
+  CurX, CurY, SubX, SubY: Single;
+  NewArgs: array of Single;
 begin
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
@@ -1477,35 +1479,75 @@ begin
       Cmds := ParsePathData(D);
       try
         // Apply transform to absolute path commands if not identity.
-        // H/V only correct for scale+translate (no rotation/skew).
+        // H/V are expanded to L using the pre-transform current point, since
+        // H/V endpoints depend on the *other* axis of the current point —
+        // a per-axis scalar transform cannot express the diagonal result of
+        // rotating/skewing a horizontal or vertical line.
         if (Abs(XForm.A - 1) > 0.0001) or (Abs(XForm.D - 1) > 0.0001) or
            (Abs(XForm.B) > 0.0001) or (Abs(XForm.C) > 0.0001) or
            (Abs(XForm.E) > 0.0001) or (Abs(XForm.F) > 0.0001) then
         begin
+          CurX := 0; CurY := 0; SubX := 0; SubY := 0;
           for J := 0 to Cmds.Count - 1 do
           begin
             Cmd := Cmds[J];
             case Cmd.Cmd of
-              'M', 'L', 'T':
+              'M':
+              begin
+                if Length(Cmd.Args) >= 2 then
+                begin
+                  SubX := Cmd.Args[0]; SubY := Cmd.Args[1];
+                end;
+                K := 0;
+                while K + 1 < Length(Cmd.Args) do
+                begin
+                  CurX := Cmd.Args[K]; CurY := Cmd.Args[K + 1];
+                  XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
+                  Inc(K, 2);
+                end;
+              end;
+              'L', 'T':
               begin
                 K := 0;
                 while K + 1 < Length(Cmd.Args) do
                 begin
+                  CurX := Cmd.Args[K]; CurY := Cmd.Args[K + 1];
                   XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
                   Inc(K, 2);
                 end;
               end;
               'H':
+              begin
+                SetLength(NewArgs, Length(Cmd.Args) * 2);
                 for K := 0 to High(Cmd.Args) do
-                  Cmd.Args[K] := XForm.A * Cmd.Args[K] + XForm.E;
+                begin
+                  CurX := Cmd.Args[K];
+                  NewArgs[K * 2] := CurX;
+                  NewArgs[K * 2 + 1] := CurY;
+                  XFormPt(NewArgs[K * 2], NewArgs[K * 2 + 1]);
+                end;
+                Cmd.Cmd := 'L';
+                Cmd.Args := NewArgs;
+              end;
               'V':
+              begin
+                SetLength(NewArgs, Length(Cmd.Args) * 2);
                 for K := 0 to High(Cmd.Args) do
-                  Cmd.Args[K] := XForm.D * Cmd.Args[K] + XForm.F;
+                begin
+                  CurY := Cmd.Args[K];
+                  NewArgs[K * 2] := CurX;
+                  NewArgs[K * 2 + 1] := CurY;
+                  XFormPt(NewArgs[K * 2], NewArgs[K * 2 + 1]);
+                end;
+                Cmd.Cmd := 'L';
+                Cmd.Args := NewArgs;
+              end;
               'C':
               begin
                 K := 0;
                 while K + 5 < Length(Cmd.Args) do
                 begin
+                  CurX := Cmd.Args[K + 4]; CurY := Cmd.Args[K + 5];
                   XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
                   XFormPt(Cmd.Args[K + 2], Cmd.Args[K + 3]);
                   XFormPt(Cmd.Args[K + 4], Cmd.Args[K + 5]);
@@ -1517,6 +1559,7 @@ begin
                 K := 0;
                 while K + 3 < Length(Cmd.Args) do
                 begin
+                  CurX := Cmd.Args[K + 2]; CurY := Cmd.Args[K + 3];
                   XFormPt(Cmd.Args[K], Cmd.Args[K + 1]);
                   XFormPt(Cmd.Args[K + 2], Cmd.Args[K + 3]);
                   Inc(K, 4);
@@ -1527,9 +1570,14 @@ begin
                 K := 0;
                 while K + 6 < Length(Cmd.Args) do
                 begin
+                  CurX := Cmd.Args[K + 5]; CurY := Cmd.Args[K + 6];
                   XFormPt(Cmd.Args[K + 5], Cmd.Args[K + 6]);
                   Inc(K, 7);
                 end;
+              end;
+              'Z', 'z':
+              begin
+                CurX := SubX; CurY := SubY;
               end;
             end;
             Cmds[J] := Cmd;
