@@ -125,6 +125,13 @@ type
     FIdMap: TPixieSvgIdMap;
     FStyleMap: TPixieSvgStyleMap;
     FUseDepth: Integer;
+    // SVG 2 context paint (set while rendering marker children so
+    // fill:context-stroke / fill:context-fill resolve to the referencing
+    // element's paint)
+    FContextFillColor: TPixieWebColor;
+    FContextStrokeColor: TPixieWebColor;
+    FHasContextFill: Boolean;
+    FHasContextStroke: Boolean;
   protected
     // Abstract drawing primitives — subclasses override these
     procedure DoMoveTo(X, Y: Single); virtual; abstract;
@@ -225,7 +232,8 @@ type
     procedure RenderImage(Node: Pointer;
       const State: TPixieSvgState);
     procedure RenderMarkerAt(const MarkerId: string;
-      X, Y, Angle, StrokeW: Single; const State: TPixieSvgState);
+      X, Y, Angle, StrokeW: Single; const State: TPixieSvgState;
+      IsStart: Boolean = False);
     procedure RenderMarkers(Node: Pointer; const State: TPixieSvgState;
       X1, Y1, X2, Y2, Angle1, Angle2: Single);
   public
@@ -905,6 +913,18 @@ begin
       Result.HasFill := True;
       Result.FillGradientId := '';
     end
+    else if FHasContextStroke and SameText(FillStr, 'context-stroke') then
+    begin
+      Result.FillColor := FContextStrokeColor;
+      Result.HasFill := True;
+      Result.FillGradientId := '';
+    end
+    else if FHasContextFill and SameText(FillStr, 'context-fill') then
+    begin
+      Result.FillColor := FContextFillColor;
+      Result.HasFill := True;
+      Result.FillGradientId := '';
+    end
     else if (FillStr <> 'inherit') and ParseSvgColor(FillStr, Color) then
     begin
       Result.FillColor := Color;
@@ -932,6 +952,18 @@ begin
     else if SameText(StrokeStr, 'currentColor') then
     begin
       Result.StrokeColor := Result.Color;
+      Result.HasStroke := True;
+      Result.StrokeGradientId := '';
+    end
+    else if FHasContextStroke and SameText(StrokeStr, 'context-stroke') then
+    begin
+      Result.StrokeColor := FContextStrokeColor;
+      Result.HasStroke := True;
+      Result.StrokeGradientId := '';
+    end
+    else if FHasContextFill and SameText(StrokeStr, 'context-fill') then
+    begin
+      Result.StrokeColor := FContextFillColor;
       Result.HasStroke := True;
       Result.StrokeGradientId := '';
     end
@@ -3001,7 +3033,8 @@ end;
 // ===========================================================================
 
 procedure TPixieSvgRendererBase.RenderMarkerAt(const MarkerId: string;
-  X, Y, Angle, StrokeW: Single; const State: TPixieSvgState);
+  X, Y, Angle, StrokeW: Single; const State: TPixieSvgState;
+  IsStart: Boolean);
 var
   MarkerNode: Pointer;
   MarkerEl: TDOMElement;
@@ -3013,6 +3046,9 @@ var
   MarkerState: TPixieSvgState;
   P, Idx: Integer;
   Parts: array[0..3] of string;
+  RotAngle: Single;
+  SaveFill, SaveStroke: TPixieWebColor;
+  SaveHasFill, SaveHasStroke: Boolean;
 begin
   if (FIdMap = nil) or (MarkerId = '') then Exit;
   if not FIdMap.TryGetValue(MarkerId, MarkerNode) then Exit;
@@ -3070,8 +3106,15 @@ begin
   //   T(-refVp) * S(vb-to-viewport) * T(-vbOrigin)
   // where refVp = (refX - vbX) * sx, (refY - vbY) * sy
   M := TPixieSvgMatrix.CreateTranslate(X, Y);
-  if OrientStr = 'auto' then
-    M := M.Multiply(TPixieSvgMatrix.CreateRotate(Angle));
+  if (OrientStr = 'auto') or (OrientStr = 'auto-start-reverse') then
+  begin
+    RotAngle := Angle;
+    // auto-start-reverse: start marker is rotated 180° so the arrow points
+    // back along the path direction; end/mid markers behave like 'auto'.
+    if IsStart and (OrientStr = 'auto-start-reverse') then
+      RotAngle := RotAngle + 180;
+    M := M.Multiply(TPixieSvgMatrix.CreateRotate(RotAngle));
+  end;
   if UnitsStr = 'strokeWidth' then
     M := M.Multiply(TPixieSvgMatrix.CreateScale(StrokeW, StrokeW));
   M := M.Multiply(TPixieSvgMatrix.CreateTranslate(
@@ -3082,10 +3125,28 @@ begin
   DoSaveState;
   DoSetTransform(M);
 
-  // Render marker children — per SVG spec, marker contents inherit from the
-  // marker element itself (its DOM position), not from the referencing shape
-  MarkerState := InheritState(MarkerNode, FInitState);
-  RenderGroup(MarkerNode, MarkerState);
+  // Establish SVG 2 context paint so fill/stroke:context-stroke/context-fill
+  // inside the marker resolve to the referencing element's paint. Save/restore
+  // to support nested markers.
+  SaveFill := FContextFillColor;
+  SaveStroke := FContextStrokeColor;
+  SaveHasFill := FHasContextFill;
+  SaveHasStroke := FHasContextStroke;
+  FContextFillColor := State.FillColor;
+  FContextStrokeColor := State.StrokeColor;
+  FHasContextFill := State.HasFill and (State.FillGradientId = '');
+  FHasContextStroke := State.HasStroke and (State.StrokeGradientId = '');
+  try
+    // Render marker children — per SVG spec, marker contents inherit from the
+    // marker element itself (its DOM position), not from the referencing shape
+    MarkerState := InheritState(MarkerNode, FInitState);
+    RenderGroup(MarkerNode, MarkerState);
+  finally
+    FContextFillColor := SaveFill;
+    FContextStrokeColor := SaveStroke;
+    FHasContextFill := SaveHasFill;
+    FHasContextStroke := SaveHasStroke;
+  end;
 
   DoRestoreState;
 end;
@@ -3118,7 +3179,7 @@ begin
   begin
     MarkerId := ExtractUrlId(MarkerStartStr);
     if MarkerId <> '' then
-      RenderMarkerAt(MarkerId, X1, Y1, Angle1, SW, State);
+      RenderMarkerAt(MarkerId, X1, Y1, Angle1, SW, State, True);
   end;
 
   // marker-end
