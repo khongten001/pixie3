@@ -197,6 +197,10 @@ type
       const State: TPixieSvgState; var X, Y: Single);
     procedure RenderImage(Node: Pointer;
       const State: TPixieSvgState);
+    procedure RenderMarkerAt(const MarkerId: string;
+      X, Y, Angle, StrokeW: Single; const State: TPixieSvgState);
+    procedure RenderMarkers(Node: Pointer; const State: TPixieSvgState;
+      X1, Y1, X2, Y2, Angle1, Angle2: Single);
   public
     destructor Destroy; override;
 
@@ -1985,7 +1989,7 @@ end;
 procedure TPixieSvgRendererBase.RenderLine(Node: Pointer;
   const State: TPixieSvgState);
 var
-  X1, Y1, X2, Y2: Single;
+  X1, Y1, X2, Y2, Angle: Single;
   NeedRestore: Boolean;
 begin
   X1 := ParseSvgFloat(GetAttr(Node, 'x1', '0'));
@@ -2003,6 +2007,10 @@ begin
   DoMoveTo(X1, Y1);
   DoLineTo(X2, Y2);
   DoFillAndStroke(State);
+
+  Angle := ArcTan2(Y2 - Y1, X2 - X1) * 180 / Pi;
+  RenderMarkers(Node, State, X1, Y1, X2, Y2, Angle, Angle);
+
   if NeedRestore then DoEndOpacity;
   DoRestoreState;
 end;
@@ -2073,6 +2081,17 @@ begin
     DoClosePath;
 
   DoFillAndStroke(State);
+
+  if (NumCount >= 4) and not ClosePath then
+  begin
+    RenderMarkers(Node, State,
+      Nums[0], Nums[1],
+      Nums[NumCount - 2], Nums[NumCount - 1],
+      ArcTan2(Nums[3] - Nums[1], Nums[2] - Nums[0]) * 180 / Pi,
+      ArcTan2(Nums[NumCount - 1] - Nums[NumCount - 3],
+              Nums[NumCount - 2] - Nums[NumCount - 4]) * 180 / Pi);
+  end;
+
   if NeedRestore then DoEndOpacity;
   DoRestoreState;
 end;
@@ -2657,6 +2676,10 @@ var
   D: string;
   Cmds: TPixieSvgPathCmdList;
   NeedRestore: Boolean;
+  I, N: Integer;
+  StartX, StartY, EndX, EndY, PrevX, PrevY: Single;
+  Angle1, Angle2: Single;
+  Cmd: TPixieSvgPathCmd;
 begin
   D := GetAttr(Node, 'd');
   if D = '' then Exit;
@@ -2669,13 +2692,213 @@ begin
   Cmds := ParsePathData(D);
   try
     EmitPathCommands(Cmds);
+
+    // Extract start/end points and angles for markers
+    StartX := 0; StartY := 0; EndX := 0; EndY := 0;
+    PrevX := 0; PrevY := 0;
+    for I := 0 to Cmds.Count - 1 do
+    begin
+      Cmd := Cmds[I];
+      N := Length(Cmd.Args);
+      case Cmd.Cmd of
+        'M': if N >= 2 then
+             begin
+               if I = 0 then begin StartX := Cmd.Args[0]; StartY := Cmd.Args[1]; end;
+               PrevX := Cmd.Args[N - 2]; PrevY := Cmd.Args[N - 1];
+               EndX := PrevX; EndY := PrevY;
+             end;
+        'm': if N >= 2 then
+             begin
+               if I = 0 then begin StartX := EndX + Cmd.Args[0]; StartY := EndY + Cmd.Args[1]; end;
+               PrevX := EndX + Cmd.Args[N - 2]; PrevY := EndY + Cmd.Args[N - 1];
+               EndX := PrevX; EndY := PrevY;
+             end;
+        'L', 'T': if N >= 2 then
+             begin PrevX := EndX; PrevY := EndY; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
+        'l', 't': if N >= 2 then
+             begin PrevX := EndX; PrevY := EndY; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
+        'H': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndX := Cmd.Args[N - 1]; end;
+        'h': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndX := EndX + Cmd.Args[N - 1]; end;
+        'V': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndY := Cmd.Args[N - 1]; end;
+        'v': if N >= 1 then begin PrevX := EndX; PrevY := EndY; EndY := EndY + Cmd.Args[N - 1]; end;
+        'C': if N >= 6 then
+             begin PrevX := Cmd.Args[N - 4]; PrevY := Cmd.Args[N - 3]; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
+        'c': if N >= 6 then
+             begin PrevX := EndX + Cmd.Args[N - 4]; PrevY := EndY + Cmd.Args[N - 3]; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
+        'S', 'Q': if N >= 4 then
+             begin PrevX := Cmd.Args[N - 4]; PrevY := Cmd.Args[N - 3]; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
+        's', 'q': if N >= 4 then
+             begin PrevX := EndX + Cmd.Args[N - 4]; PrevY := EndY + Cmd.Args[N - 3]; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
+        'A': if N >= 7 then
+             begin PrevX := EndX; PrevY := EndY; EndX := Cmd.Args[N - 2]; EndY := Cmd.Args[N - 1]; end;
+        'a': if N >= 7 then
+             begin PrevX := EndX; PrevY := EndY; EndX := EndX + Cmd.Args[N - 2]; EndY := EndY + Cmd.Args[N - 1]; end;
+      end;
+    end;
+    // Start angle: direction from start point toward second command's target
+    Angle1 := 0;
+    if Cmds.Count >= 2 then
+    begin
+      Cmd := Cmds[1];
+      N := Length(Cmd.Args);
+      case Cmd.Cmd of
+        'H': if N >= 1 then Angle1 := ArcTan2(0, Cmd.Args[0] - StartX) * 180 / Pi;
+        'h': if N >= 1 then Angle1 := ArcTan2(0, Cmd.Args[0]) * 180 / Pi;
+        'V': if N >= 1 then Angle1 := ArcTan2(Cmd.Args[0] - StartY, 0) * 180 / Pi;
+        'v': if N >= 1 then Angle1 := ArcTan2(Cmd.Args[0], 0) * 180 / Pi;
+      else
+        if N >= 2 then
+        begin
+          if Cmd.Cmd < 'a' then
+            Angle1 := ArcTan2(Cmd.Args[1] - StartY, Cmd.Args[0] - StartX) * 180 / Pi
+          else
+            Angle1 := ArcTan2(Cmd.Args[1], Cmd.Args[0]) * 180 / Pi;
+        end;
+      end;
+    end;
+    // End angle: direction from penultimate point to endpoint
+    Angle2 := ArcTan2(EndY - PrevY, EndX - PrevX) * 180 / Pi;
   finally
     Cmds.Free;
   end;
 
   DoFillAndStroke(State);
+  RenderMarkers(Node, State, StartX, StartY, EndX, EndY, Angle1, Angle2);
   if NeedRestore then DoEndOpacity;
   DoRestoreState;
+end;
+
+// ===========================================================================
+// Marker rendering (marker-start, marker-end, marker-mid)
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.RenderMarkerAt(const MarkerId: string;
+  X, Y, Angle, StrokeW: Single; const State: TPixieSvgState);
+var
+  MarkerNode: Pointer;
+  MarkerEl: TDOMElement;
+  VbStr: string;
+  VbX, VbY, VbW, VbH: Single;
+  MW, MH, RefX, RefY, SX, SY: Single;
+  OrientStr, UnitsStr: string;
+  M: TPixieSvgMatrix;
+  MarkerState: TPixieSvgState;
+  P, Idx: Integer;
+  Parts: array[0..3] of string;
+begin
+  if (FIdMap = nil) or (MarkerId = '') then Exit;
+  if not FIdMap.TryGetValue(MarkerId, MarkerNode) then Exit;
+
+  MarkerEl := TDOMElement(MarkerNode);
+  if LowerCase(DomToStr(MarkerEl.TagName)) <> 'marker' then Exit;
+
+  // Parse marker attributes
+  MW := ParseSvgFloat(GetAttr(MarkerNode, 'markerWidth', '3'));
+  MH := ParseSvgFloat(GetAttr(MarkerNode, 'markerHeight', '3'));
+  RefX := ParseSvgFloat(GetAttr(MarkerNode, 'refX', '0'));
+  RefY := ParseSvgFloat(GetAttr(MarkerNode, 'refY', '0'));
+  OrientStr := GetAttr(MarkerNode, 'orient', 'auto');
+  UnitsStr := GetAttr(MarkerNode, 'markerUnits', 'strokeWidth');
+
+  // Parse viewBox
+  VbStr := GetAttr(MarkerNode, 'viewBox');
+  if VbStr <> '' then
+  begin
+    for Idx := 0 to 3 do Parts[Idx] := '';
+    P := 1; Idx := 0;
+    while (P <= Length(VbStr)) and (Idx <= 3) do
+    begin
+      while (P <= Length(VbStr)) and CharInSet(VbStr[P], [' ', ',', #9]) do Inc(P);
+      while (P <= Length(VbStr)) and not CharInSet(VbStr[P], [' ', ',', #9]) do
+      begin
+        Parts[Idx] := Parts[Idx] + VbStr[P];
+        Inc(P);
+      end;
+      Inc(Idx);
+    end;
+    VbX := ParseSvgFloat(Parts[0]);
+    VbY := ParseSvgFloat(Parts[1]);
+    VbW := ParseSvgFloat(Parts[2]);
+    VbH := ParseSvgFloat(Parts[3]);
+    if (VbW > 0) and (VbH > 0) then
+    begin
+      SX := MW / VbW;
+      SY := MH / VbH;
+    end
+    else
+    begin
+      SX := 1;
+      SY := 1;
+    end;
+  end
+  else
+  begin
+    VbX := 0; VbY := 0;
+    SX := 1;
+    SY := 1;
+  end;
+
+  // Build transform: T(vertex) * R(angle) * S(strokeWidth) *
+  //   T(-refVp) * S(vb-to-viewport) * T(-vbOrigin)
+  // where refVp = (refX - vbX) * sx, (refY - vbY) * sy
+  M := TPixieSvgMatrix.CreateTranslate(X, Y);
+  if OrientStr = 'auto' then
+    M := M.Multiply(TPixieSvgMatrix.CreateRotate(Angle));
+  if UnitsStr = 'strokeWidth' then
+    M := M.Multiply(TPixieSvgMatrix.CreateScale(StrokeW, StrokeW));
+  M := M.Multiply(TPixieSvgMatrix.CreateTranslate(
+    -(RefX - VbX) * SX, -(RefY - VbY) * SY));
+  M := M.Multiply(TPixieSvgMatrix.CreateScale(SX, SY));
+  M := M.Multiply(TPixieSvgMatrix.CreateTranslate(-VbX, -VbY));
+
+  DoSaveState;
+  DoSetTransform(M);
+
+  // Render marker children — inherit state from marker element, then per child
+  MarkerState := InheritState(MarkerNode, State);
+  RenderGroup(MarkerNode, MarkerState);
+
+  DoRestoreState;
+end;
+
+procedure TPixieSvgRendererBase.RenderMarkers(Node: Pointer;
+  const State: TPixieSvgState;
+  X1, Y1, X2, Y2, Angle1, Angle2: Single);
+var
+  MarkerStartStr, MarkerEndStr: string;
+  StyleStr: string;
+  MarkerId: string;
+  SW: Single;
+begin
+  // Check marker-start and marker-end attributes or style
+  StyleStr := GetAttr(Node, 'style');
+  MarkerStartStr := GetAttr(Node, 'marker-start');
+  if MarkerStartStr = '' then
+    MarkerStartStr := ParseStyleAttribute(StyleStr, 'marker-start');
+  MarkerEndStr := GetAttr(Node, 'marker-end');
+  if MarkerEndStr = '' then
+    MarkerEndStr := ParseStyleAttribute(StyleStr, 'marker-end');
+
+  if (MarkerStartStr = '') and (MarkerEndStr = '') then
+    Exit;
+
+  SW := State.StrokeWidth;
+
+  // marker-start
+  if MarkerStartStr <> '' then
+  begin
+    MarkerId := ExtractUrlId(MarkerStartStr);
+    if MarkerId <> '' then
+      RenderMarkerAt(MarkerId, X1, Y1, Angle1, SW, State);
+  end;
+
+  // marker-end
+  if MarkerEndStr <> '' then
+  begin
+    MarkerId := ExtractUrlId(MarkerEndStr);
+    if MarkerId <> '' then
+      RenderMarkerAt(MarkerId, X2, Y2, Angle2, SW, State);
+  end;
 end;
 
 // ===========================================================================
