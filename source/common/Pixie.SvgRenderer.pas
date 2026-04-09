@@ -191,10 +191,8 @@ type
     procedure RenderText(Node: Pointer;
       const State: TPixieSvgState); virtual;
     function CollectAllText(Node: Pointer): string;
-    function ResolveTextState(Node: Pointer;
-      const State: TPixieSvgState): TPixieSvgState;
     procedure RenderTextSpans(Node: Pointer;
-      const State: TPixieSvgState; X, Y: Single);
+      const State: TPixieSvgState; var X, Y: Single);
     procedure RenderImage(Node: Pointer;
       const State: TPixieSvgState);
   public
@@ -2691,32 +2689,8 @@ begin
   end;
 end;
 
-function TPixieSvgRendererBase.ResolveTextState(Node: Pointer;
-  const State: TPixieSvgState): TPixieSvgState;
-var
-  Child: TDOMNode;
-  Tag: string;
-begin
-  Result := State;
-  Child := TDOMNode(Node).FirstChild;
-  while Child <> nil do
-  begin
-    if Child.NodeType = ELEMENT_NODE then
-    begin
-      Tag := LowerCase(DomToStr(TDOMElement(Child).TagName));
-      if (Tag <> 'desc') and (Tag <> 'title') and (Tag <> 'metadata') then
-      begin
-        Result := InheritState(Child, Result);
-        Result := ResolveTextState(Child, Result);
-        Exit;
-      end;
-    end;
-    Child := Child.NextSibling;
-  end;
-end;
-
 procedure TPixieSvgRendererBase.RenderTextSpans(Node: Pointer;
-  const State: TPixieSvgState; X, Y: Single);
+  const State: TPixieSvgState; var X, Y: Single);
 var
   Child: TDOMNode;
   ChildState: TPixieSvgState;
@@ -2740,23 +2714,11 @@ begin
       YStr := GetAttr(Child, 'y');
       DxStr := GetAttr(Child, 'dx');
       DyStr := GetAttr(Child, 'dy');
-      if (XStr <> '') or (YStr <> '') or (DxStr <> '') or (DyStr <> '') then
-      begin
-        // Positioned tspan — apply absolute then relative offsets
-        if XStr <> '' then X := ParseSvgFloat(XStr);
-        if YStr <> '' then Y := ParseSvgFloat(YStr);
-        if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
-        if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
-        TextContent := Trim(CollectAllText(Child));
-        if TextContent <> '' then
-        begin
-          ChildState := ResolveTextState(Child, ChildState);
-          DoRenderTextRun(TextContent, X, Y, ChildState);
-        end;
-      end
-      else
-        // Non-positioned tspan — inherit state and recurse
-        RenderTextSpans(Child, ChildState, X, Y);
+      if XStr <> '' then X := ParseSvgFloat(XStr);
+      if YStr <> '' then Y := ParseSvgFloat(YStr);
+      if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
+      if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
+      RenderTextSpans(Child, ChildState, X, Y);
     end;
     Child := Child.NextSibling;
   end;
