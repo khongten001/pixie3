@@ -912,6 +912,7 @@ function TPixieSvgRenderer.EmbedImageFromHref(const Href: string;
 var
   CacheKey: string;
   DataStream: TMemoryStream;
+{$IFDEF FPC}
   ImgObj, SmaskObj: TPixiePdfObject;
   RgbData, AlphaData: TBytes;
   X, Y, W, H, Pitch: Integer;
@@ -919,7 +920,6 @@ var
   HasAlpha: Boolean;
   B, G, R, A: Byte;
   RgbIdx, AlphaIdx: Integer;
-{$IFDEF FPC}
   Img: TFPMemoryImage;
   Pixels: PByte;
 {$ENDIF}
