@@ -671,7 +671,7 @@ begin
           ColP^.Width := ColP^.MaxWidth;
         CurWidth := CurWidth + ColP^.Width;
       end;
-      if (CurWidth = BlockWidth) or IsAuto then
+      if (CurWidth = BlockWidth) or (IsAuto and not FHasPercentColumns) then
       begin
         Result := CurWidth;
         Exit;

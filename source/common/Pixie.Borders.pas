@@ -78,6 +78,7 @@ type
     procedure Init;
     procedure InitFromCss(const CssBorders: TPixieCssBorders);
     function IsVisible: Boolean;
+    procedure ResolveOutsetInset;
   end;
 
 implementation
@@ -257,6 +258,39 @@ function TPixieBorders.IsVisible: Boolean;
 begin
   Result := (Left.Width <> 0) or (Right.Width <> 0) or
             (Top.Width <> 0) or (Bottom.Width <> 0);
+end;
+
+procedure TPixieBorders.ResolveOutsetInset;
+
+  procedure ResolveSide(var Side: TPixieBorder; UseDark: Boolean);
+  var
+    C: TPixieWebColor;
+  begin
+    C := Side.Color;
+    Side.Style := bsSolid;
+    if UseDark then
+      Side.Color := TPixieWebColor.Create(C.Red div 2, C.Green div 2, C.Blue div 2, C.Alpha)
+    else
+      Side.Color := TPixieWebColor.Create(
+        C.Red + (255 - C.Red) div 2, C.Green + (255 - C.Green) div 2,
+        C.Blue + (255 - C.Blue) div 2, C.Alpha);
+  end;
+
+begin
+  if not (Top.Style in [bsOutset, bsInset]) and
+     not (Left.Style in [bsOutset, bsInset]) and
+     not (Bottom.Style in [bsOutset, bsInset]) and
+     not (Right.Style in [bsOutset, bsInset]) then
+    Exit;
+  // Outset: light top/left, dark bottom/right. Inset: opposite.
+  if Top.Style in [bsOutset, bsInset] then
+    ResolveSide(Top, Top.Style = bsInset);
+  if Left.Style in [bsOutset, bsInset] then
+    ResolveSide(Left, Left.Style = bsInset);
+  if Bottom.Style in [bsOutset, bsInset] then
+    ResolveSide(Bottom, Bottom.Style = bsOutset);
+  if Right.Style in [bsOutset, bsInset] then
+    ResolveSide(Right, Right.Style = bsOutset);
 end;
 
 end.

@@ -207,7 +207,7 @@ const
     '}' +
 
     'table[border] {' +
-    '  border-style:solid;' +
+    '  border-style:outset;' +
     '}' +
 
     'table[border^="0"] {' +
@@ -215,11 +215,7 @@ const
     '}' +
 
     'table[border] td, table[border] th {' +
-    '  border-style:solid;' +
-    '  border-top-color:black;' +
-    '  border-left-color:black;' +
-    '  border-bottom-color:gray;' +
-    '  border-right-color:gray;' +
+    '  border-style:inset;' +
     '}' +
 
     'table[border^="0"] td, table[border^="0"] th {' +

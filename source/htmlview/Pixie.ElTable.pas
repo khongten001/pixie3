@@ -18,6 +18,7 @@ type
   public
     Rules: string;
     Cellpadding: string;
+    Border: string;
     constructor Create(ADoc: TObject);
     function AppendChild(El: TPixieElement): Boolean; override;
     procedure ParseAttributes; override;
@@ -125,9 +126,10 @@ begin
     FStyle.AddProperty(Ord(psid_border_left_style), 'none');
   end;
 
-  // Cache rules and cellpadding for child cell access
+  // Cache table attributes for child cell access
   Rules := LowerCase(GetAttr('rules'));
   Cellpadding := GetAttr('cellpadding');
+  Border := GetAttr('border');
 
   if (Rules = 'all') or (Rules = 'rows') or (Rules = 'cols') or
      (Rules = 'groups') then
@@ -237,6 +239,13 @@ begin
   begin
     if Table.Cellpadding <> '' then
       MapToPixelLengthProperty(Ord(psid_padding), Table.Cellpadding);
+
+    // Set cell border style from the nearest ancestor table's border
+    // attribute (UA descendant selectors can't distinguish nearest vs any)
+    if (Table.Border <> '') and (Table.Border <> '0') then
+      FStyle.AddProperty(Ord(psid_border_style), 'inset')
+    else if Table.Border = '0' then
+      FStyle.AddProperty(Ord(psid_border_style), 'none');
 
     if Table.Rules = 'all' then
       FStyle.AddProperty(Ord(psid_border), '1px solid')

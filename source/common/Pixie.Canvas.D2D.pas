@@ -844,46 +844,59 @@ procedure TPixieD2DCanvas.DrawBorders(const Borders: TPixieBorders;
 var
   X, Y, W, H: Single;
   Geom: ID2D1PathGeometry;
+  Resolved: TPixieBorders;
+  B: ^TPixieBorders;
 begin
   if FTarget = nil then Exit;
   if not Borders.IsVisible then Exit;
+  if (Borders.Top.Style in [bsOutset, bsInset]) or
+     (Borders.Right.Style in [bsOutset, bsInset]) or
+     (Borders.Bottom.Style in [bsOutset, bsInset]) or
+     (Borders.Left.Style in [bsOutset, bsInset]) then
+  begin
+    Resolved := Borders;
+    Resolved.ResolveOutsetInset;
+    B := @Resolved;
+  end
+  else
+    B := @Borders;
 
   X := Pos.X;
   Y := Pos.Y;
   W := Pos.Width;
   H := Pos.Height;
 
-  if Borders.Radius.HasRadius then
+  if B^.Radius.HasRadius then
   begin
-    if (Borders.Top.Width > 0) and (Borders.Top.Style <> bsNone) then
+    if (B^.Top.Width > 0) and (B^.Top.Style <> bsNone) then
     begin
-      FBrush.SetColor(ToColorF(Borders.Top.Color));
-      CreateRoundedRectGeometry(X, Y, W, H, Borders.Radius, Geom);
+      FBrush.SetColor(ToColorF(B^.Top.Color));
+      CreateRoundedRectGeometry(X, Y, W, H, B^.Radius, Geom);
       if Geom <> nil then
-        FTarget.DrawGeometry(Geom, FBrush, Borders.Top.Width, nil);
+        FTarget.DrawGeometry(Geom, FBrush, B^.Top.Width, nil);
       Exit;
     end;
   end;
 
   // Top
-  DrawBorderSide(Borders.Top,
-    X, Y + Borders.Top.Width / 2,
-    X + W, Y + Borders.Top.Width / 2);
+  DrawBorderSide(B^.Top,
+    X, Y + B^.Top.Width / 2,
+    X + W, Y + B^.Top.Width / 2);
 
   // Right
-  DrawBorderSide(Borders.Right,
-    X + W - Borders.Right.Width / 2, Y,
-    X + W - Borders.Right.Width / 2, Y + H);
+  DrawBorderSide(B^.Right,
+    X + W - B^.Right.Width / 2, Y,
+    X + W - B^.Right.Width / 2, Y + H);
 
   // Bottom
-  DrawBorderSide(Borders.Bottom,
-    X, Y + H - Borders.Bottom.Width / 2,
-    X + W, Y + H - Borders.Bottom.Width / 2);
+  DrawBorderSide(B^.Bottom,
+    X, Y + H - B^.Bottom.Width / 2,
+    X + W, Y + H - B^.Bottom.Width / 2);
 
   // Left
-  DrawBorderSide(Borders.Left,
-    X + Borders.Left.Width / 2, Y,
-    X + Borders.Left.Width / 2, Y + H);
+  DrawBorderSide(B^.Left,
+    X + B^.Left.Width / 2, Y,
+    X + B^.Left.Width / 2, Y + H);
 end;
 
 // ---------------------------------------------------------------------------
