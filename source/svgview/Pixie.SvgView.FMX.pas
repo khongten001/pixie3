@@ -91,12 +91,15 @@ implementation
 
 procedure TPixieSvgView.LoadFromFile(const FileName: string);
 begin
-  FLines.LoadFromFile(FileName);
+  // SVG is UTF-8 by spec; default TStrings encoding on Delphi is the
+  // system code page (CP1252 on Windows) which would mojibake any
+  // non-ASCII text. A UTF-8 BOM, if present, still wins.
+  FLines.LoadFromFile(FileName, TEncoding.UTF8);
 end;
 
 procedure TPixieSvgView.LoadFromStream(Stream: TStream);
 begin
-  FLines.LoadFromStream(Stream);
+  FLines.LoadFromStream(Stream, TEncoding.UTF8);
 end;
 
 procedure TPixieSvgView.LoadFromResource(const ResName: string);
@@ -129,6 +132,10 @@ begin
 
   FPixieCanvas := TPixieFmxCanvas.Create;
   FLines := TStringList.Create;
+  // SVG is UTF-8 by spec; this default applies when callers reach the
+  // exposed Lines property directly (Lines.LoadFromFile etc.) instead of
+  // going through the wrapper LoadFromFile/LoadFromStream methods.
+  FLines.DefaultEncoding := TEncoding.UTF8;
   FLines.OnChange := LinesChanged;
   FRenderer := TPixieSvgCanvasRenderer.Create(FPixieCanvas);
   FAlignment := saCenterBoth;

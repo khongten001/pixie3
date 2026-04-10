@@ -94,7 +94,7 @@ type
 
   TPixieSvgPathCmd = record
     Cmd: AnsiChar;
-    Args: array of Single;
+    Args: TPixieSingleArray;
   end;
 
   TPixieSvgPathCmdList = TList<TPixieSvgPathCmd>;
@@ -274,17 +274,21 @@ end;
 // DOCTYPE entity expansion
 // ===========================================================================
 
-procedure ExpandDoctypeEntities(var S: string; DtdStart, DtdEnd: Integer);
+// Operates on raw UTF-8 bytes (AnsiString) so no code-page conversion
+// happens — Delphi's UnicodeString SetString with PAnsiChar would otherwise
+// interpret the bytes as the system code page (CP1252 on Windows), corrupting
+// any non-ASCII content like en dashes or bullets.
+procedure ExpandDoctypeEntities(var S: AnsiString; DtdStart, DtdEnd: Integer);
 var
-  Subset, EntName, EntValue: string;
+  Subset, EntName, EntValue, Marker: AnsiString;
   BracketStart, BracketEnd: Integer;
-  P, Q, ValStart, ValEnd: Integer;
-  QuoteCh: Char;
+  P, Q, ValStart, ValEnd, PMatch: Integer;
+  QuoteCh: AnsiChar;
 begin
   // Find internal subset between [ and ]
-  BracketStart := Pos('[', S, DtdStart);
+  BracketStart := Pos(AnsiString('['), S, DtdStart);
   if (BracketStart = 0) or (BracketStart > DtdEnd) then Exit;
-  BracketEnd := Pos(']', S, BracketStart);
+  BracketEnd := Pos(AnsiString(']'), S, BracketStart);
   if (BracketEnd = 0) or (BracketEnd > DtdEnd) then Exit;
 
   Subset := Copy(S, BracketStart + 1, BracketEnd - BracketStart - 1);
@@ -293,7 +297,7 @@ begin
   P := 1;
   while P < Length(Subset) do
   begin
-    P := Pos('<!ENTITY', Subset, P);
+    P := Pos(AnsiString('<!ENTITY'), Subset, P);
     if P = 0 then Break;
     Inc(P, 8);
 
@@ -325,9 +329,21 @@ begin
     EntValue := Copy(Subset, ValStart, ValEnd - ValStart);
     Inc(P);
 
-    // Expand &Name; references in the document body (after DOCTYPE)
+    // Expand &Name; references in the document body (after DOCTYPE).
+    // Inlined byte-level replace — Delphi's StringReplace is UnicodeString
+    // only, and going through UnicodeString would interpret the UTF-8 bytes
+    // as the system code page and corrupt non-ASCII content.
     if EntName <> '' then
-      S := StringReplace(S, '&' + EntName + ';', EntValue, [rfReplaceAll]);
+    begin
+      Marker := AnsiString('&') + EntName + AnsiString(';');
+      PMatch := Pos(Marker, S);
+      while PMatch > 0 do
+      begin
+        Delete(S, PMatch, Length(Marker));
+        Insert(EntValue, S, PMatch);
+        PMatch := Pos(Marker, S, PMatch + Length(EntValue));
+      end;
+    end;
   end;
 end;
 
@@ -1467,7 +1483,7 @@ var
   Cmd: TPixieSvgPathCmd;
   J, K: Integer;
   CurX, CurY, SubX, SubY: Single;
-  NewArgs: array of Single;
+  NewArgs: TPixieSingleArray;
 begin
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
@@ -3658,9 +3674,8 @@ var
   VbStr, WidthStr, HeightStr, OverflowStr: string;
   Parts: array[0..3] of string;
   P, Idx: Integer;
-  SvgStr: string;
+  SvgStr: AnsiString;
   DtdStart, DtdEnd: Integer;
-  Utf8: UTF8String;
 begin
   Result := False;
   W := 0;
@@ -3675,7 +3690,7 @@ begin
   // Before stripping, extract <!ENTITY> definitions from any internal subset
   // and expand entity references in the document body.
   SetString(SvgStr, PAnsiChar(Data), Size);
-  DtdStart := Pos('<!DOCTYPE', SvgStr);
+  DtdStart := Pos(AnsiString('<!DOCTYPE'), SvgStr);
   if DtdStart > 0 then
   begin
     // Find closing '>' — handle nested brackets for internal subsets
@@ -3693,10 +3708,10 @@ begin
     Delete(SvgStr, DtdStart, DtdEnd - DtdStart + 1);
   end;
 
-  Utf8 := UTF8String(SvgStr);
   MemStream := TMemoryStream.Create;
   try
-    MemStream.Write(Utf8[1], Length(Utf8));
+    if Length(SvgStr) > 0 then
+      MemStream.Write(SvgStr[1], Length(SvgStr));
     MemStream.Position := 0;
 
     Doc := nil;
