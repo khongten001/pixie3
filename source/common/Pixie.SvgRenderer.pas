@@ -539,11 +539,7 @@ end;
 
 function TPixieSvgRendererBase.GetHref(Node: Pointer): string;
 begin
-  Result := GetAttr(Node, 'xlink:href');
-  if Result = '' then
-    Result := GetAttr(Node, 'href');
-  if Result = '' then
-    Result := DomToStr(TDOMElement(Node).GetPrefixedAttribute('href'));
+  Result := GetAttr(Node, 'href');
 end;
 
 function TPixieSvgRendererBase.ParseSvgFloat(const S: string): Single;

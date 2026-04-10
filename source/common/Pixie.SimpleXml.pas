@@ -51,7 +51,6 @@ type
     constructor Create;
     destructor Destroy; override;
     function GetAttribute(const Name: UnicodeString): UnicodeString;
-    function GetPrefixedAttribute(const LocalName: UnicodeString): UnicodeString;
     property TagName: UnicodeString read FTagName;
     property Attributes: TDOMNamedNodeMap read FAttributes;
   end;
@@ -154,25 +153,6 @@ begin
     Result := UnicodeString(FAttrValues[Idx])
   else
     Result := '';
-end;
-
-function TDOMElement.GetPrefixedAttribute(const LocalName: UnicodeString): UnicodeString;
-var
-  I, P: Integer;
-  Name, Target: string;
-begin
-  Result := '';
-  Target := string(LocalName);
-  for I := 0 to FAttrNames.Count - 1 do
-  begin
-    Name := FAttrNames[I];
-    P := Pos(':', Name);
-    if (P > 0) and (Copy(Name, P + 1, MaxInt) = Target) then
-    begin
-      Result := UnicodeString(FAttrValues[I]);
-      Exit;
-    end;
-  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -545,6 +525,7 @@ var
   TagName, AttrName: string;
   AttrValue: UnicodeString;
   SelfClosing: Boolean;
+  ColonPos: Integer;
 begin
   Result := nil;
   if AtEnd(P) or (P.Data[P.Pos] <> '<') then Exit;
@@ -552,6 +533,11 @@ begin
 
   TagName := ReadName(P);
   if TagName = '' then Exit;
+
+  // Strip namespace prefix (e.g. 'svg:rect' -> 'rect')
+  ColonPos := Pos(':', TagName);
+  if ColonPos > 0 then
+    TagName := Copy(TagName, ColonPos + 1, MaxInt);
 
   El := TDOMElement.Create;
   El.FTagName := UnicodeString(TagName);
@@ -569,6 +555,11 @@ begin
       Inc(P.Pos); // skip unknown char
       Continue;
     end;
+
+    // Strip namespace prefix (e.g. 'xlink:href' -> 'href')
+    ColonPos := Pos(':', AttrName);
+    if ColonPos > 0 then
+      AttrName := Copy(AttrName, ColonPos + 1, MaxInt);
 
     SkipWhitespace(P);
     if (P.Pos <= P.Len) and (P.Data[P.Pos] = '=') then
