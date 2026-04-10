@@ -357,6 +357,7 @@ begin
       Container := TPixieNativeContainer.Create(Canvas);
       try
         Container.DefaultFontSize := 16;
+        Container.MediaType := mtPrint;
         Container.ViewportWidth := ContentWidthPx;
         Container.ViewportHeight := ContentHeightPx;
         Container.BaseUrl := FBaseUrl;

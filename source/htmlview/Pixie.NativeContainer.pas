@@ -57,6 +57,7 @@ type
     FCaption: string;
     FCursor: string;
     FCaretVisible: Boolean;
+    FMediaType: TPixieMediaType;
 
     function ResolveUrl(const Src, ABaseUrl: string): string;
     function GetCachedImage(const Src, ABaseUrl: string): TPixieImageHandle;
@@ -87,6 +88,7 @@ type
     property OnSetCaptionEvent: TNotifyEvent
       read FOnSetCaption write FOnSetCaption;
     property BaseUrl: string read FBaseUrl write FBaseUrl;
+    property MediaType: TPixieMediaType read FMediaType write FMediaType;
     property CaretVisible: Boolean read FCaretVisible write FCaretVisible;
 
     // ---- TPixieContainer overrides ----
@@ -598,6 +600,7 @@ begin
   FDefaultFontName := 'serif';
   FViewportWidth := 1024;
   FViewportHeight := 768;
+  FMediaType := mtScreen;
 end;
 
 destructor TPixieNativeContainer.Destroy;
@@ -1098,7 +1101,7 @@ end;
 procedure TPixieNativeContainer.GetMediaFeatures(
   out Media: TPixieMediaFeatures);
 begin
-  Media.MediaType := mtScreen;
+  Media.MediaType := FMediaType;
   Media.Width := FViewportWidth;
   Media.Height := FViewportHeight;
   Media.DeviceWidth := FViewportWidth;
