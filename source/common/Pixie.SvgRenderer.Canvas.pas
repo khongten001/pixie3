@@ -41,7 +41,8 @@ type
       FillRule: TPixieFillRule);
     procedure StrokeWithGradient(const State: TPixieSvgState);
     procedure PopulateStops(Layer: TPixieGradientBase;
-      const Grad: TPixieSvgGradient; Opacity: Single);
+      const Grad: TPixieSvgGradient; Opacity: Single;
+      const State: TPixieSvgState);
     procedure RebuildAndStroke(const State: TPixieSvgState);
     procedure RebuildAndStrokeGradient(const State: TPixieSvgState);
     function LoadImageFromHref(const Href: string): TPixieImageHandle;
@@ -232,7 +233,8 @@ begin
 end;
 
 procedure TPixieSvgCanvasRenderer.PopulateStops(Layer: TPixieGradientBase;
-  const Grad: TPixieSvgGradient; Opacity: Single);
+  const Grad: TPixieSvgGradient; Opacity: Single;
+  const State: TPixieSvgState);
 var
   I: Integer;
   Stop: TPixieSvgGradientStop;
@@ -242,6 +244,8 @@ begin
   begin
     Stop := Grad.Stops[I];
     CP := TPixieColorPoint.Create(Stop.Offset, Stop.Color);
+    if State.HasColorMatrix then
+      CP.Color := TransformColor(CP.Color, State.ColorMatrix);
     CP.Color.Alpha := Round(CP.Color.Alpha * Opacity);
     Layer.ColorPoints.Add(CP);
   end;
@@ -313,7 +317,7 @@ begin
 
       GradLayer.StartPt := TPixiePointF.Create(GX1, GY1);
       GradLayer.EndPt := TPixiePointF.Create(GX2, GY2);
-      PopulateStops(GradLayer, Grad, State.FillOpacity);
+      PopulateStops(GradLayer, Grad, State.FillOpacity, State);
       FCanvas.FillPathLinearGradient(GradLayer, FillRule);
     finally
       GradLayer.Free;
@@ -346,7 +350,7 @@ begin
 
       RadLayer.Position := TPixiePointF.Create(GCX, GCY);
       RadLayer.Radius := TPixiePointF.Create(GRX, GRY);
-      PopulateStops(RadLayer, Grad, State.FillOpacity);
+      PopulateStops(RadLayer, Grad, State.FillOpacity, State);
       FCanvas.FillPathRadialGradient(RadLayer, FillRule);
     finally
       RadLayer.Free;
@@ -412,7 +416,7 @@ begin
       end;
       GradLayer.StartPt := TPixiePointF.Create(GX1, GY1);
       GradLayer.EndPt := TPixiePointF.Create(GX2, GY2);
-      PopulateStops(GradLayer, Grad, State.StrokeOpacity);
+      PopulateStops(GradLayer, Grad, State.StrokeOpacity, State);
       FCanvas.StrokePathLinearGradient(GradLayer, State.StrokeWidth);
     finally
       GradLayer.Free;
@@ -440,7 +444,7 @@ begin
       end;
       RadLayer.Position := TPixiePointF.Create(GCX, GCY);
       RadLayer.Radius := TPixiePointF.Create(GRX, GRY);
-      PopulateStops(RadLayer, Grad, State.StrokeOpacity);
+      PopulateStops(RadLayer, Grad, State.StrokeOpacity, State);
       FCanvas.StrokePathRadialGradient(RadLayer, State.StrokeWidth);
     finally
       RadLayer.Free;
@@ -467,6 +471,8 @@ begin
     end;
   end;
   SC := State.StrokeColor;
+  if State.HasColorMatrix then
+    SC := TransformColor(SC, State.ColorMatrix);
   SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
   FCanvas.StrokePath(SC, State.StrokeWidth);
 end;
@@ -551,10 +557,14 @@ begin
   else if State.HasFill and not SkipFill then
   begin
     FC := State.FillColor;
+    if State.HasColorMatrix then
+      FC := TransformColor(FC, State.ColorMatrix);
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
     if State.HasStroke and not HasGradientStroke then
     begin
       SC := State.StrokeColor;
+      if State.HasColorMatrix then
+        SC := TransformColor(SC, State.ColorMatrix);
       SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
       FCanvas.FillAndStrokePath(FC, SC, State.StrokeWidth, FR);
     end
@@ -570,6 +580,8 @@ begin
   else if State.HasStroke then
   begin
     SC := State.StrokeColor;
+    if State.HasColorMatrix then
+      SC := TransformColor(SC, State.ColorMatrix);
     SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
     FCanvas.StrokePath(SC, State.StrokeWidth);
   end
@@ -664,6 +676,8 @@ begin
   // class (RenderTextChunk), not per text run.
 
   FC := State.FillColor;
+  if State.HasColorMatrix then
+    FC := TransformColor(FC, State.ColorMatrix);
   if State.HasFill then
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
 

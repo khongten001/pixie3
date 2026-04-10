@@ -32,6 +32,7 @@ type
   end;
 
   TPixieSingleArray = array of Single;
+  TPixieSvgColorMatrix = array[0..19] of Single;
 
   { TPixieSvgState - inherited graphics state }
 
@@ -61,6 +62,8 @@ type
     StrokeGradientId: string;
     BlendMode: TPixieBlendMode;
     XmlSpacePreserve: Boolean;
+    HasColorMatrix: Boolean;
+    ColorMatrix: TPixieSvgColorMatrix;
   end;
 
   { TPixieSvgGradientStop }
@@ -133,6 +136,7 @@ type
   TPixieSvgIdMap = TDictionary<string, Pointer>;
   TPixieSvgStyleMap = TDictionary<string, string>;
   TPixieSvgPatternInfoMap = TDictionary<string, TPixieSvgPatternInfo>;
+  TPixieSvgFilterMap = TDictionary<string, TPixieSvgColorMatrix>;
 
   TPixieSvgRendererBase = class
   protected
@@ -142,6 +146,7 @@ type
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
     FOverflowVisible: Boolean;
     FGradients: TPixieSvgGradientMap;
+    FFilters: TPixieSvgFilterMap;
     FPatternInfos: TPixieSvgPatternInfoMap;
     FIdMap: TPixieSvgIdMap;
     FStyleMap: TPixieSvgStyleMap;
@@ -224,6 +229,11 @@ type
     procedure ParseGradient(Node: Pointer; IsRadial: Boolean);
     function ResolveGradientStops(const Id: string): TPixieSvgGradient;
     class function ExtractUrlId(const S: string): string; static;
+
+    // Filter support (feColorMatrix)
+    procedure ParseFilter(Node: Pointer);
+    class function TransformColor(const C: TPixieWebColor;
+      const M: TPixieSvgColorMatrix): TPixieWebColor; static;
 
     // Pattern/image helpers
     function IsPatternFill(const Id: string): Boolean;
@@ -467,6 +477,7 @@ procedure TPixieSvgRendererBase.ClearDocument;
 begin
   DoClearImages;
   FreeAndNil(FGradients);
+  FreeAndNil(FFilters);
   FreeAndNil(FPatternInfos);
   FreeAndNil(FIdMap);
   FreeAndNil(FStyleMap);
@@ -1001,8 +1012,9 @@ var
   LetterSpacingStr, TextDecStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
-  AnchorStr: string;
+  AnchorStr, FilterStr, FilterId: string;
   Color: TPixieWebColor;
+  Matrix: TPixieSvgColorMatrix;
 begin
   Result := ParentState;
 
@@ -1291,6 +1303,25 @@ begin
   else if AnchorStr = 'saturation' then Result.BlendMode := bmSaturation
   else if AnchorStr = 'color' then Result.BlendMode := bmColor
   else if AnchorStr = 'luminosity' then Result.BlendMode := bmLuminosity;
+
+  // SVG filter (feColorMatrix) — propagates to children for color tinting
+  FilterStr := GetAttr(Node, 'filter');
+  if FilterStr = '' then
+    FilterStr := ParseStyleAttribute(StyleStr, 'filter');
+  if FilterStr <> '' then
+  begin
+    if FilterStr = 'none' then
+      Result.HasColorMatrix := False
+    else if Pos('url(', LowerCase(FilterStr)) > 0 then
+    begin
+      FilterId := ExtractUrlId(FilterStr);
+      if (FFilters <> nil) and FFilters.TryGetValue(FilterId, Matrix) then
+      begin
+        Result.HasColorMatrix := True;
+        Result.ColorMatrix := Matrix;
+      end;
+    end;
+  end;
 end;
 
 // ===========================================================================
@@ -1905,7 +1936,9 @@ begin
       if TagName = 'lineargradient' then
         ParseGradient(Child, False)
       else if TagName = 'radialgradient' then
-        ParseGradient(Child, True);
+        ParseGradient(Child, True)
+      else if TagName = 'filter' then
+        ParseFilter(Child);
     end;
     Child := Child.NextSibling;
   end;
@@ -1946,6 +1979,8 @@ begin
         ParseGradient(Child, False)
       else if TagName = 'radialgradient' then
         ParseGradient(Child, True)
+      else if TagName = 'filter' then
+        ParseFilter(Child)
       else if TagName = 'style' then
       begin
         CSS := CollectAllText(Child);
@@ -1966,6 +2001,117 @@ begin
   if (FIdMap = nil) or (Id = '') then Exit;
   if not FIdMap.TryGetValue(Id, El) then Exit;
   Result := LowerCase(DomToStr(TDOMElement(El).TagName)) = 'pattern';
+end;
+
+// ===========================================================================
+// feColorMatrix filter parsing
+// ===========================================================================
+
+procedure TPixieSvgRendererBase.ParseFilter(Node: Pointer);
+var
+  FilterId, TypeStr, ValStr: string;
+  Child: TDOMNode;
+  TagName: string;
+  Matrix: TPixieSvgColorMatrix;
+  I, Pos1, Pos2: Integer;
+  S: Single;
+begin
+  FilterId := DomToStr(TDOMElement(Node).GetAttribute('id'));
+  if FilterId = '' then Exit;
+
+  // Walk children looking for <feColorMatrix>
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+    begin
+      TagName := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if TagName = 'fecolormatrix' then
+      begin
+        TypeStr := LowerCase(Trim(GetAttr(Child, 'type', 'matrix')));
+        ValStr := Trim(GetAttr(Child, 'values'));
+
+        FillChar(Matrix, SizeOf(Matrix), 0);
+
+        if TypeStr = 'matrix' then
+        begin
+          // Parse 20 space/comma-separated floats — extract each token
+          // individually because FPC's Val returns 0 on partial matches
+          I := 0;
+          Pos1 := 1;
+          while (I < 20) and (Pos1 <= Length(ValStr)) do
+          begin
+            while (Pos1 <= Length(ValStr)) and
+              (ValStr[Pos1] in [' ', ',', #9, #10, #13]) do Inc(Pos1);
+            Pos2 := Pos1;
+            while (Pos2 <= Length(ValStr)) and
+              not (ValStr[Pos2] in [' ', ',', #9, #10, #13]) do Inc(Pos2);
+            if Pos2 > Pos1 then
+            begin
+              Matrix[I] := ParseSvgFloat(Copy(ValStr, Pos1, Pos2 - Pos1));
+              Inc(I);
+            end;
+            Pos1 := Pos2;
+          end;
+        end
+        else if TypeStr = 'saturate' then
+        begin
+          // Single value S (0..1). Build luminance-preserving matrix.
+          S := ParseSvgFloat(ValStr);
+          if S < 0 then S := 0;
+          if S > 1 then S := 1;
+          Matrix[0]  := 0.2126 + 0.7874 * S;
+          Matrix[1]  := 0.7152 - 0.7152 * S;
+          Matrix[2]  := 0.0722 - 0.0722 * S;
+          Matrix[5]  := 0.2126 - 0.2126 * S;
+          Matrix[6]  := 0.7152 + 0.2848 * S;
+          Matrix[7]  := 0.0722 - 0.0722 * S;
+          Matrix[10] := 0.2126 - 0.2126 * S;
+          Matrix[11] := 0.7152 - 0.7152 * S;
+          Matrix[12] := 0.0722 + 0.9278 * S;
+          Matrix[18] := 1;
+        end
+        else begin
+          // hueRotate / luminanceToAlpha — not yet supported, use identity
+          Matrix[0] := 1; Matrix[6] := 1; Matrix[12] := 1; Matrix[18] := 1;
+        end;
+
+        if FFilters = nil then
+          FFilters := TPixieSvgFilterMap.Create;
+        FFilters.AddOrSetValue(FilterId, Matrix);
+        Exit; // Only first feColorMatrix matters
+      end;
+    end;
+    Child := Child.NextSibling;
+  end;
+end;
+
+class function TPixieSvgRendererBase.TransformColor(const C: TPixieWebColor;
+  const M: TPixieSvgColorMatrix): TPixieWebColor;
+var
+  R, G, B, A: Single;
+  V: Integer;
+begin
+  R := C.Red / 255;
+  G := C.Green / 255;
+  B := C.Blue / 255;
+  A := C.Alpha / 255;
+
+  V := Round((M[0]*R + M[1]*G + M[2]*B + M[3]*A + M[4]) * 255);
+  if V < 0 then V := 0 else if V > 255 then V := 255;
+  Result.Red := V;
+
+  V := Round((M[5]*R + M[6]*G + M[7]*B + M[8]*A + M[9]) * 255);
+  if V < 0 then V := 0 else if V > 255 then V := 255;
+  Result.Green := V;
+
+  V := Round((M[10]*R + M[11]*G + M[12]*B + M[13]*A + M[14]) * 255);
+  if V < 0 then V := 0 else if V > 255 then V := 255;
+  Result.Blue := V;
+
+  V := Round((M[15]*R + M[16]*G + M[17]*B + M[18]*A + M[19]) * 255);
+  if V < 0 then V := 0 else if V > 255 then V := 255;
+  Result.Alpha := V;
 end;
 
 // Find the first descendant <image> element, following <use xlink:href>
@@ -3742,10 +3888,14 @@ end;
 
 procedure TPixieSvgRendererBase.RenderUse(Node: Pointer;
   const State: TPixieSvgState);
+const
+  Eps = 0.0001;
 var
-  HrefStr, TargetId: string;
+  HrefStr, TargetId, TagName: string;
   Target: Pointer;
-  X, Y: Single;
+  X, Y, W, H: Single;
+  VbX, VbY, VbW, VbH: Single;
+  SX, SY: Single;
   NeedRestore: Boolean;
   M: TPixieSvgMatrix;
   TargetState: TPixieSvgState;
@@ -3772,7 +3922,7 @@ begin
   ApplyNodeTransform(Node);
   ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
-  if (Abs(X) > 0.0001) or (Abs(Y) > 0.0001) then
+  if (Abs(X) > Eps) or (Abs(Y) > Eps) then
   begin
     M := TPixieSvgMatrix.CreateTranslate(X, Y);
     DoSetTransform(M);
@@ -3782,7 +3932,39 @@ begin
   TargetState := InheritState(Target, State);
   Inc(FUseDepth);
   try
-    RenderElement(Target, TargetState);
+    TagName := LowerCase(DomToStr(TDOMElement(Target).TagName));
+    if TagName = 'symbol' then
+    begin
+      // Per SVG spec, <symbol> referenced by <use> is treated as an inline
+      // <svg>: width/height come from <use>, viewBox from <symbol>.
+      W := ParseSvgFloat(GetAttr(Node, 'width', '0'));
+      H := ParseSvgFloat(GetAttr(Node, 'height', '0'));
+      ParseViewBox(GetAttr(Target, 'viewBox'), VbX, VbY, VbW, VbH);
+
+      // Apply viewBox-to-viewport scaling (preserveAspectRatio not yet
+      // honoured — always stretch, matching the common 'none' value)
+      if (VbW > Eps) and (VbH > Eps) and (W > Eps) and (H > Eps) then
+      begin
+        SX := W / VbW;
+        SY := H / VbH;
+        if (Abs(SX - 1) > Eps) or (Abs(SY - 1) > Eps) then
+        begin
+          M := TPixieSvgMatrix.CreateScale(SX, SY);
+          DoSetTransform(M);
+        end;
+        if (Abs(VbX) > Eps) or (Abs(VbY) > Eps) then
+        begin
+          M := TPixieSvgMatrix.CreateTranslate(-VbX, -VbY);
+          DoSetTransform(M);
+        end;
+      end;
+
+      // Render symbol children directly — the viewport transform is
+      // already applied, so skip the group-level handling in RenderElement
+      RenderGroup(Target, TargetState);
+    end
+    else
+      RenderElement(Target, TargetState);
   finally
     Dec(FUseDepth);
   end;

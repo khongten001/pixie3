@@ -56,13 +56,16 @@ type
 
     // Gradient helpers
     function BuildType2Function(const C0, C1: TPixieWebColor): Integer;
-    function BuildColorFunction(const Grad: TPixieSvgGradient): Integer;
-    function GradientNeedsAlpha(const Grad: TPixieSvgGradient): Boolean;
+    function BuildColorFunction(const Grad: TPixieSvgGradient;
+      const State: TPixieSvgState): Integer;
+    function GradientNeedsAlpha(const Grad: TPixieSvgGradient;
+      const State: TPixieSvgState): Boolean;
     function BuildAlphaType2Function(A0, A1: Byte): Integer;
-    function BuildAlphaFunction(const Grad: TPixieSvgGradient): Integer;
+    function BuildAlphaFunction(const Grad: TPixieSvgGradient;
+      const State: TPixieSvgState): Integer;
     function BuildGradientSMask(const Grad: TPixieSvgGradient;
       IsRadial: Boolean; const CoordsStr: AnsiString;
-      ShadingType: Integer): AnsiString;
+      ShadingType: Integer; const State: TPixieSvgState): AnsiString;
     procedure FillGradient(const State: TPixieSvgState);
 
     // Image helpers
@@ -230,26 +233,43 @@ begin
 end;
 
 function TPixieSvgRenderer.BuildColorFunction(
-  const Grad: TPixieSvgGradient): Integer;
+  const Grad: TPixieSvgGradient; const State: TPixieSvgState): Integer;
 var
   I, N: Integer;
   SubIds: array of Integer;
   FuncsStr, BoundsStr, EncodeStr: AnsiString;
   Obj: TPixiePdfObject;
+  C0, C1: TPixieWebColor;
 begin
   N := Grad.Stops.Count;
   if N < 2 then begin Result := 0; Exit; end;
 
   if N = 2 then
   begin
-    Result := BuildType2Function(Grad.Stops[0].Color, Grad.Stops[1].Color);
+    C0 := Grad.Stops[0].Color;
+    C1 := Grad.Stops[1].Color;
+    if State.HasColorMatrix then
+    begin
+      C0 := TransformColor(C0, State.ColorMatrix);
+      C1 := TransformColor(C1, State.ColorMatrix);
+    end;
+    Result := BuildType2Function(C0, C1);
     Exit;
   end;
 
   // N >= 3: stitching function (Type 3)
   SetLength(SubIds, N - 1);
   for I := 0 to N - 2 do
-    SubIds[I] := BuildType2Function(Grad.Stops[I].Color, Grad.Stops[I + 1].Color);
+  begin
+    C0 := Grad.Stops[I].Color;
+    C1 := Grad.Stops[I + 1].Color;
+    if State.HasColorMatrix then
+    begin
+      C0 := TransformColor(C0, State.ColorMatrix);
+      C1 := TransformColor(C1, State.ColorMatrix);
+    end;
+    SubIds[I] := BuildType2Function(C0, C1);
+  end;
 
   FuncsStr := '[';
   for I := 0 to N - 2 do
@@ -276,17 +296,23 @@ begin
 end;
 
 function TPixieSvgRenderer.GradientNeedsAlpha(
-  const Grad: TPixieSvgGradient): Boolean;
+  const Grad: TPixieSvgGradient; const State: TPixieSvgState): Boolean;
 var
   I: Integer;
+  C: TPixieWebColor;
 begin
   Result := False;
   for I := 0 to Grad.Stops.Count - 1 do
-    if Grad.Stops[I].Color.Alpha < 255 then
+  begin
+    C := Grad.Stops[I].Color;
+    if State.HasColorMatrix then
+      C := TransformColor(C, State.ColorMatrix);
+    if C.Alpha < 255 then
     begin
       Result := True;
       Exit;
     end;
+  end;
 end;
 
 function TPixieSvgRenderer.BuildAlphaType2Function(A0, A1: Byte): Integer;
@@ -303,27 +329,42 @@ begin
 end;
 
 function TPixieSvgRenderer.BuildAlphaFunction(
-  const Grad: TPixieSvgGradient): Integer;
+  const Grad: TPixieSvgGradient; const State: TPixieSvgState): Integer;
 var
   I, N: Integer;
   SubIds: array of Integer;
   FuncsStr, BoundsStr, EncodeStr: AnsiString;
   Obj: TPixiePdfObject;
+  A0, A1: Byte;
 begin
   N := Grad.Stops.Count;
   if N < 2 then begin Result := 0; Exit; end;
 
   if N = 2 then
   begin
-    Result := BuildAlphaType2Function(
-      Grad.Stops[0].Color.Alpha, Grad.Stops[1].Color.Alpha);
+    A0 := Grad.Stops[0].Color.Alpha;
+    A1 := Grad.Stops[1].Color.Alpha;
+    if State.HasColorMatrix then
+    begin
+      A0 := TransformColor(Grad.Stops[0].Color, State.ColorMatrix).Alpha;
+      A1 := TransformColor(Grad.Stops[1].Color, State.ColorMatrix).Alpha;
+    end;
+    Result := BuildAlphaType2Function(A0, A1);
     Exit;
   end;
 
   SetLength(SubIds, N - 1);
   for I := 0 to N - 2 do
-    SubIds[I] := BuildAlphaType2Function(
-      Grad.Stops[I].Color.Alpha, Grad.Stops[I + 1].Color.Alpha);
+  begin
+    A0 := Grad.Stops[I].Color.Alpha;
+    A1 := Grad.Stops[I + 1].Color.Alpha;
+    if State.HasColorMatrix then
+    begin
+      A0 := TransformColor(Grad.Stops[I].Color, State.ColorMatrix).Alpha;
+      A1 := TransformColor(Grad.Stops[I + 1].Color, State.ColorMatrix).Alpha;
+    end;
+    SubIds[I] := BuildAlphaType2Function(A0, A1);
+  end;
 
   FuncsStr := '[';
   for I := 0 to N - 2 do
@@ -351,7 +392,8 @@ end;
 
 function TPixieSvgRenderer.BuildGradientSMask(
   const Grad: TPixieSvgGradient; IsRadial: Boolean;
-  const CoordsStr: AnsiString; ShadingType: Integer): AnsiString;
+  const CoordsStr: AnsiString; ShadingType: Integer;
+  const State: TPixieSvgState): AnsiString;
 var
   AlphaFuncId: Integer;
   AlphaShObj, FormObj, GsObj: TPixiePdfObject;
@@ -359,7 +401,7 @@ var
   StreamBytes: TBytes;
   BBoxStr, GsName: AnsiString;
 begin
-  AlphaFuncId := BuildAlphaFunction(Grad);
+  AlphaFuncId := BuildAlphaFunction(Grad, State);
   if AlphaFuncId = 0 then begin Result := ''; Exit; end;
 
   // Grayscale shading for opacity
@@ -427,7 +469,7 @@ begin
   BW := FBBoxMaxX - FBBoxMinX; BH := FBBoxMaxY - FBBoxMinY;
   if (BW < 0.001) or (BH < 0.001) then begin EmitLn('n'); Exit; end;
 
-  FuncId := BuildColorFunction(Grad);
+  FuncId := BuildColorFunction(Grad, State);
   if FuncId = 0 then begin EmitLn('n'); Exit; end;
 
   HasTransform := Grad.GradientTransform <> '';
@@ -498,9 +540,9 @@ begin
     PdfRef(ShObj.Id) + ' ';
 
   // Apply soft mask for gradient stop-opacity if needed
-  if GradientNeedsAlpha(Grad) then
+  if GradientNeedsAlpha(Grad, State) then
   begin
-    GsName := BuildGradientSMask(Grad, Grad.IsRadial, CoordsStr, ShadingTypeVal);
+    GsName := BuildGradientSMask(Grad, Grad.IsRadial, CoordsStr, ShadingTypeVal, State);
     if GsName <> '' then
       EmitLn('/' + GsName + ' gs');
   end;
@@ -563,13 +605,23 @@ end;
 
 procedure TPixieSvgRenderer.DoFillAndStroke(const State: TPixieSvgState);
 var
+  FC, SC: TPixieWebColor;
   FillAlpha, StrokeAlpha: Single;
   DoFill, DoStroke: Boolean;
   GsObj: TPixiePdfObject;
   GsName: AnsiString;
 begin
-  FillAlpha := (State.FillColor.Alpha / 255.0) * State.FillOpacity;
-  StrokeAlpha := (State.StrokeColor.Alpha / 255.0) * State.StrokeOpacity;
+  FC := State.FillColor;
+  SC := State.StrokeColor;
+  if State.HasColorMatrix then
+  begin
+    if State.FillGradientId = '' then
+      FC := TransformColor(FC, State.ColorMatrix);
+    SC := TransformColor(SC, State.ColorMatrix);
+  end;
+
+  FillAlpha := (FC.Alpha / 255.0) * State.FillOpacity;
+  StrokeAlpha := (SC.Alpha / 255.0) * State.StrokeOpacity;
   DoFill := State.HasFill and ((State.FillGradientId <> '') or (FillAlpha > 0.001));
   // Gradient strokes not supported in PDF — skip them
   DoStroke := State.HasStroke and (State.StrokeGradientId = '') and
@@ -608,8 +660,8 @@ begin
       EmitLn(IntToStr(Ord(State.LineCap)) + ' J');
       EmitLn(IntToStr(Ord(State.LineJoin)) + ' j');
       EmitDashPattern(State);
-      SetPdfColor(State.FillColor, True);
-      SetPdfColor(State.StrokeColor, False);
+      SetPdfColor(FC, True);
+      SetPdfColor(SC, False);
       EmitLn(PdfFloat(State.StrokeWidth) + ' w');
       if State.EvenOddFill then
         EmitLn('B*')
@@ -618,7 +670,7 @@ begin
     end
     else if DoFill then
     begin
-      SetPdfColor(State.FillColor, True);
+      SetPdfColor(FC, True);
       if State.EvenOddFill then
         EmitLn('f*')
       else
@@ -629,7 +681,7 @@ begin
       EmitLn(IntToStr(Ord(State.LineCap)) + ' J');
       EmitLn(IntToStr(Ord(State.LineJoin)) + ' j');
       EmitDashPattern(State);
-      SetPdfColor(State.StrokeColor, False);
+      SetPdfColor(SC, False);
       EmitLn(PdfFloat(State.StrokeWidth) + ' w');
       EmitLn('S');
     end
@@ -1133,7 +1185,10 @@ begin
   PtSize := State.FontSize;
   Scale := PtSize / Info.TtFont.UnitsPerEm;
 
-  SetPdfColor(State.FillColor, True);
+  if State.HasColorMatrix then
+    SetPdfColor(TransformColor(State.FillColor, State.ColorMatrix), True)
+  else
+    SetPdfColor(State.FillColor, True);
 
   EmitLn('BT');
   EmitLn('/' + Info.PdfName + ' ' + PdfFloat(PtSize) + ' Tf');
@@ -1184,7 +1239,10 @@ begin
     TotalWidth := DoMeasureTextRun(Text, State);
     FontAscent := Info.TtFont.Ascent * Scale;
     FontXHeight := Info.TtFont.XHeight * Scale;
-    SetPdfColor(State.FillColor, False);
+    if State.HasColorMatrix then
+      SetPdfColor(TransformColor(State.FillColor, State.ColorMatrix), False)
+    else
+      SetPdfColor(State.FillColor, False);
     EmitLn(PdfFloat(PtSize * SvgDecorationThickness) + ' w');
     if (State.TextDecoration and TextDecorationLineUnderline) <> 0 then
     begin
