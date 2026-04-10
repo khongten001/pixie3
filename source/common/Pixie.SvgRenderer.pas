@@ -181,10 +181,15 @@ type
       const Default: string = ''): string;
     function GetHref(Node: Pointer): string;
     function ParseSvgFloat(const S: string): Single;
+    function ParseSvgLengthEm(const S: string; FontSize: Single): Single;
+    function IsFontRelativeLength(const S: string): Boolean;
+    procedure ParseViewBox(const S: string;
+      out VbX, VbY, VbW, VbH: Single);
     function ParseSvgColor(const S: string;
       out Color: TPixieWebColor): Boolean;
     function ParseStyleAttribute(
       const StyleStr, PropName: string): string;
+    function ResolveNodeStyle(Node: Pointer): string;
     function InheritState(Node: Pointer;
       const ParentState: TPixieSvgState): TPixieSvgState;
     procedure ParseFontShorthand(const S: string;
@@ -234,6 +239,7 @@ type
     procedure RenderElement(Node: Pointer; const State: TPixieSvgState);
     procedure RenderGroup(Node: Pointer; const State: TPixieSvgState);
     procedure RenderSwitch(Node: Pointer; const State: TPixieSvgState);
+    procedure RenderNestedSvg(Node: Pointer; const State: TPixieSvgState);
     procedure RenderUse(Node: Pointer; const State: TPixieSvgState);
     procedure RenderRect(Node: Pointer; const State: TPixieSvgState);
     procedure RenderCircle(Node: Pointer; const State: TPixieSvgState);
@@ -548,7 +554,10 @@ begin
   // Detect and strip unit suffix, apply conversion factor
   // SVG default is px (user units); 1in=96px, 1cm=96/2.54, 1mm=96/25.4, 1pt=96/72
   Scale := 1.0;
-  if Len > 2 then
+  // Check 3-char 'rem' before 2-char suffixes so the 'em' tail doesn't win
+  if (Len >= 3) and (Copy(Trimmed, Len - 2, 3) = 'rem') then
+    Trimmed := Copy(Trimmed, 1, Len - 3)
+  else if Len > 2 then
   begin
     Suffix := Copy(Trimmed, Len - 1, 2);
     if Suffix = 'px' then
@@ -585,6 +594,67 @@ begin
   Val(Trimmed, Result, Code);
   if Code = 0 then
     Result := Result * Scale;
+end;
+
+// Returns ParseSvgFloat(S) * FontSize for em/rem/% lengths, plain
+// ParseSvgFloat(S) otherwise. "1em" means one font size, not literal 1.
+function TPixieSvgRendererBase.ParseSvgLengthEm(const S: string;
+  FontSize: Single): Single;
+begin
+  if IsFontRelativeLength(S) then
+    Result := FontSize * ParseSvgFloat(S)
+  else
+    Result := ParseSvgFloat(S);
+end;
+
+// True when the length string ends in em, rem, or %. Scans S directly
+// (no allocation) since this runs per-text-node on every render.
+function TPixieSvgRendererBase.IsFontRelativeLength(const S: string): Boolean;
+var
+  Last: Integer;
+begin
+  Result := False;
+  Last := Length(S);
+  while (Last > 0) and (S[Last] <= ' ') do Dec(Last);
+  if Last = 0 then Exit;
+  if S[Last] = '%' then
+  begin
+    Result := True;
+    Exit;
+  end;
+  // 'em' suffix (covers 'rem' too — we don't distinguish root em)
+  if (Last >= 2) and CharInSet(S[Last], ['m', 'M'])
+                 and CharInSet(S[Last - 1], ['e', 'E']) then
+    Result := True;
+end;
+
+// Parses an SVG "viewBox" attribute value ("x y w h", any combination of
+// space/comma/tab separators) into its four components. Missing or
+// unparseable components come back as 0.
+procedure TPixieSvgRendererBase.ParseViewBox(const S: string;
+  out VbX, VbY, VbW, VbH: Single);
+var
+  Parts: array[0..3] of string;
+  P, Idx: Integer;
+begin
+  VbX := 0; VbY := 0; VbW := 0; VbH := 0;
+  if S = '' then Exit;
+  for Idx := 0 to 3 do Parts[Idx] := '';
+  P := 1; Idx := 0;
+  while (P <= Length(S)) and (Idx <= 3) do
+  begin
+    while (P <= Length(S)) and CharInSet(S[P], [' ', ',', #9]) do Inc(P);
+    while (P <= Length(S)) and not CharInSet(S[P], [' ', ',', #9]) do
+    begin
+      Parts[Idx] := Parts[Idx] + S[P];
+      Inc(P);
+    end;
+    Inc(Idx);
+  end;
+  VbX := ParseSvgFloat(Parts[0]);
+  VbY := ParseSvgFloat(Parts[1]);
+  VbW := ParseSvgFloat(Parts[2]);
+  VbH := ParseSvgFloat(Parts[3]);
 end;
 
 function TPixieSvgRendererBase.ParseDashArray(
@@ -847,32 +917,27 @@ begin
   end;
 end;
 
-function TPixieSvgRendererBase.InheritState(Node: Pointer;
-  const ParentState: TPixieSvgState): TPixieSvgState;
+// Builds the effective style string for a node by merging, in order:
+//   1. Type selector (@tag)
+//   2. Class selectors (.className) in order of appearance
+//   3. Type.class selectors (@tag.className)
+//   4. Inline style="..." attribute
+// Returns a single ';'-joined string suitable for ParseStyleAttribute.
+function TPixieSvgRendererBase.ResolveNodeStyle(Node: Pointer): string;
 var
-  FillStr, StrokeStr, StrokeWStr, OpacStr: string;
-  FillOpStr, StrokeOpStr, ColorStr: string;
-  StyleStr, ClassStr, ClassDecl, InlineStyleStr, NodeTag: string;
-  FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
-  LetterSpacingStr, TextDecStr: string;
-  LineCapStr, LineJoinStr: string;
-  DashArrayStr, DashOffsetStr: string;
-  AnchorStr: string;
-  Color: TPixieWebColor;
+  ClassStr, ClassDecl, InlineStyleStr, NodeTag, ClassName: string;
   SpacePos: Integer;
-  ClassName: string;
 begin
-  Result := ParentState;
+  Result := '';
 
   // Resolve styles from <style> element: type selectors, class, type.class
-  StyleStr := '';
   if FStyleMap <> nil then
   begin
     NodeTag := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
     // Type selector: @tag (lowest specificity)
     if (NodeTag <> '') and FStyleMap.TryGetValue('@' + NodeTag, ClassDecl) then
-      StyleStr := ClassDecl;
+      Result := ClassDecl;
 
     ClassStr := GetAttr(Node, 'class');
     if ClassStr <> '' then
@@ -896,20 +961,20 @@ begin
         // Class selector: .className
         if FStyleMap.TryGetValue(LowerCase(ClassName), ClassDecl) then
         begin
-          if StyleStr <> '' then
-            StyleStr := StyleStr + ';' + ClassDecl
+          if Result <> '' then
+            Result := Result + ';' + ClassDecl
           else
-            StyleStr := ClassDecl;
+            Result := ClassDecl;
         end;
 
         // Type.class selector: @tag.className (higher specificity)
         if (NodeTag <> '') and
            FStyleMap.TryGetValue('@' + NodeTag + '.' + LowerCase(ClassName), ClassDecl) then
         begin
-          if StyleStr <> '' then
-            StyleStr := StyleStr + ';' + ClassDecl
+          if Result <> '' then
+            Result := Result + ';' + ClassDecl
           else
-            StyleStr := ClassDecl;
+            Result := ClassDecl;
         end;
       end;
     end;
@@ -919,11 +984,29 @@ begin
   InlineStyleStr := GetAttr(Node, 'style');
   if InlineStyleStr <> '' then
   begin
-    if StyleStr <> '' then
-      StyleStr := StyleStr + ';' + InlineStyleStr
+    if Result <> '' then
+      Result := Result + ';' + InlineStyleStr
     else
-      StyleStr := InlineStyleStr;
+      Result := InlineStyleStr;
   end;
+end;
+
+function TPixieSvgRendererBase.InheritState(Node: Pointer;
+  const ParentState: TPixieSvgState): TPixieSvgState;
+var
+  FillStr, StrokeStr, StrokeWStr, OpacStr: string;
+  FillOpStr, StrokeOpStr, ColorStr: string;
+  StyleStr: string;
+  FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
+  LetterSpacingStr, TextDecStr: string;
+  LineCapStr, LineJoinStr: string;
+  DashArrayStr, DashOffsetStr: string;
+  AnchorStr: string;
+  Color: TPixieWebColor;
+begin
+  Result := ParentState;
+
+  StyleStr := ResolveNodeStyle(Node);
 
   // CSS color property (resolve before fill/stroke for currentColor)
   ColorStr := GetAttr(Node, 'color');
@@ -1100,12 +1183,12 @@ begin
   if FontFamilyStr <> '' then
     Result.FontFamily := NormalizeFontFamily(FontFamilyStr);
 
-  // Font size
+  // Font size — em/rem/% resolve against the already-inherited Result.FontSize.
   FontSizeStr := GetAttr(Node, 'font-size');
   if FontSizeStr = '' then
     FontSizeStr := ParseStyleAttribute(StyleStr, 'font-size');
   if FontSizeStr <> '' then
-    Result.FontSize := ParseSvgFloat(FontSizeStr);
+    Result.FontSize := ParseSvgLengthEm(FontSizeStr, Result.FontSize);
 
   // Font weight
   FontWeightStr := GetAttr(Node, 'font-weight');
@@ -1272,7 +1355,7 @@ begin
           // Size value — strip /line-height if present
           if Pos('/', Token) > 0 then
             Token := Copy(Token, 1, Pos('/', Token) - 1);
-          State.FontSize := ParseSvgFloat(Token);
+          State.FontSize := ParseSvgLengthEm(Token, State.FontSize);
           SizeFound := True;
         end
         else
@@ -1287,7 +1370,7 @@ begin
         if (Pos('px', Token) > 0) or (Pos('pt', Token) > 0) or
            (Pos('em', Token) > 0) then
         begin
-          State.FontSize := ParseSvgFloat(Token);
+          State.FontSize := ParseSvgLengthEm(Token, State.FontSize);
           SizeFound := True;
         end;
       end;
@@ -1951,26 +2034,8 @@ function TPixieSvgRendererBase.GetPatternInfo(const PatternId: string;
 
   // Parse "x y w h" (space/comma separated) into Info.ViewBox* fields
   procedure ParseViewBoxAttr(const S: string);
-  var
-    Parts: array[0..3] of string;
-    P, Idx: Integer;
   begin
-    for Idx := 0 to 3 do Parts[Idx] := '';
-    P := 1; Idx := 0;
-    while (P <= Length(S)) and (Idx <= 3) do
-    begin
-      while (P <= Length(S)) and CharInSet(S[P], [' ', ',', #9]) do Inc(P);
-      while (P <= Length(S)) and not CharInSet(S[P], [' ', ',', #9]) do
-      begin
-        Parts[Idx] := Parts[Idx] + S[P];
-        Inc(P);
-      end;
-      Inc(Idx);
-    end;
-    Info.ViewBoxX := ParseSvgFloat(Parts[0]);
-    Info.ViewBoxY := ParseSvgFloat(Parts[1]);
-    Info.ViewBoxW := ParseSvgFloat(Parts[2]);
-    Info.ViewBoxH := ParseSvgFloat(Parts[3]);
+    ParseViewBox(S, Info.ViewBoxX, Info.ViewBoxY, Info.ViewBoxW, Info.ViewBoxH);
     Info.HasViewBox := (Info.ViewBoxW > 0) and (Info.ViewBoxH > 0);
   end;
 
@@ -3254,8 +3319,6 @@ var
   OrientStr, UnitsStr: string;
   M: TPixieSvgMatrix;
   MarkerState: TPixieSvgState;
-  P, Idx: Integer;
-  Parts: array[0..3] of string;
   RotAngle: Single;
   SaveFill, SaveStroke: TPixieWebColor;
   SaveHasFill, SaveHasStroke: Boolean;
@@ -3274,40 +3337,15 @@ begin
   OrientStr := GetAttr(MarkerNode, 'orient', 'auto');
   UnitsStr := GetAttr(MarkerNode, 'markerUnits', 'strokeWidth');
 
-  // Parse viewBox
   VbStr := GetAttr(MarkerNode, 'viewBox');
-  if VbStr <> '' then
+  ParseViewBox(VbStr, VbX, VbY, VbW, VbH);
+  if (VbStr <> '') and (VbW > 0) and (VbH > 0) then
   begin
-    for Idx := 0 to 3 do Parts[Idx] := '';
-    P := 1; Idx := 0;
-    while (P <= Length(VbStr)) and (Idx <= 3) do
-    begin
-      while (P <= Length(VbStr)) and CharInSet(VbStr[P], [' ', ',', #9]) do Inc(P);
-      while (P <= Length(VbStr)) and not CharInSet(VbStr[P], [' ', ',', #9]) do
-      begin
-        Parts[Idx] := Parts[Idx] + VbStr[P];
-        Inc(P);
-      end;
-      Inc(Idx);
-    end;
-    VbX := ParseSvgFloat(Parts[0]);
-    VbY := ParseSvgFloat(Parts[1]);
-    VbW := ParseSvgFloat(Parts[2]);
-    VbH := ParseSvgFloat(Parts[3]);
-    if (VbW > 0) and (VbH > 0) then
-    begin
-      SX := MW / VbW;
-      SY := MH / VbH;
-    end
-    else
-    begin
-      SX := 1;
-      SY := 1;
-    end;
+    SX := MW / VbW;
+    SY := MH / VbH;
   end
   else
   begin
-    VbX := 0; VbY := 0;
     SX := 1;
     SY := 1;
   end;
@@ -3370,14 +3408,19 @@ var
   MarkerId: string;
   SW: Single;
 begin
-  // Check marker-start and marker-end attributes or style
-  StyleStr := GetAttr(Node, 'style');
+  // Visio-exported SVGs set marker-end via CSS classes, so check direct
+  // attributes first and fall back to class/inline-style resolution only
+  // when needed. Most non-arrow paths have neither, so this stays cheap.
   MarkerStartStr := GetAttr(Node, 'marker-start');
-  if MarkerStartStr = '' then
-    MarkerStartStr := ParseStyleAttribute(StyleStr, 'marker-start');
   MarkerEndStr := GetAttr(Node, 'marker-end');
-  if MarkerEndStr = '' then
-    MarkerEndStr := ParseStyleAttribute(StyleStr, 'marker-end');
+  if (MarkerStartStr = '') or (MarkerEndStr = '') then
+  begin
+    StyleStr := ResolveNodeStyle(Node);
+    if MarkerStartStr = '' then
+      MarkerStartStr := ParseStyleAttribute(StyleStr, 'marker-start');
+    if MarkerEndStr = '' then
+      MarkerEndStr := ParseStyleAttribute(StyleStr, 'marker-end');
+  end;
 
   if (MarkerStartStr = '') and (MarkerEndStr = '') then
     Exit;
@@ -3528,13 +3571,17 @@ begin
       YStr := GetAttr(Child, 'y');
       DxStr := GetAttr(Child, 'dx');
       DyStr := GetAttr(Child, 'dy');
+      // dx/dy in em units resolve against the tspan's own font size, which
+      // is the inherited ChildState — Visio exports use dy="1.233em" on
+      // each wrapped line to step down by one line height.
       if XStr <> '' then
       begin
         // New anchored chunk
-        NewX := ParseSvgFloat(XStr);
-        if YStr <> '' then NewY := ParseSvgFloat(YStr) else NewY := Y;
-        if DxStr <> '' then NewX := NewX + ParseSvgFloat(DxStr);
-        if DyStr <> '' then NewY := NewY + ParseSvgFloat(DyStr);
+        NewX := ParseSvgLengthEm(XStr, ChildState.FontSize);
+        if YStr <> '' then NewY := ParseSvgLengthEm(YStr, ChildState.FontSize)
+        else NewY := Y;
+        if DxStr <> '' then NewX := NewX + ParseSvgLengthEm(DxStr, ChildState.FontSize);
+        if DyStr <> '' then NewY := NewY + ParseSvgLengthEm(DyStr, ChildState.FontSize);
         RenderTextChunk(Child, ChildState, NewX, NewY);
         // SVG "current text position" carries forward — siblings without
         // their own x=/y= continue from where this chunk ended (including
@@ -3545,9 +3592,9 @@ begin
       else
       begin
         // Continues the current anchored chunk
-        if YStr <> '' then Y := ParseSvgFloat(YStr);
-        if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
-        if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
+        if YStr <> '' then Y := ParseSvgLengthEm(YStr, ChildState.FontSize);
+        if DxStr <> '' then X := X + ParseSvgLengthEm(DxStr, ChildState.FontSize);
+        if DyStr <> '' then Y := Y + ParseSvgLengthEm(DyStr, ChildState.FontSize);
         RenderTextChunkContents(Child, ChildState, X, Y);
       end;
     end;
@@ -3584,12 +3631,12 @@ var
 begin
   if Trim(CollectAllText(Node)) = '' then Exit;
 
-  X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
-  Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
+  X := ParseSvgLengthEm(GetAttr(Node, 'x', '0'), State.FontSize);
+  Y := ParseSvgLengthEm(GetAttr(Node, 'y', '0'), State.FontSize);
   DxStr := GetAttr(Node, 'dx');
   DyStr := GetAttr(Node, 'dy');
-  if DxStr <> '' then X := X + ParseSvgFloat(DxStr);
-  if DyStr <> '' then Y := Y + ParseSvgFloat(DyStr);
+  if DxStr <> '' then X := X + ParseSvgLengthEm(DxStr, State.FontSize);
+  if DyStr <> '' then Y := Y + ParseSvgLengthEm(DyStr, State.FontSize);
 
   DoSaveState;
   ApplyNodeTransform(Node);
@@ -3645,8 +3692,7 @@ var
 begin
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
-  IsGroup := (TagName = 'g') or (TagName = 'svg') or (TagName = 'symbol') or
-    (TagName = 'a');
+  IsGroup := (TagName = 'g') or (TagName = 'symbol') or (TagName = 'a');
 
   if IsGroup then
   begin
@@ -3658,6 +3704,8 @@ begin
     if NeedRestore then DoEndOpacity;
     DoRestoreState;
   end
+  else if TagName = 'svg' then
+    RenderNestedSvg(Node, State)
   else if TagName = 'rect' then
     RenderRect(Node, State)
   else if TagName = 'circle' then
@@ -3808,6 +3856,89 @@ begin
 end;
 
 // ===========================================================================
+// Nested <svg> element
+// ===========================================================================
+// Establishes a new viewport at (x, y) of size width/height with its own
+// viewBox coordinate system. Must not be handled like <g> — Visio fallback
+// images have an inner <svg viewBox="0 0 1028 1072" width="11"> whose
+// children would otherwise draw at raw viewBox scale.
+
+procedure TPixieSvgRendererBase.RenderNestedSvg(Node: Pointer;
+  const State: TPixieSvgState);
+const
+  Eps = 0.0001;
+var
+  X, Y, W, H: Single;
+  VbX, VbY, VbW, VbH: Single;
+  OverflowStr: string;
+  SX, SY: Single;
+  M: TPixieSvgMatrix;
+  NeedRestore: Boolean;
+  DoClip: Boolean;
+begin
+  X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
+  Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
+  W := ParseSvgFloat(GetAttr(Node, 'width', '0'));
+  H := ParseSvgFloat(GetAttr(Node, 'height', '0'));
+
+  ParseViewBox(GetAttr(Node, 'viewBox'), VbX, VbY, VbW, VbH);
+
+  // Nested <svg> clips to its viewport unless overflow=visible. When the
+  // dimensions are missing there's nothing to clip to, so treat it as
+  // visible regardless of the attribute.
+  OverflowStr := LowerCase(Trim(GetAttr(Node, 'overflow')));
+  if OverflowStr = '' then
+    OverflowStr := ParseStyleAttribute(ResolveNodeStyle(Node), 'overflow');
+  DoClip := (OverflowStr <> 'visible') and (W > 0) and (H > 0);
+
+  DoSaveState;
+  ApplyNodeTransform(Node);
+  ApplyClipPath(Node);
+  ApplyOpacity(State, NeedRestore);
+
+  if (Abs(X) > Eps) or (Abs(Y) > Eps) then
+  begin
+    M := TPixieSvgMatrix.CreateTranslate(X, Y);
+    DoSetTransform(M);
+  end;
+
+  // Clip must happen before the viewBox scale so the rect is in parent
+  // user-space coordinates.
+  if DoClip then
+  begin
+    DoMoveTo(0, 0);
+    DoLineTo(W, 0);
+    DoLineTo(W, H);
+    DoLineTo(0, H);
+    DoClosePath;
+    DoClipPath;
+  end;
+
+  // preserveAspectRatio is not honoured — always stretch per-axis, matching
+  // Visio's common 'none' value. Fix this when a Pixie test needs 'meet'.
+  if (VbW > Eps) and (VbH > Eps) and (W > Eps) and (H > Eps) then
+  begin
+    SX := W / VbW;
+    SY := H / VbH;
+    if (Abs(SX - 1) > Eps) or (Abs(SY - 1) > Eps) then
+    begin
+      M := TPixieSvgMatrix.CreateScale(SX, SY);
+      DoSetTransform(M);
+    end;
+    if (Abs(VbX) > Eps) or (Abs(VbY) > Eps) then
+    begin
+      M := TPixieSvgMatrix.CreateTranslate(-VbX, -VbY);
+      DoSetTransform(M);
+    end;
+  end;
+
+  RenderGroup(Node, State);
+
+  if NeedRestore then DoEndOpacity;
+  DoRestoreState;
+end;
+
+// ===========================================================================
 // Public API
 // ===========================================================================
 
@@ -3817,9 +3948,7 @@ var
   Doc: TXMLDocument;
   SvgRoot: TDOMElement;
   MemStream: TMemoryStream;
-  VbStr, WidthStr, HeightStr, OverflowStr: string;
-  Parts: array[0..3] of string;
-  P, Idx: Integer;
+  WidthStr, HeightStr, OverflowStr: string;
   SvgStr: AnsiString;
   DtdStart, DtdEnd: Integer;
 begin
@@ -3875,32 +4004,8 @@ begin
       Exit;
     end;
 
-    // Parse viewBox
-    VbStr := DomToStr(SvgRoot.GetAttribute('viewBox'));
-    FViewBoxX := 0; FViewBoxY := 0; FViewBoxW := 0; FViewBoxH := 0;
-
-    if VbStr <> '' then
-    begin
-      Idx := 0;
-      P := 1;
-      Parts[0] := ''; Parts[1] := ''; Parts[2] := ''; Parts[3] := '';
-      while (P <= Length(VbStr)) and (Idx <= 3) do
-      begin
-        while (P <= Length(VbStr)) and CharInSet(VbStr[P], [' ', ',', #9]) do Inc(P);
-        Parts[Idx] := '';
-        while (P <= Length(VbStr)) and not CharInSet(VbStr[P], [' ', ',', #9]) do
-        begin
-          Parts[Idx] := Parts[Idx] + VbStr[P];
-          Inc(P);
-        end;
-        Inc(Idx);
-      end;
-
-      FViewBoxX := SvgStrToFloat(Parts[0]);
-      FViewBoxY := SvgStrToFloat(Parts[1]);
-      FViewBoxW := SvgStrToFloat(Parts[2]);
-      FViewBoxH := SvgStrToFloat(Parts[3]);
-    end;
+    ParseViewBox(DomToStr(SvgRoot.GetAttribute('viewBox')),
+      FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH);
 
     // Parse width/height, fall back to viewBox
     WidthStr := DomToStr(SvgRoot.GetAttribute('width'));
@@ -3975,15 +4080,17 @@ begin
     SetLength(FInitState.DashArray, 0);
     FInitState.DashOffset := 0;
 
-    // Inherit state from the root SVG element
-    FInitState := InheritState(SvgRoot, FInitState);
-
     // Store document for RenderDocument
     FDoc := Doc;
     FSvgRoot := SvgRoot;
 
-    // Build ID map and pre-collect gradients (single tree walk)
+    // Build ID map and pre-collect gradients (single tree walk).
+    // Must run before InheritState on the root so that the style map
+    // is populated and the root's class attribute can be resolved.
     BuildIdMap(SvgRoot);
+
+    // Inherit state from the root SVG element
+    FInitState := InheritState(SvgRoot, FInitState);
 
     Result := True;
   finally
