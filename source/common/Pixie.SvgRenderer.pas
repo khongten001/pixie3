@@ -90,6 +90,25 @@ type
 
   TPixieSvgGradientMap = TObjectDictionary<string, TPixieSvgGradient>;
 
+  { TPixieSvgPatternInfo - resolved attributes of a <pattern> element }
+
+  TPixieSvgPatternInfo = record
+    ImageHref: string;
+    // Tile rectangle in pattern's own coordinate system (before applying units).
+    // When PatternUnitsUserSpace=False these are fractions of the bbox;
+    // otherwise they are user-space units.
+    X, Y, Width, Height: Single;
+    // Pattern viewBox (if present) — maps content coordinates into the tile
+    HasViewBox: Boolean;
+    ViewBoxX, ViewBoxY, ViewBoxW, ViewBoxH: Single;
+    // Image child element position and size (in pattern content space)
+    ImgX, ImgY, ImgW, ImgH: Single;
+    // Units flags
+    PatternUnitsUserSpace: Boolean;   // default False (objectBoundingBox)
+    ContentUnitsObjectBBox: Boolean;  // default False (userSpaceOnUse)
+    procedure Init;
+  end;
+
   { TPixieSvgPathCmd - tokenised path command }
 
   TPixieSvgPathCmd = record
@@ -113,6 +132,7 @@ type
 
   TPixieSvgIdMap = TDictionary<string, Pointer>;
   TPixieSvgStyleMap = TDictionary<string, string>;
+  TPixieSvgPatternInfoMap = TDictionary<string, TPixieSvgPatternInfo>;
 
   TPixieSvgRendererBase = class
   protected
@@ -122,6 +142,7 @@ type
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
     FOverflowVisible: Boolean;
     FGradients: TPixieSvgGradientMap;
+    FPatternInfos: TPixieSvgPatternInfoMap;
     FIdMap: TPixieSvgIdMap;
     FStyleMap: TPixieSvgStyleMap;
     FUseDepth: Integer;
@@ -202,6 +223,9 @@ type
     // Pattern/image helpers
     function IsPatternFill(const Id: string): Boolean;
     function ResolvePatternImageHref(const PatternId: string): string;
+    function GetPatternInfo(const PatternId: string;
+      out Info: TPixieSvgPatternInfo): Boolean;
+    function FindImageElement(Node: Pointer; Depth: Integer): Pointer;
 
     // ID map for <use> element lookup
     procedure BuildIdMap(Node: Pointer);
@@ -247,7 +271,7 @@ type
     // Render the parsed document by walking the SVG tree.
     procedure RenderDocument;
     // Free the parsed document.
-    procedure ClearDocument;
+    procedure ClearDocument; virtual;
   end;
 
 implementation
@@ -437,6 +461,7 @@ procedure TPixieSvgRendererBase.ClearDocument;
 begin
   DoClearImages;
   FreeAndNil(FGradients);
+  FreeAndNil(FPatternInfos);
   FreeAndNil(FIdMap);
   FreeAndNil(FStyleMap);
   if FDoc <> nil then
@@ -1860,54 +1885,174 @@ begin
   Result := LowerCase(DomToStr(TDOMElement(El).TagName)) = 'pattern';
 end;
 
+// Find the first descendant <image> element, following <use xlink:href>
+// once. Used by ResolvePatternImageHref and GetPatternInfo.
+function TPixieSvgRendererBase.FindImageElement(Node: Pointer;
+  Depth: Integer): Pointer;
+var
+  Tag, HrefStr: string;
+  Child, Target: Pointer;
+begin
+  Result := nil;
+  if (Node = nil) or (Depth >= 10) then Exit;
+  Tag := LowerCase(DomToStr(TDOMElement(Node).TagName));
+  if Tag = 'image' then
+  begin
+    Result := Node;
+    Exit;
+  end;
+  if Tag = 'use' then
+  begin
+    HrefStr := GetHref(Node);
+    if (HrefStr <> '') and (HrefStr[1] = '#') and
+      FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
+      Result := FindImageElement(Target, Depth + 1);
+    Exit;
+  end;
+  Child := TDOMNode(Node).FirstChild;
+  while Child <> nil do
+  begin
+    if TDOMNode(Child).NodeType = ELEMENT_NODE then
+    begin
+      Result := FindImageElement(Child, Depth + 1);
+      if Result <> nil then Exit;
+    end;
+    Child := TDOMNode(Child).NextSibling;
+  end;
+end;
+
 function TPixieSvgRendererBase.ResolvePatternImageHref(
   const PatternId: string): string;
-
-  function FindImageHref(Node: Pointer; Depth: Integer): string;
-  var
-    Tag, HrefStr: string;
-    Child, Target: Pointer;
-  begin
-    Result := '';
-    if (Node = nil) or (Depth >= 10) then Exit;
-
-    Tag := LowerCase(DomToStr(TDOMElement(Node).TagName));
-
-    if Tag = 'image' then
-    begin
-      Result := GetHref(Node);
-      Exit;
-    end;
-
-    if Tag = 'use' then
-    begin
-      HrefStr := GetHref(Node);
-      if (HrefStr <> '') and (HrefStr[1] = '#') and
-        FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), Target) then
-        Result := FindImageHref(Target, Depth + 1);
-      Exit;
-    end;
-
-    // Container (pattern, g, svg, symbol, a, etc.) — search children
-    Child := TDOMNode(Node).FirstChild;
-    while Child <> nil do
-    begin
-      if TDOMNode(Child).NodeType = ELEMENT_NODE then
-      begin
-        Result := FindImageHref(Child, Depth + 1);
-        if Result <> '' then Exit;
-      end;
-      Child := TDOMNode(Child).NextSibling;
-    end;
-  end;
-
 var
-  PatternEl: Pointer;
+  PatternEl, ImgEl: Pointer;
 begin
   Result := '';
   if (FIdMap = nil) or (PatternId = '') then Exit;
   if not FIdMap.TryGetValue(PatternId, PatternEl) then Exit;
-  Result := FindImageHref(PatternEl, 0);
+  ImgEl := FindImageElement(PatternEl, 0);
+  if ImgEl <> nil then
+    Result := GetHref(ImgEl);
+end;
+
+procedure TPixieSvgPatternInfo.Init;
+begin
+  ImageHref := '';
+  X := 0; Y := 0;
+  Width := 0; Height := 0;
+  HasViewBox := False;
+  ViewBoxX := 0; ViewBoxY := 0; ViewBoxW := 0; ViewBoxH := 0;
+  ImgX := 0; ImgY := 0; ImgW := 0; ImgH := 0;
+  PatternUnitsUserSpace := False;
+  ContentUnitsObjectBBox := False;
+end;
+
+function TPixieSvgRendererBase.GetPatternInfo(const PatternId: string;
+  out Info: TPixieSvgPatternInfo): Boolean;
+
+  // Parse "x y w h" (space/comma separated) into Info.ViewBox* fields
+  procedure ParseViewBoxAttr(const S: string);
+  var
+    Parts: array[0..3] of string;
+    P, Idx: Integer;
+  begin
+    for Idx := 0 to 3 do Parts[Idx] := '';
+    P := 1; Idx := 0;
+    while (P <= Length(S)) and (Idx <= 3) do
+    begin
+      while (P <= Length(S)) and CharInSet(S[P], [' ', ',', #9]) do Inc(P);
+      while (P <= Length(S)) and not CharInSet(S[P], [' ', ',', #9]) do
+      begin
+        Parts[Idx] := Parts[Idx] + S[P];
+        Inc(P);
+      end;
+      Inc(Idx);
+    end;
+    Info.ViewBoxX := ParseSvgFloat(Parts[0]);
+    Info.ViewBoxY := ParseSvgFloat(Parts[1]);
+    Info.ViewBoxW := ParseSvgFloat(Parts[2]);
+    Info.ViewBoxH := ParseSvgFloat(Parts[3]);
+    Info.HasViewBox := (Info.ViewBoxW > 0) and (Info.ViewBoxH > 0);
+  end;
+
+  // Read attributes from one pattern element, unconditionally overwriting
+  // Info fields when an attribute is present. Called root-to-leaf so the
+  // leaf element (the directly referenced pattern) wins, per SVG spec.
+  procedure ReadPatternAttrs(Node: Pointer);
+  var
+    Attr: string;
+    ImgEl: Pointer;
+  begin
+    Attr := GetAttr(Node, 'x');
+    if Attr <> '' then Info.X := ParseSvgFloat(Attr);
+    Attr := GetAttr(Node, 'y');
+    if Attr <> '' then Info.Y := ParseSvgFloat(Attr);
+    Attr := GetAttr(Node, 'width');
+    if Attr <> '' then Info.Width := ParseSvgFloat(Attr);
+    Attr := GetAttr(Node, 'height');
+    if Attr <> '' then Info.Height := ParseSvgFloat(Attr);
+    Attr := GetAttr(Node, 'viewBox');
+    if Attr <> '' then ParseViewBoxAttr(Attr);
+    Attr := GetAttr(Node, 'patternUnits');
+    if Attr <> '' then
+      Info.PatternUnitsUserSpace := SameText(Attr, 'userSpaceOnUse');
+    Attr := GetAttr(Node, 'patternContentUnits');
+    if Attr <> '' then
+      Info.ContentUnitsObjectBBox := SameText(Attr, 'objectBoundingBox');
+
+    ImgEl := FindImageElement(Node, 0);
+    if ImgEl <> nil then
+    begin
+      Info.ImageHref := GetHref(ImgEl);
+      Info.ImgX := ParseSvgFloat(GetAttr(ImgEl, 'x', '0'));
+      Info.ImgY := ParseSvgFloat(GetAttr(ImgEl, 'y', '0'));
+      Info.ImgW := ParseSvgFloat(GetAttr(ImgEl, 'width', '0'));
+      Info.ImgH := ParseSvgFloat(GetAttr(ImgEl, 'height', '0'));
+    end;
+  end;
+
+const
+  MaxChain = 10;
+var
+  Chain: array[0..MaxChain - 1] of Pointer;
+  ChainLen, I: Integer;
+  El: Pointer;
+  HrefStr: string;
+begin
+  Info.Init;
+  Result := False;
+
+  // Cache hit — pattern already parsed for this document
+  if (FPatternInfos <> nil) and FPatternInfos.TryGetValue(PatternId, Info) then
+  begin
+    Result := (Info.ImageHref <> '') and (Info.Width > 0) and (Info.Height > 0);
+    Exit;
+  end;
+
+  if (FIdMap = nil) or (PatternId = '') then Exit;
+  if not FIdMap.TryGetValue(PatternId, El) then Exit;
+  if LowerCase(DomToStr(TDOMElement(El).TagName)) <> 'pattern' then Exit;
+
+  // Collect the xlink:href chain from leaf to root
+  ChainLen := 0;
+  while (El <> nil) and (ChainLen < MaxChain) do
+  begin
+    Chain[ChainLen] := El;
+    Inc(ChainLen);
+    HrefStr := GetHref(El);
+    if (HrefStr = '') or (HrefStr[1] <> '#') then Break;
+    if not FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), El) then Break;
+    if LowerCase(DomToStr(TDOMElement(El).TagName)) <> 'pattern' then Break;
+  end;
+
+  // Apply root-to-leaf so the leaf (directly referenced) pattern wins
+  for I := ChainLen - 1 downto 0 do
+    ReadPatternAttrs(Chain[I]);
+
+  Result := (Info.ImageHref <> '') and (Info.Width > 0) and (Info.Height > 0);
+
+  if FPatternInfos = nil then
+    FPatternInfos := TPixieSvgPatternInfoMap.Create;
+  FPatternInfos.AddOrSetValue(PatternId, Info);
 end;
 
 procedure TPixieSvgRendererBase.ParseGradient(Node: Pointer;

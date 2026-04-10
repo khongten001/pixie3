@@ -83,6 +83,7 @@ type
   public
     constructor Create(ACanvas: TPixieCanvas);
     destructor Destroy; override;
+    procedure ClearDocument; override;
 
     // Render SVG into a destination rectangle, handling viewBox transform
     procedure RenderToRect(DstX, DstY, DstW, DstH: Single);
@@ -113,11 +114,22 @@ end;
 
 destructor TPixieSvgCanvasRenderer.Destroy;
 begin
-  FreeImageCache;
   if (FFontHandle <> 0) and (FCanvas <> nil) then
     FCanvas.DeleteFont(FFontHandle);
-  FPathRecord.Free;
+  // Inherited Destroy runs ClearDocument, which now virtually dispatches
+  // to our override and touches FPathRecord — so free the record AFTER.
   inherited;
+  FPathRecord.Free;
+end;
+
+procedure TPixieSvgCanvasRenderer.ClearDocument;
+begin
+  inherited;
+  // Reset per-shape state in case the renderer is reused to parse a new
+  // SVG (as TPixieSvgView does). Any leftover entries would pollute the
+  // first shape's stroke rebuild in the new document.
+  FPathRecord.Clear;
+  ResetBBox;
 end;
 
 // ===========================================================================
@@ -592,6 +604,11 @@ end;
 procedure TPixieSvgCanvasRenderer.DoClipPath;
 begin
   FCanvas.ClipPath;
+  // The clip path's geometry belonged to the clip, not to the shape that
+  // will emit its own path next. Reset so the subsequent stroke rebuild
+  // (for pattern/gradient fills) sees only the shape's own geometry.
+  FPathRecord.Clear;
+  ResetBBox;
 end;
 
 // ===========================================================================
@@ -780,59 +797,142 @@ end;
 // Pattern fill
 // ===========================================================================
 
+// Preconditions: caller (DoFillAndStroke) owns FPathRecord and FBBox* —
+// this routine must not clear them, so the subsequent stroke rebuild still
+// sees the path. On any failure we only discard the canvas path.
 procedure TPixieSvgCanvasRenderer.FillWithPattern(
   const State: TPixieSvgState; FillRule: TPixieFillRule);
+const
+  Eps = 0.001;
+  MaxTiles = 100000;
 var
-  ImgHref: string;
+  Info: TPixieSvgPatternInfo;
   Handle: TPixieImageHandle;
   BX, BY, BW, BH: Single;
-  NeedOpacity: Boolean;
+  TileX, TileY, TileW, TileH: Single;
+  ImgDrawX, ImgDrawY, ImgDrawW, ImgDrawH: Single;
+  ScaleX, ScaleY: Single;
+  NeedOpacity, ImageFillsTile: Boolean;
+  StartCol, EndCol, StartRow, EndRow, Col, Row: Integer;
 begin
-  ImgHref := ResolvePatternImageHref(State.FillGradientId);
-  if ImgHref = '' then
+  if not GetPatternInfo(State.FillGradientId, Info) or not FBBoxValid then
   begin
     FCanvas.DiscardPath;
-    ResetBBox;
-    FPathRecord.Clear;
     Exit;
   end;
 
-  Handle := LoadImageFromHref(ImgHref);
+  Handle := LoadImageFromHref(Info.ImageHref);
   if Handle = 0 then
   begin
     FCanvas.DiscardPath;
-    ResetBBox;
-    FPathRecord.Clear;
     Exit;
   end;
 
-  // Clip to current path, then draw image stretched to bounding box
-  FCanvas.ClipPath(FillRule);
-
-  if FBBoxValid then
+  BX := FBBoxMinX;
+  BY := FBBoxMinY;
+  BW := FBBoxMaxX - FBBoxMinX;
+  BH := FBBoxMaxY - FBBoxMinY;
+  if (BW <= 0) or (BH <= 0) then
   begin
-    BX := FBBoxMinX;
-    BY := FBBoxMinY;
-    BW := FBBoxMaxX - FBBoxMinX;
-    BH := FBBoxMaxY - FBBoxMinY;
+    FCanvas.DiscardPath;
+    Exit;
+  end;
+
+  // Tile rectangle in user space per patternUnits. GetPatternInfo
+  // guarantees Info.Width/Height > 0, and we've verified BW/BH > 0, so
+  // TileW/TileH are positive in both branches.
+  if Info.PatternUnitsUserSpace then
+  begin
+    TileX := Info.X;
+    TileY := Info.Y;
+    TileW := Info.Width;
+    TileH := Info.Height;
   end
   else
   begin
-    BX := 0; BY := 0; BW := 0; BH := 0;
+    TileX := BX + Info.X * BW;
+    TileY := BY + Info.Y * BH;
+    TileW := Info.Width * BW;
+    TileH := Info.Height * BH;
   end;
 
-  if (BW > 0) and (BH > 0) then
+  // Image destination rect within a single tile.
+  if Info.HasViewBox then
   begin
-    NeedOpacity := State.FillOpacity < 1.0;
+    ScaleX := TileW / Info.ViewBoxW;
+    ScaleY := TileH / Info.ViewBoxH;
+    ImgDrawX := (Info.ImgX - Info.ViewBoxX) * ScaleX;
+    ImgDrawY := (Info.ImgY - Info.ViewBoxY) * ScaleY;
+    ImgDrawW := Info.ImgW * ScaleX;
+    ImgDrawH := Info.ImgH * ScaleY;
+  end
+  else if Info.ContentUnitsObjectBBox then
+  begin
+    ImgDrawX := Info.ImgX * TileW;
+    ImgDrawY := Info.ImgY * TileH;
+    ImgDrawW := Info.ImgW * TileW;
+    ImgDrawH := Info.ImgH * TileH;
+  end
+  else
+  begin
+    ImgDrawX := Info.ImgX;
+    ImgDrawY := Info.ImgY;
+    ImgDrawW := Info.ImgW;
+    ImgDrawH := Info.ImgH;
+  end;
+
+  // Zero-sized image child — treat it as filling the whole tile
+  if (ImgDrawW <= 0) or (ImgDrawH <= 0) then
+  begin
+    ImgDrawX := 0;
+    ImgDrawY := 0;
+    ImgDrawW := TileW;
+    ImgDrawH := TileH;
+  end;
+
+  NeedOpacity := State.FillOpacity < 1.0;
+
+  // SaveState wraps ClipPath so the mask layer is released before the
+  // subsequent stroke rebuild runs outside this routine.
+  FCanvas.SaveState;
+  try
+    FCanvas.ClipPath(FillRule);
+
     if NeedOpacity then
       FCanvas.PushOpacity(State.FillOpacity);
-    FCanvas.DrawImage(Handle, BX, BY, BW, BH);
+
+    // Fast path: image exactly fills the tile — use the canvas's native
+    // tiling primitive (D2D bitmap brush, Cairo CAIRO_EXTEND_REPEAT, etc.).
+    ImageFillsTile :=
+      (Abs(ImgDrawX) < Eps) and (Abs(ImgDrawY) < Eps) and
+      (Abs(ImgDrawW - TileW) < Eps) and (Abs(ImgDrawH - TileH) < Eps);
+
+    if ImageFillsTile then
+      FCanvas.FillTiledImage(Handle, TileX, TileY, TileW, TileH,
+        BX, BY, BW, BH)
+    else
+    begin
+      // Inset image within tile: manual loop so the repeat period stays
+      // TileW×TileH while the image draws only its own sub-rect.
+      StartCol := Floor((BX - TileX) / TileW);
+      EndCol := Ceil((BX + BW - TileX) / TileW) - 1;
+      StartRow := Floor((BY - TileY) / TileH);
+      EndRow := Ceil((BY + BH - TileY) / TileH) - 1;
+      if Int64(EndCol - StartCol + 1) *
+         Int64(EndRow - StartRow + 1) <= MaxTiles then
+        for Row := StartRow to EndRow do
+          for Col := StartCol to EndCol do
+            FCanvas.DrawImage(Handle,
+              TileX + Col * TileW + ImgDrawX,
+              TileY + Row * TileH + ImgDrawY,
+              ImgDrawW, ImgDrawH);
+    end;
+
     if NeedOpacity then
       FCanvas.PopOpacity;
+  finally
+    FCanvas.RestoreState;
   end;
-
-  ResetBBox;
-  FPathRecord.Clear;
 end;
 
 // ===========================================================================
