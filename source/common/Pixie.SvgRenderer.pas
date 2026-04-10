@@ -566,7 +566,7 @@ function TPixieSvgRendererBase.ParseDashArray(
   const S: string): TPixieSingleArray;
 var
   P, I, Len, Count: Integer;
-  NumStr: string;
+  NumStr: ShortString;
 begin
   SetLength(Result, 0);
   Count := 0;
@@ -580,19 +580,19 @@ begin
     NumStr := '';
     if (P <= Len) and CharInSet(S[P], ['-', '+']) then
     begin
-      NumStr := NumStr + S[P];
+      NumStr := NumStr + AnsiChar(S[P]);
       Inc(P);
     end;
     while (P <= Len) and CharInSet(S[P], ['0'..'9', '.']) do
     begin
-      NumStr := NumStr + S[P];
+      NumStr := NumStr + AnsiChar(S[P]);
       Inc(P);
     end;
     if NumStr <> '' then
     begin
       if Count >= Length(Result) then
         SetLength(Result, Length(Result) + 8);
-      Result[Count] := SvgStrToFloat(NumStr);
+      Result[Count] := SvgStrToFloat(string(NumStr));
       Inc(Count);
     end;
   end;
@@ -619,7 +619,7 @@ var
   P, ParenStart, Depth: Integer;
   Vals: array[0..3] of Single;
   ValCount: Integer;
-  NumStr: string;
+  NumStr: ShortString;
   AlphaIsPercent: Boolean;
   Fallback: string;
 begin
@@ -678,12 +678,12 @@ begin
       while (P <= Length(Trimmed)) and
             CharInSet(Trimmed[P], ['0'..'9', '.', '-']) do
       begin
-        NumStr := NumStr + Trimmed[P];
+        NumStr := NumStr + AnsiChar(Trimmed[P]);
         Inc(P);
       end;
       if NumStr = '' then Break;
 
-      Vals[ValCount] := SvgStrToFloat(NumStr);
+      Vals[ValCount] := SvgStrToFloat(string(NumStr));
       if (P <= Length(Trimmed)) and (Trimmed[P] = '%') then
       begin
         if ValCount < 3 then
@@ -1298,10 +1298,11 @@ var
   FuncName: string;
   Args: array[0..5] of Single;
   ArgCount: Integer;
-  NumStr: string;
   M: TPixieSvgMatrix;
 
   procedure ParseArgs;
+  var
+    NumStr: ShortString;
   begin
     ArgCount := 0;
     // Skip '('
@@ -1318,7 +1319,7 @@ var
       NumStr := '';
       if (P <= Len) and CharInSet(S[P], ['-', '+']) then
       begin
-        NumStr := NumStr + S[P];
+        NumStr := NumStr + AnsiChar(S[P]);
         Inc(P);
       end;
       while (P <= Len) and CharInSet(S[P], ['0'..'9', '.', 'e', 'E']) do
@@ -1326,22 +1327,22 @@ var
         // Handle exponent sign: e.g. -4e-6
         if CharInSet(S[P], ['e', 'E']) then
         begin
-          NumStr := NumStr + S[P];
+          NumStr := NumStr + AnsiChar(S[P]);
           Inc(P);
           if (P <= Len) and CharInSet(S[P], ['-', '+']) then
           begin
-            NumStr := NumStr + S[P];
+            NumStr := NumStr + AnsiChar(S[P]);
             Inc(P);
           end;
           Continue;
         end;
-        NumStr := NumStr + S[P];
+        NumStr := NumStr + AnsiChar(S[P]);
         Inc(P);
       end;
 
       if (NumStr <> '') and (ArgCount <= High(Args)) then
       begin
-        Args[ArgCount] := SvgStrToFloat(NumStr);
+        Args[ArgCount] := SvgStrToFloat(string(NumStr));
         Inc(ArgCount);
       end;
     end;
@@ -2201,10 +2202,10 @@ procedure TPixieSvgRendererBase.RenderPolyline(Node: Pointer;
   const State: TPixieSvgState; ClosePath: Boolean);
 var
   PointsStr: string;
-  Nums: array of Single;
+  Nums: TPixieSingleArray;
   NumCount: Integer;
   P, Len: Integer;
-  NumStr: string;
+  NumStr: ShortString;
   I: Integer;
   NeedRestore: Boolean;
 begin
@@ -2226,12 +2227,12 @@ begin
     NumStr := '';
     if (P <= Len) and CharInSet(PointsStr[P], ['-', '+']) then
     begin
-      NumStr := NumStr + PointsStr[P];
+      NumStr := NumStr + AnsiChar(PointsStr[P]);
       Inc(P);
     end;
     while (P <= Len) and CharInSet(PointsStr[P], ['0'..'9', '.']) do
     begin
-      NumStr := NumStr + PointsStr[P];
+      NumStr := NumStr + AnsiChar(PointsStr[P]);
       Inc(P);
     end;
 
@@ -2239,7 +2240,7 @@ begin
     begin
       if NumCount >= Length(Nums) then
         SetLength(Nums, Length(Nums) * 2);
-      Nums[NumCount] := SvgStrToFloat(NumStr);
+      Nums[NumCount] := SvgStrToFloat(string(NumStr));
       Inc(NumCount);
     end;
   end;
@@ -2287,8 +2288,8 @@ function TPixieSvgRendererBase.ParsePathData(
 var
   P, Len: Integer;
   Cmd: TPixieSvgPathCmd;
-  NumStr: string;
-  ArgList: array of Single;
+  NumStr: ShortString;
+  ArgList: TPixieSingleArray;
   ArgCount: Integer;
   Ch: Char;
   HasDot: Boolean;
@@ -2328,7 +2329,7 @@ begin
         NumStr := '';
         if (P <= Len) and CharInSet(D[P], ['-', '+']) then
         begin
-          NumStr := NumStr + D[P];
+          NumStr := NumStr + AnsiChar(D[P]);
           Inc(P);
         end;
         HasDot := False;
@@ -2343,16 +2344,16 @@ begin
           // Handle exponent sign: e.g. 2.81e-07
           if CharInSet(D[P], ['e', 'E']) then
           begin
-            NumStr := NumStr + D[P];
+            NumStr := NumStr + AnsiChar(D[P]);
             Inc(P);
             if (P <= Len) and CharInSet(D[P], ['-', '+']) then
             begin
-              NumStr := NumStr + D[P];
+              NumStr := NumStr + AnsiChar(D[P]);
               Inc(P);
             end;
             Continue;
           end;
-          NumStr := NumStr + D[P];
+          NumStr := NumStr + AnsiChar(D[P]);
           Inc(P);
         end;
 
@@ -2360,7 +2361,7 @@ begin
         begin
           if ArgCount >= Length(ArgList) then
             SetLength(ArgList, Length(ArgList) * 2);
-          ArgList[ArgCount] := SvgStrToFloat(NumStr);
+          ArgList[ArgCount] := SvgStrToFloat(string(NumStr));
           Inc(ArgCount);
         end
         else
