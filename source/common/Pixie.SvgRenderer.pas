@@ -87,6 +87,9 @@ type
     UserSpaceUnits: Boolean;
     HrefId: string;
     GradientTransform: string;
+    HasUnits: Boolean;
+    HasCoords: Boolean;
+    HasTransform: Boolean;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -539,6 +542,8 @@ begin
   Result := GetAttr(Node, 'xlink:href');
   if Result = '' then
     Result := GetAttr(Node, 'href');
+  if Result = '' then
+    Result := DomToStr(TDOMElement(Node).GetPrefixedAttribute('href'));
 end;
 
 function TPixieSvgRendererBase.ParseSvgFloat(const S: string): Single;
@@ -2271,7 +2276,7 @@ procedure TPixieSvgRendererBase.ParseGradient(Node: Pointer;
 var
   El: TDOMElement;
   Grad: TPixieSvgGradient;
-  GradId, Units, HrefStr: string;
+  GradId, Units, HrefStr, S: string;
   Child: TDOMNode;
   ChildEl: TDOMElement;
   ChildTag: string;
@@ -2294,6 +2299,7 @@ begin
 
   // gradientUnits
   Units := DomToStr(El.GetAttribute('gradientUnits'));
+  Grad.HasUnits := (Units <> '');
   Grad.UserSpaceUnits := (LowerCase(Units) = 'userspaceonuse');
 
   // xlink:href / href
@@ -2303,21 +2309,77 @@ begin
 
   // gradientTransform
   Grad.GradientTransform := DomToStr(El.GetAttribute('gradientTransform'));
+  Grad.HasTransform := (Grad.GradientTransform <> '');
 
   if IsRadial then
   begin
-    Grad.CX := ParseSvgFloat(GetAttr(Node, 'cx', '0.5'));
-    Grad.CY := ParseSvgFloat(GetAttr(Node, 'cy', '0.5'));
-    Grad.R := ParseSvgFloat(GetAttr(Node, 'r', '0.5'));
+    S := GetAttr(Node, 'cx');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.CX := ParseSvgFloat(S);
+    end
+    else
+      Grad.CX := 0.5;
+
+    S := GetAttr(Node, 'cy');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.CY := ParseSvgFloat(S);
+    end
+    else
+      Grad.CY := 0.5;
+
+    S := GetAttr(Node, 'r');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.R := ParseSvgFloat(S);
+    end
+    else
+      Grad.R := 0.5;
+
     Grad.FX := ParseSvgFloat(GetAttr(Node, 'fx', '-1'));
     Grad.FY := ParseSvgFloat(GetAttr(Node, 'fy', '-1'));
   end
   else
   begin
-    Grad.X1 := ParseSvgFloat(GetAttr(Node, 'x1', '0'));
-    Grad.Y1 := ParseSvgFloat(GetAttr(Node, 'y1', '0'));
-    Grad.X2 := ParseSvgFloat(GetAttr(Node, 'x2', '1'));
-    Grad.Y2 := ParseSvgFloat(GetAttr(Node, 'y2', '0'));
+    S := GetAttr(Node, 'x1');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.X1 := ParseSvgFloat(S);
+    end
+    else
+      Grad.X1 := 0;
+
+    S := GetAttr(Node, 'y1');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.Y1 := ParseSvgFloat(S);
+    end
+    else
+      Grad.Y1 := 0;
+
+    S := GetAttr(Node, 'x2');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.X2 := ParseSvgFloat(S);
+    end
+    else
+      Grad.X2 := 1;
+
+    S := GetAttr(Node, 'y2');
+    if S <> '' then
+    begin
+      Grad.HasCoords := True;
+      Grad.Y2 := ParseSvgFloat(S);
+    end
+    else
+      Grad.Y2 := 0;
   end;
 
   // Parse <stop> children
@@ -2371,35 +2433,51 @@ end;
 function TPixieSvgRendererBase.ResolveGradientStops(
   const Id: string): TPixieSvgGradient;
 var
-  Grad, RefGrad: TPixieSvgGradient;
+  Grad, Cur, RefGrad: TPixieSvgGradient;
   Visited: Integer;
 begin
   Result := nil;
   if (FGradients = nil) or not FGradients.TryGetValue(Id, Grad) then
     Exit;
 
-  // If this gradient has stops, use it directly
-  if Grad.Stops.Count > 0 then
-  begin
-    Result := Grad;
-    Exit;
-  end;
-
-  // Follow xlink:href chain to find stops
+  // Walk the href chain to inherit attributes and stops
+  Cur := Grad;
   Visited := 0;
-  while (Grad.Stops.Count = 0) and (Grad.HrefId <> '') and (Visited < 10) do
+  while (Cur.HrefId <> '') and (Visited < 10) do
   begin
-    if not FGradients.TryGetValue(Grad.HrefId, RefGrad) then
+    if not FGradients.TryGetValue(Cur.HrefId, RefGrad) then
       Break;
-    if RefGrad.Stops.Count > 0 then
+
+    // Inherit unspecified attributes from referenced gradient
+    if not Grad.HasUnits then
     begin
-      Result := Grad;
-      // Copy stops from referenced gradient
-      Grad.Stops.Clear;
-      Grad.Stops.AddRange(RefGrad.Stops.ToArray);
-      Exit;
+      Grad.UserSpaceUnits := RefGrad.UserSpaceUnits;
+      Grad.HasUnits := RefGrad.HasUnits;
     end;
-    Grad := RefGrad;
+    if not Grad.HasCoords then
+    begin
+      Grad.X1 := RefGrad.X1; Grad.Y1 := RefGrad.Y1;
+      Grad.X2 := RefGrad.X2; Grad.Y2 := RefGrad.Y2;
+      Grad.CX := RefGrad.CX; Grad.CY := RefGrad.CY;
+      Grad.R := RefGrad.R; Grad.FX := RefGrad.FX; Grad.FY := RefGrad.FY;
+      Grad.HasCoords := RefGrad.HasCoords;
+    end;
+    if not Grad.HasTransform then
+    begin
+      Grad.GradientTransform := RefGrad.GradientTransform;
+      Grad.HasTransform := RefGrad.HasTransform;
+    end;
+
+    // Inherit stops
+    if (Grad.Stops.Count = 0) and (RefGrad.Stops.Count > 0) then
+      Grad.Stops.AddRange(RefGrad.Stops.ToArray);
+
+    // Early exit once everything is resolved
+    if Grad.HasUnits and Grad.HasCoords and Grad.HasTransform
+      and (Grad.Stops.Count > 0) then
+      Break;
+
+    Cur := RefGrad;
     Inc(Visited);
   end;
 

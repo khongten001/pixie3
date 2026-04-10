@@ -51,6 +51,7 @@ type
     constructor Create;
     destructor Destroy; override;
     function GetAttribute(const Name: UnicodeString): UnicodeString;
+    function GetPrefixedAttribute(const LocalName: UnicodeString): UnicodeString;
     property TagName: UnicodeString read FTagName;
     property Attributes: TDOMNamedNodeMap read FAttributes;
   end;
@@ -153,6 +154,25 @@ begin
     Result := UnicodeString(FAttrValues[Idx])
   else
     Result := '';
+end;
+
+function TDOMElement.GetPrefixedAttribute(const LocalName: UnicodeString): UnicodeString;
+var
+  I, P: Integer;
+  Name, Target: string;
+begin
+  Result := '';
+  Target := string(LocalName);
+  for I := 0 to FAttrNames.Count - 1 do
+  begin
+    Name := FAttrNames[I];
+    P := Pos(':', Name);
+    if (P > 0) and (Copy(Name, P + 1, MaxInt) = Target) then
+    begin
+      Result := UnicodeString(FAttrValues[I]);
+      Exit;
+    end;
+  end;
 end;
 
 // ---------------------------------------------------------------------------
