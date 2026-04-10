@@ -3833,9 +3833,16 @@ end;
 procedure TPixieSvgRendererBase.RenderElement(Node: Pointer;
   const State: TPixieSvgState);
 var
-  TagName: string;
+  TagName, DisplayStr: string;
   IsGroup, NeedRestore: Boolean;
 begin
+  // SVG display="none" prevents rendering of the element and its entire subtree.
+  DisplayStr := GetAttr(Node, 'display');
+  if DisplayStr = '' then
+    DisplayStr := ParseStyleAttribute(GetAttr(Node, 'style'), 'display');
+  if DisplayStr = 'none' then
+    Exit;
+
   TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
 
   IsGroup := (TagName = 'g') or (TagName = 'symbol') or (TagName = 'a');
