@@ -772,42 +772,65 @@ end;
 function PixieIsLikelySvg(const Content: string): Boolean;
 var
   I, Len: Integer;
+
+  function AtSvgTag: Boolean;
+  begin
+    Result := (I + 3 <= Len) and (Content[I] = '<') and
+      ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
+      ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
+      ((Content[I + 3] = 'g') or (Content[I + 3] = 'G'));
+  end;
+
+  procedure SkipWhitespace;
+  begin
+    while (I <= Len) and (Content[I] <= ' ') do Inc(I);
+  end;
+
 begin
   Result := False;
   Len := Length(Content);
   if Len < 4 then Exit;
   I := 1;
-  while (I <= Len) and (Content[I] <= ' ') do Inc(I);
-  if I + 3 > Len then Exit;
-  if Content[I] <> '<' then Exit;
 
-  // Direct <svg match
-  if ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
-     ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
-     ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
-  begin
-    Result := True;
-    Exit;
-  end;
+  // Skip any combination of whitespace, <?...?> processing instructions,
+  // <!-- --> comments, and <!DOCTYPE ...> / other declarations before
+  // arriving at <svg. Visio exports place both a DOCTYPE and a comment
+  // in front of the root element.
+  repeat
+    SkipWhitespace;
+    if AtSvgTag then
+    begin
+      Result := True;
+      Exit;
+    end;
+    if (I + 1 > Len) or (Content[I] <> '<') then Exit;
 
-  // Skip <?xml ...?> then optional <!DOCTYPE...>, then look for <svg
-  if (I + 4 > Len) or (Content[I + 1] <> '?') then Exit;
-  Inc(I, 2);
-  while (I < Len) and not ((Content[I] = '?') and (Content[I + 1] = '>')) do
-    Inc(I);
-  Inc(I, 2);
-  while (I <= Len) and (Content[I] <= ' ') do Inc(I);
-  if (I + 8 <= Len) and (Content[I] = '<') and (Content[I + 1] = '!') then
-  begin
-    while (I <= Len) and (Content[I] <> '>') do Inc(I);
-    Inc(I);
-    while (I <= Len) and (Content[I] <= ' ') do Inc(I);
-  end;
-  if (I + 3 <= Len) and (Content[I] = '<') and
-     ((Content[I + 1] = 's') or (Content[I + 1] = 'S')) and
-     ((Content[I + 2] = 'v') or (Content[I + 2] = 'V')) and
-     ((Content[I + 3] = 'g') or (Content[I + 3] = 'G')) then
-    Result := True;
+    if Content[I + 1] = '?' then
+    begin
+      Inc(I, 2);
+      while (I < Len) and not ((Content[I] = '?') and (Content[I + 1] = '>')) do
+        Inc(I);
+      Inc(I, 2);
+    end
+    else if (I + 3 <= Len) and (Content[I + 1] = '!') and
+            (Content[I + 2] = '-') and (Content[I + 3] = '-') then
+    begin
+      // Comment — terminated by -->, not the first '>'
+      Inc(I, 4);
+      while (I + 2 <= Len) and not ((Content[I] = '-') and
+        (Content[I + 1] = '-') and (Content[I + 2] = '>')) do
+        Inc(I);
+      Inc(I, 3);
+    end
+    else if Content[I + 1] = '!' then
+    begin
+      // DOCTYPE or other declaration
+      while (I <= Len) and (Content[I] <> '>') do Inc(I);
+      Inc(I);
+    end
+    else
+      Exit;
+  until I > Len;
 end;
 
 end.
