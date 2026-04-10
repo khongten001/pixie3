@@ -126,8 +126,8 @@ type
   TPixieSvgPathStats = record
     StartX, StartY: Single;             // path origin (first moveto target)
     EndX, EndY: Single;                 // current point after last command
-    FirstSegEndX, FirstSegEndY: Single; // end of first drawing segment
-    LastSegStartX, LastSegStartY: Single; // start of last drawing segment
+    FirstSegEndX, FirstSegEndY: Single; // start tangent direction (CP1 for curves, endpoint for lines)
+    LastSegStartX, LastSegStartY: Single; // end tangent direction (CP2 for curves, startpoint for lines)
     HasSegment: Boolean;
   end;
 
@@ -3094,6 +3094,20 @@ var
     CurY := NY;
   end;
 
+  procedure RecordCurveSegment(NX, NY, TanToX, TanToY, TanFromX, TanFromY: Single);
+  begin
+    if not Stats.HasSegment then
+    begin
+      Stats.FirstSegEndX := TanToX;
+      Stats.FirstSegEndY := TanToY;
+      Stats.HasSegment := True;
+    end;
+    Stats.LastSegStartX := TanFromX;
+    Stats.LastSegStartY := TanFromY;
+    CurX := NX;
+    CurY := NY;
+  end;
+
 begin
   Stats.StartX := 0; Stats.StartY := 0;
   Stats.EndX := 0; Stats.EndY := 0;
@@ -3203,8 +3217,10 @@ begin
         while ArgIdx + 5 < ArgLen do
         begin
           NewX := Cmd.Args[ArgIdx + 4]; NewY := Cmd.Args[ArgIdx + 5];
+          RecordCurveSegment(NewX, NewY,
+            Cmd.Args[ArgIdx], Cmd.Args[ArgIdx + 1],
+            Cmd.Args[ArgIdx + 2], Cmd.Args[ArgIdx + 3]);
           Inc(ArgIdx, 6);
-          RecordSegment(NewX, NewY);
         end;
       end;
       'c':
@@ -3213,8 +3229,10 @@ begin
         begin
           NewX := CurX + Cmd.Args[ArgIdx + 4];
           NewY := CurY + Cmd.Args[ArgIdx + 5];
+          RecordCurveSegment(NewX, NewY,
+            CurX + Cmd.Args[ArgIdx], CurY + Cmd.Args[ArgIdx + 1],
+            CurX + Cmd.Args[ArgIdx + 2], CurY + Cmd.Args[ArgIdx + 3]);
           Inc(ArgIdx, 6);
-          RecordSegment(NewX, NewY);
         end;
       end;
       'S', 'Q':
@@ -3222,8 +3240,10 @@ begin
         while ArgIdx + 3 < ArgLen do
         begin
           NewX := Cmd.Args[ArgIdx + 2]; NewY := Cmd.Args[ArgIdx + 3];
+          RecordCurveSegment(NewX, NewY,
+            Cmd.Args[ArgIdx], Cmd.Args[ArgIdx + 1],
+            Cmd.Args[ArgIdx], Cmd.Args[ArgIdx + 1]);
           Inc(ArgIdx, 4);
-          RecordSegment(NewX, NewY);
         end;
       end;
       's', 'q':
@@ -3232,8 +3252,10 @@ begin
         begin
           NewX := CurX + Cmd.Args[ArgIdx + 2];
           NewY := CurY + Cmd.Args[ArgIdx + 3];
+          RecordCurveSegment(NewX, NewY,
+            CurX + Cmd.Args[ArgIdx], CurY + Cmd.Args[ArgIdx + 1],
+            CurX + Cmd.Args[ArgIdx], CurY + Cmd.Args[ArgIdx + 1]);
           Inc(ArgIdx, 4);
-          RecordSegment(NewX, NewY);
         end;
       end;
       'A':
