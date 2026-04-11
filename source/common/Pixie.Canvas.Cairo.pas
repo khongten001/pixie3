@@ -158,6 +158,12 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Offscreen rendering (Cairo image surface)
+    function BeginOffscreenPaint(Width, Height: Integer): Pcairo_surface_t;
+    procedure EndOffscreenPaint;
+    procedure SaveSurfaceToPng(Surface: Pcairo_surface_t;
+      const FileName: string);
   end;
 
 implementation
@@ -1639,6 +1645,47 @@ procedure TPixieCairoCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   FViewWidth := W;
   FViewHeight := H;
+end;
+
+// ---------------------------------------------------------------------------
+// Offscreen rendering (Cairo image surface)
+// ---------------------------------------------------------------------------
+
+function TPixieCairoCanvas.BeginOffscreenPaint(
+  Width, Height: Integer): Pcairo_surface_t;
+begin
+  Result := cairo_image_surface_create(CAIRO_FORMAT_ARGB32, Width, Height);
+  if Result = nil then Exit;
+
+  FCairo := cairo_create(Result);
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+
+  // Update Pango context for text rendering
+  if FPersistentContext <> nil then
+    pango_cairo_update_context(FCairo, FPersistentContext);
+  FPangoContext := FPersistentContext;
+
+  // Clear to white
+  cairo_set_source_rgb(FCairo, 1, 1, 1);
+  cairo_paint(FCairo);
+end;
+
+procedure TPixieCairoCanvas.EndOffscreenPaint;
+begin
+  if FCairo <> nil then
+  begin
+    cairo_destroy(FCairo);
+    FCairo := nil;
+  end;
+end;
+
+procedure TPixieCairoCanvas.SaveSurfaceToPng(Surface: Pcairo_surface_t;
+  const FileName: string);
+begin
+  if Surface <> nil then
+    cairo_surface_write_to_png(Surface, PAnsiChar(AnsiString(FileName)));
 end;
 
 

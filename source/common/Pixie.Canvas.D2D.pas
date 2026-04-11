@@ -46,7 +46,8 @@ type
     FFactory: ID2D1Factory;
     FDWriteFactory: IDWriteFactory;
     FWicFactory: IWICImagingFactory;
-    FTarget: ID2D1DCRenderTarget;
+    FTarget: ID2D1RenderTarget;
+    FDCTarget: ID2D1DCRenderTarget;
     FBrush: ID2D1SolidColorBrush;
     FViewWidth: Integer;
     FViewHeight: Integer;
@@ -173,11 +174,18 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Offscreen rendering (WIC bitmap target)
+    function BeginOffscreenPaint(Width, Height: Integer): IWICBitmap;
+    procedure EndOffscreenPaint;
+    procedure SaveWicBitmapToPng(const Bitmap: IWICBitmap;
+      const FileName: string);
   end;
 
 implementation
 
 uses
+  FPImage, FPWritePNG,
   Pixie.SvgRenderer.Canvas;
 
 var
@@ -404,7 +412,8 @@ begin
     Props.dpiY := 96;
     Props.usage := D2D1_RENDER_TARGET_USAGE_NONE;
     Props.minLevel := D2D1_FEATURE_LEVEL_DEFAULT;
-    FFactory.CreateDCRenderTarget(Props, FTarget);
+    FFactory.CreateDCRenderTarget(Props, FDCTarget);
+    FTarget := FDCTarget;
   end;
 
   // Create reusable solid brush
@@ -419,6 +428,7 @@ destructor TPixieD2DCanvas.Destroy;
 begin
   // COM interfaces release automatically
   FBrush := nil;
+  FDCTarget := nil;
   FTarget := nil;
   FWicFactory := nil;
   FDWriteFactory := nil;
@@ -442,7 +452,7 @@ begin
   R.Top := 0;
   R.Right := FViewWidth;
   R.Bottom := FViewHeight;
-  if Failed(FTarget.BindDC(HDC(DC), R)) then Exit;
+  if (FDCTarget = nil) or Failed(FDCTarget.BindDC(HDC(DC), R)) then Exit;
 
   FTarget.BeginDraw;
   FTarget.SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -1756,6 +1766,8 @@ procedure TPixieD2DCanvas.FillPathLinearGradient(
 var
   Stops: ID2D1GradientStopCollection;
   Props: TD2d1LinearGradientBrushProperties;
+  BP: TD2d1BrushProperties;
+  PBP: PD2d1BrushProperties;
   LBrush: ID2D1LinearGradientBrush;
 begin
   if (FTarget = nil) or (Gradient = nil) then Exit;
@@ -1769,7 +1781,20 @@ begin
   end;
   Props.startPoint := MakePoint(Gradient.StartPt.X, Gradient.StartPt.Y);
   Props.endPoint := MakePoint(Gradient.EndPt.X, Gradient.EndPt.Y);
-  if Succeeded(FTarget.CreateLinearGradientBrush(@Props, nil, Stops,
+  if Gradient.HasBrushTransform then
+  begin
+    BP.opacity := 1.0;
+    BP.transform.m11 := Gradient.BrushTransform.M11;
+    BP.transform.m12 := Gradient.BrushTransform.M12;
+    BP.transform.m21 := Gradient.BrushTransform.M21;
+    BP.transform.m22 := Gradient.BrushTransform.M22;
+    BP.transform.dx := Gradient.BrushTransform.DX;
+    BP.transform.dy := Gradient.BrushTransform.DY;
+    PBP := @BP;
+  end
+  else
+    PBP := nil;
+  if Succeeded(FTarget.CreateLinearGradientBrush(@Props, PBP, Stops,
     LBrush)) then
     FTarget.FillGeometry(FPathGeometry, LBrush, nil);
   FPathGeometry := nil;
@@ -1781,6 +1806,8 @@ procedure TPixieD2DCanvas.FillPathRadialGradient(
 var
   Stops: ID2D1GradientStopCollection;
   Props: TD2d1RadialGradientBrushProperties;
+  BP: TD2d1BrushProperties;
+  PBP: PD2d1BrushProperties;
   RBrush: ID2D1RadialGradientBrush;
 begin
   if (FTarget = nil) or (Gradient = nil) then Exit;
@@ -1796,7 +1823,20 @@ begin
   Props.gradientOriginOffset := MakePoint(0, 0);
   Props.radiusX := Gradient.Radius.X;
   Props.radiusY := Gradient.Radius.Y;
-  if Succeeded(FTarget.CreateRadialGradientBrush(@Props, nil, Stops,
+  if Gradient.HasBrushTransform then
+  begin
+    BP.opacity := 1.0;
+    BP.transform.m11 := Gradient.BrushTransform.M11;
+    BP.transform.m12 := Gradient.BrushTransform.M12;
+    BP.transform.m21 := Gradient.BrushTransform.M21;
+    BP.transform.m22 := Gradient.BrushTransform.M22;
+    BP.transform.dx := Gradient.BrushTransform.DX;
+    BP.transform.dy := Gradient.BrushTransform.DY;
+    PBP := @BP;
+  end
+  else
+    PBP := nil;
+  if Succeeded(FTarget.CreateRadialGradientBrush(@Props, PBP, Stops,
     RBrush)) then
     FTarget.FillGeometry(FPathGeometry, RBrush, nil);
   FPathGeometry := nil;
@@ -1878,6 +1918,130 @@ procedure TPixieD2DCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   FViewWidth := W;
   FViewHeight := H;
+end;
+
+// ---------------------------------------------------------------------------
+// Offscreen rendering (WIC bitmap target)
+// ---------------------------------------------------------------------------
+
+function TPixieD2DCanvas.BeginOffscreenPaint(
+  Width, Height: Integer): IWICBitmap;
+var
+  Props: TD2d1RenderTargetProperties;
+  C: TD2d1ColorF;
+  M: TD2d1Matrix3x2F;
+begin
+  Result := nil;
+  if (FWicFactory = nil) or (FFactory = nil) then Exit;
+
+  // Create WIC bitmap
+  if Failed(FWicFactory.CreateBitmap(Width, Height,
+    @GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, Result)) then Exit;
+
+  // Create WIC bitmap render target
+  FillChar(Props, SizeOf(Props), 0);
+  Props._type := D2D1_RENDER_TARGET_TYPE_DEFAULT;
+  Props.pixelFormat.format := DXGI_FORMAT_B8G8R8A8_UNORM;
+  Props.pixelFormat.alphaMode := D2D1_ALPHA_MODE_PREMULTIPLIED;
+  Props.dpiX := 96;
+  Props.dpiY := 96;
+  if Failed(FFactory.CreateWicBitmapRenderTarget(
+    Result, Props, FTarget)) then
+  begin
+    Result := nil;
+    FTarget := FDCTarget;
+    Exit;
+  end;
+
+  // Create brush on new target
+  C.r := 0; C.g := 0; C.b := 0; C.a := 1;
+  FTarget.CreateSolidColorBrush(C, nil, FBrush);
+
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+  FTarget.BeginDraw;
+  FTarget.SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+  FTarget.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+
+  // Identity transform
+  FillChar(M, SizeOf(M), 0);
+  M.m11 := 1;
+  M.m22 := 1;
+  FTarget.SetTransform(@M);
+
+  // Clear to white
+  C.r := 1; C.g := 1; C.b := 1; C.a := 1;
+  FTarget.Clear(C);
+end;
+
+procedure TPixieD2DCanvas.EndOffscreenPaint;
+var
+  C: TD2d1ColorF;
+begin
+  if FTarget = nil then Exit;
+  FTarget.EndDraw(nil, nil);
+
+  // Restore DC render target
+  FTarget := FDCTarget;
+  if FDCTarget <> nil then
+  begin
+    C.r := 0; C.g := 0; C.b := 0; C.a := 1;
+    FDCTarget.CreateSolidColorBrush(C, nil, FBrush);
+  end;
+end;
+
+procedure TPixieD2DCanvas.SaveWicBitmapToPng(const Bitmap: IWICBitmap;
+  const FileName: string);
+var
+  W, H, Stride: UINT;
+  Pixels: PByte;
+  BufSize: Integer;
+  Img: TFPMemoryImage;
+  Writer: TFPWriterPNG;
+  X, Y: Integer;
+  P: PByte;
+  C: TFPColor;
+begin
+  if Bitmap = nil then Exit;
+
+  // Get bitmap dimensions and pixel data
+  Bitmap.GetSize(W, H);
+  Stride := W * 4; // 32bpp BGRA
+  BufSize := Stride * H;
+  GetMem(Pixels, BufSize);
+  try
+    if Failed(Bitmap.CopyPixels(nil, Stride, BufSize, Pixels)) then Exit;
+
+    // Create FPImage and copy pixels (BGRA -> FPColor 16-bit)
+    Img := TFPMemoryImage.Create(W, H);
+    try
+      Writer := TFPWriterPNG.Create;
+      try
+        Writer.UseAlpha := True;
+        for Y := 0 to H - 1 do
+        begin
+          P := Pixels + Y * Stride;
+          for X := 0 to W - 1 do
+          begin
+            C.Blue := P[0] or (P[0] shl 8);
+            C.Green := P[1] or (P[1] shl 8);
+            C.Red := P[2] or (P[2] shl 8);
+            C.Alpha := P[3] or (P[3] shl 8);
+            Img.Colors[X, Y] := C;
+            Inc(P, 4);
+          end;
+        end;
+        Img.SaveToFile(FileName, Writer);
+      finally
+        Writer.Free;
+      end;
+    finally
+      Img.Free;
+    end;
+  finally
+    FreeMem(Pixels);
+  end;
 end;
 
 

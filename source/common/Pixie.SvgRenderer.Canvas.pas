@@ -302,11 +302,22 @@ begin
       begin
         GX1 := Grad.X1; GY1 := Grad.Y1;
         GX2 := Grad.X2; GY2 := Grad.Y2;
+        GradLayer.HasBrushTransform := False;
       end
       else
       begin
-        GX1 := BX + Grad.X1 * BW; GY1 := BY + Grad.Y1 * BH;
-        GX2 := BX + Grad.X2 * BW; GY2 := BY + Grad.Y2 * BH;
+        // objectBoundingBox: keep gradient in normalised 0-1 bbox space
+        // and use a brush transform to map to user space. This preserves
+        // the gradient direction in bbox space per the SVG spec.
+        GX1 := Grad.X1; GY1 := Grad.Y1;
+        GX2 := Grad.X2; GY2 := Grad.Y2;
+        GradLayer.HasBrushTransform := True;
+        GradLayer.BrushTransform.M11 := BW;
+        GradLayer.BrushTransform.M12 := 0;
+        GradLayer.BrushTransform.M21 := 0;
+        GradLayer.BrushTransform.M22 := BH;
+        GradLayer.BrushTransform.DX := BX;
+        GradLayer.BrushTransform.DY := BY;
       end;
 
       if HasTransform then
@@ -332,11 +343,20 @@ begin
       begin
         GCX := Grad.CX; GCY := Grad.CY;
         GRX := Grad.R; GRY := Grad.R;
+        RadLayer.HasBrushTransform := False;
       end
       else
       begin
-        GCX := BX + Grad.CX * BW; GCY := BY + Grad.CY * BH;
-        GRX := Grad.R * BW; GRY := Grad.R * BH;
+        // objectBoundingBox: normalised coordinates + brush transform
+        GCX := Grad.CX; GCY := Grad.CY;
+        GRX := Grad.R; GRY := Grad.R;
+        RadLayer.HasBrushTransform := True;
+        RadLayer.BrushTransform.M11 := BW;
+        RadLayer.BrushTransform.M12 := 0;
+        RadLayer.BrushTransform.M21 := 0;
+        RadLayer.BrushTransform.M22 := BH;
+        RadLayer.BrushTransform.DX := BX;
+        RadLayer.BrushTransform.DY := BY;
       end;
 
       // Apply gradientTransform: transform center and compute

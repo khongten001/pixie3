@@ -458,11 +458,23 @@ procedure TPixieCanvas.FillPathLinearGradient(
 var
   EmptyRadius: TPixieBorderRadiuses;
 begin
-  // Default: clip to path, fill bounding rect with gradient
+  // Default: clip to path, fill bounding rect with gradient.
+  // If the gradient has a brush transform (objectBoundingBox), apply it
+  // as a canvas transform so the gradient direction is preserved.
   FillChar(EmptyRadius, SizeOf(EmptyRadius), 0);
   SaveState;
   ClipPath(FillRule);
-  FillLinearGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
+  if Gradient.HasBrushTransform then
+  begin
+    ConcatMatrix(
+      Gradient.BrushTransform.M11, Gradient.BrushTransform.M12,
+      Gradient.BrushTransform.M21, Gradient.BrushTransform.M22,
+      Gradient.BrushTransform.DX, Gradient.BrushTransform.DY);
+    // Fill in normalised bbox space (shape maps to 0-1, padded for extend)
+    FillLinearGradient(-1, -1, 3, 3, EmptyRadius, Gradient);
+  end
+  else
+    FillLinearGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
   RestoreState;
 end;
 
@@ -475,7 +487,16 @@ begin
   FillChar(EmptyRadius, SizeOf(EmptyRadius), 0);
   SaveState;
   ClipPath(FillRule);
-  FillRadialGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
+  if Gradient.HasBrushTransform then
+  begin
+    ConcatMatrix(
+      Gradient.BrushTransform.M11, Gradient.BrushTransform.M12,
+      Gradient.BrushTransform.M21, Gradient.BrushTransform.M22,
+      Gradient.BrushTransform.DX, Gradient.BrushTransform.DY);
+    FillRadialGradient(-1, -1, 3, 3, EmptyRadius, Gradient);
+  end
+  else
+    FillRadialGradient(-1e6, -1e6, 2e6, 2e6, EmptyRadius, Gradient);
   RestoreState;
 end;
 

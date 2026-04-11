@@ -36,12 +36,20 @@ type
 
   TPixieColorPointList = TList<TPixieColorPoint>;
 
+  { TPixieGradientTransform — brush-to-user-space affine transform for
+    objectBoundingBox gradients (maps normalised 0-1 coords to user space) }
+  TPixieGradientTransform = record
+    M11, M12, M21, M22, DX, DY: Single;
+  end;
+
   { TPixieGradientBase - base for computed gradient layers }
   TPixieGradientBase = class
   public
     ColorPoints: TPixieColorPointList;
     ColorSpace: TPixieColorSpace;
     HueInterpolation: TPixieHueInterpolation;
+    HasBrushTransform: Boolean;
+    BrushTransform: TPixieGradientTransform;
 
     constructor Create;
     destructor Destroy; override;

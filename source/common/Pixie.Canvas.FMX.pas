@@ -1406,10 +1406,21 @@ begin
 
   FBrush.Kind := TBrushKind.Gradient;
   FBrush.Gradient.Style := TGradientStyle.Linear;
-  FBrush.Gradient.StartPosition.X := (Gradient.StartPt.X - R.Left) / RW;
-  FBrush.Gradient.StartPosition.Y := (Gradient.StartPt.Y - R.Top) / RH;
-  FBrush.Gradient.StopPosition.X := (Gradient.EndPt.X - R.Left) / RW;
-  FBrush.Gradient.StopPosition.Y := (Gradient.EndPt.Y - R.Top) / RH;
+  if Gradient.HasBrushTransform then
+  begin
+    // Normalised bbox coords map directly to FMX's 0-1 gradient positions
+    FBrush.Gradient.StartPosition.X := Gradient.StartPt.X;
+    FBrush.Gradient.StartPosition.Y := Gradient.StartPt.Y;
+    FBrush.Gradient.StopPosition.X := Gradient.EndPt.X;
+    FBrush.Gradient.StopPosition.Y := Gradient.EndPt.Y;
+  end
+  else
+  begin
+    FBrush.Gradient.StartPosition.X := (Gradient.StartPt.X - R.Left) / RW;
+    FBrush.Gradient.StartPosition.Y := (Gradient.StartPt.Y - R.Top) / RH;
+    FBrush.Gradient.StopPosition.X := (Gradient.EndPt.X - R.Left) / RW;
+    FBrush.Gradient.StopPosition.Y := (Gradient.EndPt.Y - R.Top) / RH;
+  end;
   SetupGradientStops(Gradient.ColorPoints);
 
   FCanvas.FillPath(FCurrentPath, FOpacity, FBrush);
@@ -1441,13 +1452,22 @@ begin
   FBrush.Kind := TBrushKind.Gradient;
   FBrush.Gradient.Style := TGradientStyle.Radial;
 
-  // FMX D2D sets gradient centre = (BBox.Width * RC.X, BBox.Height * RC.Y)
-  // without adding BBox.Left/Top, so RC must use absolute user-space coords
-  // divided by the bbox dimensions.
-  FBrush.Gradient.RadialTransform.RotationCenter.X :=
-    Gradient.Position.X / R.Width;
-  FBrush.Gradient.RadialTransform.RotationCenter.Y :=
-    Gradient.Position.Y / R.Height;
+  if Gradient.HasBrushTransform then
+  begin
+    // Normalised bbox coords map directly to FMX rotation center
+    FBrush.Gradient.RadialTransform.RotationCenter.X := Gradient.Position.X;
+    FBrush.Gradient.RadialTransform.RotationCenter.Y := Gradient.Position.Y;
+  end
+  else
+  begin
+    // FMX D2D sets gradient centre = (BBox.Width * RC.X, BBox.Height * RC.Y)
+    // without adding BBox.Left/Top, so RC must use absolute user-space coords
+    // divided by the bbox dimensions.
+    FBrush.Gradient.RadialTransform.RotationCenter.X :=
+      Gradient.Position.X / R.Width;
+    FBrush.Gradient.RadialTransform.RotationCenter.Y :=
+      Gradient.Position.Y / R.Height;
+  end;
   FBrush.Gradient.RadialTransform.Scale.X := 1;
   FBrush.Gradient.RadialTransform.Scale.Y := 1;
   FBrush.Gradient.RadialTransform.RotationAngle := 0;

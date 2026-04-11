@@ -11,7 +11,6 @@ interface
 uses
   SysUtils, Classes, Math,
   MacOSAll,
-  CocoaGDIObjects,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas;
@@ -154,11 +153,19 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Offscreen rendering (CGBitmapContext)
+    function BeginOffscreenPaint(Width, Height: Integer): CGContextRef;
+    procedure EndOffscreenPaint;
+    procedure SaveContextToPng(Ctx: CGContextRef; Width, Height: Integer;
+      const FileName: string);
   end;
 
 implementation
 
 uses
+  {$IFDEF LCL}CocoaGDIObjects,{$ENDIF}
+  FPImage, FPWritePNG,
   Pixie.SvgRenderer.Canvas;
 
 function CheckCGFont(const Name: string): Boolean;
@@ -332,12 +339,18 @@ end;
 // ---------------------------------------------------------------------------
 
 procedure TPixieCGCanvas.BeginPaint(DC: PtrUInt);
+{$IFDEF LCL}
 var
   CocoaCtx: TCocoaContext;
+{$ENDIF}
 begin
   FStateTop := 0;
+  {$IFDEF LCL}
   CocoaCtx := TCocoaContext(DC);
   FCG := CocoaCtx.CGContext;
+  {$ELSE}
+  FCG := CGContextRef(Pointer(DC));
+  {$ENDIF}
   if FCG = nil then Exit;
   CGContextSaveGState(FCG);
   CGContextScaleCTM(FCG, FScale, FScale);
@@ -1750,6 +1763,84 @@ begin
   FViewWidth := W;
   FViewHeight := H;
   FCanvasScale := ACanvasScale;
+end;
+
+// ---------------------------------------------------------------------------
+// Offscreen rendering (CGBitmapContext)
+// ---------------------------------------------------------------------------
+
+function TPixieCGCanvas.BeginOffscreenPaint(
+  Width, Height: Integer): CGContextRef;
+begin
+  // Create a bitmap context — CG allocates the pixel buffer
+  Result := CGBitmapContextCreate(nil, Width, Height, 8, Width * 4,
+    FColorSpace,
+    kCGImageAlphaPremultipliedFirst or kCGBitmapByteOrder32Little);
+  if Result = nil then Exit;
+
+  FCG := Result;
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+
+  // Flip coordinate system (CG is bottom-up, SVG is top-down)
+  CGContextTranslateCTM(FCG, 0, Height);
+  CGContextScaleCTM(FCG, 1, -1);
+
+  // Clear to white
+  CGContextSetRGBFillColor(FCG, 1, 1, 1, 1);
+  CGContextFillRect(FCG, CGRectMake(0, 0, Width, Height));
+end;
+
+procedure TPixieCGCanvas.EndOffscreenPaint;
+begin
+  // Don't destroy — the context is returned to the caller for saving
+  FCG := nil;
+end;
+
+procedure TPixieCGCanvas.SaveContextToPng(Ctx: CGContextRef;
+  Width, Height: Integer; const FileName: string);
+var
+  Pixels: PByte;
+  Stride: Integer;
+  Img: TFPMemoryImage;
+  Writer: TFPWriterPNG;
+  X, Y: Integer;
+  P: PByte;
+  C: TFPColor;
+begin
+  if Ctx = nil then Exit;
+
+  Pixels := CGBitmapContextGetData(Ctx);
+  Stride := Width * 4;
+  if Pixels = nil then Exit;
+
+  Img := TFPMemoryImage.Create(Width, Height);
+  try
+    Writer := TFPWriterPNG.Create;
+    try
+      Writer.UseAlpha := True;
+      for Y := 0 to Height - 1 do
+      begin
+        P := Pixels + Y * Stride;
+        for X := 0 to Width - 1 do
+        begin
+          // BGRA -> FPColor 16-bit
+          C.Blue := P[0] or (P[0] shl 8);
+          C.Green := P[1] or (P[1] shl 8);
+          C.Red := P[2] or (P[2] shl 8);
+          C.Alpha := P[3] or (P[3] shl 8);
+          Img.Colors[X, Y] := C;
+          Inc(P, 4);
+        end;
+      end;
+      Img.SaveToFile(FileName, Writer);
+    finally
+      Writer.Free;
+    end;
+  finally
+    Img.Free;
+  end;
 end;
 
 

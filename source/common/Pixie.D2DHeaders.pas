@@ -471,6 +471,10 @@ const
   WICBitmapDitherTypeDualSpiral8x8 = $7;
   WICBitmapDitherTypeErrorDiffusion = $8;
 
+  WICBitmapCacheOnDemand = 0;
+  WICBitmapCacheOnLoad = 1;
+  WICBitmapNoCache = 2;
+
 type
   WICBitmapPaletteType = type Integer;
   TWicbitmappalettetype = WICBitmapPaletteType;
@@ -852,6 +856,7 @@ type
   IWICBitmapDecoder = interface;
   IWICFormatConverter = interface;
   IWICImagingFactory = interface;
+  IWICBitmap = interface;
   ID2D1DeviceContext = interface;
   ID2D1DeviceContext1 = interface;
   ID2D1DeviceContext2 = interface;
@@ -916,14 +921,14 @@ type
   IWICMetadataQueryReader = interface end;
   IWICMetadataQueryWriter = interface end;
   IWICComponentInfo = interface end;
-  IWICBitmapEncoder = interface end;
   IWICBitmapScaler = interface end;
   IWICBitmapClipper = interface end;
   IWICBitmapFlipRotator = interface end;
-  IWICStream = interface end;
   IWICColorTransform = interface end;
+  IWICBitmapEncoder = interface end;
   IWICFastMetadataEncoder = interface end;
-  IWICBitmap = interface end;
+  IWICBitmapLock = interface end;
+  IWICStream = interface end;
   IWICBitmapFrameEncode = interface end;
 
   // Opaque DXGI interfaces
@@ -1595,6 +1600,14 @@ type
     function CanConvert(srcPixelFormat: REFWICPixelFormatGUID;
       dstPixelFormat: REFWICPixelFormatGUID;
       var pfCanConvert: BOOL): HResult; stdcall;
+  end;
+
+  IWICBitmap = interface(IWICBitmapSource)
+  ['{00000121-a8f2-4877-ba0a-fd2b6645fb94}']
+    function Lock(const prcLock: PWicrect; flags: DWORD;
+      out ppILock: IWICBitmapLock): HResult; stdcall;
+    function SetPalette(pIPalette: IWICPalette): HResult; stdcall;
+    function SetResolution(dpiX: Double; dpiY: Double): HResult; stdcall;
   end;
 
   IWICImagingFactory = interface(IUnknown)
