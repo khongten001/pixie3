@@ -937,10 +937,17 @@ begin
   end
   else if Info.ContentUnitsObjectBBox then
   begin
-    ImgDrawX := Info.ImgX * TileW;
-    ImgDrawY := Info.ImgY * TileH;
-    ImgDrawW := Info.ImgW * TileW;
-    ImgDrawH := Info.ImgH * TileH;
+    // When patternContentUnits=objectBoundingBox, coordinates are in the
+    // 0..1 range. If the image dims exceed 1 they come from the raw <image>
+    // element (via <use>) and are not in bbox space — skip to the tile-fill
+    // fallback below.
+    if (Info.ImgW <= 1.0 + 0.01) and (Info.ImgH <= 1.0 + 0.01) then
+    begin
+      ImgDrawX := Info.ImgX * TileW;
+      ImgDrawY := Info.ImgY * TileH;
+      ImgDrawW := Info.ImgW * TileW;
+      ImgDrawH := Info.ImgH * TileH;
+    end;
   end
   else
   begin
