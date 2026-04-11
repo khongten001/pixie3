@@ -926,6 +926,8 @@ begin
   end;
 
   // Image destination rect within a single tile.
+  ImgDrawX := 0; ImgDrawY := 0;
+  ImgDrawW := 0; ImgDrawH := 0;
   if Info.HasViewBox then
   begin
     ScaleX := TileW / Info.ViewBoxW;
