@@ -158,6 +158,11 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Offscreen rendering
+    function BeginOffscreenPaint(Width, Height: Integer): QImageH;
+    procedure EndOffscreenPaint;
+    procedure SaveImageToPng(Image: QImageH; const FileName: string);
   end;
 
 implementation
@@ -1691,6 +1696,64 @@ procedure TPixieQtCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   FViewWidth := W;
   FViewHeight := H;
+end;
+
+// ---------------------------------------------------------------------------
+// Offscreen rendering
+// ---------------------------------------------------------------------------
+
+function TPixieQtCanvas.BeginOffscreenPaint(Width, Height: Integer): QImageH;
+var
+  QC: TQColor;
+begin
+  Result := QImage_Create(Width, Height, QImageFormat_ARGB32_Premultiplied);
+  if Result = nil then Exit;
+
+  // Fill white background
+  QC.ColorSpec := 1; // QColor::Rgb
+  QC.Alpha := $FFFF;
+  QC.r := $FFFF; QC.g := $FFFF; QC.b := $FFFF;
+  QC.Pad := 0;
+  QImage_fill(Result, @QC);
+
+  // Create painter on the image
+  FPainter := QPainter_Create(QPaintDeviceH(Result));
+  if FPainter = nil then
+  begin
+    QImage_Destroy(Result);
+    Result := nil;
+    Exit;
+  end;
+
+  FStateTop := 0;
+  FOpacityTop := 0;
+  FCurrentOpacity := 1.0;
+  FViewWidth := Width;
+  FViewHeight := Height;
+
+  QPainter_setRenderHint(FPainter, QPainterAntialiasing, True);
+  QPainter_setRenderHint(FPainter, QPainterTextAntialiasing, True);
+  QPainter_setRenderHint(FPainter, QPainterSmoothPixmapTransform, True);
+  QPainter_setBackgroundMode(FPainter, QtTransparentMode);
+end;
+
+procedure TPixieQtCanvas.EndOffscreenPaint;
+begin
+  if FPainter <> nil then
+  begin
+    QPainter_end(FPainter);
+    QPainter_Destroy(FPainter);
+    FPainter := nil;
+  end;
+end;
+
+procedure TPixieQtCanvas.SaveImageToPng(Image: QImageH; const FileName: string);
+var
+  WPath: WideString;
+begin
+  if Image = nil then Exit;
+  WPath := UTF8Decode(FileName);
+  QImage_save(Image, @WPath, 'PNG');
 end;
 
 
