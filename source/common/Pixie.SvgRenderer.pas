@@ -1557,6 +1557,18 @@ begin
         M := TPixieSvgMatrix.CreateRotate(Args[0]);
       Result := Result.Multiply(M);
     end
+    else if FuncName = 'skewx' then
+    begin
+      M := TPixieSvgMatrix.Identity;
+      M.C := Tan(Args[0] * Pi / 180);
+      Result := Result.Multiply(M);
+    end
+    else if FuncName = 'skewy' then
+    begin
+      M := TPixieSvgMatrix.Identity;
+      M.B := Tan(Args[0] * Pi / 180);
+      Result := Result.Multiply(M);
+    end
     else if FuncName = 'matrix' then
     begin
       if ArgCount >= 6 then
