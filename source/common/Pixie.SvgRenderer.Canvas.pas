@@ -93,7 +93,7 @@ type
 implementation
 
 uses
-  Pixie.SimpleXml, Pixie.DataUri
+  Pixie.SimpleXml, Pixie.DataUri, Pixie.Utf8
   {$IFDEF FPC}, FPImage, FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,
   Pixie.ImageUtils{$ENDIF};
 
@@ -673,27 +673,42 @@ end;
 
 function TPixieSvgCanvasRenderer.DoMeasureTextRun(const Text: string;
   const State: TPixieSvgState): Single;
+var
+  I, CharCount: Integer;
 begin
   EnsureFont(State);
   if FFontHandle = 0 then
-    Result := 0
-  else
-    Result := FCanvas.MeasureText(Text, FFontHandle);
+  begin
+    Result := 0;
+    Exit;
+  end;
+  Result := FCanvas.MeasureText(Text, FFontHandle);
+  if State.LetterSpacing <> 0 then
+  begin
+    // Count UTF-8 characters
+    CharCount := 0;
+    I := 1;
+    while I <= Length(Text) do
+    begin
+      ReadUtf8Char(Text, I);
+      Inc(CharCount);
+    end;
+    if CharCount > 1 then
+      Result := Result + State.LetterSpacing * (CharCount - 1);
+  end;
 end;
 
 procedure TPixieSvgCanvasRenderer.DoDrawText(const Text: string;
   X, Y: Single; const State: TPixieSvgState);
 var
-  TextW: TPixiePixel;
+  TextW: Single;
   FC: TPixieWebColor;
+  I, Start: Integer;
+  Ch: string;
+  ChW: Single;
 begin
   EnsureFont(State);
   if FFontHandle = 0 then Exit;
-
-  TextW := FCanvas.MeasureText(Text, FFontHandle);
-
-  // Note: text-anchor offset is applied once per anchored chunk by the base
-  // class (RenderTextChunk), not per text run.
 
   FC := State.FillColor;
   if State.HasColorMatrix then
@@ -701,10 +716,30 @@ begin
   if State.HasFill then
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
 
-  // SVG Y is the baseline. DrawTextAtBaseline pins the layout baseline to
-  // Ascent, so mixed-font runs on the same line share a baseline (DWrite's
-  // default line spacing offsets by lineGap).
-  FCanvas.DrawTextAtBaseline(Text, FFontHandle, FFontMetrics, FC, X, Y);
+  if State.LetterSpacing <> 0 then
+  begin
+    // Draw character-by-character with spacing
+    TextW := 0;
+    I := 1;
+    while I <= Length(Text) do
+    begin
+      Start := I;
+      ReadUtf8Char(Text, I);
+      Ch := Copy(Text, Start, I - Start);
+      FCanvas.DrawTextAtBaseline(Ch, FFontHandle, FFontMetrics, FC,
+        X + TextW, Y);
+      ChW := FCanvas.MeasureText(Ch, FFontHandle);
+      TextW := TextW + ChW + State.LetterSpacing;
+    end;
+    // Total width for decoration lines
+    if TextW > 0 then
+      TextW := TextW - State.LetterSpacing; // remove trailing spacing
+  end
+  else
+  begin
+    FCanvas.DrawTextAtBaseline(Text, FFontHandle, FFontMetrics, FC, X, Y);
+    TextW := FCanvas.MeasureText(Text, FFontHandle);
+  end;
 
   // Draw text-decoration lines
   if State.TextDecoration <> TextDecorationLineNone then
