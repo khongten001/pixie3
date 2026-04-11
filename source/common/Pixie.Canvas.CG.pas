@@ -841,8 +841,7 @@ begin
     CFName := CFStringCreateWithCString(nil,
       'Helvetica', kCFStringEncodingUTF8);
 
-  // CoreText sizes are in points (72/inch); Descr.Size is CSS pixels (96/inch)
-  BaseFont := CTFontCreateWithName(CFName, Descr.Size * 72.0 / 96.0, nil);
+  BaseFont := CTFontCreateWithName(CFName, Descr.Size, nil);
   CFRelease(CFName);
 
   // Apply bold/italic traits if needed
@@ -878,7 +877,7 @@ begin
   Info.SmallCaps := Descr.Variant = fvSmallCaps;
   if Info.SmallCaps and (BaseFont <> nil) then
     Info.SmallFont := CTFontCreateCopyWithAttributes(
-      BaseFont, Descr.Size * 72.0 / 96.0 * PixieSmallCapsScale, nil, nil)
+      BaseFont, Descr.Size * PixieSmallCapsScale, nil, nil)
   else
     Info.SmallFont := nil;
 
