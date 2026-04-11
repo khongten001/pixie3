@@ -178,14 +178,16 @@ type
     // Offscreen rendering (WIC bitmap target)
     function BeginOffscreenPaint(Width, Height: Integer): IWICBitmap;
     procedure EndOffscreenPaint;
+    {$IFDEF FPC}
     procedure SaveWicBitmapToPng(const Bitmap: IWICBitmap;
       const FileName: string);
+    {$ENDIF}
   end;
 
 implementation
 
 uses
-  FPImage, FPWritePNG,
+  {$IFDEF FPC}FPImage, FPWritePNG,{$ENDIF}
   Pixie.SvgRenderer.Canvas;
 
 var
@@ -1991,6 +1993,7 @@ begin
   end;
 end;
 
+{$IFDEF FPC}
 procedure TPixieD2DCanvas.SaveWicBitmapToPng(const Bitmap: IWICBitmap;
   const FileName: string);
 var
@@ -2043,6 +2046,7 @@ begin
     FreeMem(Pixels);
   end;
 end;
+{$ENDIF}
 
 
 end.

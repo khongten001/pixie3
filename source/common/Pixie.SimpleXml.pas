@@ -294,7 +294,7 @@ begin
   end;
 
   // Unknown entity — keep as-is
-  Result := '&' + UnicodeString(Copy(Data, EntStart, EntLen)) + ';';
+  Result := '&' + StrToDom(Copy(Data, EntStart, EntLen)) + ';';
 end;
 
 function ReadText(var P: TXmlParser; StopChar: Char): UnicodeString;
@@ -314,14 +314,14 @@ begin
   begin
     Start := P.Pos;
     P.Pos := ScanPos;
-    Result := UnicodeString(Copy(P.Data, Start, ScanPos - Start));
+    Result := StrToDom(Copy(P.Data, Start, ScanPos - Start));
     Exit;
   end;
 
   // Pass 2: copy clean prefix before first entity, then decode
   Start := P.Pos;
   if ScanPos > Start then
-    Result := UnicodeString(Copy(P.Data, Start, ScanPos - Start))
+    Result := StrToDom(Copy(P.Data, Start, ScanPos - Start))
   else
     Result := '';
   P.Pos := ScanPos;
@@ -344,7 +344,7 @@ begin
       while (P.Pos <= P.Len) and (P.Data[P.Pos] <> StopChar) and
             (P.Data[P.Pos] <> '&') do
         Inc(P.Pos);
-      Result := Result + UnicodeString(Copy(P.Data, Start, P.Pos - Start));
+      Result := Result + StrToDom(Copy(P.Data, Start, P.Pos - Start));
     end;
   end;
 end;
@@ -425,13 +425,13 @@ begin
   begin
     if Matches(P, ']]>') then
     begin
-      Result := UnicodeString(Copy(P.Data, Start, P.Pos - Start));
+      Result := StrToDom(Copy(P.Data, Start, P.Pos - Start));
       Skip(P, 3);
       Exit;
     end;
     Inc(P.Pos);
   end;
-  Result := UnicodeString(Copy(P.Data, Start, P.Pos - Start));
+  Result := StrToDom(Copy(P.Data, Start, P.Pos - Start));
 end;
 
 function ParseElement(var P: TXmlParser): TDOMElement; forward;
