@@ -2048,15 +2048,27 @@ begin
   FilterId := DomToStr(TDOMElement(Node).GetAttribute('id'));
   if FilterId = '' then Exit;
 
-  // Walk children looking for <feColorMatrix>
+  // Walk children looking for a standalone feColorMatrix.  If the filter
+  // contains other primitives (feBlend, feFlood, etc.) it is a complex
+  // pipeline (e.g. drop shadow) we cannot reduce to a color matrix — skip.
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
     if Child.NodeType = ELEMENT_NODE then
     begin
       TagName := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if (TagName = 'feblend') or (TagName = 'feflood') or
+         (TagName = 'feoffset') or (TagName = 'fegaussianblur') or
+         (TagName = 'fecomposite') or (TagName = 'femerge') then
+        Exit;
       if TagName = 'fecolormatrix' then
       begin
+        // Skip feColorMatrix operating on SourceAlpha (shadow extraction)
+        if LowerCase(Trim(GetAttr(Child, 'in'))) = 'sourcealpha' then
+        begin
+          Child := Child.NextSibling;
+          Continue;
+        end;
         TypeStr := LowerCase(Trim(GetAttr(Child, 'type', 'matrix')));
         ValStr := Trim(GetAttr(Child, 'values'));
 
