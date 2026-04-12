@@ -117,6 +117,9 @@ type
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
+    procedure StrokeTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; Width: Single; X, BaselineY: Single); override;
     function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
@@ -1102,6 +1105,43 @@ begin
   Pt.x := X;
   Pt.y := Y + Info.Metrics.Ascent;
   QPainter_drawText(FPainter, PQtPointF(@Pt), @WStr);
+end;
+
+procedure TPixieQtCanvas.StrokeTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; Width: Single; X, BaselineY: Single);
+var
+  Info: TPixieQtFont;
+  QC: TQColor;
+  WStr: WideString;
+  Path: QPainterPathH;
+  Pen: QPenH;
+begin
+  if (Handle = 0) or (FPainter = nil) or (Width <= 0) then Exit;
+  Info := TPixieQtFont(Handle);
+  if Info.Handle = nil then Exit;
+
+  WStr := UTF8Decode(Text);
+  if Length(WStr) = 0 then Exit;
+
+  // Create path from text outline
+  Path := QPainterPath_Create;
+  try
+    QPainterPath_addText(Path, X, BaselineY, Info.Handle, @WStr);
+    // Stroke the text outline
+    MakeColor(Color, QC);
+    Pen := QPen_Create(@QC);
+    try
+      QPen_setWidthF(Pen, Width);
+      QPainter_setPen(FPainter, Pen);
+      QPainter_setBrush(FPainter, QtNoBrush);
+      QPainter_drawPath(FPainter, Path);
+    finally
+      QPen_Destroy(Pen);
+    end;
+  finally
+    QPainterPath_Destroy(Path);
+  end;
 end;
 
 function TPixieQtCanvas.PtToPx(Pt: Single): TPixiePixel;

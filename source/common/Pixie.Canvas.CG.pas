@@ -107,6 +107,9 @@ type
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
+    procedure StrokeTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; Width: Single; X, BaselineY: Single); override;
     function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
@@ -171,6 +174,9 @@ uses
   {$IFDEF LCL}CocoaGDIObjects,{$ENDIF}
   FPImage, FPWritePNG,
   Pixie.SvgRenderer.Canvas;
+
+const
+  kCGTextStroke = 1;
 
 function CheckCGFont(const Name: string): Boolean;
 var
@@ -1219,6 +1225,75 @@ begin
         end;
 
         // Text decoration is drawn at the element level (TPixieHtmlTag.DrawBackground)
+      finally
+        CFRelease(Line);
+      end;
+    finally
+      CFRelease(AttrStr);
+    end;
+  finally
+    CFRelease(CFText);
+  end;
+end;
+
+procedure TPixieCGCanvas.StrokeTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; Width: Single; X, BaselineY: Single);
+var
+  Info: TPixieCGFont;
+  CFText: CFStringRef;
+  AttrStr: CFAttributedStringRef;
+  Attrs: CFMutableDictionaryRef;
+  Line: CTLineRef;
+  Components: array[0..3] of CGFloat;
+  CGColor_: CGColorRef;
+begin
+  if (Handle = 0) or (FCG = nil) or (Width <= 0) then Exit;
+  Info := TPixieCGFont(Handle);
+  if Info.Font = nil then Exit;
+  if Text = '' then Exit;
+
+  Components[0] := Color.Red / 255.0;
+  Components[1] := Color.Green / 255.0;
+  Components[2] := Color.Blue / 255.0;
+  Components[3] := Color.Alpha / 255.0;
+  CGColor_ := CGColorCreate(FColorSpace, @Components[0]);
+
+  CFText := CFStringCreateWithCString(nil,
+    PAnsiChar(Text), kCFStringEncodingUTF8);
+  if CFText = nil then
+  begin
+    CGColorRelease(CGColor_);
+    Exit;
+  end;
+  try
+    Attrs := CFDictionaryCreateMutable(nil, 2,
+      @kCFTypeDictionaryKeyCallBacks, @kCFTypeDictionaryValueCallBacks);
+    CFDictionarySetValue(Attrs, kCTFontAttributeName, Info.Font);
+    CFDictionarySetValue(Attrs, kCTForegroundColorAttributeName, CGColor_);
+
+    AttrStr := CFAttributedStringCreate(nil, CFText, Attrs);
+    CFRelease(Attrs);
+    CGColorRelease(CGColor_);
+    if AttrStr = nil then Exit;
+    try
+      Line := CTLineCreateWithAttributedString(AttrStr);
+      if Line = nil then Exit;
+      try
+        CGContextSaveGState(FCG);
+        try
+          CGContextTranslateCTM(FCG, X, BaselineY);
+          CGContextScaleCTM(FCG, 1, -1);
+          CGContextSetTextPosition(FCG, 0, 0);
+          CGContextSetTextDrawingMode(FCG, kCGTextStroke);
+          CGContextSetRGBStrokeColor(FCG,
+            Color.Red / 255.0, Color.Green / 255.0,
+            Color.Blue / 255.0, Color.Alpha / 255.0);
+          CGContextSetLineWidth(FCG, Width);
+          CTLineDraw(Line, FCG);
+        finally
+          CGContextRestoreGState(FCG);
+        end;
       finally
         CFRelease(Line);
       end;

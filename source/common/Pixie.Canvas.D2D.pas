@@ -119,6 +119,9 @@ type
     procedure DrawTextAtBaseline(const Text: string;
       Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
       Color: TPixieWebColor; X, BaselineY: Single); override;
+    procedure StrokeTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; Width: Single; X, BaselineY: Single); override;
     function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
@@ -1256,6 +1259,89 @@ begin
   FBrush.SetColor(ToColorF(Color));
   FTarget.DrawTextLayout(MakePoint(X, BaselineY - Metrics.Ascent),
     Layout, FBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+end;
+
+procedure TPixieD2DCanvas.StrokeTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; Width: Single; X, BaselineY: Single);
+var
+  Info: PPixieD2DFont;
+  WText: UnicodeString;
+  Collection: IDWriteFontCollection;
+  Family: IDWriteFontFamily;
+  Font: IDWriteFont;
+  Face: IDWriteFontFace;
+  FamilyName: array[0..255] of WideChar;
+  NameLen, FamilyIdx: UINT32;
+  Exists: BOOL;
+  CodePoints: array of UINT32;
+  GlyphIndices: array of UINT16;
+  I, CharLen: Integer;
+  Geometry: ID2D1PathGeometry;
+  Sink: ID2D1GeometrySink;
+  SavedMatrix, TranslateMatrix: TD2d1Matrix3x2F;
+begin
+  if (Handle = 0) or (FTarget = nil) or (Width <= 0) then Exit;
+  Info := PPixieD2DFont(Handle);
+  if Info.TextFormat = nil then Exit;
+
+  WText := UnicodeString(Text);
+  if Length(WText) = 0 then Exit;
+
+  // Get font face from text format: Collection → Family → Font → FontFace
+  if Failed(Info.TextFormat.GetFontCollection(Collection)) then Exit;
+  NameLen := Info.TextFormat.GetFontFamilyNameLength;
+  if NameLen > High(FamilyName) then Exit;
+  if Failed(Info.TextFormat.GetFontFamilyName(FamilyName[0], NameLen + 1)) then Exit;
+  if Failed(Collection.FindFamilyName(@FamilyName[0], FamilyIdx, Exists)) or not Exists then Exit;
+  if Failed(Collection.GetFontFamily(FamilyIdx, Family)) then Exit;
+  if Failed(Family.GetFirstMatchingFont(Info.TextFormat.GetFontWeight,
+    Info.TextFormat.GetFontStretch, Info.TextFormat.GetFontStyle, Font)) then Exit;
+  if Failed(Font.CreateFontFace(Face)) then Exit;
+
+  // Convert UTF-16 codepoints to glyph indices
+  SetLength(CodePoints, Length(WText));
+  CharLen := 0;
+  I := 1;
+  while I <= Length(WText) do
+  begin
+    if (I < Length(WText)) and
+       (Word(WText[I]) >= $D800) and (Word(WText[I]) <= $DBFF) then
+    begin
+      CodePoints[CharLen] := ((Word(WText[I]) - $D800) shl 10) +
+        (Word(WText[I + 1]) - $DC00) + $10000;
+      Inc(I, 2);
+    end
+    else
+    begin
+      CodePoints[CharLen] := Word(WText[I]);
+      Inc(I);
+    end;
+    Inc(CharLen);
+  end;
+  if CharLen = 0 then Exit;
+
+  SetLength(GlyphIndices, CharLen);
+  if Failed(Face.GetGlyphIndices(@CodePoints[0], CharLen, @GlyphIndices[0])) then Exit;
+
+  if Failed(FFactory.CreatePathGeometry(Geometry)) then Exit;
+  if Failed(Geometry.Open(Sink)) then Exit;
+  Face.GetGlyphRunOutline(Info.TextFormat.GetFontSize, @GlyphIndices[0],
+    nil, nil, CharLen, False, False, Sink);
+  Sink.Close;
+
+  // Draw stroked geometry at text position
+  FTarget.GetTransform(SavedMatrix);
+  TranslateMatrix.m11 := SavedMatrix.m11;
+  TranslateMatrix.m12 := SavedMatrix.m12;
+  TranslateMatrix.m21 := SavedMatrix.m21;
+  TranslateMatrix.m22 := SavedMatrix.m22;
+  TranslateMatrix.dx := SavedMatrix.m11 * X + SavedMatrix.m21 * BaselineY + SavedMatrix.dx;
+  TranslateMatrix.dy := SavedMatrix.m12 * X + SavedMatrix.m22 * BaselineY + SavedMatrix.dy;
+  FTarget.SetTransform(@TranslateMatrix);
+  FBrush.SetColor(ToColorF(Color));
+  FTarget.DrawGeometry(Geometry, FBrush, Width, nil);
+  FTarget.SetTransform(@SavedMatrix);
 end;
 
 function TPixieD2DCanvas.PtToPx(Pt: Single): TPixiePixel;

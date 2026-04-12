@@ -120,6 +120,9 @@ type
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
       Color: TPixieWebColor; X, Y, W, H: Single); override;
+    procedure StrokeTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; Width: Single; X, BaselineY: Single); override;
     function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
@@ -1073,6 +1076,35 @@ begin
     SetSourceColor(Color);
     cairo_move_to(FCairo, X, Y);
     pango_cairo_show_layout(FCairo, Layout);
+  finally
+    g_object_unref(Layout);
+  end;
+end;
+
+procedure TPixieCairoCanvas.StrokeTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; Width: Single; X, BaselineY: Single);
+var
+  Info: TPixieCairoFont;
+  Layout: PPangoLayout;
+begin
+  if (Handle = 0) or (FCairo = nil) or (Width <= 0) then Exit;
+  Info := TPixieCairoFont(Handle);
+  if Info.FontDesc = nil then Exit;
+
+  Layout := pango_cairo_create_layout(FCairo);
+  try
+    pango_layout_set_font_description(Layout, Info.FontDesc);
+    pango_layout_set_text(Layout, PAnsiChar(Text), -1);
+    pango_layout_set_width(Layout, -1);
+
+    // Position at baseline
+    cairo_move_to(FCairo, X, BaselineY - Metrics.Ascent);
+    // Convert text layout to path, then stroke
+    pango_cairo_layout_path(FCairo, Layout);
+    SetSourceColor(Color);
+    cairo_set_line_width(FCairo, Width);
+    cairo_stroke(FCairo);
   finally
     g_object_unref(Layout);
   end;

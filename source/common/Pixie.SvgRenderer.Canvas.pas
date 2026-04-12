@@ -749,68 +749,110 @@ end;
 
 procedure TPixieSvgCanvasRenderer.DoDrawText(const Text: string;
   X, Y: Single; const State: TPixieSvgState);
+
+  procedure DrawRun(const S: string; RunX: Single;
+    DoFill, DoStroke, StrokeFirst: Boolean;
+    const FC, SC: TPixieWebColor);
+  begin
+    if DoFill and DoStroke then
+    begin
+      if StrokeFirst then
+      begin
+        FCanvas.StrokeTextAtBaseline(S, FFontHandle, FFontMetrics,
+          SC, State.StrokeWidth, RunX, Y);
+        FCanvas.DrawTextAtBaseline(S, FFontHandle, FFontMetrics, FC, RunX, Y);
+      end
+      else
+      begin
+        FCanvas.DrawTextAtBaseline(S, FFontHandle, FFontMetrics, FC, RunX, Y);
+        FCanvas.StrokeTextAtBaseline(S, FFontHandle, FFontMetrics,
+          SC, State.StrokeWidth, RunX, Y);
+      end;
+    end
+    else if DoFill then
+      FCanvas.DrawTextAtBaseline(S, FFontHandle, FFontMetrics, FC, RunX, Y)
+    else
+      FCanvas.StrokeTextAtBaseline(S, FFontHandle, FFontMetrics,
+        SC, State.StrokeWidth, RunX, Y);
+  end;
+
 var
   TextW: Single;
-  FC: TPixieWebColor;
+  FC, SC, DecColor: TPixieWebColor;
   I, Start: Integer;
   Ch: string;
   ChW: Single;
+  HasFill, HasStroke: Boolean;
 begin
-  if not State.HasFill then Exit;
-
   EnsureFont(State);
   if FFontHandle = 0 then Exit;
 
-  FC := State.FillColor;
-  // Gradient fill on text: use first stop color as approximation
-  if State.FillGradientId <> '' then
-  begin
-    FC := ResolveGradientFirstColor(State.FillGradientId);
-    if FC.Alpha = 0 then
-      FC := State.FillColor;
-  end;
-  if State.HasColorMatrix then
-    FC := TransformColor(FC, State.ColorMatrix);
-  FC.Alpha := Round(FC.Alpha * State.FillOpacity);
+  HasFill := State.HasFill;
+  HasStroke := State.HasStroke and (State.StrokeWidth > 0);
+  if not HasFill and not HasStroke then Exit;
 
+  // Resolve fill color
+  if HasFill then
+  begin
+    FC := State.FillColor;
+    if State.FillGradientId <> '' then
+    begin
+      FC := ResolveGradientFirstColor(State.FillGradientId);
+      if FC.Alpha = 0 then
+        FC := State.FillColor;
+    end;
+    if State.HasColorMatrix then
+      FC := TransformColor(FC, State.ColorMatrix);
+    FC.Alpha := Round(FC.Alpha * State.FillOpacity);
+  end;
+
+  // Resolve stroke color
+  if HasStroke then
+  begin
+    SC := State.StrokeColor;
+    if State.HasColorMatrix then
+      SC := TransformColor(SC, State.ColorMatrix);
+    SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
+  end;
+
+  // Draw fill and/or stroke
   if State.LetterSpacing <> 0 then
   begin
-    // Draw character-by-character with spacing
-    TextW := 0;
+    ChW := 0;
     I := 1;
     while I <= Length(Text) do
     begin
       Start := I;
       ReadUtf8Char(Text, I);
       Ch := Copy(Text, Start, I - Start);
-      FCanvas.DrawTextAtBaseline(Ch, FFontHandle, FFontMetrics, FC,
-        X + TextW, Y);
-      ChW := FCanvas.MeasureText(Ch, FFontHandle);
-      TextW := TextW + ChW + State.LetterSpacing;
+      DrawRun(Ch, X + ChW, HasFill, HasStroke, State.StrokeBeforeFill, FC, SC);
+      ChW := ChW + FCanvas.MeasureText(Ch, FFontHandle) + State.LetterSpacing;
     end;
-    // Total width for decoration lines
-    if TextW > 0 then
-      TextW := TextW - State.LetterSpacing; // remove trailing spacing
+    if ChW > 0 then
+      TextW := ChW - State.LetterSpacing
+    else
+      TextW := 0;
   end
   else
   begin
-    FCanvas.DrawTextAtBaseline(Text, FFontHandle, FFontMetrics, FC, X, Y);
+    DrawRun(Text, X, HasFill, HasStroke, State.StrokeBeforeFill, FC, SC);
     TextW := FCanvas.MeasureText(Text, FFontHandle);
   end;
 
   // Draw text-decoration lines
   if State.TextDecoration <> TextDecorationLineNone then
   begin
+    if HasFill then DecColor := FC else DecColor := SC;
     if (State.TextDecoration and TextDecorationLineUnderline) <> 0 then
       FCanvas.DrawLine(X, Y + State.FontSize * SvgDecorationUnderlineOffset,
         X + TextW, Y + State.FontSize * SvgDecorationUnderlineOffset,
-        FC, State.FontSize * SvgDecorationThickness);
+        DecColor, State.FontSize * SvgDecorationThickness);
     if (State.TextDecoration and TextDecorationLineOverline) <> 0 then
       FCanvas.DrawLine(X, Y - FFontMetrics.Ascent, X + TextW,
-        Y - FFontMetrics.Ascent, FC, State.FontSize * SvgDecorationThickness);
+        Y - FFontMetrics.Ascent, DecColor, State.FontSize * SvgDecorationThickness);
     if (State.TextDecoration and TextDecorationLineLineThrough) <> 0 then
       FCanvas.DrawLine(X, Y - FFontMetrics.XHeight / 2, X + TextW,
-        Y - FFontMetrics.XHeight / 2, FC, State.FontSize * SvgDecorationThickness);
+        Y - FFontMetrics.XHeight / 2, DecColor, State.FontSize * SvgDecorationThickness);
   end;
 end;
 

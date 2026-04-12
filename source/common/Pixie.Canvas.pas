@@ -121,6 +121,10 @@ type
     procedure DrawTextAtBaseline(const Text: string;
       Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
       Color: TPixieWebColor; X, BaselineY: Single); virtual;
+    // Stroke text outline at baseline position. Default: no-op.
+    procedure StrokeTextAtBaseline(const Text: string;
+      Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+      Color: TPixieWebColor; Width: Single; X, BaselineY: Single); virtual;
 
     // ---- Convenience methods (non-abstract, call through to abstract) ----
 
@@ -302,6 +306,13 @@ procedure TPixieCanvas.DrawTextAtBaseline(const Text: string;
 begin
   DrawText(Text, Handle, Color, X, BaselineY - Metrics.Ascent,
     1e6, Metrics.Height);
+end;
+
+procedure TPixieCanvas.StrokeTextAtBaseline(const Text: string;
+  Handle: TPixieFontHandle; const Metrics: TPixieFontMetrics;
+  Color: TPixieWebColor; Width: Single; X, BaselineY: Single);
+begin
+  // No-op default — backends override with platform-specific text stroke
 end;
 
 procedure TPixieCanvas.TextRect(const Text: string;

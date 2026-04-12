@@ -70,7 +70,23 @@ type
   PD2d1TransformedImageSourceProperties = Pointer;
   PD2d1SimpleColorProfile = Pointer;
   PD2d1Matrix4x4F = Pointer;
-  PDwriteGlyphRun = Pointer;
+  PDwriteGlyphOffset = ^TDwriteGlyphOffset;
+  TDwriteGlyphOffset = record
+    advanceOffset: FLOAT;
+    ascenderOffset: FLOAT;
+  end;
+
+  PDwriteGlyphRun = ^TDwriteGlyphRun;
+  TDwriteGlyphRun = record
+    fontFace: Pointer;       // IDWriteFontFace (raw pointer to avoid forward ref)
+    fontEmSize: FLOAT;
+    glyphCount: UINT32;
+    glyphIndices: PUINT16;
+    glyphAdvances: PSingle;
+    glyphOffsets: PDwriteGlyphOffset;
+    isSideways: BOOL;
+    bidiLevel: UINT32;
+  end;
   PDwriteGlyphRunDescription = Pointer;
   PDwriteMatrix = Pointer;
 
@@ -899,8 +915,45 @@ type
   ID2D1SpriteBatch = interface end;
   ID2D1SvgGlyphStyle = interface end;
 
-  // Opaque DWrite interfaces
-  IDWriteFontFace = interface end;
+  // IDWriteFontFace — expanded for GetGlyphRunOutline (text stroke support)
+  IDWriteFontFace = interface(IUnknown)
+  ['{5f49804d-7024-4d43-bfa9-d25984f53849}']
+    function GetType: Integer; stdcall;
+    function GetFiles(var numberOfFiles: UINT32;
+      fontFiles: Pointer): HResult; stdcall;
+    function GetIndex: UINT32; stdcall;
+    function GetSimulations: Integer; stdcall;
+    function IsSymbolFont: BOOL; stdcall;
+    procedure GetMetrics(metrics: Pointer); stdcall;
+    function GetGlyphCount: UINT16; stdcall;
+    function GetDesignGlyphMetrics(glyphIndices: PUINT16;
+      glyphCount: UINT32; glyphMetrics: Pointer;
+      isSideways: BOOL): HResult; stdcall;
+    function GetGlyphIndices(codePoints: PUINT32;
+      codePointCount: UINT32;
+      glyphIndices: PUINT16): HResult; stdcall;
+    function TryGetFontTable(openTypeTableTag: UINT32;
+      out tableData: Pointer; out tableSize: UINT32;
+      out tableContext: Pointer; out exists: BOOL): HResult; stdcall;
+    procedure ReleaseFontTable(tableContext: Pointer); stdcall;
+    function GetGlyphRunOutline(emSize: FLOAT;
+      glyphIndices: PUINT16; glyphAdvances: PSingle;
+      glyphOffsets: Pointer; glyphCount: UINT32;
+      isSideways: BOOL; isRightToLeft: BOOL;
+      geometrySink: ID2D1SimplifiedGeometrySink): HResult; stdcall;
+    function GetRecommendedRenderingMode(emSize: FLOAT;
+      pixelsPerDip: FLOAT; measuringMode: TDwriteMeasuringMode;
+      renderingParams: IUnknown;
+      out renderingMode: Integer): HResult; stdcall;
+    function GetGdiCompatibleMetrics(emSize: FLOAT;
+      pixelsPerDip: FLOAT; transform: Pointer;
+      metrics: Pointer): HResult; stdcall;
+    function GetGdiCompatibleGlyphMetrics(emSize: FLOAT;
+      pixelsPerDip: FLOAT; transform: Pointer;
+      useGdiNatural: BOOL; glyphIndices: PUINT16;
+      glyphCount: UINT32; glyphMetrics: Pointer;
+      isSideways: BOOL): HResult; stdcall;
+  end;
   IDWriteLocalizedStrings = interface end;
   IDWriteFontCollectionLoader = interface end;
   IDWriteFontFileLoader = interface end;
