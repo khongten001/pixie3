@@ -5,7 +5,7 @@ unit Pixie.WebColor;
 interface
 
 uses
-  SysUtils, Math, Generics.Collections, Pixie.Types, Pixie.Html;
+  SysUtils, Math, Generics.Collections, Pixie.Types, Pixie.Utils;
 
 type
   { TPixieWebColor }

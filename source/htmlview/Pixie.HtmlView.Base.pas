@@ -15,7 +15,7 @@ uses
   {$IFDEF FRAMEWORK_FMX}FMX.Types,{$ENDIF}
   {$IFDEF FRAMEWORK_VCL}Vcl.ExtCtrls,{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
-  Pixie.Html, Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
+  Pixie.Html, Pixie.Utils, Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext,
   Pixie.SvgRenderer, Pixie.SvgRenderer.Canvas;
 

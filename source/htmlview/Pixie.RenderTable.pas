@@ -61,7 +61,7 @@ implementation
 
 uses
   SysUtils,
-  Pixie.StringId, Pixie.Html,
+  Pixie.StringId, Pixie.Utils,
   Pixie.Document;
 
 procedure ApplyColWidths(TableEl: TPixieElement; Grid: TPixieTableGrid);

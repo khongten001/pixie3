@@ -7,7 +7,7 @@ unit Pixie.CssTokenizer;
 interface
 
 uses
-  SysUtils, Math, Generics.Collections, Pixie.Html, Pixie.Utf8;
+  SysUtils, Math, Generics.Collections, Pixie.Utils, Pixie.Utf8;
 
 const
   // CSS token types

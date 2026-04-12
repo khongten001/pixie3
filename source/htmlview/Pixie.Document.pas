@@ -207,7 +207,7 @@ type
 implementation
 
 uses
-  Pixie.StringId, Pixie.Html,
+  Pixie.StringId, Pixie.Utils,
   Pixie.HtmlParser, Pixie.MasterCss,
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.CssSelector,
   Pixie.HtmlTag,

@@ -13,7 +13,7 @@ interface
 
 uses
   SysUtils, Generics.Collections,
-  Pixie.Types, Pixie.StringId, Pixie.Html,
+  Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssLength, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
   Pixie.CssTokenizer, Pixie.CssParser,

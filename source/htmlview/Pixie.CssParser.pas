@@ -12,7 +12,7 @@ unit Pixie.CssParser;
 interface
 
 uses
-  SysUtils, Generics.Collections, Pixie.Html, Pixie.CssTokenizer;
+  SysUtils, Generics.Collections, Pixie.Utils, Pixie.CssTokenizer;
 
 type
   TPixieCssRuleType = (

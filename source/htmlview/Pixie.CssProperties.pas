@@ -12,7 +12,7 @@ interface
 
 uses
   SysUtils, Classes, Math,
-  Pixie.Types, Pixie.Html,
+  Pixie.Types, Pixie.Utils,
   Pixie.CssLength, Pixie.WebColor, Pixie.Borders,
   Pixie.FontDescription, Pixie.Background;
 

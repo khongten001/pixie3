@@ -9,7 +9,7 @@ interface
 
 uses
   SysUtils, Generics.Collections,
-  Pixie.Types, Pixie.StringId, Pixie.Html,
+  Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssTokenizer, Pixie.CssParser,
   Pixie.CssSelector, Pixie.Style, Pixie.MediaQuery;
 

@@ -51,7 +51,7 @@ type
 implementation
 
 uses
-  Pixie.StringId, Pixie.Html, Pixie.HtmlTag,
+  Pixie.StringId, Pixie.Utils, Pixie.HtmlTag,
   Pixie.WebColor, Pixie.RenderItem, Pixie.Document;
 
 const

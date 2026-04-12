@@ -36,6 +36,7 @@ contains
   Pixie.Types in '..\source\common\Pixie.Types.pas',
   Pixie.StringId in '..\source\common\Pixie.StringId.pas',
   Pixie.Html in '..\source\common\Pixie.Html.pas',
+  Pixie.Utils in '..\source\common\Pixie.Utils.pas',
   Pixie.Utf8 in '..\source\common\Pixie.Utf8.pas',
   Pixie.CssLength in '..\source\common\Pixie.CssLength.pas',
   Pixie.WebColor in '..\source\common\Pixie.WebColor.pas',

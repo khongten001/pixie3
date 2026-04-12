@@ -5,7 +5,7 @@ unit Pixie.Borders;
 interface
 
 uses
-  SysUtils, Math, Pixie.Types, Pixie.CssLength, Pixie.WebColor, Pixie.Html;
+  SysUtils, Math, Pixie.Types, Pixie.CssLength, Pixie.WebColor, Pixie.Utils;
 
 type
   { TPixieCssBorder }

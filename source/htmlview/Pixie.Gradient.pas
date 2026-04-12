@@ -11,7 +11,7 @@ interface
 
 uses
   SysUtils, Math, Generics.Collections,
-  Pixie.Types, Pixie.StringId, Pixie.Html,
+  Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssLength, Pixie.WebColor, Pixie.GradientLayer,
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.Style;
 

@@ -116,6 +116,7 @@
         <DCCReference Include="..\source\common\Pixie.Types.pas"/>
         <DCCReference Include="..\source\common\Pixie.StringId.pas"/>
         <DCCReference Include="..\source\common\Pixie.Html.pas"/>
+        <DCCReference Include="..\source\common\Pixie.Utils.pas"/>
         <DCCReference Include="..\source\common\Pixie.Utf8.pas"/>
         <DCCReference Include="..\source\common\Pixie.CssLength.pas"/>
         <DCCReference Include="..\source\common\Pixie.WebColor.pas"/>

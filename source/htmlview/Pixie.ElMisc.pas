@@ -159,7 +159,7 @@ type
 implementation
 
 uses
-  Pixie.StringId, Pixie.Html, Pixie.Container, Pixie.Document;
+  Pixie.StringId, Pixie.Utils, Pixie.Container, Pixie.Document;
 
 { TPixieElBody }
 

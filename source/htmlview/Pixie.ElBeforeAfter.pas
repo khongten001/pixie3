@@ -42,7 +42,7 @@ implementation
 
 uses
   StrUtils,
-  Pixie.StringId, Pixie.Html, Pixie.Utf8,
+  Pixie.StringId, Pixie.Utils, Pixie.Utf8,
   Pixie.ElText, Pixie.ElImage;
 
 const

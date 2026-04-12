@@ -16,7 +16,7 @@ interface
 
 uses
   SysUtils, Classes, Generics.Collections,
-  Pixie.Types, Pixie.StringId, Pixie.Html,
+  Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssProperties, Pixie.Style,
   Pixie.CssSelector, Pixie.Stylesheet,
   Pixie.Container, Pixie.Background;

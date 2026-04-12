@@ -145,6 +145,10 @@
         <UnitName Value="Pixie.Html"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.Utils.pas"/>
+        <UnitName Value="Pixie.Utils"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.HtmlEntities.pas"/>
         <UnitName Value="Pixie.HtmlEntities"/>
       </Item>

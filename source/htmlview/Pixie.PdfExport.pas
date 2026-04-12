@@ -10,7 +10,7 @@ interface
 
 uses
   SysUtils, Classes, Math, Generics.Collections,
-  Pixie.Types, Pixie.Html, Pixie.NativeContainer, Pixie.TrueType, Pixie.PdfWriter,
+  Pixie.Types, Pixie.Html, Pixie.Utils, Pixie.NativeContainer, Pixie.TrueType, Pixie.PdfWriter,
   Pixie.Canvas.Pdf;
 
 type

@@ -5,7 +5,7 @@ unit Pixie.CssLength;
 interface
 
 uses
-  SysUtils, Generics.Collections, Pixie.Types, Pixie.Html;
+  SysUtils, Generics.Collections, Pixie.Types, Pixie.Utils;
 
 const
   // from_token options (flags)

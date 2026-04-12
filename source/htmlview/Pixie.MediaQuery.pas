@@ -8,7 +8,7 @@ interface
 
 uses
   SysUtils, Math, Generics.Collections,
-  Pixie.Types, Pixie.StringId, Pixie.Html,
+  Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssTokenizer, Pixie.CssParser;
 
 type
