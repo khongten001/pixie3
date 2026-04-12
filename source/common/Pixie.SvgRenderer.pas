@@ -4642,17 +4642,14 @@ begin
     else
       H := 0;
 
-    // Determine overflow: when the SVG has no valid explicit dimensions and
-    // doesn't say overflow="hidden", browsers render with visible overflow
-    // (content outside the viewBox is not clipped)
+    // Determine overflow: browsers default to visible for the outermost
+    // <svg>, only clipping when overflow="hidden" is explicitly set
     OverflowStr := LowerCase(Trim(
       DomToStr(SvgRoot.GetAttribute('overflow'))));
-    if OverflowStr = 'visible' then
-      FOverflowVisible := True
-    else if OverflowStr = 'hidden' then
+    if OverflowStr = 'hidden' then
       FOverflowVisible := False
     else
-      FOverflowVisible := (W <= 0) and (H <= 0);
+      FOverflowVisible := True;
 
     // Fall back to viewBox dimensions when width/height couldn't be parsed
     // (e.g. malformed values like width="px" with no numeric part)
