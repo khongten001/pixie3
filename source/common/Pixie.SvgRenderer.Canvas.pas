@@ -978,14 +978,15 @@ var
 begin
   Det := M.A * M.D - M.B * M.C;
   if Abs(Det) < 1e-10 then Exit;
+  Det := 1 / Det;
 
   // Compute inverse matrix
-  InvA :=  M.D / Det;
-  InvB := -M.B / Det;
-  InvC := -M.C / Det;
-  InvD :=  M.A / Det;
-  InvE := (M.C * M.F - M.D * M.E) / Det;
-  InvF := (M.B * M.E - M.A * M.F) / Det;
+  InvA :=  M.D * Det;
+  InvB := -M.B * Det;
+  InvC := -M.C * Det;
+  InvD :=  M.A * Det;
+  InvE := (M.C * M.F - M.D * M.E) * Det;
+  InvF := (M.B * M.E - M.A * M.F) * Det;
 
   // Transform all 4 corners of the bounding box
   CX[0] := InvA * BX       + InvC * BY       + InvE;
