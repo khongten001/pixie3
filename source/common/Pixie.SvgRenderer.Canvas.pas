@@ -726,14 +726,15 @@ var
   Ch: string;
   ChW: Single;
 begin
+  if not State.HasFill then Exit;
+
   EnsureFont(State);
   if FFontHandle = 0 then Exit;
 
   FC := State.FillColor;
   if State.HasColorMatrix then
     FC := TransformColor(FC, State.ColorMatrix);
-  if State.HasFill then
-    FC.Alpha := Round(FC.Alpha * State.FillOpacity);
+  FC.Alpha := Round(FC.Alpha * State.FillOpacity);
 
   if State.LetterSpacing <> 0 then
   begin
