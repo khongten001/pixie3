@@ -236,6 +236,8 @@ type
 
     // Filter support (feColorMatrix)
     procedure ParseFilter(Node: Pointer);
+    class function SrgbToLinear(V: Single): Single;
+    class function LinearToSrgb(V: Single): Single;
     class function TransformColor(const C: TPixieWebColor;
       const M: TPixieSvgColorMatrix): TPixieWebColor; static;
 
@@ -2149,29 +2151,53 @@ begin
   end;
 end;
 
+// sRGB <-> linear conversion per SVG spec (IEC 61966-2-1)
+class function TPixieSvgRendererBase.SrgbToLinear(V: Single): Single;
+begin
+  if V <= 0.04045 then
+    Result := V / 12.92
+  else
+    Result := Power((V + 0.055) / 1.055, 2.4);
+end;
+
+class function TPixieSvgRendererBase.LinearToSrgb(V: Single): Single;
+begin
+  if V <= 0.0031308 then
+    Result := V * 12.92
+  else
+    Result := 1.055 * Power(V, 1.0 / 2.4) - 0.055;
+end;
+
 class function TPixieSvgRendererBase.TransformColor(const C: TPixieWebColor;
   const M: TPixieSvgColorMatrix): TPixieWebColor;
 var
-  R, G, B, A: Single;
+  R, G, B, A, Rv, Gv, Bv: Single;
   V: Integer;
 begin
-  R := C.Red / 255;
-  G := C.Green / 255;
-  B := C.Blue / 255;
+  // feColorMatrix operates in linearized sRGB space per SVG spec
+  R := SrgbToLinear(C.Red / 255);
+  G := SrgbToLinear(C.Green / 255);
+  B := SrgbToLinear(C.Blue / 255);
   A := C.Alpha / 255;
 
-  V := Round((M[0]*R + M[1]*G + M[2]*B + M[3]*A + M[4]) * 255);
+  Rv := M[0]*R + M[1]*G + M[2]*B + M[3]*A + M[4];
+  Gv := M[5]*R + M[6]*G + M[7]*B + M[8]*A + M[9];
+  Bv := M[10]*R + M[11]*G + M[12]*B + M[13]*A + M[14];
+
+  // Convert back to sRGB and clamp
+  V := Round(LinearToSrgb(Rv) * 255);
   if V < 0 then V := 0 else if V > 255 then V := 255;
   Result.Red := V;
 
-  V := Round((M[5]*R + M[6]*G + M[7]*B + M[8]*A + M[9]) * 255);
+  V := Round(LinearToSrgb(Gv) * 255);
   if V < 0 then V := 0 else if V > 255 then V := 255;
   Result.Green := V;
 
-  V := Round((M[10]*R + M[11]*G + M[12]*B + M[13]*A + M[14]) * 255);
+  V := Round(LinearToSrgb(Bv) * 255);
   if V < 0 then V := 0 else if V > 255 then V := 255;
   Result.Blue := V;
 
+  // Alpha is not gamma-corrected
   V := Round((M[15]*R + M[16]*G + M[17]*B + M[18]*A + M[19]) * 255);
   if V < 0 then V := 0 else if V > 255 then V := 255;
   Result.Alpha := V;
