@@ -1351,7 +1351,7 @@ begin
   end;
 
   // xml:space (inherited; "preserve" keeps all whitespace verbatim)
-  AnchorStr := GetAttr(Node, 'xml:space');
+  AnchorStr := GetAttr(Node, 'space');
   if AnchorStr = 'preserve' then
     Result.XmlSpacePreserve := True
   else if AnchorStr = 'default' then
@@ -1929,8 +1929,6 @@ begin
   begin
     // Resolve <use> reference and emit the referenced shape's geometry
     D := GetHref(Node);
-    if D = '' then
-      D := GetAttr(Node, 'xlink:href');
     if (D <> '') and (D[1] = '#') and (FIdMap <> nil) then
     begin
       D := Copy(D, 2, MaxInt);
@@ -2008,8 +2006,6 @@ begin
        (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'image') then
     begin
       Href := GetHref(Child);
-      if Href = '' then
-        Href := GetAttr(Child, 'xlink:href');
       Break;
     end;
     Child := Child.NextSibling;
