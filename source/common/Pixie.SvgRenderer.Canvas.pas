@@ -79,6 +79,7 @@ type
     procedure DoBeginMask(const MaskImageHref: string;
       MaskX, MaskY, MaskW, MaskH: Single); override;
     procedure DoEndMask; override;
+    function ResolveGradientFirstColor(const Id: string): TPixieWebColor;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
     function DoMeasureTextRun(const Text: string;
@@ -655,6 +656,17 @@ begin
   FCanvas.PopOpacity;
 end;
 
+function TPixieSvgCanvasRenderer.ResolveGradientFirstColor(
+  const Id: string): TPixieWebColor;
+var
+  Grad: TPixieSvgGradient;
+begin
+  Result := TPixieWebColor.Create(0, 0, 0, 0);
+  Grad := ResolveGradientStops(Id);
+  if (Grad <> nil) and (Grad.Stops <> nil) and (Grad.Stops.Count > 0) then
+    Result := Grad.Stops[0].Color;
+end;
+
 procedure TPixieSvgCanvasRenderer.DoBeginMask(const MaskImageHref: string;
   MaskX, MaskY, MaskW, MaskH: Single);
 var
@@ -750,6 +762,13 @@ begin
   if FFontHandle = 0 then Exit;
 
   FC := State.FillColor;
+  // Gradient fill on text: use first stop color as approximation
+  if State.FillGradientId <> '' then
+  begin
+    FC := ResolveGradientFirstColor(State.FillGradientId);
+    if FC.Alpha = 0 then
+      FC := State.FillColor;
+  end;
   if State.HasColorMatrix then
     FC := TransformColor(FC, State.ColorMatrix);
   FC.Alpha := Round(FC.Alpha * State.FillOpacity);
