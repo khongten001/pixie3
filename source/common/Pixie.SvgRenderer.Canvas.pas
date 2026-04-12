@@ -965,6 +965,53 @@ end;
 // Pattern fill
 // ===========================================================================
 
+// Inverse-transform the bounding box through the patternTransform matrix.
+// After ConcatMatrix applies the transform to the canvas, tile positions
+// are in untransformed coordinates, so we need the bounding box in that space.
+procedure InvertPatternTransform(const M: TPixieSvgMatrix;
+  var BX, BY, BW, BH: Single);
+var
+  Det, InvA, InvB, InvC, InvD, InvE, InvF: Single;
+  CX, CY: array[0..3] of Single;
+  I: Integer;
+  MinX, MinY, MaxX, MaxY: Single;
+begin
+  Det := M.A * M.D - M.B * M.C;
+  if Abs(Det) < 1e-10 then Exit;
+
+  // Compute inverse matrix
+  InvA :=  M.D / Det;
+  InvB := -M.B / Det;
+  InvC := -M.C / Det;
+  InvD :=  M.A / Det;
+  InvE := (M.C * M.F - M.D * M.E) / Det;
+  InvF := (M.B * M.E - M.A * M.F) / Det;
+
+  // Transform all 4 corners of the bounding box
+  CX[0] := InvA * BX       + InvC * BY       + InvE;
+  CY[0] := InvB * BX       + InvD * BY       + InvF;
+  CX[1] := InvA * (BX+BW)  + InvC * BY       + InvE;
+  CY[1] := InvB * (BX+BW)  + InvD * BY       + InvF;
+  CX[2] := InvA * BX       + InvC * (BY+BH)  + InvE;
+  CY[2] := InvB * BX       + InvD * (BY+BH)  + InvF;
+  CX[3] := InvA * (BX+BW)  + InvC * (BY+BH)  + InvE;
+  CY[3] := InvB * (BX+BW)  + InvD * (BY+BH)  + InvF;
+
+  // Find axis-aligned bounding box of transformed corners
+  MinX := CX[0]; MaxX := CX[0];
+  MinY := CY[0]; MaxY := CY[0];
+  for I := 1 to 3 do
+  begin
+    if CX[I] < MinX then MinX := CX[I];
+    if CX[I] > MaxX then MaxX := CX[I];
+    if CY[I] < MinY then MinY := CY[I];
+    if CY[I] > MaxY then MaxY := CY[I];
+  end;
+
+  BX := MinX; BY := MinY;
+  BW := MaxX - MinX; BH := MaxY - MinY;
+end;
+
 // Preconditions: caller (DoFillAndStroke) owns FPathRecord and FBBox* —
 // this routine must not clear them, so the subsequent stroke rebuild still
 // sees the path. On any failure we only discard the canvas path.
@@ -1035,15 +1082,6 @@ begin
     TileH := Info.Height * BH;
   end;
 
-  // Apply patternTransform to tile grid (scale + translate components)
-  if Info.HasPatternTransform then
-  begin
-    TileX := TileX * Info.PatternTransform.A + Info.PatternTransform.E;
-    TileY := TileY * Info.PatternTransform.D + Info.PatternTransform.F;
-    TileW := TileW * Info.PatternTransform.A;
-    TileH := TileH * Info.PatternTransform.D;
-  end;
-
   NeedOpacity := State.FillOpacity < 1.0;
 
   FCanvas.SaveState;
@@ -1052,6 +1090,17 @@ begin
 
     if NeedOpacity then
       FCanvas.PushOpacity(State.FillOpacity);
+
+    // Apply full patternTransform (rotation, scale, skew, translate)
+    if Info.HasPatternTransform then
+    begin
+      FCanvas.ConcatMatrix(
+        Info.PatternTransform.A, Info.PatternTransform.B,
+        Info.PatternTransform.C, Info.PatternTransform.D,
+        Info.PatternTransform.E, Info.PatternTransform.F);
+      // Compute bounding box in inverse-transformed tile space
+      InvertPatternTransform(Info.PatternTransform, BX, BY, BW, BH);
+    end;
 
     if UseSubtree then
     begin
