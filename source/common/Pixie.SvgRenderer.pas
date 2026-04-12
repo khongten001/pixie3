@@ -113,6 +113,11 @@ type
     // Units flags
     PatternUnitsUserSpace: Boolean;   // default False (objectBoundingBox)
     ContentUnitsObjectBBox: Boolean;  // default False (userSpaceOnUse)
+    // Content node for subtree rendering (the pattern element with children)
+    PatternNode: Pointer;
+    HasChildren: Boolean;
+    HasPatternTransform: Boolean;
+    PatternTransform: TPixieSvgMatrix;
     procedure Init;
   end;
 
@@ -2262,6 +2267,9 @@ begin
   ImgX := 0; ImgY := 0; ImgW := 0; ImgH := 0;
   PatternUnitsUserSpace := False;
   ContentUnitsObjectBBox := False;
+  PatternNode := nil;
+  HasChildren := False;
+  HasPatternTransform := False;
 end;
 
 function TPixieSvgRendererBase.GetPatternInfo(const PatternId: string;
@@ -2281,6 +2289,7 @@ function TPixieSvgRendererBase.GetPatternInfo(const PatternId: string;
   var
     Attr: string;
     ImgEl: Pointer;
+    Child: TDOMNode;
   begin
     Attr := GetAttr(Node, 'x');
     if Attr <> '' then Info.X := ParseSvgFloat(Attr);
@@ -2298,6 +2307,25 @@ function TPixieSvgRendererBase.GetPatternInfo(const PatternId: string;
     Attr := GetAttr(Node, 'patternContentUnits');
     if Attr <> '' then
       Info.ContentUnitsObjectBBox := SameText(Attr, 'objectBoundingBox');
+    Attr := GetAttr(Node, 'patternTransform');
+    if Attr <> '' then
+    begin
+      Info.HasPatternTransform := True;
+      Info.PatternTransform := ParseTransform(Attr);
+    end;
+
+    // Check for element children (content comes from this node)
+    Child := TDOMNode(Node).FirstChild;
+    while Child <> nil do
+    begin
+      if Child.NodeType = ELEMENT_NODE then
+      begin
+        Info.PatternNode := Node;
+        Info.HasChildren := True;
+        Break;
+      end;
+      Child := Child.NextSibling;
+    end;
 
     ImgEl := FindImageElement(Node, 0);
     if ImgEl <> nil then
@@ -2324,7 +2352,8 @@ begin
   // Cache hit — pattern already parsed for this document
   if (FPatternInfos <> nil) and FPatternInfos.TryGetValue(PatternId, Info) then
   begin
-    Result := (Info.ImageHref <> '') and (Info.Width > 0) and (Info.Height > 0);
+    Result := (Info.Width > 0) and (Info.Height > 0) and
+      (Info.HasChildren or (Info.ImageHref <> ''));
     Exit;
   end;
 
@@ -2348,7 +2377,8 @@ begin
   for I := ChainLen - 1 downto 0 do
     ReadPatternAttrs(Chain[I]);
 
-  Result := (Info.ImageHref <> '') and (Info.Width > 0) and (Info.Height > 0);
+  Result := (Info.Width > 0) and (Info.Height > 0) and
+    (Info.HasChildren or (Info.ImageHref <> ''));
 
   if FPatternInfos = nil then
     FPatternInfos := TPixieSvgPatternInfoMap.Create;

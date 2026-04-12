@@ -34,6 +34,7 @@ type
 
     // Image cache for <image> elements (freed on ClearDocument)
     FImageCache: TDictionary<string, TPixieImageHandle>;
+    FPatternDepth: Integer;
 
     procedure UpdateBBox(X, Y: Single);
     procedure ResetBBox;
@@ -51,6 +52,7 @@ type
     procedure FreeImageCache;
     procedure FillWithPattern(const State: TPixieSvgState;
       FillRule: TPixieFillRule);
+    procedure RenderPatternChildren(PatternNode: Pointer);
 
     // Path recording — only active when gradient fill + stroke needs replay
     type
@@ -898,8 +900,11 @@ var
   TileX, TileY, TileW, TileH: Single;
   ImgDrawX, ImgDrawY, ImgDrawW, ImgDrawH: Single;
   ScaleX, ScaleY: Single;
-  NeedOpacity, ImageFillsTile: Boolean;
+  NeedOpacity, ImageFillsTile, UseSubtree: Boolean;
   StartCol, EndCol, StartRow, EndRow, Col, Row: Integer;
+  SavedPath: TPathEntryList;
+  SavedBBoxMinX, SavedBBoxMinY, SavedBBoxMaxX, SavedBBoxMaxY: Single;
+  SavedBBoxValid: Boolean;
 begin
   if not GetPatternInfo(State.FillGradientId, Info) or not FBBoxValid then
   begin
@@ -907,8 +912,18 @@ begin
     Exit;
   end;
 
-  Handle := LoadImageFromHref(Info.ImageHref);
-  if Handle = 0 then
+  // Prefer subtree rendering for patterns with children (handles clips,
+  // transforms, nested <use> correctly).  Fall back to image-based path
+  // only for simple single-image patterns without children.
+  Handle := 0;
+  UseSubtree := Info.HasChildren and (Info.PatternNode <> nil) and
+    (FPatternDepth < 3);
+  if not UseSubtree then
+  begin
+    if Info.ImageHref <> '' then
+      Handle := LoadImageFromHref(Info.ImageHref);
+  end;
+  if (Handle = 0) and not UseSubtree then
   begin
     FCanvas.DiscardPath;
     Exit;
@@ -924,9 +939,7 @@ begin
     Exit;
   end;
 
-  // Tile rectangle in user space per patternUnits. GetPatternInfo
-  // guarantees Info.Width/Height > 0, and we've verified BW/BH > 0, so
-  // TileW/TileH are positive in both branches.
+  // Tile rectangle in user space per patternUnits
   if Info.PatternUnitsUserSpace then
   begin
     TileX := Info.X;
@@ -942,53 +955,17 @@ begin
     TileH := Info.Height * BH;
   end;
 
-  // Image destination rect within a single tile.
-  ImgDrawX := 0; ImgDrawY := 0;
-  ImgDrawW := 0; ImgDrawH := 0;
-  if Info.HasViewBox then
+  // Apply patternTransform to tile grid (scale + translate components)
+  if Info.HasPatternTransform then
   begin
-    ScaleX := TileW / Info.ViewBoxW;
-    ScaleY := TileH / Info.ViewBoxH;
-    ImgDrawX := (Info.ImgX - Info.ViewBoxX) * ScaleX;
-    ImgDrawY := (Info.ImgY - Info.ViewBoxY) * ScaleY;
-    ImgDrawW := Info.ImgW * ScaleX;
-    ImgDrawH := Info.ImgH * ScaleY;
-  end
-  else if Info.ContentUnitsObjectBBox then
-  begin
-    // When patternContentUnits=objectBoundingBox, coordinates are in the
-    // 0..1 range. If the image dims exceed 1 they come from the raw <image>
-    // element (via <use>) and are not in bbox space — skip to the tile-fill
-    // fallback below.
-    if (Info.ImgW <= 1.0 + 0.01) and (Info.ImgH <= 1.0 + 0.01) then
-    begin
-      ImgDrawX := Info.ImgX * TileW;
-      ImgDrawY := Info.ImgY * TileH;
-      ImgDrawW := Info.ImgW * TileW;
-      ImgDrawH := Info.ImgH * TileH;
-    end;
-  end
-  else
-  begin
-    ImgDrawX := Info.ImgX;
-    ImgDrawY := Info.ImgY;
-    ImgDrawW := Info.ImgW;
-    ImgDrawH := Info.ImgH;
-  end;
-
-  // Zero-sized image child — treat it as filling the whole tile
-  if (ImgDrawW <= 0) or (ImgDrawH <= 0) then
-  begin
-    ImgDrawX := 0;
-    ImgDrawY := 0;
-    ImgDrawW := TileW;
-    ImgDrawH := TileH;
+    TileX := TileX * Info.PatternTransform.A + Info.PatternTransform.E;
+    TileY := TileY * Info.PatternTransform.D + Info.PatternTransform.F;
+    TileW := TileW * Info.PatternTransform.A;
+    TileH := TileH * Info.PatternTransform.D;
   end;
 
   NeedOpacity := State.FillOpacity < 1.0;
 
-  // SaveState wraps ClipPath so the mask layer is released before the
-  // subsequent stroke rebuild runs outside this routine.
   FCanvas.SaveState;
   try
     FCanvas.ClipPath(FillRule);
@@ -996,37 +973,144 @@ begin
     if NeedOpacity then
       FCanvas.PushOpacity(State.FillOpacity);
 
-    // Fast path: image exactly fills the tile — use the canvas's native
-    // tiling primitive (D2D bitmap brush, Cairo CAIRO_EXTEND_REPEAT, etc.).
-    ImageFillsTile :=
-      (Abs(ImgDrawX) < Eps) and (Abs(ImgDrawY) < Eps) and
-      (Abs(ImgDrawW - TileW) < Eps) and (Abs(ImgDrawH - TileH) < Eps);
-
-    if ImageFillsTile then
-      FCanvas.FillTiledImage(Handle, TileX, TileY, TileW, TileH,
-        BX, BY, BW, BH)
+    if UseSubtree then
+    begin
+      // Subtree rendering: render pattern children directly into the canvas
+      // for each tile position.
+      Inc(FPatternDepth);
+      // Save path record and bbox — child rendering will overwrite them
+      SavedPath := FPathRecord;
+      FPathRecord := TPathEntryList.Create;
+      SavedBBoxMinX := FBBoxMinX; SavedBBoxMinY := FBBoxMinY;
+      SavedBBoxMaxX := FBBoxMaxX; SavedBBoxMaxY := FBBoxMaxY;
+      SavedBBoxValid := FBBoxValid;
+      try
+        StartCol := Floor((BX - TileX) / TileW);
+        EndCol := Ceil((BX + BW - TileX) / TileW) - 1;
+        StartRow := Floor((BY - TileY) / TileH);
+        EndRow := Ceil((BY + BH - TileY) / TileH) - 1;
+        if Int64(EndCol - StartCol + 1) *
+           Int64(EndRow - StartRow + 1) <= MaxTiles then
+          for Row := StartRow to EndRow do
+            for Col := StartCol to EndCol do
+            begin
+              FCanvas.SaveState;
+              FCanvas.ConcatMatrix(1, 0, 0, 1,
+                TileX + Col * TileW, TileY + Row * TileH);
+              // Clip to tile rect
+              FCanvas.BeginPath;
+              FCanvas.MoveTo(0, 0);
+              FCanvas.LineTo(TileW, 0);
+              FCanvas.LineTo(TileW, TileH);
+              FCanvas.LineTo(0, TileH);
+              FCanvas.ClosePath;
+              FCanvas.ClipPath;
+              // Apply content coordinate scaling
+              if Info.HasViewBox then
+                FCanvas.ConcatMatrix(
+                  TileW / Info.ViewBoxW, 0, 0, TileH / Info.ViewBoxH,
+                  -Info.ViewBoxX * TileW / Info.ViewBoxW,
+                  -Info.ViewBoxY * TileH / Info.ViewBoxH)
+              else if Info.ContentUnitsObjectBBox then
+                FCanvas.ConcatMatrix(BW, 0, 0, BH, 0, 0);
+              RenderPatternChildren(Info.PatternNode);
+              FCanvas.RestoreState;
+            end;
+      finally
+        FPathRecord.Free;
+        FPathRecord := SavedPath;
+        FBBoxMinX := SavedBBoxMinX; FBBoxMinY := SavedBBoxMinY;
+        FBBoxMaxX := SavedBBoxMaxX; FBBoxMaxY := SavedBBoxMaxY;
+        FBBoxValid := SavedBBoxValid;
+        Dec(FPatternDepth);
+      end;
+    end
     else
     begin
-      // Inset image within tile: manual loop so the repeat period stays
-      // TileW×TileH while the image draws only its own sub-rect.
-      StartCol := Floor((BX - TileX) / TileW);
-      EndCol := Ceil((BX + BW - TileX) / TileW) - 1;
-      StartRow := Floor((BY - TileY) / TileH);
-      EndRow := Ceil((BY + BH - TileY) / TileH) - 1;
-      if Int64(EndCol - StartCol + 1) *
-         Int64(EndRow - StartRow + 1) <= MaxTiles then
-        for Row := StartRow to EndRow do
-          for Col := StartCol to EndCol do
-            FCanvas.DrawImage(Handle,
-              TileX + Col * TileW + ImgDrawX,
-              TileY + Row * TileH + ImgDrawY,
-              ImgDrawW, ImgDrawH);
+      // Image-based path: tile the loaded image
+      ImgDrawX := 0; ImgDrawY := 0;
+      ImgDrawW := 0; ImgDrawH := 0;
+      if Info.HasViewBox then
+      begin
+        ScaleX := TileW / Info.ViewBoxW;
+        ScaleY := TileH / Info.ViewBoxH;
+        ImgDrawX := (Info.ImgX - Info.ViewBoxX) * ScaleX;
+        ImgDrawY := (Info.ImgY - Info.ViewBoxY) * ScaleY;
+        ImgDrawW := Info.ImgW * ScaleX;
+        ImgDrawH := Info.ImgH * ScaleY;
+      end
+      else if Info.ContentUnitsObjectBBox then
+      begin
+        if (Info.ImgW <= 1.0 + 0.01) and (Info.ImgH <= 1.0 + 0.01) then
+        begin
+          ImgDrawX := Info.ImgX * TileW;
+          ImgDrawY := Info.ImgY * TileH;
+          ImgDrawW := Info.ImgW * TileW;
+          ImgDrawH := Info.ImgH * TileH;
+        end;
+      end
+      else
+      begin
+        ImgDrawX := Info.ImgX;
+        ImgDrawY := Info.ImgY;
+        ImgDrawW := Info.ImgW;
+        ImgDrawH := Info.ImgH;
+      end;
+
+      if (ImgDrawW <= 0) or (ImgDrawH <= 0) then
+      begin
+        ImgDrawX := 0;
+        ImgDrawY := 0;
+        ImgDrawW := TileW;
+        ImgDrawH := TileH;
+      end;
+
+      ImageFillsTile :=
+        (Abs(ImgDrawX) < Eps) and (Abs(ImgDrawY) < Eps) and
+        (Abs(ImgDrawW - TileW) < Eps) and (Abs(ImgDrawH - TileH) < Eps);
+
+      if ImageFillsTile then
+        FCanvas.FillTiledImage(Handle, TileX, TileY, TileW, TileH,
+          BX, BY, BW, BH)
+      else
+      begin
+        StartCol := Floor((BX - TileX) / TileW);
+        EndCol := Ceil((BX + BW - TileX) / TileW) - 1;
+        StartRow := Floor((BY - TileY) / TileH);
+        EndRow := Ceil((BY + BH - TileY) / TileH) - 1;
+        if Int64(EndCol - StartCol + 1) *
+           Int64(EndRow - StartRow + 1) <= MaxTiles then
+          for Row := StartRow to EndRow do
+            for Col := StartCol to EndCol do
+              FCanvas.DrawImage(Handle,
+                TileX + Col * TileW + ImgDrawX,
+                TileY + Row * TileH + ImgDrawY,
+                ImgDrawW, ImgDrawH);
+      end;
     end;
 
     if NeedOpacity then
       FCanvas.PopOpacity;
   finally
     FCanvas.RestoreState;
+  end;
+end;
+
+procedure TPixieSvgCanvasRenderer.RenderPatternChildren(
+  PatternNode: Pointer);
+var
+  Child: TDOMNode;
+  ChildState: TPixieSvgState;
+begin
+  Child := TDOMNode(PatternNode).FirstChild;
+  while Child <> nil do
+  begin
+    if Child.NodeType = ELEMENT_NODE then
+    begin
+      ChildState := InheritState(Pointer(Child), FInitState);
+      RenderElement(Pointer(Child), ChildState);
+    end;
+    Child := Child.NextSibling;
   end;
 end;
 
