@@ -2723,9 +2723,10 @@ begin
 
   if (W <= 0) or (H <= 0) then Exit;
 
-  // If only one radius specified, use it for both
-  if (RX > 0) and (RY = 0) then RY := RX;
-  if (RY > 0) and (RX = 0) then RX := RY;
+  // If only one radius specified (attribute missing), use the other for both.
+  // An explicit rx="0" or ry="0" means no rounding on that axis.
+  if (RX > 0) and (RY = 0) and (GetAttr(Node, 'ry') = '') then RY := RX;
+  if (RY > 0) and (RX = 0) and (GetAttr(Node, 'rx') = '') then RX := RY;
 
   DoSaveState;
   ApplyNodeTransform(Node);
