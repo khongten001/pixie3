@@ -738,7 +738,10 @@ begin
         SetLength(Result, Length(Result) + 8);
       Result[Count] := SvgStrToFloat(string(NumStr));
       Inc(Count);
-    end;
+    end
+    else
+      // Skip any non-numeric character (e.g. stroke-dasharray="null")
+      Inc(P);
   end;
   SetLength(Result, Count);
 end;
@@ -2790,7 +2793,9 @@ begin
         SetLength(Nums, Length(Nums) * 2);
       Nums[NumCount] := SvgStrToFloat(string(NumStr));
       Inc(NumCount);
-    end;
+    end
+    else
+      Inc(P);
   end;
 
   if NumCount < 4 then Exit; // need at least 2 points
