@@ -182,6 +182,9 @@ type
     procedure DoBeginOpacity(Opacity: Single); virtual; abstract;
     procedure DoEndOpacity; virtual; abstract;
     procedure DoClipPath; virtual; abstract;
+    procedure DoBeginMask(const MaskImageHref: string;
+      MaskX, MaskY, MaskW, MaskH: Single); virtual; abstract;
+    procedure DoEndMask; virtual; abstract;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); virtual;
     procedure DoRenderTextRun(const Text: string; X, Y: Single;
@@ -230,6 +233,7 @@ type
     procedure EmitShapeGeometry(Node: Pointer;
       const XForm: TPixieSvgMatrix);
     procedure ApplyClipPath(Node: Pointer);
+    procedure ApplyMask(Node: Pointer; out NeedMaskRestore: Boolean);
 
     // CSS <style> support
     procedure ParseStyleElement(const CSS: string);
@@ -1959,6 +1963,56 @@ begin
   end;
 
   DoClipPath;
+end;
+
+procedure TPixieSvgRendererBase.ApplyMask(Node: Pointer;
+  out NeedMaskRestore: Boolean);
+var
+  MaskStr, MaskId, Href: string;
+  MaskEl: Pointer;
+  Child: TDOMNode;
+  MX, MY, MW, MH: Single;
+begin
+  NeedMaskRestore := False;
+  if FIdMap = nil then Exit;
+
+  MaskStr := GetAttr(Node, 'mask');
+  if MaskStr = '' then
+    MaskStr := ParseStyleAttribute(ResolveNodeStyle(Node), 'mask');
+  if MaskStr = '' then Exit;
+
+  MaskId := ExtractUrlId(MaskStr);
+  if MaskId = '' then Exit;
+  if not FIdMap.TryGetValue(MaskId, MaskEl) then Exit;
+  if LowerCase(DomToStr(TDOMElement(MaskEl).TagName)) <> 'mask' then Exit;
+
+  // Find first <image> child in the mask element
+  Href := '';
+  Child := TDOMNode(MaskEl).FirstChild;
+  while Child <> nil do
+  begin
+    if (Child.NodeType = ELEMENT_NODE) and
+       (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'image') then
+    begin
+      Href := GetHref(Child);
+      if Href = '' then
+        Href := GetAttr(Child, 'xlink:href');
+      Break;
+    end;
+    Child := Child.NextSibling;
+  end;
+  if Href = '' then Exit;
+
+  // Read mask bounds
+  MX := ParseSvgFloat(GetAttr(MaskEl, 'x', '0'));
+  MY := ParseSvgFloat(GetAttr(MaskEl, 'y', '0'));
+  MW := ParseSvgFloat(GetAttr(MaskEl, 'width', '1'));
+  MH := ParseSvgFloat(GetAttr(MaskEl, 'height', '1'));
+
+  // Both maskUnits cases (objectBoundingBox default and userSpaceOnUse)
+  // pass raw coordinates — the mask image maps to these directly.
+  DoBeginMask(Href, MX, MY, MW, MH);
+  NeedMaskRestore := True;
 end;
 
 procedure TPixieSvgRendererBase.EmitBezierEllipse(CX, CY, RX, RY: Single);
@@ -4126,7 +4180,7 @@ procedure TPixieSvgRendererBase.RenderImage(Node: Pointer;
 var
   X, Y, W, H: Single;
   HrefStr: string;
-  NeedRestore: Boolean;
+  NeedRestore, NeedMaskRestore: Boolean;
 begin
   X := ParseSvgFloat(GetAttr(Node, 'x', '0'));
   Y := ParseSvgFloat(GetAttr(Node, 'y', '0'));
@@ -4140,11 +4194,13 @@ begin
   DoSaveState;
   ApplyNodeTransform(Node);
   ApplyClipPath(Node);
+  ApplyMask(Node, NeedMaskRestore);
   ApplyOpacity(State, NeedRestore);
 
   DoDrawImage(HrefStr, X, Y, W, H);
 
   if NeedRestore then DoEndOpacity;
+  if NeedMaskRestore then DoEndMask;
   DoRestoreState;
 end;
 
@@ -4156,7 +4212,7 @@ procedure TPixieSvgRendererBase.RenderElement(Node: Pointer;
   const State: TPixieSvgState);
 var
   TagName, DisplayStr: string;
-  IsGroup, NeedRestore: Boolean;
+  IsGroup, NeedRestore, NeedMaskRestore: Boolean;
 begin
   // SVG display="none" prevents rendering of the element and its entire subtree.
   DisplayStr := GetAttr(Node, 'display');
@@ -4174,9 +4230,11 @@ begin
     DoSaveState;
     ApplyNodeTransform(Node);
     ApplyClipPath(Node);
+    ApplyMask(Node, NeedMaskRestore);
     ApplyOpacity(State, NeedRestore);
     RenderGroup(Node, State);
     if NeedRestore then DoEndOpacity;
+    if NeedMaskRestore then DoEndMask;
     DoRestoreState;
   end
   else if TagName = 'svg' then

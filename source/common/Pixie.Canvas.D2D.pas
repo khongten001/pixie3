@@ -84,6 +84,9 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    procedure PushMask(MaskHandle: TPixieImageHandle;
+      MaskX, MaskY, MaskW, MaskH: Single); override;
+    procedure PopMask; override;
 
     procedure SetClipRect(const R: TPixiePosition;
       const Radius: TPixieBorderRadiuses); override;
@@ -529,6 +532,99 @@ begin
 end;
 
 procedure TPixieD2DCanvas.PopOpacity;
+begin
+  if FTarget = nil then Exit;
+  FTarget.PopLayer;
+
+  if FStateTop > 0 then
+    Dec(FStateStack[FStateTop - 1].LayersPushed);
+end;
+
+procedure TPixieD2DCanvas.PushMask(MaskHandle: TPixieImageHandle;
+  MaskX, MaskY, MaskW, MaskH: Single);
+var
+  Info: PPixieD2DImage;
+  W, H, Stride: UINT;
+  Pixels: PByte;
+  BufSize, I: Integer;
+  MaskBmp: ID2D1Bitmap;
+  BmpSize: TD2d1SizeU;
+  BmpProps: TD2d1BitmapProperties;
+  BrushBmpProps: TD2d1BitmapBrushProperties;
+  BrushProps: TD2d1BrushProperties;
+  BitmapBrush: ID2D1BitmapBrush;
+  Params: TD2d1LayerParameters;
+begin
+  if (MaskHandle = 0) or (FTarget = nil) then Exit;
+  Info := PPixieD2DImage(MaskHandle);
+  if Info.WicSource = nil then Exit;
+  if (MaskW <= 0) or (MaskH <= 0) then Exit;
+
+  Info.WicSource.GetSize(W, H);
+  if (W = 0) or (H = 0) then Exit;
+  Stride := W * 4;
+  BufSize := Stride * H;
+  GetMem(Pixels, BufSize);
+  try
+    if Failed(Info.WicSource.CopyPixels(nil, Stride, BufSize, Pixels)) then Exit;
+
+    // Convert luminance to alpha in-place: grayscale PNG has R=G=B=luminance,
+    // A=255. D2D opacity brush uses brush alpha, so set A=luminance, clear RGB.
+    for I := 0 to W * H - 1 do
+    begin
+      Pixels[I * 4 + 3] := Pixels[I * 4 + 2]; // A = R (luminance)
+      Pixels[I * 4 + 0] := 0;
+      Pixels[I * 4 + 1] := 0;
+      Pixels[I * 4 + 2] := 0;
+    end;
+
+    BmpSize.width := W;
+    BmpSize.height := H;
+    BmpProps.pixelFormat.format := DXGI_FORMAT_B8G8R8A8_UNORM;
+    BmpProps.pixelFormat.alphaMode := D2D1_ALPHA_MODE_PREMULTIPLIED;
+    BmpProps.dpiX := 96;
+    BmpProps.dpiY := 96;
+    if Failed(FTarget.CreateBitmap(BmpSize, Pixels, Stride,
+      @BmpProps, MaskBmp)) then Exit;
+  finally
+    FreeMem(Pixels);
+  end;
+
+  // Create bitmap brush from mask bitmap
+  BrushBmpProps.extendModeX := D2D1_EXTEND_MODE_CLAMP;
+  BrushBmpProps.extendModeY := D2D1_EXTEND_MODE_CLAMP;
+  BrushBmpProps.interpolationMode := D2D1_BITMAP_INTERPOLATION_MODE_LINEAR;
+
+  BrushProps.opacity := 1.0;
+  BrushProps.transform.m11 := MaskW / W;
+  BrushProps.transform.m12 := 0;
+  BrushProps.transform.m21 := 0;
+  BrushProps.transform.m22 := MaskH / H;
+  BrushProps.transform.dx := MaskX;
+  BrushProps.transform.dy := MaskY;
+
+  if Failed(FTarget.CreateBitmapBrush(MaskBmp,
+    @BrushBmpProps, @BrushProps, BitmapBrush)) then Exit;
+
+  // Push layer with opacity brush
+  FillChar(Params, SizeOf(Params), 0);
+  Params.contentBounds.left := -1e6;
+  Params.contentBounds.top := -1e6;
+  Params.contentBounds.right := 1e6;
+  Params.contentBounds.bottom := 1e6;
+  Params.maskAntialiasMode := D2D1_ANTIALIAS_MODE_PER_PRIMITIVE;
+  Params.maskTransform._11 := 1;
+  Params.maskTransform._22 := 1;
+  Params.opacity := 1.0;
+  Params.opacityBrush := Pointer(BitmapBrush);
+  Params.layerOptions := 0; // D2D1_LAYER_OPTIONS_NONE (not CLEARTYPE — needed for opacity brush)
+  FTarget.PushLayer(@Params, nil);
+
+  if FStateTop > 0 then
+    Inc(FStateStack[FStateTop - 1].LayersPushed);
+end;
+
+procedure TPixieD2DCanvas.PopMask;
 begin
   if FTarget = nil then Exit;
   FTarget.PopLayer;

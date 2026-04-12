@@ -76,6 +76,9 @@ type
     procedure DoBeginOpacity(Opacity: Single); override;
     procedure DoEndOpacity; override;
     procedure DoClipPath; override;
+    procedure DoBeginMask(const MaskImageHref: string;
+      MaskX, MaskY, MaskW, MaskH: Single); override;
+    procedure DoEndMask; override;
     procedure DoDrawText(const Text: string; X, Y: Single;
       const State: TPixieSvgState); override;
     function DoMeasureTextRun(const Text: string;
@@ -650,6 +653,21 @@ end;
 procedure TPixieSvgCanvasRenderer.DoEndOpacity;
 begin
   FCanvas.PopOpacity;
+end;
+
+procedure TPixieSvgCanvasRenderer.DoBeginMask(const MaskImageHref: string;
+  MaskX, MaskY, MaskW, MaskH: Single);
+var
+  Handle: TPixieImageHandle;
+begin
+  Handle := LoadImageFromHref(MaskImageHref);
+  if Handle = 0 then Exit;
+  FCanvas.PushMask(Handle, MaskX, MaskY, MaskW, MaskH);
+end;
+
+procedure TPixieSvgCanvasRenderer.DoEndMask;
+begin
+  FCanvas.PopMask;
 end;
 
 procedure TPixieSvgCanvasRenderer.DoClipPath;

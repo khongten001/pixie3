@@ -56,6 +56,11 @@ type
     procedure PushOpacity(AOpacity: Single); virtual;
     procedure PopOpacity; virtual;
 
+    // Mask layers — applies a luminance mask image to all drawing until PopMask
+    procedure PushMask(MaskHandle: TPixieImageHandle;
+      MaskX, MaskY, MaskW, MaskH: Single); virtual;
+    procedure PopMask; virtual;
+
     // Blend mode — returns True if the backend supports the requested mode
     function SetBlendMode(Mode: TPixieBlendMode): Boolean; virtual;
     procedure ResetBlendMode; virtual;
@@ -331,6 +336,17 @@ begin
 end;
 
 procedure TPixieCanvas.PopOpacity;
+begin
+  // no-op by default
+end;
+
+procedure TPixieCanvas.PushMask(MaskHandle: TPixieImageHandle;
+  MaskX, MaskY, MaskW, MaskH: Single);
+begin
+  // no-op by default
+end;
+
+procedure TPixieCanvas.PopMask;
 begin
   // no-op by default
 end;

@@ -90,6 +90,9 @@ type
     procedure DoBeginOpacity(Opacity: Single); override;
     procedure DoEndOpacity; override;
     procedure DoClipPath; override;
+    procedure DoBeginMask(const MaskImageHref: string;
+      MaskX, MaskY, MaskW, MaskH: Single); override;
+    procedure DoEndMask; override;
 
     // Override text run rendering for PDF font embedding
     procedure DoRenderTextRun(const Text: string; X, Y: Single;
@@ -722,6 +725,17 @@ begin
   // W n — clip to current path (non-zero winding), then clear path
   // W* n — even-odd clip rule
   EmitLn('W n');
+end;
+
+procedure TPixieSvgRenderer.DoBeginMask(const MaskImageHref: string;
+  MaskX, MaskY, MaskW, MaskH: Single);
+begin
+  // PDF mask support not implemented — no-op
+end;
+
+procedure TPixieSvgRenderer.DoEndMask;
+begin
+  // no-op
 end;
 
 // ===========================================================================

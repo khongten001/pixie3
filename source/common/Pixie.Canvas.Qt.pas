@@ -55,6 +55,12 @@ type
     FOpacityStack: array[0..15] of Single;
     FOpacityTop: Integer;
     FCurrentOpacity: Single;
+    FMaskImage: QImageH;
+    FMaskPainter: QPainterH;
+    FMaskSavedPainter: QPainterH;
+    FMaskHandle: TPixieImageHandle;
+    FMaskTransform: QTransformH;
+    FMaskX, FMaskY, FMaskW, FMaskH: Single;
     FTempRect: QRectFH;
     FCurrentPath: QPainterPathH;
 
@@ -77,6 +83,9 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    procedure PushMask(MaskHandle: TPixieImageHandle;
+      MaskX, MaskY, MaskW, MaskH: Single); override;
+    procedure PopMask; override;
     function SetBlendMode(Mode: TPixieBlendMode): Boolean; override;
     procedure ResetBlendMode; override;
 
@@ -405,6 +414,121 @@ begin
   Dec(FOpacityTop);
   FCurrentOpacity := FOpacityStack[FOpacityTop];
   QPainter_setOpacity(FPainter, FCurrentOpacity);
+end;
+
+procedure TPixieQtCanvas.PushMask(MaskHandle: TPixieImageHandle;
+  MaskX, MaskY, MaskW, MaskH: Single);
+var
+  QC: TQColor;
+begin
+  if (FPainter = nil) or (MaskHandle = 0) or (FMaskImage <> nil) then Exit;
+
+  // Create offscreen image and redirect painting to it
+  FMaskImage := QImage_Create(FViewWidth, FViewHeight, QImageFormat_ARGB32_Premultiplied);
+  QC.ColorSpec := 0; QC.Alpha := 0; QC.r := 0; QC.g := 0; QC.b := 0;
+  QImage_fill(FMaskImage, @QC);
+  FMaskPainter := QPainter_Create(QPaintDeviceH(FMaskImage));
+  QPainter_setRenderHint(FMaskPainter, QPainterAntialiasing, True);
+  QPainter_setRenderHint(FMaskPainter, QPainterSmoothPixmapTransform, True);
+  // Save and copy current transform so mask aligns with content
+  FMaskTransform := QPainter_transform(FPainter);
+  FMaskTransform := QTransform_Create(
+    QTransform_m11(FMaskTransform), QTransform_m12(FMaskTransform),
+    QTransform_m13(FMaskTransform), QTransform_m21(FMaskTransform),
+    QTransform_m22(FMaskTransform), QTransform_m23(FMaskTransform),
+    QTransform_m31(FMaskTransform), QTransform_m32(FMaskTransform),
+    QTransform_m33(FMaskTransform));
+  QPainter_setTransform(FMaskPainter, FMaskTransform);
+
+  FMaskSavedPainter := FPainter;
+  FMaskHandle := MaskHandle;
+  FMaskX := MaskX;
+  FMaskY := MaskY;
+  FMaskW := MaskW;
+  FMaskH := MaskH;
+  FPainter := FMaskPainter;
+end;
+
+procedure TPixieQtCanvas.PopMask;
+var
+  MaskInfo: TPixieQtImage;
+  MaskRendered: QImageH;
+  MaskPainter: QPainterH;
+  ContentBits, MaskBits: PByte;
+  W, H, I: Integer;
+  MaskA: Byte;
+  QC: TQColor;
+  R: QRectFH;
+  SrcR: QRectFH;
+begin
+  if (FMaskImage = nil) or (FMaskSavedPainter = nil) then Exit;
+
+  // End offscreen painting
+  QPainter_end(FMaskPainter);
+  QPainter_Destroy(FMaskPainter);
+  FMaskPainter := nil;
+  FPainter := FMaskSavedPainter;
+  FMaskSavedPainter := nil;
+
+  MaskInfo := TPixieQtImage(FMaskHandle);
+  W := QImage_width(FMaskImage);
+  H := QImage_height(FMaskImage);
+
+  if (MaskInfo <> nil) and (MaskInfo.Handle <> nil) and
+     (MaskInfo.ImgWidth > 0) and (MaskInfo.ImgHeight > 0) then
+  begin
+    // Render mask image through the same transform as the content,
+    // so it aligns with the masked element
+    MaskRendered := QImage_Create(W, H, QImageFormat_ARGB32_Premultiplied);
+    QC.ColorSpec := 0; QC.Alpha := $FFFF; QC.r := 0; QC.g := 0; QC.b := 0;
+    QImage_fill(MaskRendered, @QC);
+    MaskPainter := QPainter_Create(QPaintDeviceH(MaskRendered));
+    QPainter_setTransform(MaskPainter, FMaskTransform);
+    R := QRectF_Create(FMaskX, FMaskY, FMaskW, FMaskH);
+    SrcR := QRectF_Create(0, 0, MaskInfo.ImgWidth, MaskInfo.ImgHeight);
+    QPainter_drawImage(MaskPainter, R, MaskInfo.Handle, SrcR);
+    QRectF_Destroy(SrcR);
+    QRectF_Destroy(R);
+    QPainter_end(MaskPainter);
+    QPainter_Destroy(MaskPainter);
+
+    // Per-pixel: multiply content alpha by mask luminance (R channel)
+    ContentBits := QImage_bits(FMaskImage);
+    MaskBits := QImage_bits(MaskRendered);
+    for I := 0 to W * H - 1 do
+    begin
+      MaskA := MaskBits[I * 4 + 2]; // R channel = luminance
+      if MaskA = 0 then
+      begin
+        ContentBits[I * 4 + 0] := 0;
+        ContentBits[I * 4 + 1] := 0;
+        ContentBits[I * 4 + 2] := 0;
+        ContentBits[I * 4 + 3] := 0;
+      end
+      else if MaskA < 255 then
+      begin
+        ContentBits[I * 4 + 0] := (ContentBits[I * 4 + 0] * MaskA) div 255;
+        ContentBits[I * 4 + 1] := (ContentBits[I * 4 + 1] * MaskA) div 255;
+        ContentBits[I * 4 + 2] := (ContentBits[I * 4 + 2] * MaskA) div 255;
+        ContentBits[I * 4 + 3] := (ContentBits[I * 4 + 3] * MaskA) div 255;
+      end;
+    end;
+    QImage_Destroy(MaskRendered);
+  end;
+
+  // Draw the masked result onto the main painter.
+  // The offscreen already has content at correct pixel positions (transform baked in),
+  // so temporarily reset the main painter's transform to identity.
+  QPainter_save(FPainter);
+  QPainter_resetTransform(FPainter);
+  QPainter_drawImage(FPainter, 0, 0, FMaskImage);
+  QPainter_restore(FPainter);
+
+  QImage_Destroy(FMaskImage);
+  FMaskImage := nil;
+  FMaskHandle := 0;
+  QTransform_Destroy(FMaskTransform);
+  FMaskTransform := nil;
 end;
 
 function TPixieQtCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;

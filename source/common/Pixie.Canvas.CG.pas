@@ -51,6 +51,7 @@ type
     FViewWidth, FViewHeight: Integer;
     FStateStack: array[0..63] of TPixieCGSavedState;
     FStateTop: Integer;
+    FMaskPixels: Pointer;
 
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -72,6 +73,9 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    procedure PushMask(MaskHandle: TPixieImageHandle;
+      MaskX, MaskY, MaskW, MaskH: Single); override;
+    procedure PopMask; override;
     function SetBlendMode(Mode: TPixieBlendMode): Boolean; override;
     procedure ResetBlendMode; override;
 
@@ -404,6 +408,72 @@ begin
   if FCG = nil then Exit;
   CGContextEndTransparencyLayer(FCG);
   CGContextRestoreGState(FCG);
+end;
+
+procedure TPixieCGCanvas.PushMask(MaskHandle: TPixieImageHandle;
+  MaskX, MaskY, MaskW, MaskH: Single);
+var
+  Info: TPixieCGImage;
+  W, H, I: Integer;
+  SrcCtx: CGContextRef;
+  SrcPixels, GrayPixels: PByte;
+  SrcPitch: Integer;
+  GraySpace: CGColorSpaceRef;
+  GrayProvider: CGDataProviderRef;
+  MaskImg: CGImageRef;
+begin
+  if (FCG = nil) or (MaskHandle = 0) then Exit;
+  Info := TPixieCGImage(MaskHandle);
+  if Info.Image = nil then Exit;
+  W := Info.ImgWidth;
+  H := Info.ImgHeight;
+  if (W = 0) or (H = 0) then Exit;
+
+  // Extract RGBA pixels from the source image
+  SrcPitch := W * 4;
+  GetMem(SrcPixels, SrcPitch * H);
+  SrcCtx := CGBitmapContextCreate(SrcPixels, W, H, 8, SrcPitch,
+    FColorSpace, kCGImageAlphaPremultipliedFirst or kCGBitmapByteOrder32Little);
+  if SrcCtx = nil then begin FreeMem(SrcPixels); Exit; end;
+  CGContextDrawImage(SrcCtx, CGRectMake(0, 0, W, H), Info.Image);
+  CGContextRelease(SrcCtx);
+
+  // Convert to grayscale: extract R channel (luminance) from BGRA pixels
+  GetMem(GrayPixels, W * H);
+  for I := 0 to W * H - 1 do
+    GrayPixels[I] := SrcPixels[I * 4 + 2]; // R channel
+  FreeMem(SrcPixels);
+
+  // Create a grayscale CGImage for use as mask
+  GraySpace := CGColorSpaceCreateDeviceGray;
+  GrayProvider := CGDataProviderCreateWithData(nil, GrayPixels, W * H, nil);
+  MaskImg := CGImageCreate(W, H, 8, 8, W, GraySpace,
+    kCGImageAlphaNone, GrayProvider, nil, 0, kCGRenderingIntentDefault);
+  CGDataProviderRelease(GrayProvider);
+  CGColorSpaceRelease(GraySpace);
+
+  CGContextSaveGState(FCG);
+  // Y-flip: CG native coords have Y up, our canvas has Y down
+  CGContextTranslateCTM(FCG, MaskX, MaskY + MaskH);
+  CGContextScaleCTM(FCG, 1, -1);
+  CGContextClipToMask(FCG, CGRectMake(0, 0, MaskW, MaskH), MaskImg);
+  CGContextScaleCTM(FCG, 1, -1);
+  CGContextTranslateCTM(FCG, -MaskX, -(MaskY + MaskH));
+
+  CGImageRelease(MaskImg);
+  // GrayPixels freed in PopMask — CG retains mask data until RestoreGState
+  FMaskPixels := GrayPixels;
+end;
+
+procedure TPixieCGCanvas.PopMask;
+begin
+  if FCG = nil then Exit;
+  CGContextRestoreGState(FCG);
+  if FMaskPixels <> nil then
+  begin
+    FreeMem(FMaskPixels);
+    FMaskPixels := nil;
+  end;
 end;
 
 function TPixieCGCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;

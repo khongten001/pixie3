@@ -44,6 +44,13 @@ type
     Value: Single;
   end;
 
+  TPixieCairoMaskEntry = record
+    Surface: Pcairo_surface_t;
+    Pixels: Pointer;
+    X, Y, W, H: Single;
+    ImgW, ImgH: Integer;
+  end;
+
   { TPixieCairoCanvas }
 
   TPixieCairoCanvas = class(TPixieCanvas)
@@ -56,6 +63,8 @@ type
     FStateTop: Integer;
     FOpacityStack: array[0..15] of TPixieOpacityEntry;
     FOpacityTop: Integer;
+    FMaskStack: array[0..15] of TPixieCairoMaskEntry;
+    FMaskTop: Integer;
 
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -77,6 +86,9 @@ type
     procedure RestoreState; override;
     procedure PushOpacity(AOpacity: Single); override;
     procedure PopOpacity; override;
+    procedure PushMask(MaskHandle: TPixieImageHandle;
+      MaskX, MaskY, MaskW, MaskH: Single); override;
+    procedure PopMask; override;
     function SetBlendMode(Mode: TPixieBlendMode): Boolean; override;
     procedure ResetBlendMode; override;
 
@@ -451,6 +463,76 @@ begin
   Alpha := FOpacityStack[FOpacityTop].Value;
   cairo_pop_group_to_source(FCairo);
   cairo_paint_with_alpha(FCairo, Alpha);
+end;
+
+procedure TPixieCairoCanvas.PushMask(MaskHandle: TPixieImageHandle;
+  MaskX, MaskY, MaskW, MaskH: Single);
+var
+  Img: TPixieCairoImage;
+  MaskPixels: PByte;
+  MaskPitch, BufSize, I: Integer;
+  MaskSurface: Pcairo_surface_t;
+begin
+  if (FCairo = nil) or (MaskHandle = 0) or
+     (FMaskTop > High(FMaskStack)) then Exit;
+  Img := TPixieCairoImage(MaskHandle);
+  if (Img.Surface = nil) or (Img.ImgWidth = 0) or (Img.ImgHeight = 0) then Exit;
+
+  // Create a separate mask surface with luminance→alpha conversion.
+  // Cairo's cairo_mask_surface uses the A channel, but grayscale PNGs
+  // have A=255 everywhere with luminance in RGB — must convert.
+  MaskPitch := Img.ImgWidth * 4;
+  BufSize := MaskPitch * Img.ImgHeight;
+  GetMem(MaskPixels, BufSize);
+  if Img.PixelData <> nil then
+    Move(Img.PixelData^, MaskPixels^, BufSize)
+  else
+  begin
+    FreeMem(MaskPixels);
+    Exit;
+  end;
+  // ARGB32 layout (native endian): B=P[0], G=P[1], R=P[2], A=P[3]
+  for I := 0 to Img.ImgWidth * Img.ImgHeight - 1 do
+  begin
+    MaskPixels[I * 4 + 3] := MaskPixels[I * 4 + 2]; // A = R (luminance)
+    MaskPixels[I * 4 + 0] := 0;
+    MaskPixels[I * 4 + 1] := 0;
+    MaskPixels[I * 4 + 2] := 0;
+  end;
+  MaskSurface := cairo_image_surface_create_for_data(
+    MaskPixels, CAIRO_FORMAT_ARGB32, Img.ImgWidth, Img.ImgHeight, MaskPitch);
+
+  FMaskStack[FMaskTop].Surface := MaskSurface;
+  FMaskStack[FMaskTop].Pixels := MaskPixels;
+  FMaskStack[FMaskTop].X := MaskX;
+  FMaskStack[FMaskTop].Y := MaskY;
+  FMaskStack[FMaskTop].W := MaskW;
+  FMaskStack[FMaskTop].H := MaskH;
+  FMaskStack[FMaskTop].ImgW := Img.ImgWidth;
+  FMaskStack[FMaskTop].ImgH := Img.ImgHeight;
+  Inc(FMaskTop);
+  cairo_push_group(FCairo);
+end;
+
+procedure TPixieCairoCanvas.PopMask;
+var
+  Entry: TPixieCairoMaskEntry;
+begin
+  if (FCairo = nil) or (FMaskTop <= 0) then Exit;
+  Dec(FMaskTop);
+  Entry := FMaskStack[FMaskTop];
+  cairo_pop_group_to_source(FCairo);
+
+  // Apply mask: scale mask surface to cover MaskX,MaskY,MaskW,MaskH
+  cairo_save(FCairo);
+  cairo_translate(FCairo, Entry.X, Entry.Y);
+  if (Entry.W > 0) and (Entry.H > 0) then
+    cairo_scale(FCairo, Entry.W / Entry.ImgW, Entry.H / Entry.ImgH);
+  cairo_mask_surface(FCairo, Entry.Surface, 0, 0);
+  cairo_restore(FCairo);
+
+  cairo_surface_destroy(Entry.Surface);
+  FreeMem(Entry.Pixels);
 end;
 
 function TPixieCairoCanvas.SetBlendMode(Mode: TPixieBlendMode): Boolean;
