@@ -65,6 +65,7 @@ type
     HasColorMatrix: Boolean;
     ColorMatrix: TPixieSvgColorMatrix;
     StrokeBeforeFill: Boolean;
+    BaselineShift: Single;
   end;
 
   { TPixieSvgGradientStop }
@@ -1038,7 +1039,7 @@ var
   FillOpStr, StrokeOpStr, ColorStr: string;
   StyleStr: string;
   FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
-  LetterSpacingStr, TextDecStr: string;
+  LetterSpacingStr, TextDecStr, BaselineShiftStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
   AnchorStr, FilterStr, FilterId: string;
@@ -1263,6 +1264,25 @@ begin
       Result.LetterSpacing := 0
     else
       Result.LetterSpacing := ParseSvgFloat(LetterSpacingStr);
+  end;
+
+  // Baseline shift (super/sub/percentage/length)
+  BaselineShiftStr := GetAttr(Node, 'baseline-shift');
+  if BaselineShiftStr = '' then
+    BaselineShiftStr := ParseStyleAttribute(StyleStr, 'baseline-shift');
+  if BaselineShiftStr <> '' then
+  begin
+    BaselineShiftStr := LowerCase(BaselineShiftStr);
+    if BaselineShiftStr = 'super' then
+      Result.BaselineShift := -0.4 * Result.FontSize
+    else if BaselineShiftStr = 'sub' then
+      Result.BaselineShift := 0.2 * Result.FontSize
+    else if (Length(BaselineShiftStr) > 1) and
+            (BaselineShiftStr[Length(BaselineShiftStr)] = '%') then
+      Result.BaselineShift := -ParseSvgFloat(Copy(BaselineShiftStr, 1,
+        Length(BaselineShiftStr) - 1)) / 100 * Result.FontSize
+    else if BaselineShiftStr <> 'baseline' then
+      Result.BaselineShift := -ParseSvgFloat(BaselineShiftStr);
   end;
 
   // Text anchor
@@ -3987,6 +4007,8 @@ begin
             (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'tspan') then
     begin
       ChildState := InheritState(Child, State);
+      // baseline-shift: offset Y for this tspan, restore after
+      Y := Y + ChildState.BaselineShift;
       XStr := GetAttr(Child, 'x');
       YStr := GetAttr(Child, 'y');
       DxStr := GetAttr(Child, 'dx');
@@ -4042,6 +4064,7 @@ begin
         if DyStr <> '' then Y := Y + ParseSvgLengthEm(DyStr, ChildState.FontSize);
         RenderTextChunkContents(Child, ChildState, X, Y);
       end;
+      Y := Y - ChildState.BaselineShift;
     end;
     Child := Child.NextSibling;
   end;
@@ -4610,6 +4633,7 @@ begin
     FInitState.StrokeGradientId := '';
     FInitState.BlendMode := bmNormal;
     FInitState.StrokeBeforeFill := False;
+    FInitState.BaselineShift := 0;
     SetLength(FInitState.DashArray, 0);
     FInitState.DashOffset := 0;
     FSystemLanguage := 'en';
