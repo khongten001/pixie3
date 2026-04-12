@@ -64,6 +64,7 @@ type
     XmlSpacePreserve: Boolean;
     HasColorMatrix: Boolean;
     ColorMatrix: TPixieSvgColorMatrix;
+    StrokeBeforeFill: Boolean;
   end;
 
   { TPixieSvgGradientStop }
@@ -1030,6 +1031,7 @@ var
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
   AnchorStr, FilterStr, FilterId: string;
+  Pos1, Pos2: Integer;
   Color: TPixieWebColor;
   Matrix: TPixieSvgColorMatrix;
 begin
@@ -1292,6 +1294,26 @@ begin
     Result.EvenOddFill := True
   else if AnchorStr = 'nonzero' then
     Result.EvenOddFill := False;
+
+  // paint-order: default is "fill stroke markers".  Per SVG spec, if only
+  // "stroke" is listed the omitted values follow in default order, so
+  // "stroke" alone means "stroke fill markers".  "normal" resets to default.
+  AnchorStr := GetAttr(Node, 'paint-order');
+  if AnchorStr = '' then
+    AnchorStr := ParseStyleAttribute(StyleStr, 'paint-order');
+  if AnchorStr <> '' then
+  begin
+    AnchorStr := LowerCase(Trim(AnchorStr));
+    if AnchorStr = 'normal' then
+      Result.StrokeBeforeFill := False
+    else
+    begin
+      Pos1 := Pos('stroke', AnchorStr);
+      Pos2 := Pos('fill', AnchorStr);
+      Result.StrokeBeforeFill :=
+        (Pos1 > 0) and ((Pos2 = 0) or (Pos1 < Pos2));
+    end;
+  end;
 
   // xml:space (inherited; "preserve" keeps all whitespace verbatim)
   AnchorStr := GetAttr(Node, 'xml:space');
@@ -4481,6 +4503,7 @@ begin
     FInitState.FillGradientId := '';
     FInitState.StrokeGradientId := '';
     FInitState.BlendMode := bmNormal;
+    FInitState.StrokeBeforeFill := False;
     SetLength(FInitState.DashArray, 0);
     FInitState.DashOffset := 0;
 

@@ -43,6 +43,8 @@ type
     procedure PopulateStops(Layer: TPixieGradientBase;
       const Grad: TPixieSvgGradient; Opacity: Single;
       const State: TPixieSvgState);
+    procedure ReplayPath;
+    procedure RebuildAndFill(const State: TPixieSvgState);
     procedure RebuildAndStroke(const State: TPixieSvgState);
     procedure RebuildAndStrokeGradient(const State: TPixieSvgState);
     function LoadImageFromHref(const Href: string): TPixieImageHandle;
@@ -472,12 +474,10 @@ begin
   end;
 end;
 
-procedure TPixieSvgCanvasRenderer.RebuildAndStroke(
-  const State: TPixieSvgState);
+procedure TPixieSvgCanvasRenderer.ReplayPath;
 var
   I: Integer;
   Entry: TPathEntry;
-  SC: TPixieWebColor;
 begin
   for I := 0 to FPathRecord.Count - 1 do
   begin
@@ -490,6 +490,29 @@ begin
       poClosePath: FCanvas.ClosePath;
     end;
   end;
+end;
+
+procedure TPixieSvgCanvasRenderer.RebuildAndFill(
+  const State: TPixieSvgState);
+var
+  FC: TPixieWebColor;
+  FR: TPixieFillRule;
+begin
+  ReplayPath;
+  FC := State.FillColor;
+  if State.HasColorMatrix then
+    FC := TransformColor(FC, State.ColorMatrix);
+  FC.Alpha := Round(FC.Alpha * State.FillOpacity);
+  if State.EvenOddFill then FR := frEvenOdd else FR := frNonZero;
+  FCanvas.FillPath(FC, FR);
+end;
+
+procedure TPixieSvgCanvasRenderer.RebuildAndStroke(
+  const State: TPixieSvgState);
+var
+  SC: TPixieWebColor;
+begin
+  ReplayPath;
   SC := State.StrokeColor;
   if State.HasColorMatrix then
     SC := TransformColor(SC, State.ColorMatrix);
@@ -499,21 +522,8 @@ end;
 
 procedure TPixieSvgCanvasRenderer.RebuildAndStrokeGradient(
   const State: TPixieSvgState);
-var
-  I: Integer;
-  Entry: TPathEntry;
 begin
-  for I := 0 to FPathRecord.Count - 1 do
-  begin
-    Entry := FPathRecord[I];
-    case Entry.Op of
-      poMoveTo: FCanvas.MoveTo(Entry.X, Entry.Y);
-      poLineTo: FCanvas.LineTo(Entry.X, Entry.Y);
-      poCurveTo: FCanvas.CurveTo(Entry.X, Entry.Y,
-                   Entry.X2, Entry.Y2, Entry.X3, Entry.Y3);
-      poClosePath: FCanvas.ClosePath;
-    end;
-  end;
+  ReplayPath;
   StrokeWithGradient(State);
 end;
 
@@ -586,7 +596,14 @@ begin
       if State.HasColorMatrix then
         SC := TransformColor(SC, State.ColorMatrix);
       SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
-      FCanvas.FillAndStrokePath(FC, SC, State.StrokeWidth, FR);
+      if State.StrokeBeforeFill then
+      begin
+        // paint-order: stroke first, then fill on top (covers inner half)
+        FCanvas.StrokePath(SC, State.StrokeWidth);
+        RebuildAndFill(State);
+      end
+      else
+        FCanvas.FillAndStrokePath(FC, SC, State.StrokeWidth, FR);
     end
     else
     begin
