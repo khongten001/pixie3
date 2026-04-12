@@ -160,6 +160,7 @@ type
     FIdMap: TPixieSvgIdMap;
     FStyleMap: TPixieSvgStyleMap;
     FUseDepth: Integer;
+    FSystemLanguage: string;
     // SVG 2 context paint (set while rendering marker children so
     // fill:context-stroke / fill:context-fill resolve to the referencing
     // element's paint)
@@ -4308,34 +4309,78 @@ end;
 procedure TPixieSvgRendererBase.RenderSwitch(Node: Pointer;
   const State: TPixieSvgState);
 var
-  Child: TDOMNode;
+  Child, Fallback: TDOMNode;
   ChildState: TPixieSvgState;
   NeedRestore: Boolean;
+  Lang: string;
+
+  function LanguageMatches(const LangAttr: string): Boolean;
+  var
+    P: Integer;
+    Tag: string;
+  begin
+    // SVG spec: systemLanguage is a comma-separated list of BCP 47 tags.
+    // Match if any tag equals or is a prefix of FSystemLanguage.
+    Result := False;
+    P := 1;
+    while P <= Length(LangAttr) do
+    begin
+      while (P <= Length(LangAttr)) and CharInSet(LangAttr[P], [' ', ',']) do Inc(P);
+      if P > Length(LangAttr) then Break;
+      Tag := '';
+      while (P <= Length(LangAttr)) and not CharInSet(LangAttr[P], [' ', ',']) do
+      begin
+        Tag := Tag + LangAttr[P];
+        Inc(P);
+      end;
+      Tag := LowerCase(Tag);
+      if (Tag = FSystemLanguage) or
+         ((Length(Tag) < Length(FSystemLanguage)) and
+          (Copy(FSystemLanguage, 1, Length(Tag) + 1) = Tag + '-')) then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+  end;
+
 begin
-  // SVG <switch> renders only the first child whose conditional attributes
-  // (systemLanguage, requiredFeatures, requiredExtensions) are satisfied.
-  // We pick the first child that has none of these attributes (the fallback).
+  // SVG <switch> renders the first child whose systemLanguage matches.
+  // If none match, render the first child with no conditional attributes.
   DoSaveState;
   ApplyNodeTransform(Node);
   ApplyClipPath(Node);
   ApplyOpacity(State, NeedRestore);
 
+  Fallback := nil;
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
     if Child.NodeType = ELEMENT_NODE then
     begin
-      if (GetAttr(Child, 'systemLanguage') = '') and
-         (GetAttr(Child, 'requiredFeatures') = '') and
-         (GetAttr(Child, 'requiredExtensions') = '') then
+      Lang := GetAttr(Child, 'systemLanguage');
+      if Lang <> '' then
       begin
-        ChildState := InheritState(Child, State);
-        RenderElement(Child, ChildState);
-        Break;
-      end;
+        if LanguageMatches(Lang) then
+        begin
+          ChildState := InheritState(Child, State);
+          RenderElement(Child, ChildState);
+          Fallback := nil;
+          Break;
+        end;
+      end
+      else if (Fallback = nil) and
+              (GetAttr(Child, 'requiredFeatures') = '') and
+              (GetAttr(Child, 'requiredExtensions') = '') then
+        Fallback := Child;
     end;
-
     Child := Child.NextSibling;
+  end;
+
+  if Fallback <> nil then
+  begin
+    ChildState := InheritState(Fallback, State);
+    RenderElement(Fallback, ChildState);
   end;
 
   if NeedRestore then DoEndOpacity;
@@ -4567,6 +4612,7 @@ begin
     FInitState.StrokeBeforeFill := False;
     SetLength(FInitState.DashArray, 0);
     FInitState.DashOffset := 0;
+    FSystemLanguage := 'en';
 
     // Store document for RenderDocument
     FDoc := Doc;
