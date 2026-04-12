@@ -1056,16 +1056,17 @@ begin
   StyleStr := ResolveNodeStyle(Node);
 
   // CSS color property (resolve before fill/stroke for currentColor)
-  ColorStr := GetAttr(Node, 'color');
+  // Inline style takes priority over presentation attributes per SVG/CSS spec
+  ColorStr := ParseStyleAttribute(StyleStr, 'color');
   if ColorStr = '' then
-    ColorStr := ParseStyleAttribute(StyleStr, 'color');
+    ColorStr := GetAttr(Node, 'color');
   if (ColorStr <> '') and (ColorStr <> 'inherit') and ParseSvgColor(ColorStr, Color) then
     Result.Color := Color;
 
   // Fill
-  FillStr := GetAttr(Node, 'fill');
+  FillStr := ParseStyleAttribute(StyleStr, 'fill');
   if FillStr = '' then
-    FillStr := ParseStyleAttribute(StyleStr, 'fill');
+    FillStr := GetAttr(Node, 'fill');
   if FillStr <> '' then
   begin
     if FillStr = 'none' then
@@ -1105,9 +1106,9 @@ begin
   end;
 
   // Stroke
-  StrokeStr := GetAttr(Node, 'stroke');
+  StrokeStr := ParseStyleAttribute(StyleStr, 'stroke');
   if StrokeStr = '' then
-    StrokeStr := ParseStyleAttribute(StyleStr, 'stroke');
+    StrokeStr := GetAttr(Node, 'stroke');
   if StrokeStr <> '' then
   begin
     if StrokeStr = 'none' then
@@ -1147,16 +1148,16 @@ begin
   end;
 
   // Stroke width
-  StrokeWStr := GetAttr(Node, 'stroke-width');
+  StrokeWStr := ParseStyleAttribute(StyleStr, 'stroke-width');
   if StrokeWStr = '' then
-    StrokeWStr := ParseStyleAttribute(StyleStr, 'stroke-width');
+    StrokeWStr := GetAttr(Node, 'stroke-width');
   if StrokeWStr <> '' then
     Result.StrokeWidth := ParseSvgFloat(StrokeWStr);
 
   // Stroke line cap
-  LineCapStr := GetAttr(Node, 'stroke-linecap');
+  LineCapStr := ParseStyleAttribute(StyleStr, 'stroke-linecap');
   if LineCapStr = '' then
-    LineCapStr := ParseStyleAttribute(StyleStr, 'stroke-linecap');
+    LineCapStr := GetAttr(Node, 'stroke-linecap');
   if LineCapStr = 'round' then
     Result.LineCap := lcRound
   else if LineCapStr = 'square' then
@@ -1165,9 +1166,9 @@ begin
     Result.LineCap := lcButt;
 
   // Stroke line join
-  LineJoinStr := GetAttr(Node, 'stroke-linejoin');
+  LineJoinStr := ParseStyleAttribute(StyleStr, 'stroke-linejoin');
   if LineJoinStr = '' then
-    LineJoinStr := ParseStyleAttribute(StyleStr, 'stroke-linejoin');
+    LineJoinStr := GetAttr(Node, 'stroke-linejoin');
   if LineJoinStr = 'round' then
     Result.LineJoin := ljRound
   else if LineJoinStr = 'bevel' then
@@ -1176,9 +1177,9 @@ begin
     Result.LineJoin := ljMiter;
 
   // Stroke dash array
-  DashArrayStr := GetAttr(Node, 'stroke-dasharray');
+  DashArrayStr := ParseStyleAttribute(StyleStr, 'stroke-dasharray');
   if DashArrayStr = '' then
-    DashArrayStr := ParseStyleAttribute(StyleStr, 'stroke-dasharray');
+    DashArrayStr := GetAttr(Node, 'stroke-dasharray');
   if DashArrayStr <> '' then
   begin
     DashArrayStr := Trim(DashArrayStr);
@@ -1189,31 +1190,31 @@ begin
   end;
 
   // Stroke dash offset
-  DashOffsetStr := GetAttr(Node, 'stroke-dashoffset');
+  DashOffsetStr := ParseStyleAttribute(StyleStr, 'stroke-dashoffset');
   if DashOffsetStr = '' then
-    DashOffsetStr := ParseStyleAttribute(StyleStr, 'stroke-dashoffset');
+    DashOffsetStr := GetAttr(Node, 'stroke-dashoffset');
   if DashOffsetStr <> '' then
     Result.DashOffset := ParseSvgFloat(DashOffsetStr);
 
   // Opacity (not inherited — each element defaults to 1.0 unless explicitly set)
   Result.Opacity := 1.0;
-  OpacStr := GetAttr(Node, 'opacity');
+  OpacStr := ParseStyleAttribute(StyleStr, 'opacity');
   if OpacStr = '' then
-    OpacStr := ParseStyleAttribute(StyleStr, 'opacity');
+    OpacStr := GetAttr(Node, 'opacity');
   if OpacStr <> '' then
     Result.Opacity := ParseSvgFloat(OpacStr);
 
   // Fill opacity
-  FillOpStr := GetAttr(Node, 'fill-opacity');
+  FillOpStr := ParseStyleAttribute(StyleStr, 'fill-opacity');
   if FillOpStr = '' then
-    FillOpStr := ParseStyleAttribute(StyleStr, 'fill-opacity');
+    FillOpStr := GetAttr(Node, 'fill-opacity');
   if FillOpStr <> '' then
     Result.FillOpacity := ParseSvgFloat(FillOpStr);
 
   // Stroke opacity
-  StrokeOpStr := GetAttr(Node, 'stroke-opacity');
+  StrokeOpStr := ParseStyleAttribute(StyleStr, 'stroke-opacity');
   if StrokeOpStr = '' then
-    StrokeOpStr := ParseStyleAttribute(StyleStr, 'stroke-opacity');
+    StrokeOpStr := GetAttr(Node, 'stroke-opacity');
   if StrokeOpStr <> '' then
     Result.StrokeOpacity := ParseSvgFloat(StrokeOpStr);
 
@@ -1224,23 +1225,23 @@ begin
     ParseFontShorthand(FontShorthand, Result);
 
   // Font family
-  FontFamilyStr := GetAttr(Node, 'font-family');
+  FontFamilyStr := ParseStyleAttribute(StyleStr, 'font-family');
   if FontFamilyStr = '' then
-    FontFamilyStr := ParseStyleAttribute(StyleStr, 'font-family');
+    FontFamilyStr := GetAttr(Node, 'font-family');
   if FontFamilyStr <> '' then
     Result.FontFamily := NormalizeFontFamily(FontFamilyStr);
 
   // Font size — em/rem/% resolve against the already-inherited Result.FontSize.
-  FontSizeStr := GetAttr(Node, 'font-size');
+  FontSizeStr := ParseStyleAttribute(StyleStr, 'font-size');
   if FontSizeStr = '' then
-    FontSizeStr := ParseStyleAttribute(StyleStr, 'font-size');
+    FontSizeStr := GetAttr(Node, 'font-size');
   if FontSizeStr <> '' then
     Result.FontSize := ParseSvgLengthEm(FontSizeStr, Result.FontSize);
 
   // Font weight
-  FontWeightStr := GetAttr(Node, 'font-weight');
+  FontWeightStr := ParseStyleAttribute(StyleStr, 'font-weight');
   if FontWeightStr = '' then
-    FontWeightStr := ParseStyleAttribute(StyleStr, 'font-weight');
+    FontWeightStr := GetAttr(Node, 'font-weight');
   if FontWeightStr <> '' then
   begin
     if FontWeightStr = 'bold' then
@@ -1252,16 +1253,16 @@ begin
   end;
 
   // Font style
-  FontStyleStr := GetAttr(Node, 'font-style');
+  FontStyleStr := ParseStyleAttribute(StyleStr, 'font-style');
   if FontStyleStr = '' then
-    FontStyleStr := ParseStyleAttribute(StyleStr, 'font-style');
+    FontStyleStr := GetAttr(Node, 'font-style');
   if FontStyleStr <> '' then
     Result.FontItalic := (FontStyleStr = 'italic') or (FontStyleStr = 'oblique');
 
   // Letter spacing
-  LetterSpacingStr := GetAttr(Node, 'letter-spacing');
+  LetterSpacingStr := ParseStyleAttribute(StyleStr, 'letter-spacing');
   if LetterSpacingStr = '' then
-    LetterSpacingStr := ParseStyleAttribute(StyleStr, 'letter-spacing');
+    LetterSpacingStr := GetAttr(Node, 'letter-spacing');
   if LetterSpacingStr <> '' then
   begin
     if LetterSpacingStr = 'normal' then
@@ -1271,9 +1272,9 @@ begin
   end;
 
   // Baseline shift (super/sub/percentage/length)
-  BaselineShiftStr := GetAttr(Node, 'baseline-shift');
+  BaselineShiftStr := ParseStyleAttribute(StyleStr, 'baseline-shift');
   if BaselineShiftStr = '' then
-    BaselineShiftStr := ParseStyleAttribute(StyleStr, 'baseline-shift');
+    BaselineShiftStr := GetAttr(Node, 'baseline-shift');
   if BaselineShiftStr <> '' then
   begin
     BaselineShiftStr := LowerCase(BaselineShiftStr);
@@ -1290,9 +1291,9 @@ begin
   end;
 
   // Text anchor
-  AnchorStr := GetAttr(Node, 'text-anchor');
+  AnchorStr := ParseStyleAttribute(StyleStr, 'text-anchor');
   if AnchorStr = '' then
-    AnchorStr := ParseStyleAttribute(StyleStr, 'text-anchor');
+    AnchorStr := GetAttr(Node, 'text-anchor');
   if AnchorStr = 'middle' then
     Result.TextAnchor := taCenter
   else if AnchorStr = 'end' then
@@ -1301,9 +1302,9 @@ begin
     Result.TextAnchor := taLeft;
 
   // Text decoration
-  TextDecStr := GetAttr(Node, 'text-decoration');
+  TextDecStr := ParseStyleAttribute(StyleStr, 'text-decoration');
   if TextDecStr = '' then
-    TextDecStr := ParseStyleAttribute(StyleStr, 'text-decoration');
+    TextDecStr := GetAttr(Node, 'text-decoration');
   if TextDecStr <> '' then
   begin
     TextDecStr := LowerCase(TextDecStr);
@@ -1322,9 +1323,9 @@ begin
   end;
 
   // Fill rule
-  AnchorStr := GetAttr(Node, 'fill-rule');
+  AnchorStr := ParseStyleAttribute(StyleStr, 'fill-rule');
   if AnchorStr = '' then
-    AnchorStr := ParseStyleAttribute(StyleStr, 'fill-rule');
+    AnchorStr := GetAttr(Node, 'fill-rule');
   if AnchorStr = 'evenodd' then
     Result.EvenOddFill := True
   else if AnchorStr = 'nonzero' then
@@ -1333,9 +1334,9 @@ begin
   // paint-order: default is "fill stroke markers".  Per SVG spec, if only
   // "stroke" is listed the omitted values follow in default order, so
   // "stroke" alone means "stroke fill markers".  "normal" resets to default.
-  AnchorStr := GetAttr(Node, 'paint-order');
+  AnchorStr := ParseStyleAttribute(StyleStr, 'paint-order');
   if AnchorStr = '' then
-    AnchorStr := ParseStyleAttribute(StyleStr, 'paint-order');
+    AnchorStr := GetAttr(Node, 'paint-order');
   if AnchorStr <> '' then
   begin
     AnchorStr := LowerCase(Trim(AnchorStr));
@@ -1359,9 +1360,9 @@ begin
 
   // Mix blend mode (non-inherited — reset per element)
   Result.BlendMode := bmNormal;
-  AnchorStr := GetAttr(Node, 'mix-blend-mode');
+  AnchorStr := ParseStyleAttribute(StyleStr, 'mix-blend-mode');
   if AnchorStr = '' then
-    AnchorStr := ParseStyleAttribute(StyleStr, 'mix-blend-mode');
+    AnchorStr := GetAttr(Node, 'mix-blend-mode');
   if AnchorStr = 'multiply' then Result.BlendMode := bmMultiply
   else if AnchorStr = 'screen' then Result.BlendMode := bmScreen
   else if AnchorStr = 'overlay' then Result.BlendMode := bmOverlay
@@ -1379,9 +1380,9 @@ begin
   else if AnchorStr = 'luminosity' then Result.BlendMode := bmLuminosity;
 
   // SVG filter (feColorMatrix) — propagates to children for color tinting
-  FilterStr := GetAttr(Node, 'filter');
+  FilterStr := ParseStyleAttribute(StyleStr, 'filter');
   if FilterStr = '' then
-    FilterStr := ParseStyleAttribute(StyleStr, 'filter');
+    FilterStr := GetAttr(Node, 'filter');
   if FilterStr <> '' then
   begin
     if FilterStr = 'none' then
