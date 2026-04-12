@@ -1924,6 +1924,19 @@ begin
         Cmds.Free;
       end;
     end;
+  end
+  else if TagName = 'use' then
+  begin
+    // Resolve <use> reference and emit the referenced shape's geometry
+    D := GetHref(Node);
+    if D = '' then
+      D := GetAttr(Node, 'xlink:href');
+    if (D <> '') and (D[1] = '#') and (FIdMap <> nil) then
+    begin
+      D := Copy(D, 2, MaxInt);
+      if FIdMap.TryGetValue(D, Node) then
+        EmitShapeGeometry(Node, XForm);
+    end;
   end;
 end;
 
