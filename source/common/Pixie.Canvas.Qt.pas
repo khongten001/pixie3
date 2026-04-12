@@ -428,8 +428,12 @@ begin
 
   // Create offscreen image and redirect painting to it
   FMaskImage := QImage_Create(FViewWidth, FViewHeight, QImageFormat_ARGB32_Premultiplied);
+  {$IFDEF LCLqt}
+  QImage_fill(FMaskImage, $00000000);
+  {$ELSE}
   QC.ColorSpec := 0; QC.Alpha := 0; QC.r := 0; QC.g := 0; QC.b := 0;
   QImage_fill(FMaskImage, @QC);
+  {$ENDIF}
   FMaskPainter := QPainter_Create(QPaintDeviceH(FMaskImage));
   QPainter_setRenderHint(FMaskPainter, QPainterAntialiasing, True);
   QPainter_setRenderHint(FMaskPainter, QPainterSmoothPixmapTransform, True);
@@ -483,8 +487,12 @@ begin
     // Render mask image through the same transform as the content,
     // so it aligns with the masked element
     MaskRendered := QImage_Create(W, H, QImageFormat_ARGB32_Premultiplied);
+    {$IFDEF LCLqt}
+    QImage_fill(MaskRendered, $FF000000);
+    {$ELSE}
     QC.ColorSpec := 0; QC.Alpha := $FFFF; QC.r := 0; QC.g := 0; QC.b := 0;
     QImage_fill(MaskRendered, @QC);
+    {$ENDIF}
     MaskPainter := QPainter_Create(QPaintDeviceH(MaskRendered));
     QPainter_setTransform(MaskPainter, FMaskTransform);
     R := QRectF_Create(FMaskX, FMaskY, FMaskW, FMaskH);
@@ -1874,11 +1882,15 @@ begin
   if Result = nil then Exit;
 
   // Fill white background
+  {$IFDEF LCLqt}
+  QImage_fill(Result, $FFFFFFFF);
+  {$ELSE}
   QC.ColorSpec := 1; // QColor::Rgb
   QC.Alpha := $FFFF;
   QC.r := $FFFF; QC.g := $FFFF; QC.b := $FFFF;
   QC.Pad := 0;
   QImage_fill(Result, @QC);
+  {$ENDIF}
 
   // Create painter on the image
   FPainter := QPainter_Create(QPaintDeviceH(Result));
