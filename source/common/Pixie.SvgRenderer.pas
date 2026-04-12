@@ -315,7 +315,7 @@ type
 implementation
 
 uses
-  Math, Pixie.SimpleXml, Pixie.Utf8;
+  Math, Pixie.SimpleXml, Pixie.Utf8, Pixie.Utils;
 
 const
   Kappa: Single = 0.5522847498;
@@ -858,8 +858,9 @@ end;
 
 procedure TPixieSvgRendererBase.ParseStyleElement(const CSS: string);
 var
-  P, Len, BraceStart, BraceEnd: Integer;
-  Selector, Declarations, KeySel, Existing: string;
+  P, I, Len, SelStart, BraceStart, BraceEnd: Integer;
+  Declarations, KeySel, Existing, Sel: string;
+  Selectors: TPixieStringVector;
   SpacePos, DotPos: Integer;
 
   procedure MergeStyle(const Key, Decl: string);
@@ -870,52 +871,18 @@ var
       FStyleMap.Add(Key, Decl);
   end;
 
-begin
-  if FStyleMap = nil then
-    FStyleMap := TPixieSvgStyleMap.Create;
-
-  P := 1;
-  Len := Length(CSS);
-  while P <= Len do
+  procedure ProcessSelector(const Sel: string);
   begin
-    // Skip whitespace and comments
-    while (P <= Len) and (CSS[P] <= ' ') do Inc(P);
-    if (P < Len) and (CSS[P] = '/') and (CSS[P + 1] = '*') then
-    begin
-      Inc(P, 2);
-      while (P < Len) and not ((CSS[P] = '*') and (CSS[P + 1] = '/')) do Inc(P);
-      Inc(P, 2);
-      Continue;
-    end;
-    if P > Len then Break;
-
-    // Read selector(s) up to '{'
-    BraceStart := P;
-    while (BraceStart <= Len) and (CSS[BraceStart] <> '{') do Inc(BraceStart);
-    if BraceStart > Len then Break;
-    Selector := Trim(Copy(CSS, P, BraceStart - P));
-
-    // Read declarations up to '}'
-    BraceEnd := BraceStart + 1;
-    while (BraceEnd <= Len) and (CSS[BraceEnd] <> '}') do Inc(BraceEnd);
-    if BraceEnd > Len then Break;
-    Declarations := Trim(Copy(CSS, BraceStart + 1, BraceEnd - BraceStart - 1));
-    P := BraceEnd + 1;
-
-    if (Declarations = '') or (Selector = '') then Continue;
-    // Skip comma-separated selector lists
-    if Pos(',', Selector) > 0 then Continue;
-
     // Extract key selector (last whitespace-delimited segment)
     // e.g. "svg.railroad-diagram path" -> "path"
-    SpacePos := Length(Selector);
-    while (SpacePos > 0) and (Selector[SpacePos] <> ' ') do Dec(SpacePos);
+    SpacePos := Length(Sel);
+    while (SpacePos > 0) and (Sel[SpacePos] <> ' ') do Dec(SpacePos);
     if SpacePos > 0 then
-      KeySel := Copy(Selector, SpacePos + 1, MaxInt)
+      KeySel := Copy(Sel, SpacePos + 1, MaxInt)
     else
-      KeySel := Selector;
+      KeySel := Sel;
 
-    if KeySel = '' then Continue;
+    if KeySel = '' then Exit;
 
     if KeySel[1] = '.' then
     begin
@@ -930,6 +897,56 @@ begin
       else if CharInSet(KeySel[1], ['A'..'Z', 'a'..'z']) then
         MergeStyle('@' + LowerCase(KeySel), Declarations);
     end;
+  end;
+
+begin
+  if FStyleMap = nil then
+    FStyleMap := TPixieSvgStyleMap.Create;
+
+  Selectors := TPixieStringVector.Create;
+  try
+    P := 1;
+    Len := Length(CSS);
+    while P <= Len do
+    begin
+      // Skip whitespace and comments
+      while (P <= Len) and (CSS[P] <= ' ') do Inc(P);
+      if (P < Len) and (CSS[P] = '/') and (CSS[P + 1] = '*') then
+      begin
+        Inc(P, 2);
+        while (P < Len) and not ((CSS[P] = '*') and (CSS[P + 1] = '/')) do Inc(P);
+        Inc(P, 2);
+        Continue;
+      end;
+      if P > Len then Break;
+
+      // Read selector(s) up to '{'
+      SelStart := P;
+      BraceStart := P;
+      while (BraceStart <= Len) and (CSS[BraceStart] <> '{') do Inc(BraceStart);
+      if BraceStart > Len then Break;
+
+      // Read declarations up to '}'
+      BraceEnd := BraceStart + 1;
+      while (BraceEnd <= Len) and (CSS[BraceEnd] <> '}') do Inc(BraceEnd);
+      if BraceEnd > Len then Break;
+      Declarations := Trim(Copy(CSS, BraceStart + 1, BraceEnd - BraceStart - 1));
+      P := BraceEnd + 1;
+
+      if Declarations = '' then Continue;
+
+      // Split comma-separated selector list and process each
+      Selectors.Clear;
+      PixieSplitString(Trim(Copy(CSS, SelStart, BraceStart - SelStart)), Selectors, ',');
+      for I := 0 to Selectors.Count - 1 do
+      begin
+        Sel := Trim(Selectors[I]);
+        if Sel <> '' then
+          ProcessSelector(Sel);
+      end;
+    end;
+  finally
+    Selectors.Free;
   end;
 end;
 
