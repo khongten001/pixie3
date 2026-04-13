@@ -1391,23 +1391,24 @@ begin
   // Raster images via ImageIO (supports PNG, JPEG, GIF, BMP, TIFF, ICO)
   CFPath := CFStringCreateWithCString(nil,
     PAnsiChar(Resolved), kCFStringEncodingUTF8);
-  if CFPath = nil then Exit;
+  if CFPath <> nil then
   try
     FileUrl := CFURLCreateWithFileSystemPath(nil, CFPath,
       kCFURLPOSIXPathStyle, False);
-    if FileUrl = nil then Exit;
+    if FileUrl <> nil then
     try
       ImageSource := CGImageSourceCreateWithURL(FileUrl, nil);
-      if ImageSource = nil then Exit;
+      if ImageSource <> nil then
       try
         Img := CGImageSourceCreateImageAtIndex(ImageSource, 0, nil);
-        if Img = nil then Exit;
-
-        Info := TPixieCGImage.Create;
-        Info.Image := Img;
-        Info.ImgWidth := CGImageGetWidth(Img);
-        Info.ImgHeight := CGImageGetHeight(Img);
-        Result := TPixieImageHandle(Info);
+        if Img <> nil then
+        begin
+          Info := TPixieCGImage.Create;
+          Info.Image := Img;
+          Info.ImgWidth := CGImageGetWidth(Img);
+          Info.ImgHeight := CGImageGetHeight(Img);
+          Result := TPixieImageHandle(Info);
+        end;
       finally
         CFRelease(ImageSource);
       end;
@@ -1417,6 +1418,11 @@ begin
   finally
     CFRelease(CFPath);
   end;
+
+  // ImageIO failed — try libwebp for .webp files
+  if (Result = 0) and
+     (LowerCase(ExtractFileExt(Resolved)) = '.webp') then
+    Result := LoadWebPFile(Resolved);
 end;
 
 function TPixieCGCanvas.LoadImageFromPixels(Width, Height: Integer;

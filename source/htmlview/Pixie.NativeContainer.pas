@@ -174,7 +174,7 @@ implementation
 
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,{$ENDIF}
-  Pixie.DataUri, Pixie.Utf8, Pixie.Url;
+  Pixie.WebP, Pixie.DataUri, Pixie.Utf8, Pixie.Url;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -368,11 +368,12 @@ end;
 // ---------------------------------------------------------------------------
 
 type
-  TPixieStreamImageType = (sitUnknown, sitPng, sitJpeg, sitBmp, sitGif, sitSvg);
+  TPixieStreamImageType = (sitUnknown, sitPng, sitJpeg, sitBmp, sitGif, sitSvg,
+    sitWebP);
 
 function DetectImageType(Stream: TStream): TPixieStreamImageType;
 var
-  Header: array[0..7] of Byte;
+  Header: array[0..11] of Byte;
   SavePos: Int64;
   BytesRead: Integer;
 begin
@@ -438,6 +439,17 @@ begin
       Result := sitSvg;
       Exit;
     end;
+
+    // WebP: RIFF xxxx WEBP (bytes 0-3 = 'RIFF', bytes 8-11 = 'WEBP')
+    if (BytesRead >= 12) and
+       (Header[0] = Ord('R')) and (Header[1] = Ord('I')) and
+       (Header[2] = Ord('F')) and (Header[3] = Ord('F')) and
+       (Header[8] = Ord('W')) and (Header[9] = Ord('E')) and
+       (Header[10] = Ord('B')) and (Header[11] = Ord('P')) then
+    begin
+      Result := sitWebP;
+      Exit;
+    end;
   finally
     Stream.Position := SavePos;
   end;
@@ -447,6 +459,9 @@ function TPixieNativeContainer.DecodeStreamToHandle(
   Stream: TStream): TPixieImageHandle;
 var
   SvgBuf: TMemoryStream;
+  WebPBuf: TMemoryStream;
+  WebPPixels: Pointer;
+  WebPW, WebPH: Integer;
 {$IFDEF FPC}
   Img: TFPMemoryImage;
   Pixels: PByte;
@@ -480,6 +495,30 @@ begin
   Stream.Position := 0;
   Result := FCanvas.LoadImageFromStream(Stream);
   if Result <> 0 then Exit;
+
+  // WebP — decode via libwebp
+  if (DetectImageType(Stream) = sitWebP) and PixieWebPAvailable then
+  begin
+    WebPBuf := TMemoryStream.Create;
+    try
+      Stream.Position := 0;
+      WebPBuf.CopyFrom(Stream, 0);
+      if WebPBuf.Size > 0 then
+      begin
+        if PixieWebPDecode(WebPBuf.Memory, WebPBuf.Size,
+          WebPW, WebPH, WebPPixels) then
+        try
+          Result := FCanvas.LoadImageFromPixels(
+            WebPW, WebPH, WebPPixels, WebPW * 4);
+        finally
+          PixieWebPFreePixels(WebPPixels);
+        end;
+      end;
+    finally
+      WebPBuf.Free;
+    end;
+    if Result <> 0 then Exit;
+  end;
 
 {$IFDEF FPC}
   // FPC: load via FPImage readers directly — bypasses platform bitmap handles

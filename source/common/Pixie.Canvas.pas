@@ -159,6 +159,7 @@ type
       TileX, TileY, TileW, TileH: Single;
       FillX, FillY, FillW, FillH: Single); virtual;
     function LoadImageFromStream(Stream: TStream): TPixieImageHandle; virtual;
+    function LoadWebPFile(const Path: string): TPixieImageHandle; virtual;
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; virtual;
 
@@ -224,7 +225,7 @@ type
 implementation
 
 uses
-  Math;
+  SysUtils, Math, Pixie.WebP;
 
 constructor TPixieCanvas.Create;
 begin
@@ -410,6 +411,37 @@ function TPixieCanvas.LoadImageFromStream(
   Stream: TStream): TPixieImageHandle;
 begin
   Result := 0;
+end;
+
+function TPixieCanvas.LoadWebPFile(
+  const Path: string): TPixieImageHandle;
+var
+  Stream: TFileStream;
+  Buf: Pointer;
+  BufSize: Integer;
+  Pixels: Pointer;
+  W, H: Integer;
+begin
+  Result := 0;
+  Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+  try
+    BufSize := Stream.Size;
+    if BufSize = 0 then Exit;
+    GetMem(Buf, BufSize);
+    try
+      Stream.ReadBuffer(Buf^, BufSize);
+      if PixieWebPDecode(Buf, BufSize, W, H, Pixels) then
+      try
+        Result := LoadImageFromPixels(W, H, Pixels, W * 4);
+      finally
+        PixieWebPFreePixels(Pixels);
+      end;
+    finally
+      FreeMem(Buf);
+    end;
+  finally
+    Stream.Free;
+  end;
 end;
 
 function TPixieCanvas.LoadSvgFromData(Data: Pointer;

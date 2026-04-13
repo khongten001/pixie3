@@ -194,7 +194,7 @@ implementation
 
 uses
   {$IFDEF FPC}FPImage, FPWritePNG,{$ENDIF}
-  Pixie.SvgRenderer.Canvas;
+  Pixie.WebP, Pixie.SvgRenderer.Canvas;
 
 var
   GCheckFontCanvas: TPixieD2DCanvas;
@@ -1411,6 +1411,12 @@ var
   Frame: IWICBitmapFrameDecode;
   Converter: IWICFormatConverter;
   IW, IH: UINT;
+  WicBmp: IWICBitmap;
+  Stream: TFileStream;
+  Buf: Pointer;
+  BufSize: Integer;
+  Pixels: Pointer;
+  PW, PH: Integer;
 begin
   Result := 0;
 
@@ -1426,26 +1432,62 @@ begin
   if FWicFactory = nil then Exit;
   WPath := UnicodeString(Resolved);
 
-  if Failed(FWicFactory.CreateDecoderFromFilename(PWideChar(WPath),
+  if not Failed(FWicFactory.CreateDecoderFromFilename(PWideChar(WPath),
     GUID_NULL, GENERIC_READ, 0, Decoder)) then
+  begin
+    if Failed(Decoder.GetFrame(0, Frame)) then Exit;
+
+    // Convert to premultiplied BGRA for D2D compatibility
+    if Failed(FWicFactory.CreateFormatConverter(Converter)) then Exit;
+    if Failed(Converter.Initialize(Frame, GUID_WICPixelFormat32bppPBGRA,
+      WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then
+      Exit;
+
+    Frame.GetSize(IW, IH);
+
+    New(Info);
+    FillChar(Info^, SizeOf(TPixieD2DImage), 0);
+    Info.WicSource := Converter;
+    Info.ImgWidth := IW;
+    Info.ImgHeight := IH;
+    Result := TPixieImageHandle(Info);
     Exit;
+  end;
 
-  if Failed(Decoder.GetFrame(0, Frame)) then Exit;
-
-  // Convert to premultiplied BGRA for D2D compatibility
-  if Failed(FWicFactory.CreateFormatConverter(Converter)) then Exit;
-  if Failed(Converter.Initialize(Frame, GUID_WICPixelFormat32bppPBGRA,
-    WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then
-    Exit;
-
-  Frame.GetSize(IW, IH);
-
-  New(Info);
-  FillChar(Info^, SizeOf(TPixieD2DImage), 0);
-  Info.WicSource := Converter;
-  Info.ImgWidth := IW;
-  Info.ImgHeight := IH;
-  Result := TPixieImageHandle(Info);
+  // WIC decoder failed — try libwebp for .webp files
+  if (LowerCase(ExtractFileExt(Resolved)) = '.webp') and
+     PixieWebPAvailable then
+  begin
+    Stream := TFileStream.Create(Resolved, fmOpenRead or fmShareDenyNone);
+    try
+      BufSize := Stream.Size;
+      if BufSize = 0 then Exit;
+      GetMem(Buf, BufSize);
+      try
+        Stream.ReadBuffer(Buf^, BufSize);
+        if PixieWebPDecode(Buf, BufSize, PW, PH, Pixels) then
+        try
+          if not Failed(FWicFactory.CreateBitmapFromMemory(
+            PW, PH, @GUID_WICPixelFormat32bppPBGRA,
+            PW * 4, PW * PH * 4, Pixels, WicBmp)) then
+          begin
+            New(Info);
+            FillChar(Info^, SizeOf(TPixieD2DImage), 0);
+            Info.WicSource := WicBmp;
+            Info.ImgWidth := PW;
+            Info.ImgHeight := PH;
+            Result := TPixieImageHandle(Info);
+          end;
+        finally
+          PixieWebPFreePixels(Pixels);
+        end;
+      finally
+        FreeMem(Buf);
+      end;
+    finally
+      Stream.Free;
+    end;
+  end;
 end;
 
 function TPixieD2DCanvas.LoadImageFromStream(

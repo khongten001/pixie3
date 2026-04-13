@@ -1300,6 +1300,11 @@ begin
 
   // Other formats: decode via LCL
   Result := DecodeImageFile(Resolved);
+
+  // LCL failed — try libwebp for .webp files
+  if (Result = 0) and
+     (LowerCase(ExtractFileExt(Resolved)) = '.webp') then
+    Result := LoadWebPFile(Resolved);
 end;
 
 function TPixieCairoCanvas.LoadImageFromPixels(Width, Height: Integer;

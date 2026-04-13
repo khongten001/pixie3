@@ -1055,12 +1055,15 @@ begin
     Info.Bitmap := TBitmap.CreateFromFile(Resolved);
     Info.ImgWidth := Info.Bitmap.Width;
     Info.ImgHeight := Info.Bitmap.Height;
+    Result := TPixieImageHandle(Info);
   except
     Info.Free;
-    Exit;
   end;
 
-  Result := TPixieImageHandle(Info);
+  // Native load failed — try libwebp for .webp files
+  if (Result = 0) and
+     (LowerCase(ExtractFileExt(Resolved)) = '.webp') then
+    Result := LoadWebPFile(Resolved);
 end;
 
 function TPixieFmxCanvas.LoadImageFromStream(
