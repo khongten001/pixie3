@@ -20,6 +20,17 @@ uses
   Pixie.CssTokenizer, Pixie.CssParser;
 
 type
+  // Calc resolution context — font metrics and viewport dimensions
+  TCalcContext = record
+    EmSize: Single;
+    RemSize: Single;
+    ExHeight: Single;
+    ChWidth: Single;
+    VwPx: Single;
+    VhPx: Single;
+  end;
+  PCalcContext = ^TCalcContext;
+
   // Property value kind (what is stored in the variant-like record)
   TPixiePropertyKind = (
     pkInvalid,      // not found / empty
@@ -41,6 +52,7 @@ type
     Kind: TPixiePropertyKind;
     Important: Boolean;
     HasVar: Boolean;
+    HasCalc: Boolean;
     IntVal: Integer;
     FloatVal: Single;
     LengthVal: TPixieCssLength;
@@ -140,6 +152,10 @@ type
     // var() substitution — resolves CSS custom property references.
     // El is TPixieHtmlTag (passed as TObject to avoid circular dependency).
     procedure SubstVars(El: TObject);
+
+    // Resolve deferred calc() expressions that contain context-dependent
+    // units (em/rem/vw/vh). Called from Compute after font metrics are known.
+    procedure ResolveCalc(const Ctx: TCalcContext);
 
     property Properties: TPixiePropsMap read FProperties;
   end;
@@ -366,6 +382,48 @@ begin
   Result := False;
 end;
 
+function HasCalcContextUnit(Tokens: TPixieCssTokenList): Boolean;
+var
+  I: Integer;
+  Tok: TPixieCssToken;
+  U: string;
+begin
+  for I := 0 to Tokens.Count - 1 do
+  begin
+    Tok := Tokens[I];
+    if Tok.TokenType = cssTokenDimension then
+    begin
+      U := PixieLowerCase(Tok.Str);
+      if (U = 'em') or (U = 'rem') or (U = 'ex') or (U = 'ch') or
+         (U = 'vw') or (U = 'vh') or (U = 'vmin') or (U = 'vmax') then
+        Exit(True);
+    end;
+    if Tok.IsComponentValue and (Tok.Value <> nil) and
+       HasCalcContextUnit(Tok.Value) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+function HasDeferredCalc(Tokens: TPixieCssTokenList): Boolean;
+var
+  I: Integer;
+  Tok: TPixieCssToken;
+begin
+  for I := 0 to Tokens.Count - 1 do
+  begin
+    Tok := Tokens[I];
+    if (Tok.TokenType = cssTokenCvFunction) and
+       PixieStrEqualNoCase(Tok.Str, 'calc') and
+       (Tok.Value <> nil) and HasCalcContextUnit(Tok.Value) then
+      Exit(True);
+    if Tok.IsComponentValue and (Tok.Value <> nil) and
+       HasDeferredCalc(Tok.Value) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
 function PixieGetValidValues(Name: Integer): string;
 begin
   if not ValidValues.TryGetValue(Name, Result) then
@@ -575,13 +633,18 @@ end;
 // --- calc() expression evaluator ---
 // Evaluates calc() into a dual-value form: absolutePx + percentCoeff.
 // Supports +, -, *, / with correct precedence.
-// Phase 1: px, %, pt, in, cm, mm, pc only (no em/rem/vw/vh).
+// Context-dependent units (em/rem/vw/vh/vmin/vmax/ex/ch) are resolved
+// when GCalcCtx is set; otherwise they cause evaluation to fail so the
+// property is deferred until Compute provides the context.
 
 type
   TCalcValue = record
     Px: Single;
     Pct: Single;
   end;
+
+var
+  GCalcCtx: PCalcContext = nil;
 
 function CalcTokenToValue(Tok: TPixieCssToken; out V: TCalcValue): Boolean;
 var
@@ -622,8 +685,29 @@ begin
       V.Px := Tok.Number * 96 / 25.4
     else if UnitStr = 'pc' then
       V.Px := Tok.Number * 96 / 6
+    else if GCalcCtx <> nil then
+    begin
+      if UnitStr = 'em' then
+        V.Px := Tok.Number * GCalcCtx^.EmSize
+      else if UnitStr = 'rem' then
+        V.Px := Tok.Number * GCalcCtx^.RemSize
+      else if UnitStr = 'ex' then
+        V.Px := Tok.Number * GCalcCtx^.ExHeight
+      else if UnitStr = 'ch' then
+        V.Px := Tok.Number * GCalcCtx^.ChWidth
+      else if UnitStr = 'vw' then
+        V.Px := Tok.Number * GCalcCtx^.VwPx / 100
+      else if UnitStr = 'vh' then
+        V.Px := Tok.Number * GCalcCtx^.VhPx / 100
+      else if UnitStr = 'vmin' then
+        V.Px := Tok.Number * Min(GCalcCtx^.VwPx, GCalcCtx^.VhPx) / 100
+      else if UnitStr = 'vmax' then
+        V.Px := Tok.Number * Max(GCalcCtx^.VwPx, GCalcCtx^.VhPx) / 100
+      else
+        Exit(False);
+    end
     else
-      Exit(False); // em, rem, vw, vh etc. not supported in Phase 1
+      Exit(False);
     Exit(True);
   end;
 end;
@@ -1619,6 +1703,7 @@ var
   Vec: TPixieStringVector;
   I: Integer;
   TokensCopy: TPixieCssTokenList;
+  Prop: TPixiePropertyValue;
 begin
   // Empty value: only valid for custom properties
   NameStr := PixieStr(Name);
@@ -1631,6 +1716,17 @@ begin
     TokensCopy := TPixieCssTokenList.Create;
     PixieCssTokenListCopy(Tokens, TokensCopy);
     AddParsedProperty(Name, TPixiePropertyValue.FromTokenVec(TokensCopy, Important, True));
+    Exit;
+  end;
+
+  // Check for calc() with context-dependent units (em/rem/vw/vh) - delay
+  if HasDeferredCalc(Tokens) then
+  begin
+    TokensCopy := TPixieCssTokenList.Create;
+    PixieCssTokenListCopy(Tokens, TokensCopy);
+    Prop := TPixiePropertyValue.FromTokenVec(TokensCopy, Important, False);
+    Prop.HasCalc := True;
+    AddParsedProperty(Name, Prop);
     Exit;
   end;
 
@@ -3219,6 +3315,34 @@ begin
     // Re-add the property — if it's a standard CSS property it will be
     // parsed into a typed value; if custom property it stays as tokens.
     AddProperty(Key, Prop.TokenVecVal, '', Prop.Important);
+  end;
+end;
+
+procedure TPixieStyle.ResolveCalc(const Ctx: TCalcContext);
+var
+  Keys: TPixieIntArray;
+  I, Key: Integer;
+  Prop: TPixiePropertyValue;
+begin
+  GCalcCtx := @Ctx;
+  try
+    Keys := FProperties.Keys.ToArray;
+    for I := 0 to Length(Keys) - 1 do
+    begin
+      Key := Keys[I];
+      if not FProperties.TryGetValue(Key, Prop) then
+        Continue;
+      if not Prop.HasCalc then
+        Continue;
+      if Prop.Kind <> pkTokenVector then
+        Continue;
+      if Prop.TokenVecVal = nil then
+        Continue;
+      // Re-parse with calc context now available
+      AddProperty(Key, Prop.TokenVecVal, '', Prop.Important);
+    end;
+  finally
+    GCalcCtx := nil;
   end;
 end;
 

@@ -990,6 +990,7 @@ procedure TPixieCssProperties.Compute(El: TObject; Doc: TObject);
 var
   Tag: TPixieHtmlTag;
   Ctx: TComputeContext;
+  CalcCtx: TCalcContext;
   AutoLen: TPixieCssLength;
   ZeroLen: TPixieCssLength;
   FS: TPixiePixel;
@@ -1097,6 +1098,15 @@ begin
   // 4. Font computation (font-size, family, weight, text-decoration, emphasis)
   ComputeFont(El, Doc);
   FS := GetFontSize;
+
+  // 4a. Resolve deferred calc() with context-dependent units
+  CalcCtx.EmSize := FFontMetrics.FontSize;
+  CalcCtx.RemSize := Ctx.RootFontSize;
+  CalcCtx.ExHeight := FFontMetrics.XHeight;
+  CalcCtx.ChWidth := FFontMetrics.ChWidth;
+  CalcCtx.VwPx := Ctx.Media.Width;
+  CalcCtx.VhPx := Ctx.Media.Height;
+  Tag.Style.ResolveCalc(CalcCtx);
 
   // 5. Box model dimensions
   FCssWidth := Tag.GetPropertyLength(Ord(psid_width), False, AutoLen,
