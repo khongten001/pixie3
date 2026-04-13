@@ -827,8 +827,8 @@ begin
     begin
       if RowP^.CssHeight.Units <> cssUnitsPercentage then
       begin
-        if RowP^.Height < TPixiePixel(RowP^.CssHeight.Val) then
-          RowP^.Height := TPixiePixel(RowP^.CssHeight.Val);
+        if RowP^.Height < RowP^.CssHeight.Val then
+          RowP^.Height := RowP^.CssHeight.Val;
       end;
     end;
     RowP^.MinHeight := RowP^.Height;
@@ -862,7 +862,7 @@ begin
     begin
       if AutoCount > 0 then
       begin
-        ExtraRowHeight := ExtraHeight / TPixiePixel(AutoCount);
+        ExtraRowHeight := ExtraHeight / AutoCount;
         for I := 0 to FRows.Count - 1 do
         begin
           if FRows.Ptr(I)^.CssHeight.IsPredefined then

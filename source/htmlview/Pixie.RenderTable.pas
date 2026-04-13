@@ -456,7 +456,7 @@ begin
         if (not Cell^.CssHeight.IsPredefined) and
            (Cell^.CssHeight.Units <> cssUnitsPercentage) then
         begin
-          CellMinH := TPixiePixel(Cell^.CssHeight.Val);
+          CellMinH := Cell^.CssHeight.Val;
           // For content-box, add padding+border to get border-box equivalent
           if TPixieRenderItem(Cell^.El).Css.BoxSizing <> bxBorderBox then
             CellMinH := CellMinH +

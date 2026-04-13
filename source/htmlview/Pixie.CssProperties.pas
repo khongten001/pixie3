@@ -472,7 +472,7 @@ end;
 
 function TPixieCssProperties.GetFontSize: TPixiePixel;
 begin
-  Result := TPixiePixel(FCssFontSize.Val);
+  Result := FCssFontSize.Val;
 end;
 
 procedure TPixieCssProperties.SetFontSize(Value: TPixiePixel);
@@ -1305,10 +1305,10 @@ begin
   if FLineHeight.CssValue.IsPredefined then
     FLineHeight.ComputedValue := FFontMetrics.Height
   else if FLineHeight.CssValue.Units = cssUnitsNone then
-    FLineHeight.ComputedValue := TPixiePixel(FLineHeight.CssValue.Val * FS)
+    FLineHeight.ComputedValue := FLineHeight.CssValue.Val * FS
   else if FLineHeight.CssValue.Units = cssUnitsPercentage then
   begin
-    FLineHeight.ComputedValue := TPixiePixel(FLineHeight.CssValue.Val / 100 * FS);
+    FLineHeight.ComputedValue := FLineHeight.CssValue.Val / 100 * FS;
     FLineHeight.CssValue.SetValue(FLineHeight.ComputedValue, cssUnitsPx);
   end
   else

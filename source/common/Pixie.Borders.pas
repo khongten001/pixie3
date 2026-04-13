@@ -105,7 +105,7 @@ end;
 
 procedure TPixieBorder.InitFromCss(const CssBorder: TPixieCssBorder);
 begin
-  Width := TPixiePixel(CssBorder.Width.Val);
+  Width := CssBorder.Width.Val;
   Style := CssBorder.Style;
   Color := CssBorder.Color;
 end;

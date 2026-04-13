@@ -171,7 +171,7 @@ begin
     else if FUnits = cssUnitsPercentage then
       Result := AWidth * FValue / 100
     else
-      Result := TPixiePixel(Val);
+      Result := Val;
   end
   else
     Result := 0;
