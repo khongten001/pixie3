@@ -1030,6 +1030,10 @@ var
   ScaleX, ScaleY: Single;
   NeedOpacity, ImageFillsTile, UseSubtree: Boolean;
   StartCol, EndCol, StartRow, EndRow, Col, Row: Integer;
+  TileCount: Int64;
+  TileImg: TPixieImageHandle;
+  TileScaleX, TileScaleY: Single;
+  TilePixelW, TilePixelH: Integer;
   SavedPath: TPathEntryList;
   SavedBBoxMinX, SavedBBoxMinY, SavedBBoxMaxX, SavedBBoxMaxY: Single;
   SavedBBoxValid: Boolean;
@@ -1105,8 +1109,7 @@ begin
 
     if UseSubtree then
     begin
-      // Subtree rendering: render pattern children directly into the canvas
-      // for each tile position.
+      // Subtree rendering: render pattern children into the canvas.
       Inc(FPatternDepth);
       // Save path record and bbox — child rendering will overwrite them
       SavedPath := FPathRecord;
@@ -1119,8 +1122,47 @@ begin
         EndCol := Ceil((BX + BW - TileX) / TileW) - 1;
         StartRow := Floor((BY - TileY) / TileH);
         EndRow := Ceil((BY + BH - TileY) / TileH) - 1;
-        if Int64(EndCol - StartCol + 1) *
-           Int64(EndRow - StartRow + 1) <= MaxTiles then
+        TileCount := Int64(EndCol - StartCol + 1) *
+           Int64(EndRow - StartRow + 1);
+
+        // Try off-screen tile rendering: render once, tile as image.
+        // The off-screen bitmap must match the display resolution —
+        // query the full canvas transform (viewport + patternTransform).
+        TileImg := 0;
+        FCanvas.GetTransformScale(TileScaleX, TileScaleY);
+        TilePixelW := Min(4096, Max(1, Ceil(TileW * TileScaleX)));
+        TilePixelH := Min(4096, Max(1, Ceil(TileH * TileScaleY)));
+        if (TileCount > 4) and (TileW > 0) and (TileH > 0) and
+           FCanvas.BeginTileRender(TilePixelW, TilePixelH) then
+        begin
+          // Scale children from tile coords to pixel coords.
+          // Must use pixel/tile ratio (not raw canvas scale) so content
+          // fills the bitmap exactly — Ceil rounding would leave gaps.
+          FCanvas.ConcatMatrix(
+            TilePixelW / TileW, 0, 0, TilePixelH / TileH, 0, 0);
+          if Info.HasViewBox then
+            FCanvas.ConcatMatrix(
+              TileW / Info.ViewBoxW, 0, 0, TileH / Info.ViewBoxH,
+              -Info.ViewBoxX * TileW / Info.ViewBoxW,
+              -Info.ViewBoxY * TileH / Info.ViewBoxH)
+          else if Info.ContentUnitsObjectBBox then
+            FCanvas.ConcatMatrix(BW, 0, 0, BH, 0, 0);
+          RenderPatternChildren(Info.PatternNode);
+          TileImg := FCanvas.EndTileRender;
+        end;
+
+        if TileImg <> 0 then
+        begin
+          // Tile the pre-rendered image (single GPU call on D2D).
+          // Snap fill rect to tile boundaries — matches the per-tile
+          // loop coverage exactly, preventing rounding gaps at edges.
+          FCanvas.FillTiledImage(TileImg, TileX, TileY, TileW, TileH,
+            TileX + StartCol * TileW, TileY + StartRow * TileH,
+            (EndCol - StartCol + 1) * TileW,
+            (EndRow - StartRow + 1) * TileH);
+          FCanvas.FreeImage(TileImg);
+        end
+        else if TileCount <= MaxTiles then
           for Row := StartRow to EndRow do
             for Col := StartCol to EndCol do
             begin

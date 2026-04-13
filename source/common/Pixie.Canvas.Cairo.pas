@@ -65,6 +65,11 @@ type
     FOpacityTop: Integer;
     FMaskStack: array[0..15] of TPixieCairoMaskEntry;
     FMaskTop: Integer;
+    FTileSurface: Pcairo_surface_t;
+    FTileSavedCairo: Pcairo_t;
+    FTileSavedPangoCtx: PPangoContext;
+    FTileSavedStateTop: Integer;
+    FTileSavedViewW, FTileSavedViewH: Integer;
 
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -173,6 +178,11 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Off-screen tile rendering (pattern optimisation)
+    function BeginTileRender(Width, Height: Integer): Boolean; override;
+    function EndTileRender: TPixieImageHandle; override;
+    procedure GetTransformScale(out ScaleX, ScaleY: Single); override;
 
     // Offscreen rendering (Cairo image surface)
     function BeginOffscreenPaint(Width, Height: Integer): Pcairo_surface_t;
@@ -1769,6 +1779,75 @@ end;
 // ---------------------------------------------------------------------------
 // Offscreen rendering (Cairo image surface)
 // ---------------------------------------------------------------------------
+
+procedure TPixieCairoCanvas.GetTransformScale(out ScaleX, ScaleY: Single);
+var
+  M: cairo_matrix_t;
+begin
+  if FCairo = nil then
+  begin
+    ScaleX := 1;
+    ScaleY := 1;
+    Exit;
+  end;
+  cairo_get_matrix(FCairo, @M);
+  ScaleX := Sqrt(Sqr(M.xx) + Sqr(M.yx));
+  ScaleY := Sqrt(Sqr(M.xy) + Sqr(M.yy));
+end;
+
+function TPixieCairoCanvas.BeginTileRender(Width, Height: Integer): Boolean;
+begin
+  Result := False;
+  FTileSurface := cairo_image_surface_create(CAIRO_FORMAT_ARGB32, Width, Height);
+  if FTileSurface = nil then Exit;
+
+  // Save current state
+  FTileSavedCairo := FCairo;
+  FTileSavedPangoCtx := FPangoContext;
+  FTileSavedStateTop := FStateTop;
+  FTileSavedViewW := FViewWidth;
+  FTileSavedViewH := FViewHeight;
+
+  FCairo := cairo_create(FTileSurface);
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+  if FPersistentContext <> nil then
+    pango_cairo_update_context(FCairo, FPersistentContext);
+  FPangoContext := FPersistentContext;
+
+  // Surface starts transparent (ARGB32 is zero-initialized)
+  Result := True;
+end;
+
+function TPixieCairoCanvas.EndTileRender: TPixieImageHandle;
+var
+  W, H, Stride: Integer;
+  Pixels: Pointer;
+begin
+  Result := 0;
+  // Destroy offscreen context
+  if FCairo <> nil then
+    cairo_destroy(FCairo);
+
+  // Restore main canvas state
+  FCairo := FTileSavedCairo;
+  FPangoContext := FTileSavedPangoCtx;
+  FStateTop := FTileSavedStateTop;
+  FViewWidth := FTileSavedViewW;
+  FViewHeight := FTileSavedViewH;
+
+  if FTileSurface = nil then Exit;
+  cairo_surface_flush(FTileSurface);
+  W := cairo_image_surface_get_width(FTileSurface);
+  H := cairo_image_surface_get_height(FTileSurface);
+  Stride := cairo_image_surface_get_stride(FTileSurface);
+  Pixels := cairo_image_surface_get_data(FTileSurface);
+  if Pixels <> nil then
+    Result := LoadImageFromPixels(W, H, Pixels, Stride);
+  cairo_surface_destroy(FTileSurface);
+  FTileSurface := nil;
+end;
 
 function TPixieCairoCanvas.BeginOffscreenPaint(
   Width, Height: Integer): Pcairo_surface_t;

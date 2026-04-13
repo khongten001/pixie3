@@ -56,6 +56,11 @@ type
     FPathFigureOpen: Boolean;
     FStateStack: array[0..63] of TPixieD2DSavedState;
     FStateTop: Integer;
+    FTileWicBitmap: IWICBitmap;
+    FTileSavedTarget: ID2D1RenderTarget;
+    FTileSavedBrush: ID2D1SolidColorBrush;
+    FTileSavedStateTop: Integer;
+    FTileSavedViewW, FTileSavedViewH: Integer;
 
     function ToColorF(const C: TPixieWebColor): TD2d1ColorF;
     function MakeRectF(X, Y, W, H: Single): TD2d1RectF;
@@ -112,6 +117,9 @@ type
     function CreateFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): TPixieFontHandle; override;
     procedure DoDeleteFont(Handle: TPixieFontHandle); override;
+    function InstallFontFromMemory(Data: Pointer; Size: Integer;
+      out Handle: PtrUInt): Boolean; override;
+    procedure UninstallFont(Handle: PtrUInt); override;
     function DoMeasureText(const Text: string;
       Handle: TPixieFontHandle): TPixiePixel; override;
     procedure DrawText(const Text: string; Handle: TPixieFontHandle;
@@ -181,6 +189,11 @@ type
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
 
+    // Off-screen tile rendering (pattern optimisation)
+    function BeginTileRender(Width, Height: Integer): Boolean; override;
+    function EndTileRender: TPixieImageHandle; override;
+    procedure GetTransformScale(out ScaleX, ScaleY: Single); override;
+
     // Offscreen rendering (WIC bitmap target)
     function BeginOffscreenPaint(Width, Height: Integer): IWICBitmap;
     procedure EndOffscreenPaint;
@@ -195,6 +208,12 @@ implementation
 uses
   {$IFDEF FPC}FPImage, FPWritePNG,{$ENDIF}
   Pixie.WebP, Pixie.SvgRenderer.Canvas;
+
+function AddFontMemResourceEx(pFileView: Pointer; cjSize: DWORD;
+  pvReserved: Pointer; pNumFonts: PDWORD): THandle;
+  stdcall; external 'gdi32.dll' name 'AddFontMemResourceEx';
+function RemoveFontMemResourceEx(fh: THandle): BOOL;
+  stdcall; external 'gdi32.dll' name 'RemoveFontMemResourceEx';
 
 var
   GCheckFontCanvas: TPixieD2DCanvas;
@@ -1098,6 +1117,28 @@ begin
   Info := PPixieD2DFont(Handle);
   Info.TextFormat := nil;  // release COM interface
   Dispose(Info);
+end;
+
+function TPixieD2DCanvas.InstallFontFromMemory(Data: Pointer; Size: Integer;
+  out Handle: PtrUInt): Boolean;
+var
+  NumFonts: DWORD;
+  H: THandle;
+  Collection: IDWriteFontCollection;
+begin
+  NumFonts := 0;
+  H := AddFontMemResourceEx(Data, Size, nil, @NumFonts);
+  Result := H <> 0;
+  Handle := PtrUInt(H);
+  // Force DirectWrite to refresh its font collection cache
+  if Result and (FDWriteFactory <> nil) then
+    FDWriteFactory.GetSystemFontCollection(Collection, True);
+end;
+
+procedure TPixieD2DCanvas.UninstallFont(Handle: PtrUInt);
+begin
+  if Handle <> 0 then
+    RemoveFontMemResourceEx(THandle(Handle));
 end;
 
 // Applies small-caps simulation: sets a reduced font size on ranges
@@ -2144,6 +2185,122 @@ procedure TPixieD2DCanvas.SetViewSize(W, H: Integer; ACanvasScale: Single);
 begin
   FViewWidth := W;
   FViewHeight := H;
+end;
+
+// ---------------------------------------------------------------------------
+// Off-screen tile rendering (pattern optimisation)
+// ---------------------------------------------------------------------------
+
+function TPixieD2DCanvas.BeginTileRender(Width, Height: Integer): Boolean;
+var
+  Props: TD2d1RenderTargetProperties;
+  C: TD2d1ColorF;
+  M: TD2d1Matrix3x2F;
+begin
+  Result := False;
+  if (FWicFactory = nil) or (FFactory = nil) then Exit;
+
+  // Create WIC bitmap
+  if Failed(FWicFactory.CreateBitmap(Width, Height,
+    @GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad,
+    FTileWicBitmap)) then Exit;
+
+  // Create render target on the WIC bitmap
+  FillChar(Props, SizeOf(Props), 0);
+  Props._type := D2D1_RENDER_TARGET_TYPE_DEFAULT;
+  Props.pixelFormat.format := DXGI_FORMAT_B8G8R8A8_UNORM;
+  Props.pixelFormat.alphaMode := D2D1_ALPHA_MODE_PREMULTIPLIED;
+  Props.dpiX := 96;
+  Props.dpiY := 96;
+
+  // Save current state
+  FTileSavedTarget := FTarget;
+  FTileSavedBrush := FBrush;
+  FTileSavedStateTop := FStateTop;
+  FTileSavedViewW := FViewWidth;
+  FTileSavedViewH := FViewHeight;
+
+  if Failed(FFactory.CreateWicBitmapRenderTarget(
+    FTileWicBitmap, Props, FTarget)) then
+  begin
+    FTileWicBitmap := nil;
+    FTarget := FTileSavedTarget;
+    Exit;
+  end;
+
+  C.r := 0; C.g := 0; C.b := 0; C.a := 1;
+  FTarget.CreateSolidColorBrush(C, nil, FBrush);
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+  FTarget.BeginDraw;
+  FTarget.SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+
+  FillChar(M, SizeOf(M), 0);
+  M.m11 := 1; M.m22 := 1;
+  FTarget.SetTransform(@M);
+
+  // Clear to transparent
+  C.r := 0; C.g := 0; C.b := 0; C.a := 0;
+  FTarget.Clear(C);
+  Result := True;
+end;
+
+function TPixieD2DCanvas.EndTileRender: TPixieImageHandle;
+var
+  W, H, Stride: UINT;
+  Lock: IWICBitmapLock;
+  R: WICRect;
+  Data: PByte;
+  BufSize: UINT;
+begin
+  Result := 0;
+  // End offscreen drawing
+  FTarget.EndDraw(nil, nil);
+
+  // Restore main canvas state
+  FTarget := FTileSavedTarget;
+  FBrush := FTileSavedBrush;
+  FStateTop := FTileSavedStateTop;
+  FViewWidth := FTileSavedViewW;
+  FViewHeight := FTileSavedViewH;
+  FTileSavedTarget := nil;
+  FTileSavedBrush := nil;
+
+  if FTileWicBitmap = nil then Exit;
+  if Failed(FTileWicBitmap.GetSize(W, H)) then
+  begin
+    FTileWicBitmap := nil;
+    Exit;
+  end;
+  R.X := 0; R.Y := 0;
+  R.Width := W; R.Height := H;
+  if Failed(FTileWicBitmap.Lock(@R, WICBitmapLockRead, Lock)) then
+  begin
+    FTileWicBitmap := nil;
+    Exit;
+  end;
+  Lock.GetStride(Stride);
+  Lock.GetDataPointer(BufSize, Data);
+  Result := LoadImageFromPixels(W, H, Data, Stride);
+  Lock := nil;
+  FTileWicBitmap := nil;
+end;
+
+// ---------------------------------------------------------------------------
+procedure TPixieD2DCanvas.GetTransformScale(out ScaleX, ScaleY: Single);
+var
+  M: TD2d1Matrix3x2F;
+begin
+  if FTarget = nil then
+  begin
+    ScaleX := 1;
+    ScaleY := 1;
+    Exit;
+  end;
+  FTarget.GetTransform(M);
+  ScaleX := Sqrt(Sqr(M.m11) + Sqr(M.m21));
+  ScaleY := Sqrt(Sqr(M.m12) + Sqr(M.m22));
 end;
 
 // ---------------------------------------------------------------------------

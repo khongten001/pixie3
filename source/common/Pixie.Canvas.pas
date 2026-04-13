@@ -108,6 +108,11 @@ type
       out Metrics: TPixieFontMetrics): TPixieFontHandle; virtual; abstract;
     procedure DeleteFont(Handle: TPixieFontHandle);
 
+    // Custom font installation (@font-face)
+    function InstallFontFromMemory(Data: Pointer; Size: Integer;
+      out Handle: PtrUInt): Boolean; virtual;
+    procedure UninstallFont(Handle: PtrUInt); virtual;
+
     // Text
     function MeasureText(const Text: string;
       Handle: TPixieFontHandle): TPixiePixel;
@@ -162,6 +167,11 @@ type
     function LoadWebPFile(const Path: string): TPixieImageHandle; virtual;
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; virtual;
+
+    // Off-screen tile rendering (pattern optimisation)
+    function BeginTileRender(Width, Height: Integer): Boolean; virtual;
+    function EndTileRender: TPixieImageHandle; virtual;
+    procedure GetTransformScale(out ScaleX, ScaleY: Single); virtual;
 
     // Simple shapes (for list markers and form controls)
     procedure FillEllipse(X, Y, W, H: Single;
@@ -444,6 +454,17 @@ begin
   end;
 end;
 
+function TPixieCanvas.InstallFontFromMemory(Data: Pointer; Size: Integer;
+  out Handle: PtrUInt): Boolean;
+begin
+  Result := False;
+  Handle := 0;
+end;
+
+procedure TPixieCanvas.UninstallFont(Handle: PtrUInt);
+begin
+end;
+
 function TPixieCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 begin
@@ -465,6 +486,22 @@ begin
     for Col := StartCol to EndCol do
       DrawImage(Handle,
         TileX + Col * TileW, TileY + Row * TileH, TileW, TileH);
+end;
+
+function TPixieCanvas.BeginTileRender(Width, Height: Integer): Boolean;
+begin
+  Result := False;
+end;
+
+function TPixieCanvas.EndTileRender: TPixieImageHandle;
+begin
+  Result := 0;
+end;
+
+procedure TPixieCanvas.GetTransformScale(out ScaleX, ScaleY: Single);
+begin
+  ScaleX := 1;
+  ScaleY := 1;
 end;
 
 procedure TPixieCanvas.BeginPath;

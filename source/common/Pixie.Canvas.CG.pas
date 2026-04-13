@@ -52,6 +52,11 @@ type
     FStateStack: array[0..63] of TPixieCGSavedState;
     FStateTop: Integer;
     FMaskPixels: Pointer;
+    FTileContext: CGContextRef;
+    FTileWidth, FTileHeight: Integer;
+    FTileSavedCG: CGContextRef;
+    FTileSavedStateTop: Integer;
+    FTileSavedViewW, FTileSavedViewH: Integer;
 
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -160,6 +165,11 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Off-screen tile rendering (pattern optimisation)
+    function BeginTileRender(Width, Height: Integer): Boolean; override;
+    function EndTileRender: TPixieImageHandle; override;
+    procedure GetTransformScale(out ScaleX, ScaleY: Single); override;
 
     // Offscreen rendering (CGBitmapContext)
     function BeginOffscreenPaint(Width, Height: Integer): CGContextRef;
@@ -1918,6 +1928,71 @@ end;
 // ---------------------------------------------------------------------------
 // Offscreen rendering (CGBitmapContext)
 // ---------------------------------------------------------------------------
+
+procedure TPixieCGCanvas.GetTransformScale(out ScaleX, ScaleY: Single);
+var
+  M: CGAffineTransform;
+begin
+  if FCG = nil then
+  begin
+    ScaleX := 1;
+    ScaleY := 1;
+    Exit;
+  end;
+  M := CGContextGetCTM(FCG);
+  ScaleX := Sqrt(Sqr(M.a) + Sqr(M.b));
+  ScaleY := Sqrt(Sqr(M.c) + Sqr(M.d));
+end;
+
+function TPixieCGCanvas.BeginTileRender(Width, Height: Integer): Boolean;
+begin
+  Result := False;
+  FTileContext := CGBitmapContextCreate(nil, Width, Height, 8, Width * 4,
+    FColorSpace,
+    kCGImageAlphaPremultipliedFirst or kCGBitmapByteOrder32Little);
+  if FTileContext = nil then Exit;
+
+  // Save current state
+  FTileSavedCG := FCG;
+  FTileSavedStateTop := FStateTop;
+  FTileSavedViewW := FViewWidth;
+  FTileSavedViewH := FViewHeight;
+
+  FCG := FTileContext;
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+
+  // Flip coordinate system (CG is bottom-up)
+  CGContextTranslateCTM(FCG, 0, Height);
+  CGContextScaleCTM(FCG, 1, -1);
+
+  // Bitmap starts zero-filled (transparent)
+  FTileWidth := Width;
+  FTileHeight := Height;
+  Result := True;
+end;
+
+function TPixieCGCanvas.EndTileRender: TPixieImageHandle;
+var
+  Pixels: Pointer;
+  Stride: Integer;
+begin
+  Result := 0;
+  // Restore main canvas state (don't release FTileContext yet — need pixels)
+  FCG := FTileSavedCG;
+  FStateTop := FTileSavedStateTop;
+  FViewWidth := FTileSavedViewW;
+  FViewHeight := FTileSavedViewH;
+
+  if FTileContext = nil then Exit;
+  Pixels := CGBitmapContextGetData(FTileContext);
+  Stride := FTileWidth * 4;
+  if Pixels <> nil then
+    Result := LoadImageFromPixels(FTileWidth, FTileHeight, Pixels, Stride);
+  CGContextRelease(FTileContext);
+  FTileContext := nil;
+end;
 
 function TPixieCGCanvas.BeginOffscreenPaint(
   Width, Height: Integer): CGContextRef;

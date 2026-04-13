@@ -548,16 +548,15 @@ end;
 
 function TPixieSvgRendererBase.GetAttr(Node: Pointer; const Name: string;
   const Default: string): string;
-var
-  El: TDOMElement;
-  Attr: TDOMNode;
 begin
-  Result := Default;
-  if Node = nil then Exit;
-  El := TDOMElement(Node);
-  Attr := El.Attributes.GetNamedItem(StrToDom(Name));
-  if Attr <> nil then
-    Result := DomToStr(Attr.NodeValue);
+  if Node = nil then
+    Result := Default
+  else
+  begin
+    Result := TDOMElement(Node).GetAttributeStr(Name);
+    if Result = '' then
+      Result := Default;
+  end;
 end;
 
 function TPixieSvgRendererBase.GetHref(Node: Pointer): string;

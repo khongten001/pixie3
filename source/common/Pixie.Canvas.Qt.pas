@@ -63,6 +63,12 @@ type
     FMaskX, FMaskY, FMaskW, FMaskH: Single;
     FTempRect: QRectFH;
     FCurrentPath: QPainterPathH;
+    FTileImage: QImageH;
+    FTileSavedPainter: QPainterH;
+    FTileSavedStateTop: Integer;
+    FTileSavedOpacityTop: Integer;
+    FTileSavedOpacity: Single;
+    FTileSavedViewW, FTileSavedViewH: Integer;
 
     procedure MakeColor(const C: TPixieWebColor; out QC: TQColor);
     procedure ApplyDashPattern(Pen: QPenH; Width: Single);
@@ -170,6 +176,11 @@ type
       Size: Integer): TPixieImageHandle; override;
 
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); override;
+
+    // Off-screen tile rendering (pattern optimisation)
+    function BeginTileRender(Width, Height: Integer): Boolean; override;
+    function EndTileRender: TPixieImageHandle; override;
+    procedure GetTransformScale(out ScaleX, ScaleY: Single); override;
 
     // Offscreen rendering
     function BeginOffscreenPaint(Width, Height: Integer): QImageH;
@@ -1878,6 +1889,103 @@ end;
 // ---------------------------------------------------------------------------
 // Offscreen rendering
 // ---------------------------------------------------------------------------
+
+procedure TPixieQtCanvas.GetTransformScale(out ScaleX, ScaleY: Single);
+var
+  T: QTransformH;
+begin
+  if FPainter = nil then
+  begin
+    ScaleX := 1;
+    ScaleY := 1;
+    Exit;
+  end;
+  T := QPainter_transform(FPainter);
+  ScaleX := Sqrt(Sqr(QTransform_m11(T)) + Sqr(QTransform_m21(T)));
+  ScaleY := Sqrt(Sqr(QTransform_m12(T)) + Sqr(QTransform_m22(T)));
+end;
+
+function TPixieQtCanvas.BeginTileRender(Width, Height: Integer): Boolean;
+{$IFNDEF LCLqt}
+var
+  QC: TQColor;
+{$ENDIF}
+begin
+  Result := False;
+  FTileImage := QImage_Create(Width, Height, QImageFormat_ARGB32_Premultiplied);
+  if FTileImage = nil then Exit;
+
+  // Clear to transparent
+  {$IFDEF LCLqt}
+  QImage_fill(FTileImage, $00000000);
+  {$ELSE}
+  QC.ColorSpec := 1;
+  QC.Alpha := 0;
+  QC.r := 0; QC.g := 0; QC.b := 0;
+  QC.Pad := 0;
+  QImage_fill(FTileImage, @QC);
+  {$ENDIF}
+
+  // Save current state
+  FTileSavedPainter := FPainter;
+  FTileSavedStateTop := FStateTop;
+  FTileSavedOpacityTop := FOpacityTop;
+  FTileSavedOpacity := FCurrentOpacity;
+  FTileSavedViewW := FViewWidth;
+  FTileSavedViewH := FViewHeight;
+
+  FPainter := QPainter_Create(QPaintDeviceH(FTileImage));
+  if FPainter = nil then
+  begin
+    QImage_Destroy(FTileImage);
+    FTileImage := nil;
+    FPainter := FTileSavedPainter;
+    Exit;
+  end;
+
+  FStateTop := 0;
+  FOpacityTop := 0;
+  FCurrentOpacity := 1.0;
+  FViewWidth := Width;
+  FViewHeight := Height;
+  QPainter_setRenderHint(FPainter, QPainterAntialiasing, True);
+  QPainter_setRenderHint(FPainter, QPainterTextAntialiasing, True);
+  QPainter_setRenderHint(FPainter, QPainterSmoothPixmapTransform, True);
+  QPainter_setBackgroundMode(FPainter, QtTransparentMode);
+  Result := True;
+end;
+
+function TPixieQtCanvas.EndTileRender: TPixieImageHandle;
+var
+  W, H, Stride: Integer;
+  Pixels: PByte;
+begin
+  Result := 0;
+  // End offscreen painting
+  if FPainter <> nil then
+  begin
+    QPainter_end(FPainter);
+    QPainter_Destroy(FPainter);
+  end;
+
+  // Restore main canvas state
+  FPainter := FTileSavedPainter;
+  FStateTop := FTileSavedStateTop;
+  FOpacityTop := FTileSavedOpacityTop;
+  FCurrentOpacity := FTileSavedOpacity;
+  FViewWidth := FTileSavedViewW;
+  FViewHeight := FTileSavedViewH;
+
+  if FTileImage = nil then Exit;
+  W := QImage_width(FTileImage);
+  H := QImage_height(FTileImage);
+  Stride := QImage_bytesPerLine(FTileImage);
+  Pixels := QImage_bits(FTileImage);
+  if Pixels <> nil then
+    Result := LoadImageFromPixels(W, H, Pixels, Stride);
+  QImage_Destroy(FTileImage);
+  FTileImage := nil;
+end;
 
 function TPixieQtCanvas.BeginOffscreenPaint(Width, Height: Integer): QImageH;
 var

@@ -492,6 +492,9 @@ const
   WICBitmapCacheOnLoad = 1;
   WICBitmapNoCache = 2;
 
+  WICBitmapLockRead  = $01;
+  WICBitmapLockWrite = $02;
+
 type
   WICBitmapPaletteType = type Integer;
   TWicbitmappalettetype = WICBitmapPaletteType;
@@ -981,7 +984,13 @@ type
   IWICColorTransform = interface end;
   IWICBitmapEncoder = interface end;
   IWICFastMetadataEncoder = interface end;
-  IWICBitmapLock = interface end;
+  IWICBitmapLock = interface(IUnknown)
+  ['{00000123-a8f2-4877-ba0a-fd2b6645fb94}']
+    function GetSize(out puiWidth: UINT; out puiHeight: UINT): HResult; stdcall;
+    function GetStride(out pcbStride: UINT): HResult; stdcall;
+    function GetDataPointer(out pcbBufferSize: UINT; out ppbData: PByte): HResult; stdcall;
+    function GetPixelFormat(out pPixelFormat: WICPixelFormatGUID): HResult; stdcall;
+  end;
   IWICStream = interface end;
   IWICBitmapFrameEncode = interface end;
 

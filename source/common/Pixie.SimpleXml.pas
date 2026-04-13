@@ -51,6 +51,8 @@ type
     constructor Create;
     destructor Destroy; override;
     function GetAttribute(const Name: UnicodeString): UnicodeString;
+    function GetAttributeStr(const Name: string): string;
+    function HasAttribute(const Name: string): Boolean;
     property TagName: UnicodeString read FTagName;
     property Attributes: TDOMNamedNodeMap read FAttributes;
   end;
@@ -146,13 +148,40 @@ end;
 
 function TDOMElement.GetAttribute(const Name: UnicodeString): UnicodeString;
 var
-  Idx: Integer;
+  I: Integer;
+  N: string;
 begin
-  Idx := FAttrNames.IndexOf(string(Name));
-  if Idx >= 0 then
-    Result := UnicodeString(FAttrValues[Idx])
-  else
-    Result := '';
+  N := string(Name);
+  for I := 0 to FAttrNames.Count - 1 do
+    if FAttrNames[I] = N then
+    begin
+      Result := UnicodeString(FAttrValues[I]);
+      Exit;
+    end;
+  Result := '';
+end;
+
+function TDOMElement.GetAttributeStr(const Name: string): string;
+var
+  I: Integer;
+begin
+  for I := 0 to FAttrNames.Count - 1 do
+    if FAttrNames[I] = Name then
+    begin
+      Result := FAttrValues[I];
+      Exit;
+    end;
+  Result := '';
+end;
+
+function TDOMElement.HasAttribute(const Name: string): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to FAttrNames.Count - 1 do
+    if FAttrNames[I] = Name then
+      Exit(True);
+  Result := False;
 end;
 
 // ---------------------------------------------------------------------------
@@ -167,16 +196,18 @@ end;
 
 function TDOMNamedNodeMap.GetNamedItem(const Name: UnicodeString): TDOMNode;
 var
-  Idx: Integer;
+  I: Integer;
+  N: string;
 begin
-  Idx := FOwner.FAttrNames.IndexOf(string(Name));
-  if Idx >= 0 then
-  begin
-    FOwner.FAttrNode.FNodeValue := UnicodeString(FOwner.FAttrValues[Idx]);
-    Result := FOwner.FAttrNode;
-  end
-  else
-    Result := nil;
+  N := string(Name);
+  for I := 0 to FOwner.FAttrNames.Count - 1 do
+    if FOwner.FAttrNames[I] = N then
+    begin
+      FOwner.FAttrNode.FNodeValue := UnicodeString(FOwner.FAttrValues[I]);
+      Result := FOwner.FAttrNode;
+      Exit;
+    end;
+  Result := nil;
 end;
 
 // ---------------------------------------------------------------------------
