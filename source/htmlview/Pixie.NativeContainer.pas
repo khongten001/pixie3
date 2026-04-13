@@ -15,7 +15,7 @@ uses
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.GradientLayer, Pixie.Background,
   Pixie.FontDescription, Pixie.CssLength,
-  Pixie.Container, Pixie.Canvas;
+  Pixie.Container, Pixie.Canvas, Pixie.FontFace;
 
 type
   TPixieAnchorClickEvent = procedure(Sender: TObject;
@@ -64,6 +64,7 @@ type
     function DecodeStreamToHandle(Stream: TStream): TPixieImageHandle;
     function LoadFromResource(const ResName: string): TPixieImageHandle;
     function ResolvePendingImage(const Key: string): TPixieImageHandle;
+    procedure FetchAndInstallFontFace(Entry: TPixieFontFaceEntry);
   public
     constructor Create(ACanvas: TPixieCanvas);
     destructor Destroy; override;
@@ -97,6 +98,7 @@ type
     function CreateFont(const Descr: TPixieFontDescription; Doc: TObject;
       out Metrics: TPixieFontMetrics): PtrUInt; override;
     procedure DeleteFont(HFont: PtrUInt); override;
+    procedure UninstallFont(Handle: PtrUInt); override;
     function TextWidth(const Text: string; HFont: PtrUInt): TPixiePixel; override;
     procedure DrawText(Hdc: PtrUInt; const Text: string; HFont: PtrUInt;
       Color: TPixieWebColor; const Pos: TPixiePosition); override;
@@ -174,7 +176,8 @@ implementation
 
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,{$ENDIF}
-  Pixie.WebP, Pixie.DataUri, Pixie.Utf8, Pixie.Url;
+  Pixie.WebP, Pixie.Document,
+  Pixie.DataUri, Pixie.Utf8, Pixie.Url;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -664,13 +667,110 @@ end;
 function TPixieNativeContainer.CreateFont(
   const Descr: TPixieFontDescription; Doc: TObject;
   out Metrics: TPixieFontMetrics): PtrUInt;
+var
+  Resolved: TPixieFontDescription;
+  Registry: TPixieFontFaceRegistry;
+  I, J, Start, Len: Integer;
+  Part: string;
+  Entry: TPixieFontFaceEntry;
 begin
-  Result := PtrUInt(FCanvas.CreateFont(Descr, Metrics));
+  Resolved := Descr;
+  if (Doc is TPixieDocument) then
+  begin
+    Registry := TPixieDocument(Doc).FontFaceRegistry;
+    if Registry.Entries.Count > 0 then
+    begin
+      // Split family list, load matching @font-face fonts, substitute names
+      Len := Length(Descr.Family);
+      Start := 1;
+      for I := 1 to Len + 1 do
+      begin
+        if (I > Len) or (Descr.Family[I] = ',') then
+        begin
+          Part := Trim(Copy(Descr.Family, Start, I - Start));
+          if (Length(Part) >= 2) and
+             ((Part[1] = '''') or (Part[1] = '"')) then
+            Part := Copy(Part, 2, Length(Part) - 2);
+          Start := I + 1;
+          if Part = '' then Continue;
+          for J := 0 to Registry.Entries.Count - 1 do
+          begin
+            Entry := Registry.Entries[J];
+            if not SameText(Entry.Family, Part) then Continue;
+            if not Entry.Loaded and not Entry.LoadFailed then
+              FetchAndInstallFontFace(Entry);
+            if Entry.Loaded and (Entry.InternalName <> '') then
+            begin
+              Resolved.Family := Entry.InternalName;
+              Break;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  Result := PtrUInt(FCanvas.CreateFont(Resolved, Metrics));
 end;
 
 procedure TPixieNativeContainer.DeleteFont(HFont: PtrUInt);
 begin
   FCanvas.DeleteFont(TPixieFontHandle(HFont));
+end;
+
+procedure TPixieNativeContainer.UninstallFont(Handle: PtrUInt);
+begin
+  FCanvas.UninstallFont(Handle);
+end;
+
+procedure TPixieNativeContainer.FetchAndInstallFontFace(
+  Entry: TPixieFontFaceEntry);
+var
+  K: Integer;
+  Src: TPixieFontFaceSrc;
+  FullPath: string;
+  Stream: TMemoryStream;
+  Success: Boolean;
+  H: PtrUInt;
+begin
+  for K := 0 to Entry.Sources.Count - 1 do
+  begin
+    Src := Entry.Sources[K];
+    // Phase 1: only accept truetype or unspecified format
+    if (Src.Format <> '') and (Src.Format <> 'truetype') then
+      Continue;
+
+    FullPath := ResolveUrl(Src.Url, Entry.BaseUrl);
+
+    Stream := TMemoryStream.Create;
+    try
+      Success := False;
+      if IsHttpUrl(FullPath) and Assigned(FOnFetchUrl) then
+        FOnFetchUrl(Self, FullPath, Stream, Success)
+      else
+      try
+        Stream.LoadFromFile(FullPath);
+        Success := Stream.Size > 0;
+      except
+        Success := False;
+      end;
+
+      if Success and (Stream.Size > 0) then
+      begin
+        if FCanvas.InstallFontFromMemory(Stream.Memory, Stream.Size, H) then
+        begin
+          Entry.Loaded := True;
+          Entry.InstalledHandle := H;
+          Entry.InternalName := PixieGetTtfFamilyName(
+            Stream.Memory, Stream.Size);
+          Exit;
+        end;
+      end;
+    finally
+      Stream.Free;
+    end;
+  end;
+
+  Entry.LoadFailed := True;
 end;
 
 function TPixieNativeContainer.TextWidth(const Text: string;

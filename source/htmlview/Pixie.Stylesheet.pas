@@ -11,7 +11,8 @@ uses
   SysUtils, Generics.Collections,
   Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssTokenizer, Pixie.CssParser,
-  Pixie.CssSelector, Pixie.Style, Pixie.MediaQuery;
+  Pixie.CssSelector, Pixie.Style, Pixie.MediaQuery,
+  Pixie.FontFace;
 
 type
   TPixieSelectorIndexMap = TDictionary<Integer, TPixieCssSelectorList>;
@@ -68,6 +69,9 @@ type
 
     property Selectors: TPixieCssSelectorList read FSelectors;
     property IsIndexed: Boolean read FIsIndexed;
+  public
+    // Non-owning: set by the document before parsing, receives @font-face entries
+    FontFaces: TPixieFontFaceEntryList;
   end;
 
 implementation
@@ -215,6 +219,7 @@ var
   Rule: TPixieCssRawRule;
   I: Integer;
   RuleName: Integer;
+  Entry: TPixieFontFaceEntry;
 begin
   // Register external media query (e.g. <style media="...">) for tracking
   if (Media <> nil) and (FMediaQueries.IndexOf(Media) < 0) then
@@ -251,6 +256,17 @@ begin
       if RuleName = Ord(psid_media) then
       begin
         ParseMediaRule(Rule, BaseUrl, Mode, Media);
+        Continue;
+      end;
+
+      if RuleName = Ord(psid_font_face) then
+      begin
+        if (Rule.Block <> nil) and (FontFaces <> nil) then
+        begin
+          Entry := PixieParseFontFaceRule(Rule.Block.Value, BaseUrl);
+          if Entry <> nil then
+            FontFaces.Add(Entry);
+        end;
         Continue;
       end;
 

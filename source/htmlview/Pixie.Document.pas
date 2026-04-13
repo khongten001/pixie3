@@ -12,7 +12,7 @@ uses
   Pixie.Types, Pixie.CssLength, Pixie.WebColor,
   Pixie.FontDescription,
   Pixie.Container, Pixie.Element,
-  Pixie.Style, Pixie.Stylesheet,
+  Pixie.Style, Pixie.Stylesheet, Pixie.FontFace,
   Pixie.MediaQuery, Pixie.CssProperties;
 
 type
@@ -45,6 +45,7 @@ type
     FDefColor: TPixieWebColor;
     FMasterCss: TPixieStylesheet;
     FUserCss: TPixieStylesheet;
+    FFontFaceRegistry: TPixieFontFaceRegistry;
     FSize: TPixieSize;
     FFixedBoxes: TPixiePositionVector;
     FOverElement: TPixieElement;
@@ -98,6 +99,7 @@ type
 
     // Accessors
     property Container: TPixieContainer read FContainer;
+    property FontFaceRegistry: TPixieFontFaceRegistry read FFontFaceRegistry;
     property Mode: TPixieDocumentMode read FMode;
     property DefColor: TPixieWebColor read FDefColor;
     function Root: TPixieElement;
@@ -232,6 +234,7 @@ begin
   FTabularElements := TPixiePointerList.Create;
   FAllElements := TPixieElementList.Create(True); // owns elements
   FSelMap := TPixieSelectionSet.Create;
+  FFontFaceRegistry := TPixieFontFaceRegistry.Create;
   FSize.Width := 0;
   FSize.Height := 0;
   FDefColor := TPixieWebColor.Black;
@@ -253,6 +256,7 @@ end;
 
 destructor TPixieDocument.Destroy;
 var
+  I: Integer;
   Pair: TPair<string, TPixieFontItem>;
 begin
   FOverElement := nil;
@@ -271,9 +275,17 @@ begin
 
   // Delete fonts via container
   if FContainer <> nil then
+  begin
     for Pair in FFonts do
       FContainer.DeleteFont(Pair.Value.Font);
+    // Uninstall @font-face fonts
+    for I := 0 to FFontFaceRegistry.Entries.Count - 1 do
+      if FFontFaceRegistry.Entries[I].Loaded and
+         (FFontFaceRegistry.Entries[I].InstalledHandle <> 0) then
+        FContainer.UninstallFont(FFontFaceRegistry.Entries[I].InstalledHandle);
+  end;
 
+  FFontFaceRegistry.Free;
   FSelMap.Free;
   FAllElements.Free;
   FTabularElements.Free;
@@ -524,6 +536,7 @@ begin
       Doc.FRoot.ParseAttributes;
 
       // Parse linked stylesheets (collected during ParseAttributes)
+      Doc.FStyles.FontFaces := Doc.FFontFaceRegistry.Entries;
       for I := 0 to Doc.FCss.Count - 1 do
       begin
         CssEntry := Doc.FCss[I];
@@ -541,6 +554,7 @@ begin
         Doc.FStyles.ParseCssStylesheet(CssEntry.Text,
           CssEntry.BaseUrl, Doc.FMode, MqLL);
       end;
+      Doc.FStyles.FontFaces := nil;
       Doc.FStyles.SortSelectors;
 
       // Apply media features

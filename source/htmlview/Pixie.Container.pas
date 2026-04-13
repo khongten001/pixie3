@@ -43,6 +43,7 @@ type
     function CreateFont(const Descr: TPixieFontDescription; Doc: TObject;
       out Metrics: TPixieFontMetrics): PtrUInt; virtual; abstract;
     procedure DeleteFont(HFont: PtrUInt); virtual; abstract;
+    procedure UninstallFont(Handle: PtrUInt); virtual;
     function TextWidth(const Text: string; HFont: PtrUInt): TPixiePixel; virtual; abstract;
     procedure DrawText(Hdc: PtrUInt; const Text: string; HFont: PtrUInt;
       Color: TPixieWebColor; const Pos: TPixiePosition); virtual; abstract;
@@ -233,6 +234,10 @@ begin
   end;
   if Buf <> '' then
     Callback(Buf, tpWord, UserData);
+end;
+
+procedure TPixieContainer.UninstallFont(Handle: PtrUInt);
+begin
 end;
 
 end.
