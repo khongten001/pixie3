@@ -200,6 +200,7 @@ type
       const Default: string = ''): string;
     function GetHref(Node: Pointer): string;
     function ParseSvgFloat(const S: string): Single;
+    function TryParseSvgFloat(const S: string; out Value: Single): Boolean;
     function ParseSvgLengthEm(const S: string; FontSize: Single): Single;
     function IsFontRelativeLength(const S: string): Boolean;
     procedure ParseViewBox(const S: string;
@@ -625,6 +626,21 @@ begin
   Val(Trimmed, Result, Code);
   if Code = 0 then
     Result := Result * Scale;
+end;
+
+// Like ParseSvgFloat but returns False for non-numeric values like "null"
+function TPixieSvgRendererBase.TryParseSvgFloat(const S: string;
+  out Value: Single): Boolean;
+var
+  P, Len: Integer;
+begin
+  Value := 0;
+  Len := Length(S);
+  P := 1;
+  while (P <= Len) and (S[P] <= ' ') do Inc(P);
+  Result := (P <= Len) and CharInSet(S[P], ['0'..'9', '.', '-', '+']);
+  if Result then
+    Value := ParseSvgFloat(S);
 end;
 
 // Returns ParseSvgFloat(S) * FontSize for em/rem/% lengths, plain
@@ -1065,6 +1081,7 @@ var
   DashArrayStr, DashOffsetStr: string;
   AnchorStr, FilterStr, FilterId: string;
   Pos1, Pos2: Integer;
+  V: Single;
   Color: TPixieWebColor;
   Matrix: TPixieSvgColorMatrix;
 begin
@@ -1168,8 +1185,8 @@ begin
   StrokeWStr := ParseStyleAttribute(StyleStr, 'stroke-width');
   if StrokeWStr = '' then
     StrokeWStr := GetAttr(Node, 'stroke-width');
-  if StrokeWStr <> '' then
-    Result.StrokeWidth := ParseSvgFloat(StrokeWStr);
+  if TryParseSvgFloat(StrokeWStr, V) then
+    Result.StrokeWidth := V;
 
   // Stroke line cap
   LineCapStr := ParseStyleAttribute(StyleStr, 'stroke-linecap');
@@ -1210,30 +1227,30 @@ begin
   DashOffsetStr := ParseStyleAttribute(StyleStr, 'stroke-dashoffset');
   if DashOffsetStr = '' then
     DashOffsetStr := GetAttr(Node, 'stroke-dashoffset');
-  if DashOffsetStr <> '' then
-    Result.DashOffset := ParseSvgFloat(DashOffsetStr);
+  if TryParseSvgFloat(DashOffsetStr, V) then
+    Result.DashOffset := V;
 
   // Opacity (not inherited — each element defaults to 1.0 unless explicitly set)
   Result.Opacity := 1.0;
   OpacStr := ParseStyleAttribute(StyleStr, 'opacity');
   if OpacStr = '' then
     OpacStr := GetAttr(Node, 'opacity');
-  if OpacStr <> '' then
-    Result.Opacity := ParseSvgFloat(OpacStr);
+  if TryParseSvgFloat(OpacStr, V) then
+    Result.Opacity := V;
 
   // Fill opacity
   FillOpStr := ParseStyleAttribute(StyleStr, 'fill-opacity');
   if FillOpStr = '' then
     FillOpStr := GetAttr(Node, 'fill-opacity');
-  if FillOpStr <> '' then
-    Result.FillOpacity := ParseSvgFloat(FillOpStr);
+  if TryParseSvgFloat(FillOpStr, V) then
+    Result.FillOpacity := V;
 
   // Stroke opacity
   StrokeOpStr := ParseStyleAttribute(StyleStr, 'stroke-opacity');
   if StrokeOpStr = '' then
     StrokeOpStr := GetAttr(Node, 'stroke-opacity');
-  if StrokeOpStr <> '' then
-    Result.StrokeOpacity := ParseSvgFloat(StrokeOpStr);
+  if TryParseSvgFloat(StrokeOpStr, V) then
+    Result.StrokeOpacity := V;
 
   // Font shorthand: font: [style] [weight] size[/line-height] family[, ...]
   // Parsed first so individual properties can override below
@@ -1265,8 +1282,8 @@ begin
       Result.FontWeight := 700
     else if FontWeightStr = 'normal' then
       Result.FontWeight := 400
-    else
-      Result.FontWeight := Round(ParseSvgFloat(FontWeightStr));
+    else if TryParseSvgFloat(FontWeightStr, V) then
+      Result.FontWeight := Round(V);
   end;
 
   // Font style
@@ -1284,8 +1301,8 @@ begin
   begin
     if LetterSpacingStr = 'normal' then
       Result.LetterSpacing := 0
-    else
-      Result.LetterSpacing := ParseSvgFloat(LetterSpacingStr);
+    else if TryParseSvgFloat(LetterSpacingStr, V) then
+      Result.LetterSpacing := V;
   end;
 
   // Baseline shift (super/sub/percentage/length)
@@ -1427,6 +1444,7 @@ procedure TPixieSvgRendererBase.ParseFontShorthand(const S: string;
 var
   P, Len, TokenStart: Integer;
   Token, FamilyStr: string;
+  V: Single;
   SizeFound: Boolean;
 begin
   P := 1;
@@ -1484,7 +1502,8 @@ begin
         else
         begin
           // Bare number — weight if 100-900 range
-          State.FontWeight := Round(ParseSvgFloat(Token));
+          if TryParseSvgFloat(Token, V) then
+            State.FontWeight := Round(V);
         end;
       end
       else
