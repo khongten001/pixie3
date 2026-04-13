@@ -66,6 +66,9 @@ type
     ColorMatrix: TPixieSvgColorMatrix;
     StrokeBeforeFill: Boolean;
     BaselineShift: Single;
+    MarkerStart: string;
+    MarkerMid: string;
+    MarkerEnd: string;
   end;
 
   { TPixieSvgGradientStop }
@@ -1079,7 +1082,7 @@ var
   LetterSpacingStr, TextDecStr, BaselineShiftStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
-  AnchorStr, FilterStr, FilterId: string;
+  AnchorStr, FilterStr, FilterId, MarkerStr: string;
   Pos1, Pos2: Integer;
   V: Single;
   Color: TPixieWebColor;
@@ -1384,6 +1387,45 @@ begin
         (Pos1 > 0) and ((Pos2 = 0) or (Pos1 < Pos2));
     end;
   end;
+
+  // Marker properties (inherited per SVG spec)
+  // 'marker' shorthand sets all three at once
+  MarkerStr := ParseStyleAttribute(StyleStr, 'marker');
+  if MarkerStr = '' then
+    MarkerStr := GetAttr(Node, 'marker');
+  if MarkerStr <> '' then
+  begin
+    if MarkerStr = 'none' then
+    begin
+      Result.MarkerStart := '';
+      Result.MarkerMid := '';
+      Result.MarkerEnd := '';
+    end
+    else
+    begin
+      Result.MarkerStart := MarkerStr;
+      Result.MarkerMid := MarkerStr;
+      Result.MarkerEnd := MarkerStr;
+    end;
+  end;
+  MarkerStr := ParseStyleAttribute(StyleStr, 'marker-start');
+  if MarkerStr = '' then
+    MarkerStr := GetAttr(Node, 'marker-start');
+  if MarkerStr <> '' then
+    if MarkerStr = 'none' then Result.MarkerStart := ''
+    else Result.MarkerStart := MarkerStr;
+  MarkerStr := ParseStyleAttribute(StyleStr, 'marker-mid');
+  if MarkerStr = '' then
+    MarkerStr := GetAttr(Node, 'marker-mid');
+  if MarkerStr <> '' then
+    if MarkerStr = 'none' then Result.MarkerMid := ''
+    else Result.MarkerMid := MarkerStr;
+  MarkerStr := ParseStyleAttribute(StyleStr, 'marker-end');
+  if MarkerStr = '' then
+    MarkerStr := GetAttr(Node, 'marker-end');
+  if MarkerStr <> '' then
+    if MarkerStr = 'none' then Result.MarkerEnd := ''
+    else Result.MarkerEnd := MarkerStr;
 
   // xml:space (inherited; "preserve" keeps all whitespace verbatim)
   AnchorStr := GetAttr(Node, 'space');
@@ -3890,42 +3932,27 @@ procedure TPixieSvgRendererBase.RenderMarkers(Node: Pointer;
   const State: TPixieSvgState;
   X1, Y1, X2, Y2, Angle1, Angle2: Single);
 var
-  MarkerStartStr, MarkerEndStr: string;
-  StyleStr: string;
   MarkerId: string;
   SW: Single;
 begin
-  // Visio-exported SVGs set marker-end via CSS classes, so check direct
-  // attributes first and fall back to class/inline-style resolution only
-  // when needed. Most non-arrow paths have neither, so this stays cheap.
-  MarkerStartStr := GetAttr(Node, 'marker-start');
-  MarkerEndStr := GetAttr(Node, 'marker-end');
-  if (MarkerStartStr = '') or (MarkerEndStr = '') then
-  begin
-    StyleStr := ResolveNodeStyle(Node);
-    if MarkerStartStr = '' then
-      MarkerStartStr := ParseStyleAttribute(StyleStr, 'marker-start');
-    if MarkerEndStr = '' then
-      MarkerEndStr := ParseStyleAttribute(StyleStr, 'marker-end');
-  end;
-
-  if (MarkerStartStr = '') and (MarkerEndStr = '') then
+  if (State.MarkerStart = '') and (State.MarkerMid = '') and
+     (State.MarkerEnd = '') then
     Exit;
 
   SW := State.StrokeWidth;
 
   // marker-start
-  if MarkerStartStr <> '' then
+  if State.MarkerStart <> '' then
   begin
-    MarkerId := ExtractUrlId(MarkerStartStr);
+    MarkerId := ExtractUrlId(State.MarkerStart);
     if MarkerId <> '' then
       RenderMarkerAt(MarkerId, X1, Y1, Angle1, SW, State, True);
   end;
 
   // marker-end
-  if MarkerEndStr <> '' then
+  if State.MarkerEnd <> '' then
   begin
-    MarkerId := ExtractUrlId(MarkerEndStr);
+    MarkerId := ExtractUrlId(State.MarkerEnd);
     if MarkerId <> '' then
       RenderMarkerAt(MarkerId, X2, Y2, Angle2, SW, State);
   end;
