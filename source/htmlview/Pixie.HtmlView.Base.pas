@@ -899,9 +899,8 @@ begin
     FContainer.ViewportHeight := H;
   end;
   if (FDocument <> nil) and FDocument.CheckMediaChanged then
-    RebuildDocument
-  else
-    FNeedsLayout := True;
+    FDocument.Rebuild;
+  FNeedsLayout := True;
   Invalidate;
 end;
 

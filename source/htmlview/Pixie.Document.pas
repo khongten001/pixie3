@@ -2115,7 +2115,7 @@ end;
 
 procedure TPixieDocument.Rebuild;
 var
-  I: Integer;
+  I, J: Integer;
   El: TPixieElement;
   Ri: TPixieRenderItem;
   CssEntry: TPixieCssText;
@@ -2155,7 +2155,7 @@ begin
   FWordSelAnchor := nil;
   FSelMap.Clear;
 
-  // 4. Remove and free ::before/::after pseudo-elements
+  // 4. Remove and free ::before/::after pseudo-elements and anonymous wrappers
   for I := FAllElements.Count - 1 downto 0 do
   begin
     El := FAllElements[I];
@@ -2165,15 +2165,29 @@ begin
       if El.Parent <> nil then
         El.Parent.RemoveChild(El);
       UnregisterElement(El);
+    end
+    else if (El is TPixieHtmlTag) and (El.GetTag = -1) then
+    begin
+      // Anonymous wrapper element from previous render tree — remove
+      FAllElements.Delete(I);
     end;
   end;
 
   // 5. Clear used styles, reset accumulated styles and counters
+  //    Also clear pseudo-element children (not in FAllElements)
   for I := 0 to FAllElements.Count - 1 do
   begin
-    FAllElements[I].ClearUsedStyles;
-    FAllElements[I].ResetStyle;
-    FAllElements[I].ClearCounterValues;
+    El := FAllElements[I];
+    El.ClearUsedStyles;
+    El.ResetStyle;
+    El.ClearCounterValues;
+    for J := 0 to El.Children.Count - 1 do
+      if (El.Children[J].GetTag = Ord(psid__tag_before)) or
+         (El.Children[J].GetTag = Ord(psid__tag_after)) then
+      begin
+        El.Children[J].ClearUsedStyles;
+        El.Children[J].ResetStyle;
+      end;
   end;
 
   // 6. Re-create FStyles and re-collect from <style>/<link>

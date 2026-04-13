@@ -253,7 +253,7 @@ begin
     Ord(psid_background_color),
     Ord(psid_background_position_x), Ord(psid_background_position_y),
     Ord(psid_background_repeat), Ord(psid_background_attachment),
-    Ord(psid_background_image), Ord(psid_background_image_baseurl),
+    Ord(psid_background_image),
     Ord(psid_background_size),
     Ord(psid_background_origin), Ord(psid_background_clip)]);
 
