@@ -17,6 +17,7 @@ uses
 type
   FLOAT = Single;
   PFLOAT = ^FLOAT;
+  PUINT16 = ^UINT16;
   TIID = TGUID;
 
   DXGI_FORMAT = type Integer;

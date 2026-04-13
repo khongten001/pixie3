@@ -19,7 +19,7 @@ procedure PixieWebPFreePixels(Pixels: Pointer);
 implementation
 
 uses
-  {$IFDEF FPC}DynLibs,{$ENDIF}
+  {$IFDEF FPC}DynLibs,{$ELSE}Winapi.Windows,{$ENDIF}
   SysUtils;
 
 type

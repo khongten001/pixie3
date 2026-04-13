@@ -191,7 +191,7 @@ function PercentDecode(const S: string): string;
 var
   I, Len, Ch: Integer;
 {$IFNDEF FPC}
-  Bytes: array of Byte;
+  Bytes: TBytes;
   ByteCount: Integer;
 {$ENDIF}
 begin

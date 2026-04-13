@@ -171,7 +171,7 @@ var
 {$IFDEF FPC}
   C: Char;
 {$ELSE}
-  Bytes: array of Byte;
+  Bytes: TBytes;
   ByteCount: Integer;
 {$ENDIF}
 begin
