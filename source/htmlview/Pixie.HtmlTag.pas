@@ -12,7 +12,7 @@ unit Pixie.HtmlTag;
 interface
 
 uses
-  SysUtils, Generics.Collections, Generics.Defaults,
+  SysUtils, Generics.Collections,
   Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssLength, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
@@ -294,7 +294,7 @@ begin
   FStrClasses := TPixieStringVector.Create;
   FClasses := TPixieIntVector.Create;
   FStyle := TPixieStyle.Create;
-  FAttrs := TPixieStringMap.Create(TIStringComparer.Ordinal);
+  FAttrs := TPixieStringMap.Create;
   FPseudoClasses := TPixieIntVector.Create;
 end;
 
