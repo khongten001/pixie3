@@ -12,7 +12,7 @@ unit Pixie.HtmlTag;
 interface
 
 uses
-  SysUtils, Generics.Collections,
+  SysUtils, Generics.Collections, Generics.Defaults,
   Pixie.Types, Pixie.StringId, Pixie.Utils,
   Pixie.CssLength, Pixie.WebColor, Pixie.Borders,
   Pixie.Background, Pixie.FontDescription,
@@ -294,7 +294,7 @@ begin
   FStrClasses := TPixieStringVector.Create;
   FClasses := TPixieIntVector.Create;
   FStyle := TPixieStyle.Create;
-  FAttrs := TPixieStringMap.Create;
+  FAttrs := TPixieStringMap.Create(TIStringComparer.Ordinal);
   FPseudoClasses := TPixieIntVector.Create;
 end;
 
@@ -573,9 +573,10 @@ var
   Tokens: TPixieStringVector;
   I: Integer;
 begin
-  Name := PixieLowerCase(AName);
+  Name := AName;
   FAttrs.AddOrSetValue(Name, AVal);
 
+  Name := PixieLowerCase(Name);
   if Name = 'class' then
   begin
     Val := AVal;
@@ -613,7 +614,7 @@ function TPixieHtmlTag.GetAttr(const AName: string;
 var
   Val: string;
 begin
-  if FAttrs.TryGetValue(PixieLowerCase(AName), Val) then
+  if FAttrs.TryGetValue(AName, Val) then
     Result := Val
   else
     Result := ADef;

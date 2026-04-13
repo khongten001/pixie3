@@ -213,7 +213,8 @@ uses
   Pixie.HtmlParser, Pixie.MasterCss,
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.CssSelector,
   Pixie.HtmlTag,
-  Pixie.ElText, Pixie.ElImage, Pixie.ElInput, Pixie.ElTextInput,
+  Pixie.ElText, Pixie.ElImage, Pixie.ElSvg,
+  Pixie.ElInput, Pixie.ElTextInput,
   Pixie.ElTable, Pixie.ElAnchor, Pixie.ElMisc, Pixie.ElDetails,
   Pixie.ElBeforeAfter,
   Pixie.RenderItem, Pixie.RenderBlock,
@@ -801,6 +802,8 @@ begin
       El := TPixieElBody.Create(Self)
     else if TagName = 'hr' then
       El := TPixieElHr.Create(Self)
+    else if TagName = 'svg' then
+      El := TPixieElSvg.Create(Self)
     else if TagName = 'div' then
       El := TPixieElDiv.Create(Self)
     else if TagName = 'script' then
