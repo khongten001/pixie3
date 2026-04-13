@@ -121,6 +121,7 @@
         <DCCReference Include="..\source\htmlview\Pixie.Style.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.CssSelector.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.Stylesheet.pas"/>
+        <DCCReference Include="..\source\htmlview\Pixie.FontFace.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.MediaQuery.pas"/>
         <DCCReference Include="..\source\common\Pixie.GradientLayer.pas"/>
         <DCCReference Include="..\source\common\Pixie.DataUri.pas"/>
@@ -134,6 +135,7 @@
         <DCCReference Include="..\source\htmlview\Pixie.HtmlTag.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElText.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElImage.pas"/>
+        <DCCReference Include="..\source\htmlview\Pixie.ElSvg.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElTable.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElAnchor.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElMisc.pas"/>
@@ -161,6 +163,7 @@
         <DCCReference Include="..\source\htmlview\Pixie.Iterators.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ScrollView.pas"/>
         <DCCReference Include="..\source\common\Pixie.Canvas.pas"/>
+        <DCCReference Include="..\source\common\Pixie.WebP.pas"/>
         <DCCReference Include="..\source\common\Pixie.Clipboard.pas"/>
         <DCCReference Include="..\source\common\Pixie.D2DHeaders.pas"/>
         <DCCReference Include="..\source\common\Pixie.Canvas.D2D.pas"/>

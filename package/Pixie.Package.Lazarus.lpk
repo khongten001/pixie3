@@ -49,6 +49,10 @@
         <UnitName Value="Pixie.Canvas"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.WebP.pas"/>
+        <UnitName Value="Pixie.WebP"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.Clipboard.pas"/>
         <UnitName Value="Pixie.Clipboard"/>
       </Item>
@@ -99,6 +103,10 @@
       <Item>
         <Filename Value="../source/htmlview/Pixie.ElImage.pas"/>
         <UnitName Value="Pixie.ElImage"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/htmlview/Pixie.ElSvg.pas"/>
+        <UnitName Value="Pixie.ElSvg"/>
       </Item>
       <Item>
         <Filename Value="../source/htmlview/Pixie.ElInput.pas"/>
@@ -256,6 +264,10 @@
       <Item>
         <Filename Value="../source/htmlview/Pixie.Stylesheet.pas"/>
         <UnitName Value="Pixie.Stylesheet"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/htmlview/Pixie.FontFace.pas"/>
+        <UnitName Value="Pixie.FontFace"/>
       </Item>
       <Item>
         <Filename Value="../source/common/Pixie.SvgRenderer.pas"/>
