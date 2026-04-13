@@ -91,7 +91,10 @@ begin
   else
     Result := Screen.PixelsPerInch / 96;
   {$ELSE}
-  Result := GetCanvasScaleFactor;
+  // Non-Windows: ClientWidth/ClientHeight are already in logical points,
+  // so no DPI compensation is needed for layout. The backing buffer density
+  // (Retina 2x etc.) is handled separately via SetViewSize's ACanvasScale.
+  Result := 1.0;
   {$ENDIF}
 end;
 
