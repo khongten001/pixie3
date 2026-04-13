@@ -2057,9 +2057,10 @@ end;
 procedure TPixieSvgRendererBase.ApplyMask(Node: Pointer;
   out NeedMaskRestore: Boolean);
 var
-  MaskStr, MaskId, Href: string;
-  MaskEl: Pointer;
+  MaskStr, MaskId, Href, ChildTag, UseHref, UseTargetId: string;
+  MaskEl, UseTarget: Pointer;
   Child: TDOMNode;
+  ContentNode: Pointer;
   MX, MY, MW, MH: Single;
 begin
   NeedMaskRestore := False;
@@ -2075,29 +2076,48 @@ begin
   if not FIdMap.TryGetValue(MaskId, MaskEl) then Exit;
   if LowerCase(DomToStr(TDOMElement(MaskEl).TagName)) <> 'mask' then Exit;
 
-  // Find first <image> child in the mask element
+  // Find first <image> child in the mask element (also resolve <use>)
   Href := '';
+  ContentNode := nil;
   Child := TDOMNode(MaskEl).FirstChild;
   while Child <> nil do
   begin
-    if (Child.NodeType = ELEMENT_NODE) and
-       (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'image') then
+    if Child.NodeType = ELEMENT_NODE then
     begin
-      Href := GetHref(Child);
-      Break;
+      ChildTag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      if ChildTag = 'image' then
+      begin
+        Href := GetHref(Child);
+        ContentNode := Child;
+        Break;
+      end
+      else if ChildTag = 'use' then
+      begin
+        UseHref := GetHref(Child);
+        if (UseHref <> '') and (UseHref[1] = '#') then
+        begin
+          UseTargetId := Copy(UseHref, 2, MaxInt);
+          if FIdMap.TryGetValue(UseTargetId, UseTarget) then
+            if LowerCase(DomToStr(TDOMElement(UseTarget).TagName)) = 'image' then
+            begin
+              Href := GetHref(UseTarget);
+              ContentNode := UseTarget;
+              Break;
+            end;
+        end;
+      end;
     end;
     Child := Child.NextSibling;
   end;
   if Href = '' then Exit;
 
-  // Read mask bounds
-  MX := ParseSvgFloat(GetAttr(MaskEl, 'x', '0'));
-  MY := ParseSvgFloat(GetAttr(MaskEl, 'y', '0'));
-  MW := ParseSvgFloat(GetAttr(MaskEl, 'width', '1'));
-  MH := ParseSvgFloat(GetAttr(MaskEl, 'height', '1'));
+  // Use the image element's own dimensions for mask placement
+  MX := ParseSvgFloat(GetAttr(ContentNode, 'x', '0'));
+  MY := ParseSvgFloat(GetAttr(ContentNode, 'y', '0'));
+  MW := ParseSvgFloat(GetAttr(ContentNode, 'width', '0'));
+  MH := ParseSvgFloat(GetAttr(ContentNode, 'height', '0'));
+  if (MW <= 0) or (MH <= 0) then Exit;
 
-  // Both maskUnits cases (objectBoundingBox default and userSpaceOnUse)
-  // pass raw coordinates — the mask image maps to these directly.
   DoBeginMask(Href, MX, MY, MW, MH);
   NeedMaskRestore := True;
 end;
@@ -4356,7 +4376,7 @@ var
   X, Y, W, H: Single;
   VbX, VbY, VbW, VbH: Single;
   SX, SY: Single;
-  NeedRestore: Boolean;
+  NeedRestore, NeedMaskRestore: Boolean;
   M: TPixieSvgMatrix;
   TargetState: TPixieSvgState;
 begin
@@ -4381,6 +4401,7 @@ begin
   // Apply <use> element's own transform, then x/y translation
   ApplyNodeTransform(Node);
   ApplyClipPath(Node);
+  ApplyMask(Node, NeedMaskRestore);
   ApplyOpacity(State, NeedRestore);
   if (Abs(X) > Eps) or (Abs(Y) > Eps) then
   begin
@@ -4430,6 +4451,7 @@ begin
   end;
 
   if NeedRestore then DoEndOpacity;
+  if NeedMaskRestore then DoEndMask;
   DoRestoreState;
 end;
 
