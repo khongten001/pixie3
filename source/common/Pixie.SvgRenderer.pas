@@ -33,6 +33,9 @@ type
 
   TPixieSingleArray = array of Single;
 
+  TPixieSvgDominantBaseline = (dbAuto, dbHanging, dbMiddle, dbCentral,
+    dbMathematical, dbIdeographic, dbTextBeforeEdge, dbTextAfterEdge);
+
   { TPixieSvgState - inherited graphics state }
 
   TPixieSvgState = record
@@ -63,6 +66,7 @@ type
     XmlSpacePreserve: Boolean;
     StrokeBeforeFill: Boolean;
     BaselineShift: Single;
+    DominantBaseline: TPixieSvgDominantBaseline;
     MarkerStart: string;
     MarkerMid: string;
     MarkerEnd: string;
@@ -1064,7 +1068,7 @@ var
   FillOpStr, StrokeOpStr, ColorStr: string;
   StyleStr: string;
   FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
-  LetterSpacingStr, TextDecStr, BaselineShiftStr: string;
+  LetterSpacingStr, TextDecStr, BaselineShiftStr, DomBaselineStr: string;
   LineCapStr, LineJoinStr: string;
   DashArrayStr, DashOffsetStr: string;
   AnchorStr, MarkerStr: string;
@@ -1309,6 +1313,33 @@ begin
         Length(BaselineShiftStr) - 1)) / 100 * Result.FontSize
     else if BaselineShiftStr <> 'baseline' then
       Result.BaselineShift := -ParseSvgFloat(BaselineShiftStr);
+  end;
+
+  // Dominant baseline
+  DomBaselineStr := ParseStyleAttribute(StyleStr, 'dominant-baseline');
+  if DomBaselineStr = '' then
+    DomBaselineStr := GetAttr(Node, 'dominant-baseline');
+  if DomBaselineStr <> '' then
+  begin
+    DomBaselineStr := LowerCase(DomBaselineStr);
+    if DomBaselineStr = 'hanging' then
+      Result.DominantBaseline := dbHanging
+    else if DomBaselineStr = 'middle' then
+      Result.DominantBaseline := dbMiddle
+    else if DomBaselineStr = 'central' then
+      Result.DominantBaseline := dbCentral
+    else if DomBaselineStr = 'mathematical' then
+      Result.DominantBaseline := dbMathematical
+    else if DomBaselineStr = 'ideographic' then
+      Result.DominantBaseline := dbIdeographic
+    else if (DomBaselineStr = 'text-before-edge') or
+            (DomBaselineStr = 'text-top') then
+      Result.DominantBaseline := dbTextBeforeEdge
+    else if (DomBaselineStr = 'text-after-edge') or
+            (DomBaselineStr = 'text-bottom') then
+      Result.DominantBaseline := dbTextAfterEdge
+    else
+      Result.DominantBaseline := dbAuto;
   end;
 
   // Text anchor

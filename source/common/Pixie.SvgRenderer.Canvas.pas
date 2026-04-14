@@ -775,6 +775,18 @@ begin
   EnsureFont(State);
   if FFontHandle = 0 then Exit;
 
+  // Heuristic baseline offsets (no font baseline table access)
+  case State.DominantBaseline of
+    dbAuto: ;
+    dbHanging:         Y := Y + FFontMetrics.Ascent * 0.8;
+    dbMiddle:          Y := Y + FFontMetrics.XHeight * 0.5;
+    dbCentral:         Y := Y + FFontMetrics.Ascent - FFontMetrics.Height * 0.5;
+    dbMathematical:    Y := Y + FFontMetrics.Ascent * 0.5;
+    dbIdeographic:     Y := Y - FFontMetrics.Descent;
+    dbTextBeforeEdge:  Y := Y + FFontMetrics.Ascent;
+    dbTextAfterEdge:   Y := Y - FFontMetrics.Descent;
+  end;
+
   HasFill := State.HasFill;
   HasStroke := State.HasStroke and (State.StrokeWidth > 0);
   if not HasFill and not HasStroke then Exit;
