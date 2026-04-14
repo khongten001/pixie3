@@ -302,6 +302,8 @@ type
     psid_max_height,
     psid_position,
     psid_overflow,
+    psid_overflow_x,
+    psid_overflow_y,
     psid_display,
     psid_visibility,
     psid_appearance,

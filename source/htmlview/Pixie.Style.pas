@@ -1748,6 +1748,10 @@ begin
   if Name = Ord(psid_word_wrap) then
     Name := Ord(psid_overflow_wrap);
 
+  // overflow-x / overflow-y map to overflow (simplified: no per-axis support)
+  if (Name = Ord(psid_overflow_x)) or (Name = Ord(psid_overflow_y)) then
+    Name := Ord(psid_overflow);
+
   // =============================  SINGLE KEYWORD  =============================
 
   if (Name = Ord(psid_display)) or (Name = Ord(psid_visibility)) or
