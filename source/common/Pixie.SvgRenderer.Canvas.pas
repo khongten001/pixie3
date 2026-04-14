@@ -252,8 +252,6 @@ begin
   begin
     Stop := Grad.Stops[I];
     CP := TPixieColorPoint.Create(Stop.Offset, Stop.Color);
-    if State.HasColorMatrix then
-      CP.Color := TransformColor(CP.Color, State.ColorMatrix);
     CP.Color.Alpha := Round(CP.Color.Alpha * Opacity);
     Layer.ColorPoints.Add(CP);
   end;
@@ -506,8 +504,6 @@ var
 begin
   ReplayPath;
   FC := State.FillColor;
-  if State.HasColorMatrix then
-    FC := TransformColor(FC, State.ColorMatrix);
   FC.Alpha := Round(FC.Alpha * State.FillOpacity);
   if State.EvenOddFill then FR := frEvenOdd else FR := frNonZero;
   FCanvas.FillPath(FC, FR);
@@ -520,8 +516,6 @@ var
 begin
   ReplayPath;
   SC := State.StrokeColor;
-  if State.HasColorMatrix then
-    SC := TransformColor(SC, State.ColorMatrix);
   SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
   FCanvas.StrokePath(SC, State.StrokeWidth);
 end;
@@ -593,14 +587,10 @@ begin
   else if State.HasFill and not SkipFill then
   begin
     FC := State.FillColor;
-    if State.HasColorMatrix then
-      FC := TransformColor(FC, State.ColorMatrix);
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
     if State.HasStroke and not HasGradientStroke then
     begin
       SC := State.StrokeColor;
-      if State.HasColorMatrix then
-        SC := TransformColor(SC, State.ColorMatrix);
       SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
       if State.StrokeBeforeFill then
       begin
@@ -623,8 +613,6 @@ begin
   else if State.HasStroke then
   begin
     SC := State.StrokeColor;
-    if State.HasColorMatrix then
-      SC := TransformColor(SC, State.ColorMatrix);
     SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
     FCanvas.StrokePath(SC, State.StrokeWidth);
   end
@@ -801,8 +789,6 @@ begin
       if FC.Alpha = 0 then
         FC := State.FillColor;
     end;
-    if State.HasColorMatrix then
-      FC := TransformColor(FC, State.ColorMatrix);
     FC.Alpha := Round(FC.Alpha * State.FillOpacity);
   end;
 
@@ -810,8 +796,6 @@ begin
   if HasStroke then
   begin
     SC := State.StrokeColor;
-    if State.HasColorMatrix then
-      SC := TransformColor(SC, State.ColorMatrix);
     SC.Alpha := Round(SC.Alpha * State.StrokeOpacity);
   end;
 

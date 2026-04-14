@@ -251,11 +251,6 @@ begin
   begin
     C0 := Grad.Stops[0].Color;
     C1 := Grad.Stops[1].Color;
-    if State.HasColorMatrix then
-    begin
-      C0 := TransformColor(C0, State.ColorMatrix);
-      C1 := TransformColor(C1, State.ColorMatrix);
-    end;
     Result := BuildType2Function(C0, C1);
     Exit;
   end;
@@ -266,11 +261,6 @@ begin
   begin
     C0 := Grad.Stops[I].Color;
     C1 := Grad.Stops[I + 1].Color;
-    if State.HasColorMatrix then
-    begin
-      C0 := TransformColor(C0, State.ColorMatrix);
-      C1 := TransformColor(C1, State.ColorMatrix);
-    end;
     SubIds[I] := BuildType2Function(C0, C1);
   end;
 
@@ -308,8 +298,6 @@ begin
   for I := 0 to Grad.Stops.Count - 1 do
   begin
     C := Grad.Stops[I].Color;
-    if State.HasColorMatrix then
-      C := TransformColor(C, State.ColorMatrix);
     if C.Alpha < 255 then
     begin
       Result := True;
@@ -347,11 +335,6 @@ begin
   begin
     A0 := Grad.Stops[0].Color.Alpha;
     A1 := Grad.Stops[1].Color.Alpha;
-    if State.HasColorMatrix then
-    begin
-      A0 := TransformColor(Grad.Stops[0].Color, State.ColorMatrix).Alpha;
-      A1 := TransformColor(Grad.Stops[1].Color, State.ColorMatrix).Alpha;
-    end;
     Result := BuildAlphaType2Function(A0, A1);
     Exit;
   end;
@@ -361,11 +344,6 @@ begin
   begin
     A0 := Grad.Stops[I].Color.Alpha;
     A1 := Grad.Stops[I + 1].Color.Alpha;
-    if State.HasColorMatrix then
-    begin
-      A0 := TransformColor(Grad.Stops[I].Color, State.ColorMatrix).Alpha;
-      A1 := TransformColor(Grad.Stops[I + 1].Color, State.ColorMatrix).Alpha;
-    end;
     SubIds[I] := BuildAlphaType2Function(A0, A1);
   end;
 
@@ -616,12 +594,6 @@ var
 begin
   FC := State.FillColor;
   SC := State.StrokeColor;
-  if State.HasColorMatrix then
-  begin
-    if State.FillGradientId = '' then
-      FC := TransformColor(FC, State.ColorMatrix);
-    SC := TransformColor(SC, State.ColorMatrix);
-  end;
 
   FillAlpha := (FC.Alpha / 255.0) * State.FillOpacity;
   StrokeAlpha := (SC.Alpha / 255.0) * State.StrokeOpacity;
@@ -1199,10 +1171,7 @@ begin
   PtSize := State.FontSize;
   Scale := PtSize / Info.TtFont.UnitsPerEm;
 
-  if State.HasColorMatrix then
-    SetPdfColor(TransformColor(State.FillColor, State.ColorMatrix), True)
-  else
-    SetPdfColor(State.FillColor, True);
+  SetPdfColor(State.FillColor, True);
 
   EmitLn('BT');
   EmitLn('/' + Info.PdfName + ' ' + PdfFloat(PtSize) + ' Tf');
@@ -1253,10 +1222,7 @@ begin
     TotalWidth := DoMeasureTextRun(Text, State);
     FontAscent := Info.TtFont.Ascent * Scale;
     FontXHeight := Info.TtFont.XHeight * Scale;
-    if State.HasColorMatrix then
-      SetPdfColor(TransformColor(State.FillColor, State.ColorMatrix), False)
-    else
-      SetPdfColor(State.FillColor, False);
+    SetPdfColor(State.FillColor, False);
     EmitLn(PdfFloat(PtSize * SvgDecorationThickness) + ' w');
     if (State.TextDecoration and TextDecorationLineUnderline) <> 0 then
     begin
