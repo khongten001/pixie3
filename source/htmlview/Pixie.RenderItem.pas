@@ -1461,7 +1461,10 @@ begin
       begin
         SavedPos := El.FPos;
         El.Render(El.Left, El.Top,
-          CbSize.NewWidth(El.Width), nil, True);
+          CbSize.NewWidthHeight(
+            SavedPos.Width + El.BoxSizingWidth,
+            SavedPos.Height + El.BoxSizingHeight,
+            SizeModeExactWidth or SizeModeExactHeight), nil, True);
         El.FPos := SavedPos;
       end;
 
