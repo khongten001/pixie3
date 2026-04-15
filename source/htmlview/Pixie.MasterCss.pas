@@ -460,6 +460,14 @@ const
     '  content: "\25BE ";' +
     '}';
 
+  // Quirks mode: table cells, table headers, and captions do not inherit
+  // font-size from the body — they reset to medium. This matches browser
+  // behaviour for documents in quirks mode.
+  PixieQuirksCss =
+    'table, td, th, caption {' +
+    '  font-size: medium;' +
+    '}';
+
 implementation
 
 end.

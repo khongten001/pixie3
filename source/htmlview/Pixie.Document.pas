@@ -512,6 +512,9 @@ begin
     begin
       Doc.FMasterCss.ParseCssStylesheet(ActualMaster, '',
         Doc.FMode);
+      if Doc.FMode = dmQuirks then
+        Doc.FMasterCss.ParseCssStylesheet(PixieQuirksCss, '',
+          Doc.FMode);
       Doc.FMasterCss.SortSelectors;
     end;
 
