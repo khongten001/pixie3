@@ -259,6 +259,13 @@ begin
         Continue;
       end;
 
+      if RuleName = Ord(psid_layer) then
+      begin
+        if Rule.Block <> nil then
+          ParseCssStylesheet(Rule.Block.Value, BaseUrl, Mode, Media, False);
+        Continue;
+      end;
+
       if RuleName = Ord(psid_font_face) then
       begin
         if (Rule.Block <> nil) and (FontFaces <> nil) then

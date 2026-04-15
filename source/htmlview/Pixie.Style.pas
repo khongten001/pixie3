@@ -1720,7 +1720,7 @@ begin
   end;
 
   // Check for calc() with context-dependent units (em/rem/vw/vh) - delay
-  if HasDeferredCalc(Tokens) then
+  if (GCalcCtx = nil) and HasDeferredCalc(Tokens) then
   begin
     TokensCopy := TPixieCssTokenList.Create;
     PixieCssTokenListCopy(Tokens, TokensCopy);
