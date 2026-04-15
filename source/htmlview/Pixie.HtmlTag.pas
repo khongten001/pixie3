@@ -2012,7 +2012,9 @@ begin
     Trimmed := Copy(Trimmed, 1, Length(Trimmed) - 1);
   end;
   System.Val(Trimmed, X, Code);
-  Result := Code = 0;
+  // Code=0 means exact parse; Code>1 means trailing non-numeric chars
+  // (e.g. "50px") — browsers ignore trailing garbage in HTML attributes
+  Result := (Code = 0) or ((Code > 1) and (X >= 0));
 end;
 
 function TPixieHtmlTag.ParseNonzeroDimensionValue(const S: string;
