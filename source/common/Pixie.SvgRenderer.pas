@@ -4155,9 +4155,12 @@ var
   IsGroup, NeedRestore, NeedMaskRestore: Boolean;
 begin
   // SVG display="none" prevents rendering of the element and its entire subtree.
+  // Check attribute, inline style, and CSS <style> resolved styles.
   DisplayStr := GetAttr(Node, 'display');
   if DisplayStr = '' then
     DisplayStr := ParseStyleAttribute(GetAttr(Node, 'style'), 'display');
+  if DisplayStr = '' then
+    DisplayStr := ParseStyleAttribute(ResolveNodeStyle(Node), 'display');
   if DisplayStr = 'none' then
     Exit;
 
