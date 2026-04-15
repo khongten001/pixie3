@@ -28,6 +28,11 @@ function PixieDigitValue(C: Integer): Integer; inline;
 function PixieIsSurrogate(C: Integer): Boolean; inline;
 function PixieToLower(C: Integer): Integer; inline;
 
+// Extract leading numeric prefix from HTML attribute values (e.g. "50px" -> "50").
+// Required because FPC's System.Val zeroes the result on any parse failure.
+function PixieExtractInteger(const S: string): string;
+function PixieExtractFloat(const S: string): string;
+
 implementation
 
 function PixieTrim(const S: string; const CharsToTrim: string): string;
@@ -380,6 +385,32 @@ begin
     Result := C + 32
   else
     Result := C;
+end;
+
+function PixieExtractInteger(const S: string): string;
+var
+  I: Integer;
+begin
+  I := 1;
+  while (I <= Length(S)) and PixieIsDigit(Ord(S[I])) do
+    Inc(I);
+  if I > Length(S) then
+    Result := S
+  else
+    Result := Copy(S, 1, I - 1);
+end;
+
+function PixieExtractFloat(const S: string): string;
+var
+  I: Integer;
+begin
+  I := 1;
+  while (I <= Length(S)) and (PixieIsDigit(Ord(S[I])) or (S[I] = '.')) do
+    Inc(I);
+  if I > Length(S) then
+    Result := S
+  else
+    Result := Copy(S, 1, I - 1);
 end;
 
 end.

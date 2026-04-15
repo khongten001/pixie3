@@ -1979,27 +1979,20 @@ end;
 function TPixieHtmlTag.ParseNonNegativeInteger(const S: string;
   out N: Integer): Boolean;
 var
-  Trimmed: string;
-  I, Code: Integer;
+  Stripped: string;
+  Code: Integer;
 begin
-  Trimmed := PixieTrim(S);
-  if Trimmed = '' then
+  Stripped := PixieExtractInteger(PixieTrim(S));
+  if Stripped = '' then
     Exit(False);
-  // Skip leading whitespace, accept digits
-  I := 1;
-  while (I <= Length(Trimmed)) and (Trimmed[I] = ' ') do
-    Inc(I);
-  if I > Length(Trimmed) then
-    Exit(False);
-  // Try to parse as integer
-  System.Val(Trimmed, N, Code);
-  Result := (Code = 0) and (N >= 0);
+  System.Val(Stripped, N, Code);
+  Result := Code = 0;
 end;
 
 function TPixieHtmlTag.ParseDimensionValue(const S: string;
   out X: Single; out IsPercent: Boolean): Boolean;
 var
-  Trimmed: string;
+  Trimmed, Stripped: string;
   Code: Integer;
 begin
   Trimmed := PixieTrim(S);
@@ -2011,10 +2004,11 @@ begin
     IsPercent := True;
     Trimmed := Copy(Trimmed, 1, Length(Trimmed) - 1);
   end;
-  System.Val(Trimmed, X, Code);
-  // Code=0 means exact parse; Code>1 means trailing non-numeric chars
-  // (e.g. "50px") — browsers ignore trailing garbage in HTML attributes
-  Result := (Code = 0) or ((Code > 1) and (X >= 0));
+  Stripped := PixieExtractFloat(Trimmed);
+  if Stripped = '' then
+    Exit(False);
+  System.Val(Stripped, X, Code);
+  Result := (Code = 0) and (X >= 0);
 end;
 
 function TPixieHtmlTag.ParseNonzeroDimensionValue(const S: string;

@@ -100,6 +100,7 @@ begin
           IsPct := True;
           Trimmed := Copy(Trimmed, 1, Length(Trimmed) - 1);
         end;
+        Trimmed := PixieExtractFloat(Trimmed);
         System.Val(Trimmed, X, Code);
         if Code = 0 then
         begin
