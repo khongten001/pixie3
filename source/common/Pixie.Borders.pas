@@ -146,25 +146,33 @@ begin
 
   if (TopLeftX > HalfWidth) or (TopLeftY > HalfHeight) then
   begin
-    Factor := Min(HalfWidth / TopLeftX, HalfHeight / TopLeftY);
+    Factor := 1;
+    if TopLeftX > 0 then Factor := HalfWidth / TopLeftX;
+    if TopLeftY > 0 then Factor := Min(Factor, HalfHeight / TopLeftY);
     TopLeftX := TopLeftX * Factor;
     TopLeftY := TopLeftY * Factor;
   end;
   if (TopRightX > HalfWidth) or (TopRightY > HalfHeight) then
   begin
-    Factor := Min(HalfWidth / TopRightX, HalfHeight / TopRightY);
+    Factor := 1;
+    if TopRightX > 0 then Factor := HalfWidth / TopRightX;
+    if TopRightY > 0 then Factor := Min(Factor, HalfHeight / TopRightY);
     TopRightX := TopRightX * Factor;
     TopRightY := TopRightY * Factor;
   end;
   if (BottomRightX > HalfWidth) or (BottomRightY > HalfHeight) then
   begin
-    Factor := Min(HalfWidth / BottomRightX, HalfHeight / BottomRightY);
+    Factor := 1;
+    if BottomRightX > 0 then Factor := HalfWidth / BottomRightX;
+    if BottomRightY > 0 then Factor := Min(Factor, HalfHeight / BottomRightY);
     BottomRightX := BottomRightX * Factor;
     BottomRightY := BottomRightY * Factor;
   end;
   if (BottomLeftX > HalfWidth) or (BottomLeftY > HalfHeight) then
   begin
-    Factor := Min(HalfWidth / BottomLeftX, HalfHeight / BottomLeftY);
+    Factor := 1;
+    if BottomLeftX > 0 then Factor := HalfWidth / BottomLeftX;
+    if BottomLeftY > 0 then Factor := Min(Factor, HalfHeight / BottomLeftY);
     BottomLeftX := BottomLeftX * Factor;
     BottomLeftY := BottomLeftY * Factor;
   end;
