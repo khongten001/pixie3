@@ -92,7 +92,7 @@ implementation
 
 uses
   Math,
-  Pixie.StringId, Pixie.Borders, Pixie.Background,
+  Pixie.StringId, Pixie.Style, Pixie.Borders, Pixie.Background,
   Pixie.Canvas, Pixie.NativeContainer,
   Pixie.RenderItem, Pixie.RenderInput;
 
@@ -568,8 +568,13 @@ begin
   IsActive := FPseudoClasses.IndexOf(Ord(psid_active)) >= 0;
   IsHover := FPseudoClasses.IndexOf(Ord(psid_hover)) >= 0;
 
-  HasCssBorder := FCss.CssBorders.Left.Style > bsHidden;
-  HasCssBg := FCss.Bg.Color.Alpha > 0;
+  // Detect explicit CSS border/background — check both computed values
+  // and whether the cascade set the property at all (catches border:0
+  // and background:transparent which produce initial-like values).
+  HasCssBorder := (FCss.CssBorders.Left.Style > bsHidden) or
+    (Style.GetProperty(Ord(psid_border_left_style)).Kind <> pkInvalid);
+  HasCssBg := (FCss.Bg.Color.Alpha > 0) or
+    (Style.GetProperty(Ord(psid_background_color)).Kind <> pkInvalid);
 
   // Determine colours — CSS overrides when available
   if IsDisabled then
@@ -646,15 +651,19 @@ begin
   Label_ := '';
   GetText(Label_);
   Label_ := Trim(Label_);
-  if Label_ = '' then
+  // Only use default "Button" label for the native appearance
+  if (Label_ = '') and not (HasCssBg or HasCssBorder) then
     Label_ := 'Button';
 
-  TextW := Cv.MeasureText(Label_, FCss.Font);
-  TextX := BX + (BW - TextW) / 2;
-  TextY := BY + (BH - FCss.FontMetrics.Height) / 2;
+  if Label_ <> '' then
+  begin
+    TextW := Cv.MeasureText(Label_, FCss.Font);
+    TextX := BX + (BW - TextW) / 2;
+    TextY := BY + (BH - FCss.FontMetrics.Height) / 2;
 
-  Cv.DrawText(Label_, FCss.Font, TextColor,
-    TextX, TextY, BW, BH);
+    Cv.DrawText(Label_, FCss.Font, TextColor,
+      TextX, TextY, BW, BH);
+  end;
 end;
 
 procedure TPixieElButton.OnClick;
@@ -683,12 +692,14 @@ end;
 { TPixieElInputButton }
 
 procedure TPixieElInputButton.GetText(var Text: string);
+const
+  NoValue = #1;
 var
   Val: string;
 begin
-  Val := GetAttr('value');
-  if Val <> '' then
-    Text := Text + Val
+  Val := GetAttr('value', NoValue);
+  if Val <> NoValue then
+    Text := Text + Val  // value="" -> empty label, value="Go" -> "Go"
   else
   begin
     Val := GetAttr('type');
