@@ -457,8 +457,10 @@ begin
            (Cell^.CssHeight.Units <> cssUnitsPercentage) then
         begin
           CellMinH := Cell^.CssHeight.Val;
-          // For content-box, add padding+border to get border-box equivalent
-          if TPixieRenderItem(Cell^.El).Css.BoxSizing <> bxBorderBox then
+          // In quirks mode, height on table cells acts as border-box
+          // (includes padding); in standards mode, add padding+border
+          if (TPixieDocument(SrcEl.GetDocument).Mode <> dmQuirks) and
+             (TPixieRenderItem(Cell^.El).Css.BoxSizing <> bxBorderBox) then
             CellMinH := CellMinH +
               TPixieRenderItem(Cell^.El).ContentOffsetHeight;
         end;

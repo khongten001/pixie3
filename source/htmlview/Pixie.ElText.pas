@@ -201,10 +201,10 @@ var
   ElParent: TPixieElement;
   Doc: TPixieDocument;
   HFont: PtrUInt;
-  Color: TPixieWebColor;
+  Color, DecColor: TPixieWebColor;
   Txt: string;
   StartOff, EndOff: Integer;
-  HlX1, HlX2: TPixiePixel;
+  HlX1, HlX2, DecY: TPixiePixel;
 begin
   if IsWhiteSpace and (not FDrawSpaces) then
     Exit;
@@ -248,6 +248,36 @@ begin
         end;
         Color := ElParent.Css.Color;
         Doc.Container.DrawText(Hdc, Txt, HFont, Color, Pos);
+
+        // Draw text-decoration for non-inline parents (block, float, etc.)
+        // Inline parents are handled by TPixieHtmlTag.DrawBackground
+        if (ElParent.Css.Display <> displayInline) and
+           (ElParent.Css.TextDecorationLine <> TextDecorationLineNone) then
+        begin
+          if ElParent.Css.TextDecorationColor.IsCurrentColor then
+            DecColor := Color
+          else
+            DecColor := ElParent.Css.TextDecorationColor;
+          if (ElParent.Css.TextDecorationLine and TextDecorationLineUnderline) <> 0 then
+          begin
+            DecY := Pos.Y + ElParent.Css.FontMetrics.Ascent + 2;
+            Doc.Container.DrawLine(Hdc, Pos.X, DecY, Pos.X + Pos.Width, DecY,
+              DecColor, 1, ElParent.Css.TextDecorationStyle);
+          end;
+          if (ElParent.Css.TextDecorationLine and TextDecorationLineOverline) <> 0 then
+          begin
+            DecY := Pos.Y;
+            Doc.Container.DrawLine(Hdc, Pos.X, DecY, Pos.X + Pos.Width, DecY,
+              DecColor, 1, ElParent.Css.TextDecorationStyle);
+          end;
+          if (ElParent.Css.TextDecorationLine and TextDecorationLineLineThrough) <> 0 then
+          begin
+            DecY := Pos.Y + ElParent.Css.FontMetrics.Ascent -
+              ElParent.Css.FontMetrics.XHeight / 2;
+            Doc.Container.DrawLine(Hdc, Pos.X, DecY, Pos.X + Pos.Width, DecY,
+              DecColor, 1, ElParent.Css.TextDecorationStyle);
+          end;
+        end;
       end;
     end;
   end;

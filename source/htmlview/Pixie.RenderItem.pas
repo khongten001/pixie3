@@ -2347,8 +2347,24 @@ begin
      (FElement.Css.ElPosition <> epFixed) then
     Result.Height.Value := CbContext.Height.Value - ContentOffsetHeight;
 
-  // Width/height from CSS (skip for table-cell)
-  if FElement.Css.Display <> displayTableCell then
+  // Width/height from CSS (skip for table-cell, except height for
+  // percentage resolution: children need the cell's declared height)
+  if FElement.Css.Display = displayTableCell then
+  begin
+    CssH := Css.CssHeight;
+    if (not CssH.IsPredefined) and (CssH.Units <> cssUnitsPercentage) then
+    begin
+      CalcCbLength(CssH, CbContext.Height.Value, Result.Height);
+      // In quirks mode, td height acts as border-box — subtract padding
+      // so that FPos.Height + padding = declared height
+      if (Result.Height.ValueType <> cbcAuto) and
+         (Css.BoxSizing <> bxBorderBox) and
+         (FElement.GetDocument is TPixieDocument) and
+         (TPixieDocument(FElement.GetDocument).Mode = dmQuirks) then
+        Result.Height.Value := Result.Height.Value - ContentOffsetHeight;
+    end;
+  end
+  else
   begin
     Par := FParent;
 

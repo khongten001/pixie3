@@ -901,8 +901,12 @@ begin
     // Default: use block container's strut
     FHeight := FDefaultLineHeight.ComputedValue;
     FBaseline := FFontMetrics.BaseLine;
-    // Quirks mode: suppress the strut and use the <br>'s own line-height
+    // Quirks mode: suppress the strut and use the <br>'s own line-height;
+    // empty lines without a <br> get zero height
     if FSuppressStrut then
+    begin
+      FHeight := 0;
+      FBaseline := 0;
       for I := 0 to FItems.Count - 1 do
         if FItems[I].GetEl.SrcEl.IsBreak then
         begin
@@ -910,6 +914,7 @@ begin
           FBaseline := FItems[I].GetEl.Css.FontMetrics.BaseLine;
           Break;
         end;
+    end;
     Result := RetItems;
     Exit;
   end;
