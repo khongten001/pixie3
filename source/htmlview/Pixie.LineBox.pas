@@ -160,6 +160,9 @@ type
 
 implementation
 
+const
+  LineWidthTolerance = 0.25; // subpixel tolerance for line-fit checks
+
 // --- Helper types (implementation only) ---
 
 type
@@ -655,7 +658,7 @@ begin
        ((Ws = wsPreWrap) and Item.GetEl.SrcEl.IsSpace) then
       Exit(True);
 
-    if FLeft + FWidth + Item.Width > FRight then
+    if FLeft + FWidth + Item.Width > FRight + LineWidthTolerance then
       Exit(False);
   end;
 
@@ -780,7 +783,7 @@ begin
     begin
       if not FItems[I].GetEl.GetSkip then
       begin
-        if FLeft + FWidth + FItems[I].Width > FRight then
+        if FLeft + FWidth + FItems[I].Width > FRight + LineWidthTolerance then
         begin
           RemoveFrom := I;
           Break;

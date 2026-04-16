@@ -862,7 +862,9 @@ begin
     Child := FChildren[I];
 
     // Direct block child in inline context?
-    if Child.SrcEl.IsBlockBox and (Child.SrcEl.Css.Float_ = efNone) then
+    if Child.SrcEl.IsBlockBox and (Child.SrcEl.Css.Float_ = efNone) and
+       (Child.SrcEl.Css.ElPosition <> epAbsolute) and
+       (Child.SrcEl.Css.ElPosition <> epFixed) then
     begin
       Result.Before := Clone;
       Result.Block := Child;
