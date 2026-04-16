@@ -59,6 +59,7 @@ type
   TPixieDrawingCanvas = class
   private
     FCanvas: TPixieCanvas;
+    FFontOwner: TPixieCanvas;  // Canvas that owns FFontHandle (may outlast Unbind)
     FPen: TPixiePen;
     FBrush: TPixieBrush;
     FFont: TPixieDrawingFont;
@@ -178,11 +179,9 @@ end;
 
 procedure TPixieDrawingCanvas.Bind(ACanvas: TPixieCanvas);
 begin
-  if ACanvas <> FCanvas then
-  begin
+  if (FFontOwner <> nil) and (ACanvas <> FFontOwner) then
     DestroyFont;
-    FCanvas := ACanvas;
-  end;
+  FCanvas := ACanvas;
 end;
 
 procedure TPixieDrawingCanvas.Unbind;
@@ -217,6 +216,7 @@ begin
   else
     Descr.Style := fstNormal;
   FFontHandle := FCanvas.CreateFont(Descr, FFontMetrics);
+  FFontOwner := FCanvas;
   FCachedFamily := FFont.Family;
   FCachedSize := FFont.Size;
   FCachedStyle := FFont.Style;
@@ -224,9 +224,10 @@ end;
 
 procedure TPixieDrawingCanvas.DestroyFont;
 begin
-  if (FFontHandle <> 0) and (FCanvas <> nil) then
-    FCanvas.DeleteFont(FFontHandle);
+  if (FFontHandle <> 0) and (FFontOwner <> nil) then
+    FFontOwner.DeleteFont(FFontHandle);
   FFontHandle := 0;
+  FFontOwner := nil;
 end;
 
 // ---------------------------------------------------------------------------
