@@ -294,22 +294,30 @@ end;
 
 function TPixieRenderBlockContext.GetFirstBaseline: TPixiePixel;
 var
+  I: Integer;
   Item: TPixieRenderItem;
 begin
-  if FChildren.Count = 0 then
-    Exit(Height - MarginBottom);
-  Item := FChildren[0];
-  Result := ContentOffsetTop + Item.Top + Item.GetFirstBaseline;
+  for I := 0 to FChildren.Count - 1 do
+  begin
+    Item := FChildren[I];
+    if Item.SrcEl.InNormalFlow then
+      Exit(ContentOffsetTop + Item.Top + Item.GetFirstBaseline);
+  end;
+  Result := Height - MarginBottom;
 end;
 
 function TPixieRenderBlockContext.GetLastBaseline: TPixiePixel;
 var
+  I: Integer;
   Item: TPixieRenderItem;
 begin
-  if FChildren.Count = 0 then
-    Exit(Height - MarginBottom);
-  Item := FChildren[FChildren.Count - 1];
-  Result := ContentOffsetTop + Item.Top + Item.GetLastBaseline;
+  for I := FChildren.Count - 1 downto 0 do
+  begin
+    Item := FChildren[I];
+    if Item.SrcEl.InNormalFlow then
+      Exit(ContentOffsetTop + Item.Top + Item.GetLastBaseline);
+  end;
+  Result := Height - MarginBottom;
 end;
 
 initialization

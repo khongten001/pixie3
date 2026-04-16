@@ -1348,21 +1348,32 @@ end;
 
 procedure TPixieDocument.FixTablesLayout;
 var
-  I: Integer;
+  I, PrevCount: Integer;
   ElPtr: TPixieRenderItem;
   ParentRi: TPixieRenderItem;
 begin
-  I := 0;
-  while I < FTabularElements.Count do
-  begin
-    Assert(TObject(FTabularElements[I]) is TPixieRenderItem);
-    ElPtr := TPixieRenderItem(FTabularElements[I]);
-    case ElPtr.SrcEl.Css.Display of
-      displayInlineTable, displayTable:
+  // Process top-down by table hierarchy level so that anonymous wrappers
+  // created by parent elements exist before children try to fix their own
+  // parents. Repeat until no new anonymous objects are generated (handles
+  // orphan cells that need a full table/row-group/row chain built bottom-up).
+  repeat
+    PrevCount := FTabularElements.Count;
+
+    for I := 0 to FTabularElements.Count - 1 do
+    begin
+      Assert(TObject(FTabularElements[I]) is TPixieRenderItem);
+      ElPtr := TPixieRenderItem(FTabularElements[I]);
+      if ElPtr.SrcEl.Css.Display in [displayInlineTable, displayTable] then
         FixTableChildren(Self, ElPtr, displayTableRowGroup,
           'table-row-group');
-      displayTableFooterGroup, displayTableRowGroup,
-      displayTableHeaderGroup:
+    end;
+
+    // Pass 2: Row-groups -> ensure parent is table, wrap non-row children
+    for I := 0 to FTabularElements.Count - 1 do
+    begin
+      ElPtr := TPixieRenderItem(FTabularElements[I]);
+      if ElPtr.SrcEl.Css.Display in [displayTableFooterGroup,
+        displayTableRowGroup, displayTableHeaderGroup] then
       begin
         ParentRi := ElPtr.GetParent;
         if ParentRi <> nil then
@@ -1372,17 +1383,28 @@ begin
         end;
         FixTableChildren(Self, ElPtr, displayTableRow, 'table-row');
       end;
-      displayTableRow:
+    end;
+
+    // Pass 3: Rows -> ensure parent is row-group, wrap non-cell children
+    for I := 0 to FTabularElements.Count - 1 do
+    begin
+      ElPtr := TPixieRenderItem(FTabularElements[I]);
+      if ElPtr.SrcEl.Css.Display = displayTableRow then
       begin
         FixTableParent(Self, ElPtr, displayTableRowGroup,
           'table-row-group');
         FixTableChildren(Self, ElPtr, displayTableCell, 'table-cell');
       end;
-      displayTableCell:
+    end;
+
+    // Pass 4: Cells -> ensure parent is row
+    for I := 0 to FTabularElements.Count - 1 do
+    begin
+      ElPtr := TPixieRenderItem(FTabularElements[I]);
+      if ElPtr.SrcEl.Css.Display = displayTableCell then
         FixTableParent(Self, ElPtr, displayTableRow, 'table-row');
     end;
-    Inc(I);
-  end;
+  until FTabularElements.Count = PrevCount;
 end;
 
 // --- Element registration ---
