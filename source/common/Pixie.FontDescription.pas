@@ -36,6 +36,12 @@ type
 function PixieResolveFontFamily(const CssFamily: string;
   CheckFont: TPixieFontCheckFunc): string;
 
+// Returns True if the first name in a CSS font-family list is the generic
+// "monospace" keyword. Used by the CSS cascade to replicate Chrome's quirk
+// where keyword font sizes resolve against a 13px base in a monospace
+// context.
+function PixieFontFamilyIsMonospace(const CssFamily: string): Boolean;
+
 const
   PixieSmallCapsScale = 0.8;
 
@@ -151,6 +157,22 @@ begin
   {$IF DEFINED(LINUX)}
   Result := 'DejaVu Sans';
   {$ENDIF}
+end;
+
+function PixieFontFamilyIsMonospace(const CssFamily: string): Boolean;
+var
+  I, J, Len: Integer;
+begin
+  Len := Length(CssFamily);
+  I := 1;
+  while (I <= Len) and ((CssFamily[I] = ' ') or (CssFamily[I] = #9) or
+                        (CssFamily[I] = '"') or (CssFamily[I] = '''')) do
+    Inc(I);
+  J := I;
+  while (J <= Len) and (CssFamily[J] <> ',') and (CssFamily[J] <> '"') and
+        (CssFamily[J] <> '''') do
+    Inc(J);
+  Result := SameText(Trim(Copy(CssFamily, I, J - I)), 'monospace');
 end;
 
 { TPixieFontDescription }

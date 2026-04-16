@@ -560,7 +560,7 @@ var
   Tag: TPixieHtmlTag;
   Ctx: TComputeContext;
   Sz: TPixieCssLength;
-  ParentSz, DocFontSize, FS: TPixiePixel;
+  ParentSz, DocFontSize, KeywordBase, FS: TPixiePixel;
   ElParent: TPixieElement;
   IdxInTable: Integer;
   PropagateDecoration: Boolean;
@@ -575,6 +575,17 @@ begin
     Ctx := PComputeContext(FComputeCtxPtr)^
   else
     InitComputeContext(Tag, Ctx);
+
+  // Font family (computed first so font-size keyword resolution can
+  // apply the monospace quirk)
+  if Ctx.Cont <> nil then
+    FFontFamily := Tag.GetPropertyString(Ord(psid_font_family), True,
+      Ctx.Cont.GetDefaultFontName,
+      PtrUInt(@FFontFamily) - PtrUInt(Self))
+  else
+    FFontFamily := Tag.GetPropertyString(Ord(psid_font_family), True,
+      'serif',
+      PtrUInt(@FFontFamily) - PtrUInt(Self));
 
   // Font size
   Sz := Tag.GetPropertyLength(Ord(psid_font_size), True,
@@ -594,7 +605,14 @@ begin
 
   if Sz.IsPredefined then
   begin
-    IdxInTable := Round(DocFontSize - 9);
+    // Chrome quirk: in a monospace font-family context, keyword font sizes
+    // resolve against a fixed-font base (13px) instead of the standard 16px.
+    // Explicit lengths (e.g. font-size: 16px) are unaffected.
+    if PixieFontFamilyIsMonospace(FFontFamily) then
+      KeywordBase := 13
+    else
+      KeywordBase := DocFontSize;
+    IdxInTable := Round(KeywordBase - 9);
     if (IdxInTable >= 0) and (IdxInTable <= 7) then
     begin
       if (Sz.Predef >= Ord(fsXXSmall)) and (Sz.Predef <= Ord(fsXXLarge)) then
@@ -609,12 +627,12 @@ begin
     else
     begin
       case Sz.Predef of
-        Ord(fsXXSmall): FS := DocFontSize * 3 / 5;
-        Ord(fsXSmall):  FS := DocFontSize * 3 / 4;
-        Ord(fsSmall):   FS := DocFontSize * 8 / 9;
-        Ord(fsLarge):   FS := DocFontSize * 6 / 5;
-        Ord(fsXLarge):  FS := DocFontSize * 3 / 2;
-        Ord(fsXXLarge): FS := DocFontSize * 2;
+        Ord(fsXXSmall): FS := KeywordBase * 3 / 5;
+        Ord(fsXSmall):  FS := KeywordBase * 3 / 4;
+        Ord(fsSmall):   FS := KeywordBase * 8 / 9;
+        Ord(fsLarge):   FS := KeywordBase * 6 / 5;
+        Ord(fsXLarge):  FS := KeywordBase * 3 / 2;
+        Ord(fsXXLarge): FS := KeywordBase * 2;
         Ord(fsSmaller): FS := ParentSz / 1.2;
         Ord(fsLarger):  FS := ParentSz * 1.2;
       else
@@ -636,16 +654,6 @@ begin
   end;
 
   FCssFontSize.SetValue(FS, cssUnitsNone);
-
-  // Font family
-  if Ctx.Cont <> nil then
-    FFontFamily := Tag.GetPropertyString(Ord(psid_font_family), True,
-      Ctx.Cont.GetDefaultFontName,
-      PtrUInt(@FFontFamily) - PtrUInt(Self))
-  else
-    FFontFamily := Tag.GetPropertyString(Ord(psid_font_family), True,
-      'serif',
-      PtrUInt(@FFontFamily) - PtrUInt(Self));
 
   // Font weight and style
   FCssFontWeight := Tag.GetPropertyLength(Ord(psid_font_weight), True,
