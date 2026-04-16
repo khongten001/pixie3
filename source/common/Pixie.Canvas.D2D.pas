@@ -8,7 +8,7 @@ unit Pixie.Canvas.D2D;
 interface
 
 uses
-  Windows, ActiveX, SysUtils, Classes, Math,
+  Windows, ActiveX, SysUtils, Classes, Math, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.GradientLayer, Pixie.FontDescription,
   Pixie.Canvas,
@@ -32,6 +32,8 @@ type
     ImgWidth: UINT;
     ImgHeight: UINT;
   end;
+
+  TPixieD2DImageList = TList<PPixieD2DImage>;
 
   TPixieD2DSavedState = record
     Transform: TD2d1Matrix3x2F;
@@ -61,7 +63,10 @@ type
     FTileSavedBrush: ID2D1SolidColorBrush;
     FTileSavedStateTop: Integer;
     FTileSavedViewW, FTileSavedViewH: Integer;
+    FImages: TPixieD2DImageList;
 
+    procedure RecreateTarget;
+    function RegisterImage(Info: PPixieD2DImage): TPixieImageHandle;
     function ToColorF(const C: TPixieWebColor): TD2d1ColorF;
     function MakeRectF(X, Y, W, H: Single): TD2d1RectF;
     function MakePoint(X, Y: Single): TD2d1Point2f;
@@ -404,29 +409,19 @@ end;
 // Construction
 // ---------------------------------------------------------------------------
 
-constructor TPixieD2DCanvas.Create;
+procedure TPixieD2DCanvas.RecreateTarget;
 var
   Props: TD2d1RenderTargetProperties;
-  Unk: IUnknown;
   C: TD2d1ColorF;
+  I: Integer;
 begin
-  inherited Create;
-  FViewWidth := 800;
-  FViewHeight := 600;
-  FStateTop := 0;
+  FBrush := nil;
+  FDCTarget := nil;
+  FTarget := nil;
 
-  // Create D2D factory
-  D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
-    IID_ID2D1Factory, nil, FFactory);
-
-  // Create DirectWrite factory
-  if Succeeded(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
-    IID_IDWriteFactory, Unk)) then
-    Unk.QueryInterface(IID_IDWriteFactory, FDWriteFactory);
-
-  // Create WIC factory
-  CoCreateInstance(CLSID_WICImagingFactory, nil, CLSCTX_INPROC_SERVER,
-    IID_IWICImagingFactory, FWicFactory);
+  // Invalidate cached D2D bitmaps; DrawImage recreates them lazily from WicSource
+  for I := 0 to FImages.Count - 1 do
+    FImages[I].D2DBitmap := nil;
 
   // Create DC render target
   if FFactory <> nil then
@@ -451,6 +446,38 @@ begin
   end;
 end;
 
+function TPixieD2DCanvas.RegisterImage(Info: PPixieD2DImage): TPixieImageHandle;
+begin
+  FImages.Add(Info);
+  Result := TPixieImageHandle(Info);
+end;
+
+constructor TPixieD2DCanvas.Create;
+var
+  Unk: IUnknown;
+begin
+  inherited Create;
+  FViewWidth := 800;
+  FViewHeight := 600;
+  FStateTop := 0;
+  FImages := TPixieD2DImageList.Create;
+
+  // Create D2D factory
+  D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
+    IID_ID2D1Factory, nil, FFactory);
+
+  // Create DirectWrite factory
+  if Succeeded(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
+    IID_IDWriteFactory, Unk)) then
+    Unk.QueryInterface(IID_IDWriteFactory, FDWriteFactory);
+
+  // Create WIC factory
+  CoCreateInstance(CLSID_WICImagingFactory, nil, CLSCTX_INPROC_SERVER,
+    IID_IWICImagingFactory, FWicFactory);
+
+  RecreateTarget;
+end;
+
 destructor TPixieD2DCanvas.Destroy;
 begin
   // COM interfaces release automatically
@@ -460,6 +487,7 @@ begin
   FWicFactory := nil;
   FDWriteFactory := nil;
   FFactory := nil;
+  FImages.Free;
   inherited Destroy;
 end;
 
@@ -471,6 +499,7 @@ procedure TPixieD2DCanvas.BeginPaint(DC: PtrUInt);
 var
   R: TRect;
   M: TD2d1Matrix3x2F;
+  HR: HResult;
 begin
   if FTarget = nil then Exit;
   FStateTop := 0;
@@ -479,7 +508,18 @@ begin
   R.Top := 0;
   R.Right := FViewWidth;
   R.Bottom := FViewHeight;
-  if (FDCTarget = nil) or Failed(FDCTarget.BindDC(HDC(DC), R)) then Exit;
+
+  // BindDC may return D2DERR_RECREATE_TARGET after session disconnect/reconnect.
+  // In that case recreate the target and retry once.
+  if FDCTarget = nil then Exit;
+  HR := FDCTarget.BindDC(HDC(DC), R);
+  if HR = D2DERR_RECREATE_TARGET then
+  begin
+    RecreateTarget;
+    if FDCTarget = nil then Exit;
+    HR := FDCTarget.BindDC(HDC(DC), R);
+  end;
+  if Failed(HR) then Exit;
 
   FTarget.BeginDraw;
   FTarget.SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -495,7 +535,8 @@ end;
 procedure TPixieD2DCanvas.EndPaint;
 begin
   if FTarget = nil then Exit;
-  FTarget.EndDraw(nil, nil);
+  if FTarget.EndDraw(nil, nil) = D2DERR_RECREATE_TARGET then
+    RecreateTarget;
 end;
 
 // ---------------------------------------------------------------------------
@@ -1439,7 +1480,7 @@ begin
   Info.SvgRenderer := Renderer;
   Info.ImgWidth := Round(W);
   Info.ImgHeight := Round(H);
-  Result := TPixieImageHandle(Info);
+  Result := RegisterImage(Info);
 end;
 
 function TPixieD2DCanvas.LoadImage(
@@ -1491,7 +1532,7 @@ begin
     Info.WicSource := Converter;
     Info.ImgWidth := IW;
     Info.ImgHeight := IH;
-    Result := TPixieImageHandle(Info);
+    Result := RegisterImage(Info);
     Exit;
   end;
 
@@ -1517,7 +1558,7 @@ begin
             Info.WicSource := WicBmp;
             Info.ImgWidth := PW;
             Info.ImgHeight := PH;
-            Result := TPixieImageHandle(Info);
+            Result := RegisterImage(Info);
           end;
         finally
           PixieWebPFreePixels(Pixels);
@@ -1572,7 +1613,7 @@ begin
   Info.WicStream := AdapterStream;
   Info.ImgWidth := IW;
   Info.ImgHeight := IH;
-  Result := TPixieImageHandle(Info);
+  Result := RegisterImage(Info);
 end;
 
 function TPixieD2DCanvas.LoadImageFromPixels(Width, Height: Integer;
@@ -1604,7 +1645,7 @@ begin
     Exit;
   end;
 
-  Result := TPixieImageHandle(Info);
+  Result := RegisterImage(Info);
 end;
 
 procedure TPixieD2DCanvas.FreeImage(Handle: TPixieImageHandle);
@@ -1613,6 +1654,7 @@ var
 begin
   if Handle = 0 then Exit;
   Info := PPixieD2DImage(Handle);
+  FImages.Remove(Info);
   Info.SvgRenderer.Free;
   Info.D2DBitmap := nil;
   Info.WicSource := nil;
