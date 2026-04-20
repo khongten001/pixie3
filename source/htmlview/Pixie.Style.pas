@@ -1748,8 +1748,11 @@ begin
   if Name = Ord(psid_word_wrap) then
     Name := Ord(psid_overflow_wrap);
 
-  // overflow-x / overflow-y map to overflow (simplified: no per-axis support)
-  if (Name = Ord(psid_overflow_x)) or (Name = Ord(psid_overflow_y)) then
+  // overflow-y maps to overflow; overflow-x is ignored (no per-axis support;
+  // overflow-x:hidden is cosmetic and must not clip content height)
+  if Name = Ord(psid_overflow_x) then
+    Exit;
+  if Name = Ord(psid_overflow_y) then
     Name := Ord(psid_overflow);
 
   // =============================  SINGLE KEYWORD  =============================

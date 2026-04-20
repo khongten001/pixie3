@@ -2447,11 +2447,21 @@ begin
 
   Result.RenderWidth := Result.Width;
 
-  // Min/max
-  CalcCbLength(FElement.Css.CssMinWidth, CbContext.Width.Value, Result.MinWidth);
-  CalcCbLength(FElement.Css.CssMaxWidth, CbContext.Width.Value, Result.MaxWidth);
-  CalcCbLength(FElement.Css.CssMinHeight, CbContext.Height.Value, Result.MinHeight);
-  CalcCbLength(FElement.Css.CssMaxHeight, CbContext.Height.Value, Result.MaxHeight);
+  // Min/max — skip when size is already definitive: flex/grid pass exact
+  // values with min/max already applied against the correct container
+  // reference, so re-resolving percentage min/max against the narrowed
+  // item width would produce wrong results (e.g. max-width:33% of the
+  // item width instead of 33% of the container width).
+  if (CbContext.SizeMode and SizeModeExactWidth) = 0 then
+  begin
+    CalcCbLength(FElement.Css.CssMinWidth, CbContext.Width.Value, Result.MinWidth);
+    CalcCbLength(FElement.Css.CssMaxWidth, CbContext.Width.Value, Result.MaxWidth);
+  end;
+  if (CbContext.SizeMode and SizeModeExactHeight) = 0 then
+  begin
+    CalcCbLength(FElement.Css.CssMinHeight, CbContext.Height.Value, Result.MinHeight);
+    CalcCbLength(FElement.Css.CssMaxHeight, CbContext.Height.Value, Result.MaxHeight);
+  end;
 
   // Fix box sizing
   if Result.Width.ValueType <> cbcAuto then
