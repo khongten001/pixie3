@@ -1947,12 +1947,10 @@ begin
     begin
       Name := Vec[I];
       Inc(I);
-      Val := 0;
-      if (I < Vec.Count) and (StrToIntDef(Vec[I], MaxInt) <> MaxInt) then
-      begin
-        Val := StrToIntDef(Vec[I], 0);
-        Inc(I);
-      end;
+      if (I < Vec.Count) and TryStrToInt(Vec[I], Val) then
+        Inc(I)
+      else
+        Val := 0;
       ResetCounter(PixieId(Name), Val);
     end;
     Exit;
@@ -1968,12 +1966,10 @@ begin
     begin
       Name := Vec[I];
       Inc(I);
-      Val := 1;
-      if (I < Vec.Count) and (StrToIntDef(Vec[I], MaxInt) <> MaxInt) then
-      begin
-        Val := StrToIntDef(Vec[I], 1);
-        Inc(I);
-      end;
+      if (I < Vec.Count) and TryStrToInt(Vec[I], Val) then
+        Inc(I)
+      else
+        Val := 1;
       IncrementCounter(PixieId(Name), Val);
     end;
   end;
