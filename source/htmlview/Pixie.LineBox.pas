@@ -998,7 +998,7 @@ begin
     if ((FTextAlign = taRight) or (SpacingX <> 0)) and (Counter = FItems.Count) then
     begin
       // Forcibly justify last element to the right side
-      Lbi.Pos^.X := FRight - Lbi.Pos^.Width;
+      Lbi.Pos^.X := FRight - Lbi.Pos^.Width - Lbi.GetEl.ContentOffsetRight;
     end
     else if ShiftX <> 0 then
       Lbi.Pos^.X := Lbi.Pos^.X + ShiftX;

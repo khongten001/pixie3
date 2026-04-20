@@ -51,29 +51,27 @@ var
   Sz: TPixieSize;
 begin
   ParentWidth := CbContext.Width.Value;
-  SelfSize := CalculateContainingBlockContext(CbContext);
 
+  // CalcOutlines must precede CalculateContainingBlockContext so that
+  // BoxSizingWidth/Height use the actual padding and border values.
   CalcOutlines(ParentWidth);
+
+  SelfSize := CalculateContainingBlockContext(CbContext);
 
   FPos.MoveTo(X, Y);
 
   SrcEl.GetContentSize(Sz, ParentWidth);
 
-  // Use CSS width if set, else intrinsic
-  if not SrcEl.Css.CssWidth.IsPredefined then
-    FPos.Width := SrcEl.Css.CssWidth.CalcPercent(ParentWidth)
+  // Use CSS width if set (box-sizing aware), else intrinsic
+  if SelfSize.RenderWidth.ValueType <> cbcAuto then
+    FPos.Width := SelfSize.RenderWidth.Value
   else
     FPos.Width := Sz.Width;
 
-  // Use CSS height if set, else intrinsic
-  if not SrcEl.Css.CssHeight.IsPredefined then
-  begin
-    if (SelfSize.Height.ValueType <> cbcAuto) and
-       (SelfSize.Height.Value > 0) then
-      FPos.Height := SelfSize.Height.Value
-    else
-      FPos.Height := Sz.Height;
-  end
+  // Use CSS height if set (box-sizing aware), else intrinsic
+  if (SelfSize.Height.ValueType <> cbcAuto) and
+     (SelfSize.Height.Value > 0) then
+    FPos.Height := SelfSize.Height.Value - BoxSizingHeight
   else
     FPos.Height := Sz.Height;
 
