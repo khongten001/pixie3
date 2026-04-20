@@ -18,6 +18,7 @@ type
   TPixieElBody = class(TPixieHtmlTag)
   public
     constructor Create(ADoc: TObject);
+    procedure ParseAttributes; override;
     function IsBody: Boolean; override;
   end;
 
@@ -166,6 +167,21 @@ uses
 constructor TPixieElBody.Create(ADoc: TObject);
 begin
   inherited Create(ADoc);
+end;
+
+procedure TPixieElBody.ParseAttributes;
+var
+  Val: string;
+begin
+  inherited;
+
+  Val := GetAttr('bgcolor');
+  if Val <> '' then
+    FStyle.AddProperty(Ord(psid_background_color), Val);
+
+  Val := GetAttr('text');
+  if Val <> '' then
+    FStyle.AddProperty(Ord(psid_color), Val);
 end;
 
 function TPixieElBody.IsBody: Boolean;
