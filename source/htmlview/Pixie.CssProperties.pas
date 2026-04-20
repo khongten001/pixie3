@@ -567,6 +567,7 @@ var
   Descr: TPixieFontDescription;
   InheritedWeight: Integer;
   Fm: TPixieFontMetrics;
+  SelfMono, ParentMono: Boolean;
 begin
   Assert(El is TPixieHtmlTag);
   Assert((Doc = nil) or (Doc is TPixieDocument));
@@ -651,6 +652,22 @@ begin
       Fm.FontSize := ParentSz;
       FS := CtxToPixels(Sz, Fm, Ctx);
     end;
+  end;
+
+  // Chrome quirk: when font-family changes from proportional to monospace
+  // (or vice versa) and font-size is not explicitly set, the inherited size
+  // is scaled by the ratio of default sizes (13/16 or 16/13).  This handles
+  // cases like <body style="font-family:monospace"> inheriting 16px from
+  // <html> and adjusting it down to 13px.
+  if (ElParent <> nil) and not Sz.IsPredefined and
+     (Tag.Style.GetProperty(Ord(psid_font_size)).Kind <> pkCssLength) then
+  begin
+    SelfMono := PixieFontFamilyIsMonospace(FFontFamily);
+    ParentMono := PixieFontFamilyIsMonospace(ElParent.Css.FontFamily);
+    if SelfMono and not ParentMono then
+      FS := FS * 13 / 16
+    else if not SelfMono and ParentMono then
+      FS := FS * 16 / 13;
   end;
 
   FCssFontSize.SetValue(FS, cssUnitsNone);

@@ -40,6 +40,7 @@ type
     FPos: TPixiePosition;
     FSkip: Boolean;
     FLayoutPositioned: Boolean;          // True if positioned during layout
+    FRelShiftDone: Boolean;              // True after ApplyRelativeShift ran
     FPositioned: TPixieRenderItemVector; // non-owning
     FScrollView: TPixieScrollView;       // owned, can be nil
 
@@ -217,6 +218,7 @@ begin
   FChildren := TPixieRenderItemList.Create(True);
   FSkip := False;
   FLayoutPositioned := False;
+  FRelShiftDone := False;
   FPositioned := nil;
   FScrollView := nil;
   FPos.Clear;
@@ -690,6 +692,7 @@ begin
 
   FPos.Clear;
   FPos.MoveTo(X, Y);
+  FRelShiftDone := False;
 
   CLeft := ContentOffsetLeft;
   CTop := ContentOffsetTop;
@@ -829,6 +832,7 @@ procedure TPixieRenderItem.ApplyRelativeShift(
 var
   Offsets: TPixieCssOffsets;
 begin
+  if FRelShiftDone then Exit;
   if FElement.Css.ElPosition = epRelative then
   begin
     Offsets := FElement.Css.CssOffsets;
@@ -841,6 +845,8 @@ begin
       FPos.Y := FPos.Y + Offsets.Top.CalcPercent(CbContext.Height.Value)
     else if not Offsets.Bottom.IsPredefined then
       FPos.Y := FPos.Y - Offsets.Bottom.CalcPercent(CbContext.Height.Value);
+
+    FRelShiftDone := True;
   end;
 end;
 
