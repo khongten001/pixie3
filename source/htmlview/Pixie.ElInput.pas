@@ -507,6 +507,7 @@ procedure TPixieElButton.GetContentSize(var Sz: TPixieSize;
   MaxWidth: TPixiePixel);
 var
   Cv: TPixieCanvas;
+  Cont: TPixieContainer;
   Label_: string;
   TextW: TPixiePixel;
 begin
@@ -515,6 +516,13 @@ begin
   Label_ := Trim(Label_);
   if Label_ = '' then
     Label_ := 'Button';
+
+  if FCss.TextTransform <> ttNone then
+  begin
+    Cont := GetDocContainer;
+    if Cont <> nil then
+      Cont.TransformText(Label_, FCss.TextTransform);
+  end;
 
   Cv := GetCanvas(Self);
   if Cv <> nil then
@@ -533,6 +541,7 @@ var
   P: TPixiePosition;
   Pad: TPixieMargins;
   Cv: TPixieCanvas;
+  Cont: TPixieContainer;
   FillColor, StrokeColor, TextColor: TPixieWebColor;
   Rad: TPixieBorderRadiuses;
   BorderW: TPixiePixel;
@@ -654,6 +663,13 @@ begin
   // Only use default "Button" label for the native appearance
   if (Label_ = '') and not (HasCssBg or HasCssBorder) then
     Label_ := 'Button';
+
+  if (Label_ <> '') and (FCss.TextTransform <> ttNone) then
+  begin
+    Cont := GetDocContainer;
+    if Cont <> nil then
+      Cont.TransformText(Label_, FCss.TextTransform);
+  end;
 
   if Label_ <> '' then
   begin

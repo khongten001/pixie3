@@ -1022,29 +1022,34 @@ var
         // Check for ::before/::after pseudo-elements
         if (Apply and (SelectMatchWithAfter or SelectMatchWithBefore)) <> 0 then
         begin
-          Assert(Sel.Style is TPixieStyle);
-          ContentProp := TPixieStyle(Sel.Style).GetProperty(
-            Ord(psid_content));
-          ContentNone := (ContentProp.Kind = pkString) and
-            (ContentProp.StrVal = 'none');
-          DoCreate := not ContentNone and
-            ((Sel.Right.Attrs.Count > 1) or
-             (Sel.Right.Tag <> PixieId('*')));
-
-          if (Apply and SelectMatchWithAfter) <> 0 then
-            BeforeAfterEl := GetElementAfter(DoCreate)
-          else
-            BeforeAfterEl := GetElementBefore(DoCreate);
-
-          if BeforeAfterEl <> nil then
+          // When pseudo-class is also present, verify it actually matches
+          if ((Apply and SelectMatchPseudoClass) = 0) or
+             (SelectSel(Sel, True) <> SelectNoMatch) then
           begin
-            if not ContentNone then
-              BeforeAfterEl.AddStyle(TPixieStyle(Sel.Style))
-            else
-              BeforeAfterEl.Parent.RemoveChild(BeforeAfterEl);
-          end;
+            Assert(Sel.Style is TPixieStyle);
+            ContentProp := TPixieStyle(Sel.Style).GetProperty(
+              Ord(psid_content));
+            ContentNone := (ContentProp.Kind = pkString) and
+              (ContentProp.StrVal = 'none');
+            DoCreate := not ContentNone and
+              ((Sel.Right.Attrs.Count > 1) or
+               (Sel.Right.Tag <> PixieId('*')));
 
-          Us.Used := True;
+            if (Apply and SelectMatchWithAfter) <> 0 then
+              BeforeAfterEl := GetElementAfter(DoCreate)
+            else
+              BeforeAfterEl := GetElementBefore(DoCreate);
+
+            if BeforeAfterEl <> nil then
+            begin
+              if not ContentNone then
+                BeforeAfterEl.AddStyle(TPixieStyle(Sel.Style))
+              else
+                BeforeAfterEl.Parent.RemoveChild(BeforeAfterEl);
+            end;
+
+            Us.Used := True;
+          end;
         end
         else if (Apply and SelectMatchPseudoClass) <> 0 then
         begin
