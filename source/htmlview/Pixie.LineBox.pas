@@ -825,7 +825,7 @@ var
   Contexts: TVaContextList;
   LineMaxHeight, TopAlignedMaxHeight, BottomAlignedMaxHeight,
     InlineBoxesDims: TItemsDimensions;
-  Bl, ContentOffset, TopShift: TPixiePixel;
+  Bl, ContentOffset, TopShift, ElH: TPixiePixel;
   IsTopBottomBox, Ignore, HasTextContent: Boolean;
   TopDownHeight: TPixiePixel;
   Diff1, Diff2: TPixiePixel;
@@ -1060,8 +1060,16 @@ begin
           end;
         vaMiddle:
           begin
-            Lbi.Pos^.Y := Bl - CurrentContext.Fm.XHeight / 2 -
-              Lbi.GetEl.Height / 2 + ContentOffset;
+            if Lbi.GetEl.SrcEl.IsReplaced then
+            begin
+              // Replaced elements (buttons, inputs): center the border box
+              ElH := Lbi.GetEl.Height - Lbi.GetEl.MarginTop - Lbi.GetEl.MarginBottom;
+              Lbi.Pos^.Y := Bl - CurrentContext.Fm.XHeight / 2 -
+                ElH / 2 + ContentOffset - Lbi.GetEl.MarginTop;
+            end
+            else
+              Lbi.Pos^.Y := Bl - CurrentContext.Fm.XHeight / 2 -
+                Lbi.GetEl.Height / 2 + ContentOffset;
             Ignore := True;
           end;
       else

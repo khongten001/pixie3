@@ -359,6 +359,7 @@ const
     '  text-indent: 0;' +
     '  text-shadow: none;' +
     '  display: inline-block;' +
+    '  box-sizing: border-box;' +
     '}' +
 
     'input[type="hidden"] {' +
