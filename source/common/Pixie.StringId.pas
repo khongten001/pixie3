@@ -381,6 +381,7 @@ type
     psid_import,
     psid_media,
     psid_font_face,
+    psid_supports,
     psid_and,
     psid_or,
     psid_boolean,
