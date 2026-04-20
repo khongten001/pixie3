@@ -949,8 +949,8 @@ begin
           Ri.RenderOffsetWidth;
       Ord(fbFitContent), Ord(fbContent):
         BaseSize := Ri.Render(0, 0,
-          SelfSize.NewWidth(SelfSize.RenderWidth.Value + Ri.ContentOffsetWidth,
-            SizeModeContent or SizeModeExactWidth),
+          SelfSize.NewWidth(Ri.ContentOffsetWidth,
+            SizeModeContent),
           TPixieFormattingContext(FmtCtx));
       Ord(fbMinContent):
       begin
