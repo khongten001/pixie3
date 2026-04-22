@@ -9,12 +9,12 @@ uses
 
 const
   // from_token options (flags)
-  fLength           = 1;
-  fPercentage       = 2;
-  fLengthPercentage = 3;
-  fNumber           = 4;
-  fInteger          = 8;
-  fPositive         = 16;
+  clfLength           = 1;
+  clfPercentage       = 2;
+  clfLengthPercentage = 3;
+  clfNumber           = 4;
+  clfInteger          = 8;
+  clfPositive         = 16;
 
   // Sentinel predefined value for minmax() in grid template vectors.
   // When a TPixieCssLength has IsPredefined=True and Predef=CssGridMinmaxMarker,

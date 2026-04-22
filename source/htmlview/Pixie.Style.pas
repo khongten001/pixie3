@@ -904,9 +904,9 @@ begin
   // Try number (unitless zero, or if f_number/f_integer allowed)
   if Token.TokenType = cssTokenNumber then
   begin
-    if ((Options and fPositive) <> 0) and (Token.Number < 0) then
+    if ((Options and clfPositive) <> 0) and (Token.Number < 0) then
       Exit;
-    if ((Options and fInteger) <> 0) and (Token.NumberType <> cssNumberInteger) then
+    if ((Options and clfInteger) <> 0) and (Token.NumberType <> cssNumberInteger) then
       Exit;
 
     // Unitless zero is always valid for lengths
@@ -916,13 +916,13 @@ begin
       Exit(True);
     end;
 
-    if (Options and fNumber) <> 0 then
+    if (Options and clfNumber) <> 0 then
     begin
       Len := TPixieCssLength.Create(Token.Number, cssUnitsNone);
       Exit(True);
     end;
 
-    if (Options and fInteger) <> 0 then
+    if (Options and clfInteger) <> 0 then
     begin
       Len := TPixieCssLength.Create(Token.Number, cssUnitsNone);
       Exit(True);
@@ -932,18 +932,18 @@ begin
   end;
 
   // Try percentage
-  if (Token.TokenType = cssTokenPercentage) and ((Options and fPercentage) <> 0) then
+  if (Token.TokenType = cssTokenPercentage) and ((Options and clfPercentage) <> 0) then
   begin
-    if ((Options and fPositive) <> 0) and (Token.Number < 0) then
+    if ((Options and clfPositive) <> 0) and (Token.Number < 0) then
       Exit;
     Len := TPixieCssLength.Create(Token.Number, cssUnitsPercentage);
     Exit(True);
   end;
 
   // Try dimension (length with unit)
-  if (Token.TokenType = cssTokenDimension) and ((Options and fLength) <> 0) then
+  if (Token.TokenType = cssTokenDimension) and ((Options and clfLength) <> 0) then
   begin
-    if ((Options and fPositive) <> 0) and (Token.Number < 0) then
+    if ((Options and clfPositive) <> 0) and (Token.Number < 0) then
       Exit;
     UnitStr := PixieLowerCase(Token.Str);
     UnitIdx := PixieValueIndex(UnitStr,
@@ -956,7 +956,7 @@ begin
 
   // Try calc() function
   if (Token.TokenType = cssTokenCvFunction) and
-     ((Options and fLengthPercentage) <> 0) and
+     ((Options and clfLengthPercentage) <> 0) and
      (PixieLowerCase(Token.Str) = 'calc') then
   begin
     if PixieParseCalcExpression(Token.Value, Len) then
@@ -1163,11 +1163,11 @@ var
 begin
   Result := False;
   TokA := PixieTokenAt(Tokens, Index);
-  if not PixieParseCssLength(TokA, A, fLengthPercentage, BackgroundPositionStrings) then
+  if not PixieParseCssLength(TokA, A, clfLengthPercentage, BackgroundPositionStrings) then
     Exit;
 
   TokB := PixieTokenAt(Tokens, Index + 1);
-  if not PixieParseCssLength(TokB, B, fLengthPercentage, BackgroundPositionStrings) then
+  if not PixieParseCssLength(TokB, B, clfLengthPercentage, BackgroundPositionStrings) then
   begin
     // If only one value, second is assumed to be center
     B := TPixieCssLength.PredefValue(Ord(bpCenter));
@@ -1221,7 +1221,7 @@ var
   W: TPixieCssLength;
 begin
   Result := False;
-  if not PixieParseCssLength(Token, W, fLength or fPositive, BorderWidthStrings) then
+  if not PixieParseCssLength(Token, W, clfLength or clfPositive, BorderWidthStrings) then
     Exit;
   if W.IsPredefined then
     W.SetValue(BorderWidthValues[TPixieBorderWidth(W.Predef)], cssUnitsPx);
@@ -1528,7 +1528,7 @@ var
 begin
   Result := False;
   TokA := PixieTokenAt(Tokens, Index);
-  if not PixieParseCssLength(TokA, A, fLengthPercentage or fPositive, BackgroundSizeStrings) then
+  if not PixieParseCssLength(TokA, A, clfLengthPercentage or clfPositive, BackgroundSizeStrings) then
     Exit;
 
   // cover | contain
@@ -1540,7 +1540,7 @@ begin
   end;
 
   TokB := PixieTokenAt(Tokens, Index + 1);
-  if PixieParseCssLength(TokB, B, fLengthPercentage or fPositive, 'auto') then
+  if PixieParseCssLength(TokB, B, clfLengthPercentage or clfPositive, 'auto') then
     Inc(Index, 2)
   else
   begin
@@ -1788,20 +1788,20 @@ begin
 
   if Name = Ord(psid_z_index) then
   begin
-    AddLengthProperty(Name, Val, 'auto', fInteger, Important);
+    AddLengthProperty(Name, Val, 'auto', clfInteger, Important);
     Exit;
   end;
 
   if Name = Ord(psid_text_indent) then
   begin
-    AddLengthProperty(Name, Val, '', fLengthPercentage, Important);
+    AddLengthProperty(Name, Val, '', clfLengthPercentage, Important);
     Exit;
   end;
 
   if (Name = Ord(psid_padding_left)) or (Name = Ord(psid_padding_right)) or
      (Name = Ord(psid_padding_top)) or (Name = Ord(psid_padding_bottom)) then
   begin
-    AddLengthProperty(Name, Val, '', fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, '', clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
@@ -1810,38 +1810,38 @@ begin
      (Name = Ord(psid_margin_left)) or (Name = Ord(psid_margin_right)) or
      (Name = Ord(psid_margin_top)) or (Name = Ord(psid_margin_bottom)) then
   begin
-    AddLengthProperty(Name, Val, 'auto', fLengthPercentage, Important);
+    AddLengthProperty(Name, Val, 'auto', clfLengthPercentage, Important);
     Exit;
   end;
 
   if (Name = Ord(psid_width)) or (Name = Ord(psid_height)) or
      (Name = Ord(psid_min_width)) or (Name = Ord(psid_min_height)) then
   begin
-    AddLengthProperty(Name, Val, 'auto', fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, 'auto', clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
   if (Name = Ord(psid_max_width)) or (Name = Ord(psid_max_height)) then
   begin
-    AddLengthProperty(Name, Val, 'none', fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, 'none', clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
   if Name = Ord(psid_line_height) then
   begin
-    AddLengthProperty(Name, Val, LineHeightStrings, fNumber or fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, LineHeightStrings, clfNumber or clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
   if Name = Ord(psid_font_size) then
   begin
-    AddLengthProperty(Name, Val, FontSizeStrings, fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, FontSizeStrings, clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
   if Name = Ord(psid_margin) then
   begin
-    N := Parse1234Lengths(Tokens, Len, fLengthPercentage, 'auto');
+    N := Parse1234Lengths(Tokens, Len, clfLengthPercentage, 'auto');
     if N > 0 then
       AddFourLengths(Ord(psid_margin_top), Len, N, Important);
     Exit;
@@ -1849,7 +1849,7 @@ begin
 
   if Name = Ord(psid_padding) then
   begin
-    N := Parse1234Lengths(Tokens, Len, fLengthPercentage or fPositive);
+    N := Parse1234Lengths(Tokens, Len, clfLengthPercentage or clfPositive);
     if N > 0 then
       AddFourLengths(Ord(psid_padding_top), Len, N, Important);
     Exit;
@@ -1963,7 +1963,7 @@ begin
      (Name = Ord(psid_border_top_right_radius)) or
      (Name = Ord(psid_border_top_left_radius)) then
   begin
-    if ParseTwoLengths(Tokens, Len[0], Len[1], fLengthPercentage or fPositive) then
+    if ParseTwoLengths(Tokens, Len[0], Len[1], clfLengthPercentage or clfPositive) then
     begin
       AddParsedProperty(PixieId(NameStr + '-x'), TPixiePropertyValue.FromLength(Len[0], Important));
       AddParsedProperty(PixieId(NameStr + '-y'), TPixiePropertyValue.FromLength(Len[1], Important));
@@ -1977,7 +1977,7 @@ begin
       Idx := Ord(psid_border_top_left_radius_x)
     else
       Idx := Ord(psid_border_top_left_radius_y);
-    N := Parse1234Lengths(Tokens, Len, fLengthPercentage or fPositive);
+    N := Parse1234Lengths(Tokens, Len, clfLengthPercentage or clfPositive);
     if N > 0 then
       AddFourLengths(Idx, Len, N, Important);
     Exit;
@@ -1991,7 +1991,7 @@ begin
 
   if Name = Ord(psid_border_spacing) then
   begin
-    if ParseTwoLengths(Tokens, Len[0], Len[1], fLength or fPositive) then
+    if ParseTwoLengths(Tokens, Len[0], Len[1], clfLength or clfPositive) then
     begin
       AddParsedProperty(Ord(psid__pixie_border_spacing_x),
         TPixiePropertyValue.FromLength(Len[0], Important));
@@ -2052,7 +2052,7 @@ begin
   if Name = Ord(psid_text_decoration_thickness) then
   begin
     AddLengthProperty(Name, Val, TextDecorationThicknessStrings,
-      fLengthPercentage or fPositive, Important);
+      clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
@@ -2120,7 +2120,7 @@ begin
 
   if Name = Ord(psid_flex_basis) then
   begin
-    AddLengthProperty(Name, Val, FlexBasisStrings, fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, FlexBasisStrings, clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
@@ -2190,7 +2190,7 @@ begin
 
   if (Name = Ord(psid_row_gap)) or (Name = Ord(psid_column_gap)) then
   begin
-    AddLengthProperty(Name, Val, 'normal', fLengthPercentage or fPositive, Important);
+    AddLengthProperty(Name, Val, 'normal', clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
@@ -2198,7 +2198,7 @@ begin
   begin
     // gap: <row-gap> <column-gap>?
     // If only one value, it applies to both
-    N := Parse1234Lengths(Tokens, Len, fLengthPercentage or fPositive, 'normal');
+    N := Parse1234Lengths(Tokens, Len, clfLengthPercentage or clfPositive, 'normal');
     if N >= 1 then
     begin
       AddParsedProperty(Ord(psid_row_gap), TPixiePropertyValue.FromLength(Len[0], Important));
@@ -2737,7 +2737,7 @@ begin
   if SlashIdx < 0 then
   begin
     // No '/' - same radii for X and Y
-    N := Parse1234Lengths(Tokens, Len, fLengthPercentage or fPositive);
+    N := Parse1234Lengths(Tokens, Len, clfLengthPercentage or clfPositive);
     if N > 0 then
     begin
       AddFourLengths(Ord(psid_border_top_left_radius_x), Len, N, Important);
@@ -2755,8 +2755,8 @@ begin
       for I := SlashIdx + 1 to Tokens.Count - 1 do
         YTokens.Add(Tokens[I]);
 
-      N := Parse1234Lengths(XTokens, RX, fLengthPercentage or fPositive);
-      M := Parse1234Lengths(YTokens, RY, fLengthPercentage or fPositive);
+      N := Parse1234Lengths(XTokens, RX, clfLengthPercentage or clfPositive);
+      M := Parse1234Lengths(YTokens, RY, clfLengthPercentage or clfPositive);
       if (N > 0) and (M > 0) then
       begin
         AddFourLengths(Ord(psid_border_top_left_radius_x), RX, N, Important);
@@ -2859,7 +2859,7 @@ begin
 
     // font-size (required)
     Tok := PixieTokenAt(Tokens, Index);
-    if not PixieParseCssLength(Tok, FontSize, fLengthPercentage or fPositive, FontSizeStrings) then
+    if not PixieParseCssLength(Tok, FontSize, clfLengthPercentage or clfPositive, FontSizeStrings) then
       Exit;
     Inc(Index);
 
@@ -2869,7 +2869,7 @@ begin
     begin
       Inc(Index);
       Tok := PixieTokenAt(Tokens, Index);
-      if not PixieParseCssLength(Tok, LineHeight, fNumber or fLengthPercentage, LineHeightStrings) then
+      if not PixieParseCssLength(Tok, LineHeight, clfNumber or clfLengthPercentage, LineHeightStrings) then
         Exit;
       Inc(Index);
     end;
@@ -2908,7 +2908,7 @@ begin
         Continue;
       end;
 
-      if PixieParseCssLength(Tok, Len, fLengthPercentage or fPositive,
+      if PixieParseCssLength(Tok, Len, clfLengthPercentage or clfPositive,
                              TextDecorationThicknessStrings) then
       begin
         AddParsedProperty(Ord(psid_text_decoration_thickness),
@@ -3035,7 +3035,7 @@ begin
     end
     else if (A.TokenType = cssTokenNumber) and (A.Number >= 0) then
       Grow := A.Number
-    else if PixieParseCssLength(A, Basis, fLengthPercentage or fPositive, FlexBasisStrings) then
+    else if PixieParseCssLength(A, Basis, clfLengthPercentage or clfPositive, FlexBasisStrings) then
       { OK }
     else
       Exit;
@@ -3048,10 +3048,10 @@ begin
       Grow := A.Number;
       if (B.TokenType = cssTokenNumber) and (B.Number >= 0) then
         Shrink := B.Number
-      else if not PixieParseCssLength(B, Basis, fLengthPercentage or fPositive, FlexBasisStrings) then
+      else if not PixieParseCssLength(B, Basis, clfLengthPercentage or clfPositive, FlexBasisStrings) then
         Exit;
     end
-    else if PixieParseCssLength(A, Basis, fLengthPercentage or fPositive, FlexBasisStrings) then
+    else if PixieParseCssLength(A, Basis, clfLengthPercentage or clfPositive, FlexBasisStrings) then
     begin
       if (B.TokenType = cssTokenNumber) and (B.Number >= 0) then
         Grow := B.Number
@@ -3073,10 +3073,10 @@ begin
       // Basis: unitless zero allowed here
       if (C.TokenType = cssTokenNumber) and (C.Number = 0) then
         Basis := TPixieCssLength.Create(0, cssUnitsPx)
-      else if not PixieParseCssLength(C, Basis, fLengthPercentage or fPositive, FlexBasisStrings) then
+      else if not PixieParseCssLength(C, Basis, clfLengthPercentage or clfPositive, FlexBasisStrings) then
         Exit;
     end
-    else if PixieParseCssLength(A, Basis, fLengthPercentage or fPositive, FlexBasisStrings) then
+    else if PixieParseCssLength(A, Basis, clfLengthPercentage or clfPositive, FlexBasisStrings) then
     begin
       if not ((B.TokenType = cssTokenNumber) and (B.Number >= 0)) then Exit;
       Grow := B.Number;
@@ -3396,14 +3396,14 @@ begin
       begin
         // Parse min value (before comma)
         if not PixieParseCssLength(Args[0], MinLen,
-            fLength or fPercentage or fPositive, 'auto;min-content;max-content') then
+            clfLength or clfPercentage or clfPositive, 'auto;min-content;max-content') then
         begin
           Vec.Free;
           Exit;
         end;
         // Parse max value (after comma)
         if not PixieParseCssLength(Args[CommaIdx + 1], MaxLen,
-            fLength or fPercentage or fPositive, 'auto;min-content;max-content') then
+            clfLength or clfPercentage or clfPositive, 'auto;min-content;max-content') then
         begin
           Vec.Free;
           Exit;
@@ -3423,7 +3423,7 @@ begin
       Continue;
     end;
 
-    if PixieParseCssLength(Tok, Len, fLength or fPercentage or fPositive, 'auto') then
+    if PixieParseCssLength(Tok, Len, clfLength or clfPercentage or clfPositive, 'auto') then
       Vec.Add(Len)
     else
     begin

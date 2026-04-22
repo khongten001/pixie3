@@ -547,8 +547,8 @@ begin
   end;
 
   // Try two length-percentages (ellipse radii)
-  if PixieParseCssLength(Tok0, Len0, fLengthPercentage or fPositive) and
-     PixieParseCssLength(Tok1, Len1, fLengthPercentage or fPositive) then
+  if PixieParseCssLength(Tok0, Len0, clfLengthPercentage or clfPositive) and
+     PixieParseCssLength(Tok1, Len1, clfLengthPercentage or clfPositive) then
   begin
     Grad.RadialExtent := reNone;
     Grad.RadialRadiusX := Len0;
@@ -558,7 +558,7 @@ begin
   end;
 
   // Try single length (circle radius) - length only, no percentage
-  if PixieParseCssLength(Tok0, Len0, fLength or fPositive) then
+  if PixieParseCssLength(Tok0, Len0, clfLength or clfPositive) then
   begin
     Grad.RadialExtent := reNone;
     Grad.RadialRadiusX := Len0;
@@ -787,15 +787,15 @@ begin
   if Tokens.Count = 2 then
   begin
     if not PixieParseCssLength(PixieTokenAt(Tokens, 1), Len1,
-      fLengthPercentage) then
+      clfLengthPercentage) then
       Exit;
     Colors.Add(TPixieGradientColorStop.CreateWithColorLength(Clr, Len1));
     Exit(True);
   end;
 
   // 3 tokens: <color> <pos1> <pos2>
-  if PixieParseCssLength(PixieTokenAt(Tokens, 1), Len1, fLengthPercentage) and
-     PixieParseCssLength(PixieTokenAt(Tokens, 2), Len2, fLengthPercentage) then
+  if PixieParseCssLength(PixieTokenAt(Tokens, 1), Len1, clfLengthPercentage) and
+     PixieParseCssLength(PixieTokenAt(Tokens, 2), Len2, clfLengthPercentage) then
   begin
     Colors.Add(TPixieGradientColorStop.CreateWithColorLength(Clr, Len1));
     Colors.Add(TPixieGradientColorStop.CreateWithColorLength(Clr, Len2));
@@ -847,7 +847,7 @@ var
 begin
   Result := False;
   if (Tokens.Count = 1) and
-     PixieParseCssLength(PixieTokenAt(Tokens, 0), Len, fLengthPercentage) then
+     PixieParseCssLength(PixieTokenAt(Tokens, 0), Len, clfLengthPercentage) then
   begin
     Colors.Add(TPixieGradientColorStop.CreateHintLength(Len));
     Result := True;
