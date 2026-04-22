@@ -113,14 +113,7 @@ end;
 
 procedure TPixieBorderRadiuses.Init;
 begin
-  TopLeftX := 0;
-  TopLeftY := 0;
-  TopRightX := 0;
-  TopRightY := 0;
-  BottomRightX := 0;
-  BottomRightY := 0;
-  BottomLeftX := 0;
-  BottomLeftY := 0;
+  Self := Default(TPixieBorderRadiuses);
 end;
 
 procedure TPixieBorderRadiuses.FixValues;
