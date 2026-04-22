@@ -87,7 +87,7 @@ implementation
 
 procedure TPixieCssBorder.Init;
 begin
-  Style := bsNone;
+  Self := Default(TPixieCssBorder);
 end;
 
 function TPixieCssBorder.ToString: string;
@@ -99,8 +99,7 @@ end;
 
 procedure TPixieBorder.Init;
 begin
-  Width := 0;
-  Style := bsNone;
+  Self := Default(TPixieBorder);
 end;
 
 procedure TPixieBorder.InitFromCss(const CssBorder: TPixieCssBorder);
