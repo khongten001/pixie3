@@ -1273,7 +1273,7 @@ begin
   Child := TDOMNode(PatternNode).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
       ChildState := InheritState(Pointer(Child), FInitState);
       RenderElement(Pointer(Child), ChildState);

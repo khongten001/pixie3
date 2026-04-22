@@ -1003,7 +1003,7 @@ begin
   // Resolve styles from <style> element: type selectors, class, type.class
   if FStyleMap <> nil then
   begin
-    NodeTag := LowerCase(DomToStr(TDOMElement(Node).TagName));
+    NodeTag := LowerCase(PixieDomToStr(TDOMElement(Node).TagName));
 
     // Type selector: @tag (lowest specificity)
     if (NodeTag <> '') and FStyleMap.TryGetValue('@' + NodeTag, ClassDecl) then
@@ -1787,7 +1787,7 @@ var
   CurX, CurY, SubX, SubY: Single;
   NewArgs: TPixieSingleArray;
 begin
-  TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
+  TagName := LowerCase(PixieDomToStr(TDOMElement(Node).TagName));
 
   if TagName = 'path' then
   begin
@@ -2037,7 +2037,7 @@ begin
   Child := TDOMNode(ClipEl).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
       TransStr := GetAttr(Child, 'transform');
       if TransStr <> '' then
@@ -2072,7 +2072,7 @@ begin
   MaskId := ExtractUrlId(MaskStr);
   if MaskId = '' then Exit;
   if not FIdMap.TryGetValue(MaskId, MaskEl) then Exit;
-  if LowerCase(DomToStr(TDOMElement(MaskEl).TagName)) <> 'mask' then Exit;
+  if LowerCase(PixieDomToStr(TDOMElement(MaskEl).TagName)) <> 'mask' then Exit;
 
   // Find first <image> child in the mask element (also resolve <use>)
   Href := '';
@@ -2080,9 +2080,9 @@ begin
   Child := TDOMNode(MaskEl).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
-      ChildTag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      ChildTag := LowerCase(PixieDomToStr(TDOMElement(Child).TagName));
       if ChildTag = 'image' then
       begin
         Href := GetHref(Child);
@@ -2096,7 +2096,7 @@ begin
         begin
           UseTargetId := Copy(UseHref, 2, MaxInt);
           if FIdMap.TryGetValue(UseTargetId, UseTarget) then
-            if LowerCase(DomToStr(TDOMElement(UseTarget).TagName)) = 'image' then
+            if LowerCase(PixieDomToStr(TDOMElement(UseTarget).TagName)) = 'image' then
             begin
               Href := GetHref(UseTarget);
               ContentNode := UseTarget;
@@ -2170,10 +2170,10 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
       El := TDOMElement(Child);
-      TagName := LowerCase(DomToStr(El.TagName));
+      TagName := LowerCase(PixieDomToStr(El.TagName));
       if TagName = 'lineargradient' then
         ParseGradient(Child, False)
       else if TagName = 'radialgradient' then
@@ -2198,10 +2198,10 @@ begin
   if FIdMap = nil then
     FIdMap := TPixieSvgIdMap.Create;
 
-  if TDOMNode(Node).NodeType = ELEMENT_NODE then
+  if TDOMNode(Node).NodeType = xntElement then
   begin
     El := TDOMElement(Node);
-    IdStr := DomToStr(El.GetAttribute('id'));
+    IdStr := PixieDomToStr(El.GetAttribute('id'));
     if IdStr <> '' then
       FIdMap.AddOrSetValue(IdStr, Node);
   end;
@@ -2209,9 +2209,9 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
-      TagName := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      TagName := LowerCase(PixieDomToStr(TDOMElement(Child).TagName));
       if TagName = 'defs' then
         CollectDefs(Child)
       else if TagName = 'lineargradient' then
@@ -2237,7 +2237,7 @@ begin
   Result := False;
   if (FIdMap = nil) or (Id = '') then Exit;
   if not FIdMap.TryGetValue(Id, El) then Exit;
-  Result := LowerCase(DomToStr(TDOMElement(El).TagName)) = 'pattern';
+  Result := LowerCase(PixieDomToStr(TDOMElement(El).TagName)) = 'pattern';
 end;
 
 // Find the first descendant <image> element, following <use xlink:href>
@@ -2250,7 +2250,7 @@ var
 begin
   Result := nil;
   if (Node = nil) or (Depth >= 10) then Exit;
-  Tag := LowerCase(DomToStr(TDOMElement(Node).TagName));
+  Tag := LowerCase(PixieDomToStr(TDOMElement(Node).TagName));
   if Tag = 'image' then
   begin
     Result := Node;
@@ -2267,7 +2267,7 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if TDOMNode(Child).NodeType = ELEMENT_NODE then
+    if TDOMNode(Child).NodeType = xntElement then
     begin
       Result := FindImageElement(Child, Depth + 1);
       if Result <> nil then Exit;
@@ -2350,7 +2350,7 @@ function TPixieSvgRendererBase.GetPatternInfo(const PatternId: string;
     Child := TDOMNode(Node).FirstChild;
     while Child <> nil do
     begin
-      if Child.NodeType = ELEMENT_NODE then
+      if Child.NodeType = xntElement then
       begin
         Info.PatternNode := Node;
         Info.HasChildren := True;
@@ -2391,7 +2391,7 @@ begin
 
   if (FIdMap = nil) or (PatternId = '') then Exit;
   if not FIdMap.TryGetValue(PatternId, El) then Exit;
-  if LowerCase(DomToStr(TDOMElement(El).TagName)) <> 'pattern' then Exit;
+  if LowerCase(PixieDomToStr(TDOMElement(El).TagName)) <> 'pattern' then Exit;
 
   // Collect the xlink:href chain from leaf to root
   ChainLen := 0;
@@ -2402,7 +2402,7 @@ begin
     HrefStr := GetHref(El);
     if (HrefStr = '') or (HrefStr[1] <> '#') then Break;
     if not FIdMap.TryGetValue(Copy(HrefStr, 2, MaxInt), El) then Break;
-    if LowerCase(DomToStr(TDOMElement(El).TagName)) <> 'pattern' then Break;
+    if LowerCase(PixieDomToStr(TDOMElement(El).TagName)) <> 'pattern' then Break;
   end;
 
   // Apply root-to-leaf so the leaf (directly referenced) pattern wins
@@ -2435,7 +2435,7 @@ begin
     FGradients := TPixieSvgGradientMap.Create([doOwnsValues]);
 
   El := TDOMElement(Node);
-  GradId := DomToStr(El.GetAttribute('id'));
+  GradId := PixieDomToStr(El.GetAttribute('id'));
   if GradId = '' then Exit;
   if (FGradients <> nil) and FGradients.ContainsKey(GradId) then Exit;
 
@@ -2444,7 +2444,7 @@ begin
   Grad.IsRadial := IsRadial;
 
   // gradientUnits
-  Units := DomToStr(El.GetAttribute('gradientUnits'));
+  Units := PixieDomToStr(El.GetAttribute('gradientUnits'));
   Grad.HasUnits := (Units <> '');
   Grad.UserSpaceUnits := (LowerCase(Units) = 'userspaceonuse');
 
@@ -2454,7 +2454,7 @@ begin
     Grad.HrefId := Copy(HrefStr, 2, MaxInt);
 
   // gradientTransform
-  Grad.GradientTransform := DomToStr(El.GetAttribute('gradientTransform'));
+  Grad.GradientTransform := PixieDomToStr(El.GetAttribute('gradientTransform'));
   Grad.HasTransform := (Grad.GradientTransform <> '');
 
   if IsRadial then
@@ -2532,19 +2532,19 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
       ChildEl := TDOMElement(Child);
-      ChildTag := LowerCase(DomToStr(ChildEl.TagName));
+      ChildTag := LowerCase(PixieDomToStr(ChildEl.TagName));
       if ChildTag = 'stop' then
       begin
-        OffsetStr := DomToStr(ChildEl.GetAttribute('offset'));
+        OffsetStr := PixieDomToStr(ChildEl.GetAttribute('offset'));
         Stop.Offset := ParseSvgFloat(OffsetStr);
         Stop.Offset := EnsureRange(Stop.Offset, 0, 1);
 
         // Parse stop-color from attribute or style
-        StyleStr := DomToStr(ChildEl.GetAttribute('style'));
-        StopColorStr := DomToStr(ChildEl.GetAttribute('stop-color'));
+        StyleStr := PixieDomToStr(ChildEl.GetAttribute('style'));
+        StopColorStr := PixieDomToStr(ChildEl.GetAttribute('stop-color'));
         if StopColorStr = '' then
           StopColorStr := ParseStyleAttribute(StyleStr, 'stop-color');
         if StopColorStr = '' then
@@ -2554,7 +2554,7 @@ begin
           StopColor := TPixieWebColor.Black;
 
         // Parse stop-opacity
-        StopOpacStr := DomToStr(ChildEl.GetAttribute('stop-opacity'));
+        StopOpacStr := PixieDomToStr(ChildEl.GetAttribute('stop-opacity'));
         if StopOpacStr = '' then
           StopOpacStr := ParseStyleAttribute(StyleStr, 'stop-opacity');
         if StopOpacStr <> '' then
@@ -3722,7 +3722,7 @@ begin
   if not FIdMap.TryGetValue(MarkerId, MarkerNode) then Exit;
 
   MarkerEl := TDOMElement(MarkerNode);
-  if LowerCase(DomToStr(MarkerEl.TagName)) <> 'marker' then Exit;
+  if LowerCase(PixieDomToStr(MarkerEl.TagName)) <> 'marker' then Exit;
 
   // Parse marker attributes
   MW := ParseSvgFloat(GetAttr(MarkerNode, 'markerWidth', '3'));
@@ -3837,11 +3837,11 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = TEXT_NODE then
-      Result := Result + DomToStr(Child.NodeValue)
-    else if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntText then
+      Result := Result + PixieDomToStr(Child.NodeValue)
+    else if Child.NodeType = xntElement then
     begin
-      Tag := LowerCase(DomToStr(TDOMElement(Child).TagName));
+      Tag := LowerCase(PixieDomToStr(TDOMElement(Child).TagName));
       if (Tag <> 'desc') and (Tag <> 'title') and (Tag <> 'metadata') then
         Result := Result + CollectAllText(Child);
     end;
@@ -3899,15 +3899,15 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = TEXT_NODE then
+    if Child.NodeType = xntText then
     begin
-      TextContent := NormalizeTextNode(DomToStr(Child.NodeValue),
+      TextContent := NormalizeTextNode(PixieDomToStr(Child.NodeValue),
         State.XmlSpacePreserve);
       if TextContent <> '' then
         Result := Result + DoMeasureTextRun(TextContent, State);
     end
-    else if (Child.NodeType = ELEMENT_NODE) and
-            (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'tspan') then
+    else if (Child.NodeType = xntElement) and
+            (LowerCase(PixieDomToStr(TDOMElement(Child).TagName)) = 'tspan') then
     begin
       // A tspan with explicit x= starts a new anchored chunk and is measured
       // separately. Otherwise it continues this chunk.
@@ -3987,9 +3987,9 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = TEXT_NODE then
+    if Child.NodeType = xntText then
     begin
-      TextContent := NormalizeTextNode(DomToStr(Child.NodeValue),
+      TextContent := NormalizeTextNode(PixieDomToStr(Child.NodeValue),
         State.XmlSpacePreserve);
       if TextContent <> '' then
       begin
@@ -3997,8 +3997,8 @@ begin
         X := X + DoMeasureTextRun(TextContent, State);
       end;
     end
-    else if (Child.NodeType = ELEMENT_NODE) and
-            (LowerCase(DomToStr(TDOMElement(Child).TagName)) = 'tspan') then
+    else if (Child.NodeType = xntElement) and
+            (LowerCase(PixieDomToStr(TDOMElement(Child).TagName)) = 'tspan') then
     begin
       ChildState := InheritState(Child, State);
       // baseline-shift: offset Y for this tspan, restore after
@@ -4164,7 +4164,7 @@ begin
   if DisplayStr = 'none' then
     Exit;
 
-  TagName := LowerCase(DomToStr(TDOMElement(Node).TagName));
+  TagName := LowerCase(PixieDomToStr(TDOMElement(Node).TagName));
 
   IsGroup := (TagName = 'g') or (TagName = 'symbol') or (TagName = 'a');
 
@@ -4263,7 +4263,7 @@ begin
   TargetState := InheritState(Target, State);
   Inc(FUseDepth);
   try
-    TagName := LowerCase(DomToStr(TDOMElement(Target).TagName));
+    TagName := LowerCase(PixieDomToStr(TDOMElement(Target).TagName));
     if TagName = 'symbol' then
     begin
       // Per SVG spec, <symbol> referenced by <use> is treated as an inline
@@ -4318,7 +4318,7 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
       ChildState := InheritState(Child, State);
       RenderElement(Child, ChildState);
@@ -4382,7 +4382,7 @@ begin
   Child := TDOMNode(Node).FirstChild;
   while Child <> nil do
   begin
-    if Child.NodeType = ELEMENT_NODE then
+    if Child.NodeType = xntElement then
     begin
       Lang := GetAttr(Child, 'systemLanguage');
       if Lang <> '' then
@@ -4549,7 +4549,7 @@ begin
 
     Doc := nil;
     try
-      ReadXMLFile(Doc, MemStream);
+      PixieReadXMLFile(Doc, MemStream);
     except
       Exit;
     end;
@@ -4562,12 +4562,12 @@ begin
       Exit;
     end;
 
-    ParseViewBox(DomToStr(SvgRoot.GetAttribute('viewBox')),
+    ParseViewBox(PixieDomToStr(SvgRoot.GetAttribute('viewBox')),
       FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH);
 
     // Parse width/height, fall back to viewBox
-    WidthStr := DomToStr(SvgRoot.GetAttribute('width'));
-    HeightStr := DomToStr(SvgRoot.GetAttribute('height'));
+    WidthStr := PixieDomToStr(SvgRoot.GetAttribute('width'));
+    HeightStr := PixieDomToStr(SvgRoot.GetAttribute('height'));
 
     if WidthStr <> '' then
       W := ParseSvgFloat(WidthStr)
@@ -4581,7 +4581,7 @@ begin
     // Determine overflow: browsers default to visible for the outermost
     // <svg>, only clipping when overflow="hidden" is explicitly set
     OverflowStr := LowerCase(Trim(
-      DomToStr(SvgRoot.GetAttribute('overflow'))));
+      PixieDomToStr(SvgRoot.GetAttribute('overflow'))));
     if OverflowStr = 'hidden' then
       FOverflowVisible := False
     else

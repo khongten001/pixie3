@@ -11,11 +11,9 @@ interface
 uses
   SysUtils, Classes;
 
-const
-  ELEMENT_NODE = 1;
-  TEXT_NODE     = 3;
-
 type
+  TPixieXmlNodeType = (xntElement, xntText);
+
   TDOMNode = class;
   TDOMElement = class;
   TDOMNamedNodeMap = class;
@@ -24,7 +22,7 @@ type
 
   TDOMNode = class
   private
-    FNodeType: Integer;
+    FNodeType: TPixieXmlNodeType;
     FNodeValue: UnicodeString;
     FFirstChild: TDOMNode;
     FLastChild: TDOMNode;
@@ -32,7 +30,7 @@ type
   public
     destructor Destroy; override;
     procedure AppendChild(Child: TDOMNode);
-    property NodeType: Integer read FNodeType;
+    property NodeType: TPixieXmlNodeType read FNodeType;
     property NodeValue: UnicodeString read FNodeValue write FNodeValue;
     property FirstChild: TDOMNode read FFirstChild;
     property NextSibling: TDOMNode read FNextSibling;
@@ -77,22 +75,22 @@ type
     property DocumentElement: TDOMElement read FDocumentElement;
   end;
 
-procedure ReadXMLFile(out Doc: TXMLDocument; Stream: TStream);
+procedure PixieReadXMLFile(out Doc: TXMLDocument; Stream: TStream);
 
-function DomToStr(const S: UnicodeString): string; inline;
-function StrToDom(const S: string): UnicodeString; inline;
+function PixieDomToStr(const S: UnicodeString): string; inline;
+function PixieStrToDom(const S: string): UnicodeString; inline;
 
 implementation
 
 {$IFDEF FPC}
-function DomToStr(const S: UnicodeString): string; inline;
+function PixieDomToStr(const S: UnicodeString): string; inline;
 begin Result := UTF8Encode(S); end;
-function StrToDom(const S: string): UnicodeString; inline;
+function PixieStrToDom(const S: string): UnicodeString; inline;
 begin Result := UTF8Decode(S); end;
 {$ELSE}
-function DomToStr(const S: UnicodeString): string; inline;
+function PixieDomToStr(const S: UnicodeString): string; inline;
 begin Result := S; end;
-function StrToDom(const S: string): UnicodeString; inline;
+function PixieStrToDom(const S: string): UnicodeString; inline;
 begin Result := S; end;
 {$ENDIF}
 
@@ -130,7 +128,7 @@ end;
 constructor TDOMElement.Create;
 begin
   inherited Create;
-  FNodeType := ELEMENT_NODE;
+  FNodeType := xntElement;
   FAttrNames := TStringList.Create;
   FAttrValues := TStringList.Create;
   FAttrNode := TDOMNode.Create;
@@ -325,7 +323,7 @@ begin
   end;
 
   // Unknown entity — keep as-is
-  Result := '&' + StrToDom(Copy(Data, EntStart, EntLen)) + ';';
+  Result := '&' + PixieStrToDom(Copy(Data, EntStart, EntLen)) + ';';
 end;
 
 function ReadText(var P: TXmlParser; StopChar: Char): UnicodeString;
@@ -345,14 +343,14 @@ begin
   begin
     Start := P.Pos;
     P.Pos := ScanPos;
-    Result := StrToDom(Copy(P.Data, Start, ScanPos - Start));
+    Result := PixieStrToDom(Copy(P.Data, Start, ScanPos - Start));
     Exit;
   end;
 
   // Pass 2: copy clean prefix before first entity, then decode
   Start := P.Pos;
   if ScanPos > Start then
-    Result := StrToDom(Copy(P.Data, Start, ScanPos - Start))
+    Result := PixieStrToDom(Copy(P.Data, Start, ScanPos - Start))
   else
     Result := '';
   P.Pos := ScanPos;
@@ -375,7 +373,7 @@ begin
       while (P.Pos <= P.Len) and (P.Data[P.Pos] <> StopChar) and
             (P.Data[P.Pos] <> '&') do
         Inc(P.Pos);
-      Result := Result + StrToDom(Copy(P.Data, Start, P.Pos - Start));
+      Result := Result + PixieStrToDom(Copy(P.Data, Start, P.Pos - Start));
     end;
   end;
 end;
@@ -456,13 +454,13 @@ begin
   begin
     if Matches(P, ']]>') then
     begin
-      Result := StrToDom(Copy(P.Data, Start, P.Pos - Start));
+      Result := PixieStrToDom(Copy(P.Data, Start, P.Pos - Start));
       Skip(P, 3);
       Exit;
     end;
     Inc(P.Pos);
   end;
-  Result := StrToDom(Copy(P.Data, Start, P.Pos - Start));
+  Result := PixieStrToDom(Copy(P.Data, Start, P.Pos - Start));
 end;
 
 function ParseElement(var P: TXmlParser): TDOMElement; forward;
@@ -507,7 +505,7 @@ begin
         if TextVal <> '' then
         begin
           TextNode := TDOMNode.Create;
-          TextNode.FNodeType := TEXT_NODE;
+          TextNode.FNodeType := xntText;
           TextNode.FNodeValue := TextVal;
           Parent.AppendChild(TextNode);
         end;
@@ -542,7 +540,7 @@ begin
       if Trim(string(TextVal)) <> '' then
       begin
         TextNode := TDOMNode.Create;
-        TextNode.FNodeType := TEXT_NODE;
+        TextNode.FNodeType := xntText;
         TextNode.FNodeValue := TextVal;
         Parent.AppendChild(TextNode);
       end;
@@ -622,10 +620,10 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// ReadXMLFile
+// PixieReadXMLFile
 // ---------------------------------------------------------------------------
 
-procedure ReadXMLFile(out Doc: TXMLDocument; Stream: TStream);
+procedure PixieReadXMLFile(out Doc: TXMLDocument; Stream: TStream);
 var
   Bytes: TBytes;
   Text: string;
