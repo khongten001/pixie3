@@ -2843,7 +2843,7 @@ begin
   FontVariant := Ord(fvNormal);
   Weight := TPixieCssLength.PredefValue(Ord(fwNormal));
   FontSize := TPixieCssLength.PredefValue(Ord(fsMedium));
-  LineHeight := TPixieCssLength.PredefValue(Ord(lhNormal));
+  LineHeight := TPixieCssLength.PredefValue;
 
   // Check for system font (single ident)
   if (Tokens.Count = 1) and

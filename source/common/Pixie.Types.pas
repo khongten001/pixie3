@@ -95,12 +95,6 @@ type
     fsLarger
   );
 
-  // Line height
-  // 'normal'
-  TPixieLineHeight = (
-    lhNormal
-  );
-
   // Font style
   // 'normal;italic'
   TPixieFontStyle = (
