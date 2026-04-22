@@ -597,6 +597,8 @@ end;
 procedure TPixieHtmlViewCore.RebuildDocument;
 var
   W, H: Integer;
+  Scale: Double;
+  HtmlStr: string;
   SvgData: UTF8String;
 begin
   FreeAndNil(FDocument);
@@ -615,13 +617,15 @@ begin
 
   if (FLines.Count > 0) and (FCanvas <> nil) then
   begin
-    if PixieIsBinaryString(FLines.Text) then
+    HtmlStr := FLines.Text;
+
+    if PixieIsBinaryString(HtmlStr) then
       raise EPixieBinaryContent.Create(SPixieBinaryContent);
 
     // Detect standalone SVG content
-    if PixieIsLikelySvg(FLines.Text) then
+    if PixieIsLikelySvg(HtmlStr) then
     begin
-      SvgData := UTF8Encode(FLines.Text);
+      SvgData := UTF8Encode(HtmlStr);
       FSvgRenderer := TPixieSvgCanvasRenderer.Create(FCanvas);
       if not FSvgRenderer.ParseSvg(@SvgData[1], Length(SvgData),
         FSvgWidth, FSvgHeight) then
@@ -633,11 +637,12 @@ begin
     if Assigned(FOnBeforeParse) then
       FOnBeforeParse(Owner);
     FContainer.BaseUrl := FBaseUrl;
-    W := Round(OnHostGetViewWidth() / GetEffectiveScale);
-    H := Round(OnHostGetViewHeight() / GetEffectiveScale);
+    Scale := GetEffectiveScale;
+    W := Round(OnHostGetViewWidth() / Scale);
+    H := Round(OnHostGetViewHeight() / Scale);
     FContainer.ViewportWidth := W;
     FContainer.ViewportHeight := H;
-    FDocument := TPixieDocument.CreateFromString(FLines.Text, FContainer,
+    FDocument := TPixieDocument.CreateFromString(HtmlStr, FContainer,
       PixieMasterCss, FUserCss);
     FDocument.OnChange := DoDocumentChange;
     if Assigned(FOnAfterParse) then
@@ -789,6 +794,7 @@ var
   ClipPos: TPixiePosition;
   BgColor: TPixieWebColor;
   LayoutWidth: Integer;
+  Scale: Double;
   ViewW, ViewH: Single;
   OldContentHeight: TPixiePixel;
   BarW, BarMargin, TrackH, ThumbH, ThumbX, ThumbY, MaxScroll: TPixiePixel;
@@ -798,11 +804,12 @@ begin
   if Assigned(FOnBeforePaint) then
     FOnBeforePaint(Owner);
 
-  FCanvas.SetScale(GetEffectiveScale);
+  Scale := GetEffectiveScale;
+  FCanvas.SetScale(Scale);
   FCanvas.BeginPaint(ACanvasHandle);
   try
-    ViewW := OnHostGetViewWidth / GetEffectiveScale;
-    ViewH := OnHostGetViewHeight / GetEffectiveScale;
+    ViewW := OnHostGetViewWidth / Scale;
+    ViewH := OnHostGetViewHeight / Scale;
     LayoutWidth := Round(ViewW);
 
     BgColor := OnHostGetBackgroundColor();
@@ -890,9 +897,11 @@ end;
 procedure TPixieHtmlViewCore.HandleResize;
 var
   W, H: Integer;
+  Scale: Double;
 begin
-  W := Round(OnHostGetViewWidth() / GetEffectiveScale);
-  H := Round(OnHostGetViewHeight() / GetEffectiveScale);
+  Scale := GetEffectiveScale;
+  W := Round(OnHostGetViewWidth() / Scale);
+  H := Round(OnHostGetViewHeight() / Scale);
   if FContainer <> nil then
   begin
     FContainer.ViewportWidth := W;
@@ -1050,6 +1059,7 @@ procedure TPixieHtmlViewCore.HandleMouseDown(IsLeft, IsDouble: Boolean;
   X, Y: Integer);
 var
   Vx, Vy: Integer;
+  Scale: Double;
   InputFocused: Boolean;
   ViewH, ViewW, BarMargin, TrackH, ThumbH, ThumbY, MaxScroll,
     NewScroll: TPixiePixel;
@@ -1057,12 +1067,13 @@ begin
   if Assigned(OnHostSetFocus) then OnHostSetFocus;
   if not IsLeft or (FDocument = nil) then Exit;
 
-  Vx := Round(X / GetEffectiveScale);
-  Vy := Round(Y / GetEffectiveScale);
+  Scale := GetEffectiveScale;
+  Vx := Round(X / Scale);
+  Vy := Round(Y / Scale);
 
   // Scrollbar interaction
-  ViewW := OnHostGetViewWidth / GetEffectiveScale;
-  ViewH := OnHostGetViewHeight / GetEffectiveScale;
+  ViewW := OnHostGetViewWidth / Scale;
+  ViewH := OnHostGetViewHeight / Scale;
   BarMargin := FScrollbar.Margin;
   if ShouldDrawScrollbar and (FContentHeight > ViewH) and
      (Vx >= Round(ViewW) - FScrollbar.Width - BarMargin * 2) then
@@ -1145,13 +1156,15 @@ end;
 procedure TPixieHtmlViewCore.HandleMouseMove(X, Y: Integer);
 var
   Vx, Vy, DeltaX: Integer;
+  Scale: Double;
   ViewW, ViewH, TrackH, ThumbH, MaxScroll, NewThumbY, NewScroll: TPixiePixel;
   InGutter: Boolean;
 begin
+  Scale := GetEffectiveScale;
   if FScrollDragging then
   begin
-    Vy := Round(Y / GetEffectiveScale);
-    ViewH := OnHostGetViewHeight / GetEffectiveScale;
+    Vy := Round(Y / Scale);
+    ViewH := OnHostGetViewHeight / Scale;
     TrackH := ViewH - FScrollbar.Margin * 2;
     ThumbH := TrackH * (ViewH / FContentHeight);
     if ThumbH < FScrollbar.MinThumbHeight then
@@ -1177,14 +1190,14 @@ begin
   end;
   if FDocument <> nil then
   begin
-    Vx := Round(X / GetEffectiveScale);
-    Vy := Round(Y / GetEffectiveScale);
+    Vx := Round(X / Scale);
+    Vy := Round(Y / Scale);
 
     // Gutter hover detection for svAuto
     if FScrollbar.Visibility = svAuto then
     begin
-      ViewW := OnHostGetViewWidth / GetEffectiveScale;
-      ViewH := OnHostGetViewHeight / GetEffectiveScale;
+      ViewW := OnHostGetViewWidth / Scale;
+      ViewH := OnHostGetViewHeight / Scale;
       InGutter := (FContentHeight > ViewH) and
         (Vx >= Round(ViewW) - Max(16, FScrollbar.Width + FScrollbar.Margin * 2));
       if InGutter and not FScrollbarHoverZone then
@@ -1209,7 +1222,7 @@ begin
       DeltaX := Abs(Vx - FLastDragVx);
       FLastDragVx := Vx;
       FLastDragVy := Vy;
-      UpdateAutoScroll(Vy, OnHostGetViewHeight / GetEffectiveScale,
+      UpdateAutoScroll(Vy, OnHostGetViewHeight / Scale,
         DeltaX);
       if (FDocument.FocusedElement <> nil) and
          FDocument.FocusedElement.IsFocusable then
@@ -1234,6 +1247,7 @@ end;
 procedure TPixieHtmlViewCore.HandleMouseUp(IsLeft: Boolean; X, Y: Integer);
 var
   Vx, Vy: Integer;
+  Scale: Double;
 begin
   if IsLeft and FScrollDragging then
   begin
@@ -1244,8 +1258,9 @@ begin
   end;
   if IsLeft and (FDocument <> nil) then
   begin
-    Vx := Round(X / GetEffectiveScale);
-    Vy := Round(Y / GetEffectiveScale);
+    Scale := GetEffectiveScale;
+    Vx := Round(X / Scale);
+    Vy := Round(Y / Scale);
     StopAutoScroll;
     FDragging := False;
     FWordDragging := False;
