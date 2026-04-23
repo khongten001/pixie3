@@ -337,7 +337,7 @@ begin
     Descr.Family := FFontFamily
   else
   begin
-    {$IFDEF MSWINDOWS}
+    {$IF DEFINED(MSWINDOWS)}
     Descr.Family := 'Segoe UI';
     {$ELSEIF DEFINED(DARWIN)}
     Descr.Family := 'Helvetica';
@@ -1260,9 +1260,9 @@ begin
   BestDist := MaxSingle;
   for I := 0 to High(FPalette) do
   begin
-    Dist := Sqr(Single(Tag.Color.Red) - FPalette[I].Red) +
-            Sqr(Single(Tag.Color.Green) - FPalette[I].Green) +
-            Sqr(Single(Tag.Color.Blue) - FPalette[I].Blue);
+    Dist := Sqr(Tag.Color.Red - FPalette[I].Red) +
+            Sqr(Tag.Color.Green - FPalette[I].Green) +
+            Sqr(Tag.Color.Blue - FPalette[I].Blue);
     if Dist < BestDist then
     begin
       BestDist := Dist;
