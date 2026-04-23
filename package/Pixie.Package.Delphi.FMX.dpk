@@ -113,6 +113,10 @@ contains
   Pixie.PaintBox.FMX in '..\source\paintbox\Pixie.PaintBox.FMX.pas',
   Pixie.Register.Delphi.FMX in 'Pixie.Register.Delphi.FMX.pas',
   Pixie.ControlBase.FMX in '..\source\common\Pixie.ControlBase.FMX.pas',
-  Pixie.CustomControl.FMX in '..\source\common\Pixie.CustomControl.FMX.pas';
+  Pixie.CustomControl.FMX in '..\source\common\Pixie.CustomControl.FMX.pas',
+  Pixie.TagBar.Colors in '..\source\tagbar\Pixie.TagBar.Colors.pas',
+  Pixie.TagBar.Render in '..\source\tagbar\Pixie.TagBar.Render.pas',
+  Pixie.TagBar.Base in '..\source\tagbar\Pixie.TagBar.Base.pas',
+  Pixie.TagBar.FMX in '..\source\tagbar\Pixie.TagBar.FMX.pas';
 
 end.

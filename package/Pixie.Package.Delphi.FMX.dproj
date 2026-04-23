@@ -191,6 +191,10 @@
         <DCCReference Include="..\source\svgview\Pixie.SvgView.FMX.pas"/>
         <DCCReference Include="..\source\common\Pixie.ControlBase.FMX.pas"/>
         <DCCReference Include="..\source\common\Pixie.CustomControl.FMX.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.Colors.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.Render.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.Base.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.FMX.pas"/>
         <DCCReference Include="Pixie.Register.Delphi.FMX.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

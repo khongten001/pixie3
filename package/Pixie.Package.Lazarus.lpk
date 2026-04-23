@@ -6,7 +6,7 @@
     <CompilerOptions>
       <Version Value="11"/>
       <SearchPaths>
-        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/paintbox;../source/svgview"/>
+        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/paintbox;../source/svgview;../source/tagbar"/>
         <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
       </SearchPaths>
     </CompilerOptions>
@@ -336,6 +336,22 @@
       <Item>
         <Filename Value="../source/svgview/Pixie.SvgView.pas"/>
         <UnitName Value="Pixie.SvgView"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.pas"/>
+        <UnitName Value="Pixie.TagBar"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.Base.pas"/>
+        <UnitName Value="Pixie.TagBar.Base"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.Render.pas"/>
+        <UnitName Value="Pixie.TagBar.Render"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/tagbar/Pixie.TagBar.Colors.pas"/>
+        <UnitName Value="Pixie.TagBar.Colors"/>
       </Item>
     </Files>
     <RequiredPkgs>

@@ -113,6 +113,10 @@ contains
   Pixie.PaintBox.VCL in '..\source\paintbox\Pixie.PaintBox.VCL.pas',
   Pixie.Register.Delphi.VCL in 'Pixie.Register.Delphi.VCL.pas',
   Pixie.ControlBase.VCL in '..\source\common\Pixie.ControlBase.VCL.pas',
-  Pixie.CustomControl.VCL in '..\source\common\Pixie.CustomControl.VCL.pas';
+  Pixie.CustomControl.VCL in '..\source\common\Pixie.CustomControl.VCL.pas',
+  Pixie.TagBar.Colors in '..\source\tagbar\Pixie.TagBar.Colors.pas',
+  Pixie.TagBar.Render in '..\source\tagbar\Pixie.TagBar.Render.pas',
+  Pixie.TagBar.Base in '..\source\tagbar\Pixie.TagBar.Base.pas',
+  Pixie.TagBar.VCL in '..\source\tagbar\Pixie.TagBar.VCL.pas';
 
 end.

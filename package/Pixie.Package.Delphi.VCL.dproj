@@ -181,6 +181,10 @@
         <DCCReference Include="..\source\svgview\Pixie.SvgView.VCL.pas"/>
         <DCCReference Include="..\source\common\Pixie.ControlBase.VCL.pas"/>
         <DCCReference Include="..\source\common\Pixie.CustomControl.VCL.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.Colors.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.Render.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.Base.pas"/>
+        <DCCReference Include="..\source\tagbar\Pixie.TagBar.VCL.pas"/>
         <DCCReference Include="Pixie.Register.Delphi.VCL.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
