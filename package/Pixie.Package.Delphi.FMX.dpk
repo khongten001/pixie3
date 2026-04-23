@@ -111,6 +111,8 @@ contains
   Pixie.SvgView.FMX in '..\source\svgview\Pixie.SvgView.FMX.pas',
   Pixie.DrawingCanvas in '..\source\paintbox\Pixie.DrawingCanvas.pas',
   Pixie.PaintBox.FMX in '..\source\paintbox\Pixie.PaintBox.FMX.pas',
-  Pixie.Register.Delphi.FMX in 'Pixie.Register.Delphi.FMX.pas';
+  Pixie.Register.Delphi.FMX in 'Pixie.Register.Delphi.FMX.pas',
+  Pixie.ControlBase.FMX in '..\source\common\Pixie.ControlBase.FMX.pas',
+  Pixie.CustomControl.FMX in '..\source\common\Pixie.CustomControl.FMX.pas';
 
 end.

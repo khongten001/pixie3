@@ -189,6 +189,8 @@
         <DCCReference Include="..\source\htmlview\Pixie.Canvas.Pdf.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.PdfExport.pas"/>
         <DCCReference Include="..\source\svgview\Pixie.SvgView.FMX.pas"/>
+        <DCCReference Include="..\source\common\Pixie.ControlBase.FMX.pas"/>
+        <DCCReference Include="..\source\common\Pixie.CustomControl.FMX.pas"/>
         <DCCReference Include="Pixie.Register.Delphi.FMX.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

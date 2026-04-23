@@ -8,21 +8,20 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes,
-  System.UIConsts, System.Rtti, System.Math,
+  System.Rtti,
   FMX.Controls, FMX.Graphics, FMX.Types, FMX.Platform,
   FMX.Text, FMX.Forms,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.Canvas.FMX,
+  Pixie.CustomControl.FMX,
   Pixie.HtmlView.Base;
 
 type
   { TPixieHtmlView }
 
-  TPixieHtmlView = class(TControl, ITextInput)
+  TPixieHtmlView = class(TPixieFmxCustomControl, ITextInput)
   private
     FCore: TPixieHtmlViewCore;
-    FCanvas: TPixieCanvas;
     FCaretTimer: TTimer;
     FTextService: TTextService;
     FLastMouseX: Single;
@@ -94,10 +93,10 @@ type
     procedure SetOnScrollChanged(Value: TNotifyEvent);
   protected
     procedure Loaded; override;
-    procedure Paint; override;
+    procedure DoPaint; override;
+    procedure DoMouseLeave; override;
     procedure Resize; override;
     procedure DialogKey(var Key: Word; Shift: TShiftState); override;
-    procedure DoMouseLeave; override;
     procedure DoEnter; override;
     procedure DoExit; override;
     procedure KeyDown(var Key: Word; var KeyChar: WideChar;
@@ -218,7 +217,6 @@ begin
 
   inherited Create(AOwner);
   ClipChildren := True;
-  HitTest := True;
   AutoCapture := True;
   Width := 400;
   Height := 300;
@@ -229,8 +227,7 @@ begin
       IFMXTextService, TextSvc) then
       FTextService := TextSvc.GetTextServiceClass.Create(Self, False);
 
-  FCanvas := TPixieFmxCanvas.Create;
-  FCore := TPixieHtmlViewCore.Create(FCanvas);
+  FCore := TPixieHtmlViewCore.Create(PixieCanvas);
   FCore.Owner := Self;
   FCore.OnHostInvalidate := HostInvalidate;
   FCore.OnHostSetCursor := HostSetCursor;
@@ -253,7 +250,6 @@ begin
   FreeAndNil(FCaretTimer);
   FreeAndNil(FTextService);
   FreeAndNil(FCore);
-  FreeAndNil(FCanvas);
   inherited Destroy;
 end;
 
@@ -263,15 +259,12 @@ end;
 
 procedure TPixieHtmlView.HostInvalidate;
 begin
-  Repaint;
+  InvalidateRect(LocalRect);
 end;
 
 procedure TPixieHtmlView.HostSetCursor(ACursor: TPixieCursorKind);
-const
-  CursorMap: array[TPixieCursorKind] of TCursor = (
-    crDefault, crHandPoint, crIBeam, crCross, crSizeAll);
 begin
-  Self.Cursor := CursorMap[ACursor];
+  SetPixieCursor(ACursor);
 end;
 
 procedure TPixieHtmlView.HostSetFocus;
@@ -291,7 +284,7 @@ end;
 
 function TPixieHtmlView.HostGetBackgroundColor: TPixieWebColor;
 begin
-  Result := TPixieWebColor.Create(255, 255, 255);
+  Result := GetBackgroundColor;
 end;
 
 procedure TPixieHtmlView.HostCopyToClipboard(const Text: string);
@@ -369,14 +362,14 @@ begin
   Result := FCore.Zoom;
 end;
 
-function TPixieHtmlView.GetScrollbar: TPixieScrollbarSettings;
-begin
-  Result := FCore.Scrollbar;
-end;
-
 procedure TPixieHtmlView.SetZoom(const Value: Double);
 begin
   FCore.Zoom := Value;
+end;
+
+function TPixieHtmlView.GetScrollbar: TPixieScrollbarSettings;
+begin
+  Result := FCore.Scrollbar;
 end;
 
 function TPixieHtmlView.GetAutoScrollSpeed: Integer;
@@ -648,17 +641,10 @@ begin
   FCore.HandleLoaded;
 end;
 
-procedure TPixieHtmlView.Paint;
+procedure TPixieHtmlView.DoPaint;
 begin
-  if (FCore = nil) or (FCore.Canvas = nil) then Exit;
-  FCore.HandlePaint(PtrUInt(Pointer(Canvas)));
-end;
-
-procedure TPixieHtmlView.Resize;
-begin
-  inherited Resize;
-  if FCore <> nil then
-    FCore.HandleResize;
+  if FCore = nil then Exit;
+  FCore.HandlePaint(GetPaintHandle);
 end;
 
 procedure TPixieHtmlView.DoMouseLeave;
@@ -666,6 +652,13 @@ begin
   inherited;
   if FCore <> nil then
     FCore.HandleMouseLeave;
+end;
+
+procedure TPixieHtmlView.Resize;
+begin
+  inherited Resize;
+  if FCore <> nil then
+    FCore.HandleResize;
 end;
 
 // ---------------------------------------------------------------------------
