@@ -111,6 +111,8 @@ contains
   Pixie.SvgView.VCL in '..\source\svgview\Pixie.SvgView.VCL.pas',
   Pixie.DrawingCanvas in '..\source\paintbox\Pixie.DrawingCanvas.pas',
   Pixie.PaintBox.VCL in '..\source\paintbox\Pixie.PaintBox.VCL.pas',
-  Pixie.Register.Delphi.VCL in 'Pixie.Register.Delphi.VCL.pas';
+  Pixie.Register.Delphi.VCL in 'Pixie.Register.Delphi.VCL.pas',
+  Pixie.ControlBase.VCL in '..\source\common\Pixie.ControlBase.VCL.pas',
+  Pixie.CustomControl.VCL in '..\source\common\Pixie.CustomControl.VCL.pas';
 
 end.

@@ -3,8 +3,6 @@ unit Pixie.HtmlView.VCL;
 // TPixieHtmlView — Delphi VCL visual component that renders HTML content
 // using the Pixie engine with Direct2D/DirectWrite graphics.
 
-{$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
-
 interface
 
 uses
@@ -12,27 +10,23 @@ uses
   Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.Canvas.D2D,
+  Pixie.CustomControl.VCL,
   Pixie.HtmlView.Base;
 
 type
   { TPixieHtmlView }
 
-  TPixieHtmlView = class(TCustomControl)
+  TPixieHtmlView = class(TPixieVclCustomControl)
   private
     FCore: TPixieHtmlViewCore;
-    FCanvas: TPixieCanvas;
     FCaretTimer: TTimer;
     FBorderStyle: TBorderStyle;
 
     procedure DoCaretTimer(Sender: TObject);
     procedure SetBorderStyle(Value: TBorderStyle);
-    procedure WMEraseBkgnd(var Msg: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMGetDlgCode(var Msg: TWMGetDlgCode); message WM_GETDLGCODE;
-    procedure CMMouseLeave(var Msg: TMessage); message CM_MOUSELEAVE;
     procedure WMIMEStartComposition(var Msg: TMessage); message WM_IME_STARTCOMPOSITION;
     procedure UpdateIMEPosition;
-    function GetScaleFactor: Single;
 
     // Host callbacks
     procedure HostInvalidate;
@@ -88,7 +82,8 @@ type
   protected
     procedure CreateParams(var Params: TCreateParams); override;
     procedure Loaded; override;
-    procedure Paint; override;
+    procedure DoPaint; override;
+    procedure DoMouseLeave; override;
     procedure Resize; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyPress(var Key: Char); override;
@@ -182,15 +177,12 @@ constructor TPixieHtmlView.Create(AOwner: TComponent);
 begin
   FCore := nil;
   inherited Create(AOwner);
-  ControlStyle := ControlStyle + [csOpaque];
   FBorderStyle := bsSingle;
   Color := clWhite;
   Width := 400;
   Height := 300;
-  TabStop := True;
 
-  FCanvas := TPixieD2DCanvas.Create;
-  FCore := TPixieHtmlViewCore.Create(FCanvas);
+  FCore := TPixieHtmlViewCore.Create(PixieCanvas);
   FCore.Owner := Self;
   FCore.OnHostInvalidate := HostInvalidate;
   FCore.OnHostSetCursor := HostSetCursor;
@@ -214,7 +206,6 @@ destructor TPixieHtmlView.Destroy;
 begin
   FreeAndNil(FCaretTimer);
   FreeAndNil(FCore);
-  FreeAndNil(FCanvas);
   inherited Destroy;
 end;
 
@@ -248,17 +239,8 @@ begin
 end;
 
 procedure TPixieHtmlView.HostSetCursor(ACursor: TPixieCursorKind);
-const
-  CursorMap: array[TPixieCursorKind] of TCursor = (
-    crDefault, crHandPoint, crIBeam, crCross, crSizeAll);
 begin
-  Self.Cursor := CursorMap[ACursor];
-end;
-
-procedure TPixieHtmlView.HostSetFocus;
-begin
-  if CanFocus then
-    SetFocus;
+  SetPixieCursor(ACursor);
 end;
 
 function TPixieHtmlView.HostGetViewWidth: TPixiePixel;
@@ -277,12 +259,14 @@ begin
 end;
 
 function TPixieHtmlView.HostGetBackgroundColor: TPixieWebColor;
-var
-  Rgb: LongInt;
 begin
-  Rgb := ColorToRGB(Self.Color);
-  Result := TPixieWebColor.Create(
-    Byte(Rgb), Byte(Rgb shr 8), Byte(Rgb shr 16));
+  Result := GetBackgroundColor;
+end;
+
+procedure TPixieHtmlView.HostSetFocus;
+begin
+  if CanFocus then
+    SetFocus;
 end;
 
 procedure TPixieHtmlView.HostCopyToClipboard(const Text: string);
@@ -528,40 +512,13 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// DPI / Scale
-// ---------------------------------------------------------------------------
-
-function TPixieHtmlView.GetScaleFactor: Single;
-var
-  F: TCustomForm;
-begin
-  F := GetParentForm(Self);
-  if F <> nil then
-    Result := F.PixelsPerInch / 96
-  else
-    Result := 1.0;
-end;
-
-// ---------------------------------------------------------------------------
 // Messages
 // ---------------------------------------------------------------------------
-
-procedure TPixieHtmlView.WMEraseBkgnd(var Msg: TWMEraseBkgnd);
-begin
-  Msg.Result := 1;
-end;
 
 procedure TPixieHtmlView.WMGetDlgCode(var Msg: TWMGetDlgCode);
 begin
   inherited;
   Msg.Result := Msg.Result or DLGC_WANTARROWS or DLGC_WANTTAB;
-end;
-
-procedure TPixieHtmlView.CMMouseLeave(var Msg: TMessage);
-begin
-  inherited;
-  if FCore <> nil then
-    FCore.HandleMouseLeave;
 end;
 
 // ---------------------------------------------------------------------------
@@ -604,16 +561,17 @@ begin
   FCore.HandleLoaded;
 end;
 
-procedure TPixieHtmlView.Paint;
+procedure TPixieHtmlView.DoPaint;
 begin
-  if (FCore = nil) or (FCore.Canvas = nil) then
-  begin
-    inherited Canvas.Brush.Color := Self.Color;
-    inherited Canvas.FillRect(ClientRect);
-    Exit;
-  end;
-  FCore.Canvas.SetViewSize(ClientWidth, ClientHeight, GetScaleFactor);
-  FCore.HandlePaint(NativeUInt(inherited Canvas.Handle));
+  if FCore = nil then Exit;
+  FCore.Canvas.SetViewSize(ClientWidth, ClientHeight, 1.0);
+  FCore.HandlePaint(GetPaintHandle);
+end;
+
+procedure TPixieHtmlView.DoMouseLeave;
+begin
+  if FCore <> nil then
+    FCore.HandleMouseLeave;
 end;
 
 procedure TPixieHtmlView.Resize;
