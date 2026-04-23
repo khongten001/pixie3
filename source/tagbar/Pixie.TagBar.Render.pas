@@ -21,7 +21,7 @@ type
     tpsInactive, tpsEditing
   );
 
-  TPixieTagPillOption = (tpoShowDismiss, tpoIsAddButton);
+  TPixieTagPillOption = (tpoShowDismiss, tpoIsAddButton, tpoEditing);
   TPixieTagPillOptions = set of TPixieTagPillOption;
 
   TPixieTagHitZone = (thzNone, thzPill, thzLeadIcon, thzDismiss);
@@ -86,7 +86,7 @@ function MeasureTagPill(
   Options: TPixieTagPillOptions;
   Shape: TPixieTagShape): TPixieTagPillMetrics;
 var
-  PadH, DismW, Gap, HalfGap, CurX, TextW, LeadW, TrailW: Single;
+  PadH, DismW, Gap, InnerPad, CurX, TextW, LeadW, TrailW: Single;
   Part1W, Part2W: Single;
   ColonPos: Integer;
   Part1, Part2: string;
@@ -126,11 +126,12 @@ begin
   PadH  := PillHeight * 0.35;
   DismW := PillHeight * 0.55;
   Gap   := PillHeight * 0.2;
-  HalfGap := Gap / 2;
 
-  // Detect colon split
-  ColonPos := Pos(':', Text);
+  // Detect colon split (suppressed during editing)
+  ColonPos := 0;
   HasColon := False;
+  if not (tpoEditing in Options) then
+    ColonPos := Pos(':', Text);
   if ColonPos > 1 then
   begin
     Part1 := Trim(Copy(Text, 1, ColonPos - 1));
@@ -151,17 +152,18 @@ begin
 
   if HasColon then
   begin
-    // Two-part measurement
+    // Two-part measurement with inner padding
     Part1W := Canvas.MeasureText(Part1, Font);
     Part2W := Canvas.MeasureText(Part2, Font);
+    InnerPad := PadH * 0.7;
 
     Result.TextX := CurX;
     Result.TextWidth := Part1W;
-    CurX := CurX + Part1W + HalfGap;
+    CurX := CurX + Part1W + InnerPad;
 
     // Separator position
     Result.SepX := CurX;
-    CurX := CurX + HalfGap;
+    CurX := CurX + InnerPad;
 
     Result.SuffixTextX := CurX;
     Result.SuffixTextWidth := Part2W;
@@ -268,7 +270,7 @@ begin
     SepAbs := Metrics.SepX; // relative to pill left
 
     // Suffix colours: unfilled (background) with dark text
-    SufFillColor := BgColor;
+    SufFillColor := TPixieWebColor.White;
     SufTxtColor := PixieTagTextColor(Base, False);
 
     // Left half fill: rounded left corners, square right corners

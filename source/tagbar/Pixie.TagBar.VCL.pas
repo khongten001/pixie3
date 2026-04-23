@@ -7,8 +7,8 @@ unit Pixie.TagBar.VCL;
 interface
 
 uses
-  SysUtils, Classes,
-  Vcl.Controls, Vcl.ExtCtrls,
+  SysUtils, Classes, Windows, Messages,
+  Vcl.Controls, Vcl.Graphics, Vcl.ExtCtrls,
   Pixie.Types, Pixie.WebColor, Pixie.Canvas,
   Pixie.CustomControl.VCL,
   Pixie.TagBar.Base, Pixie.TagBar.Render;
@@ -20,8 +20,8 @@ type
   private
     FCore: TPixieTagBarCore;
     FCaretTimer: TTimer;
-
     procedure DoCaretTimer(Sender: TObject);
+    procedure WMGetDlgCode(var Msg: TWMGetDlgCode); message WM_GETDLGCODE;
 
     // Host callbacks
     procedure HostInvalidate;
@@ -44,6 +44,10 @@ type
     procedure SetTagShape(Value: TPixieTagShape);
     function GetAutoHeight: Boolean;
     procedure SetAutoHeight(Value: Boolean);
+    function GetShowBorder: Boolean;
+    procedure SetShowBorder(Value: Boolean);
+    function GetBorderColor: TPixieWebColor;
+    procedure SetBorderColor(const Value: TPixieWebColor);
     function GetFontFamily: string;
     procedure SetFontFamily(const Value: string);
     function GetFontSize: Single;
@@ -95,12 +99,16 @@ type
     procedure UncheckAll;
     function IsChecked(ID: Integer): Boolean;
     function GetCheckedIDs: TArray<Integer>;
+  public
+    property BorderColor: TPixieWebColor read GetBorderColor write SetBorderColor;
   published
     property Options: TPixieTagBarOptions read GetOptions write SetOptions;
     property TagShape: TPixieTagShape read GetTagShape write SetTagShape
       default tsPill;
     property AutoHeight: Boolean read GetAutoHeight write SetAutoHeight
       default True;
+    property ShowBorder: Boolean read GetShowBorder write SetShowBorder
+      default False;
     property FontFamily: string read GetFontFamily write SetFontFamily;
     property FontSize: Single read GetFontSize write SetFontSize;
 
@@ -172,6 +180,16 @@ begin
   FreeAndNil(FCaretTimer);
   FreeAndNil(FCore);
   inherited Destroy;
+end;
+
+// =========================================================================
+// Messages
+// =========================================================================
+
+procedure TPixieTagBar.WMGetDlgCode(var Msg: TWMGetDlgCode);
+begin
+  inherited;
+  Msg.Result := Msg.Result or DLGC_WANTARROWS;
 end;
 
 // =========================================================================
@@ -329,45 +347,208 @@ end;
 // Property forwarding
 // =========================================================================
 
-function TPixieTagBar.GetOptions: TPixieTagBarOptions;      begin Result := FCore.Options end;
-procedure TPixieTagBar.SetOptions(Value: TPixieTagBarOptions); begin FCore.Options := Value end;
-function TPixieTagBar.GetTagShape: TPixieTagShape;           begin Result := FCore.TagShape end;
-procedure TPixieTagBar.SetTagShape(Value: TPixieTagShape);   begin FCore.TagShape := Value end;
-function TPixieTagBar.GetAutoHeight: Boolean;                begin Result := FCore.AutoHeight end;
-procedure TPixieTagBar.SetAutoHeight(Value: Boolean);        begin FCore.AutoHeight := Value end;
-function TPixieTagBar.GetFontFamily: string;                 begin Result := FCore.FontFamily end;
-procedure TPixieTagBar.SetFontFamily(const Value: string);   begin FCore.FontFamily := Value end;
-function TPixieTagBar.GetFontSize: Single;                   begin Result := FCore.FontSize end;
-procedure TPixieTagBar.SetFontSize(Value: Single);           begin FCore.FontSize := Value end;
-function TPixieTagBar.GetOnTagChecked: TPixieTagCheckedEvent;       begin Result := FCore.OnTagChecked end;
-procedure TPixieTagBar.SetOnTagChecked(Value: TPixieTagCheckedEvent); begin FCore.OnTagChecked := Value end;
-function TPixieTagBar.GetOnChanged: TNotifyEvent;                   begin Result := FCore.OnChanged end;
-procedure TPixieTagBar.SetOnChanged(Value: TNotifyEvent);           begin FCore.OnChanged := Value end;
-function TPixieTagBar.GetOnTagAdding: TPixieTagAddingEvent;         begin Result := FCore.OnTagAdding end;
-procedure TPixieTagBar.SetOnTagAdding(Value: TPixieTagAddingEvent); begin FCore.OnTagAdding := Value end;
-function TPixieTagBar.GetOnTagDeleting: TPixieTagDeletingEvent;         begin Result := FCore.OnTagDeleting end;
-procedure TPixieTagBar.SetOnTagDeleting(Value: TPixieTagDeletingEvent); begin FCore.OnTagDeleting := Value end;
-function TPixieTagBar.GetOnTagChanging: TPixieTagChangingEvent;         begin Result := FCore.OnTagChanging end;
-procedure TPixieTagBar.SetOnTagChanging(Value: TPixieTagChangingEvent); begin FCore.OnTagChanging := Value end;
+function TPixieTagBar.GetOptions: TPixieTagBarOptions;
+begin
+  Result := FCore.Options;
+end;
+
+procedure TPixieTagBar.SetOptions(Value: TPixieTagBarOptions);
+begin
+  FCore.Options := Value;
+end;
+
+function TPixieTagBar.GetTagShape: TPixieTagShape;
+begin
+  Result := FCore.TagShape;
+end;
+
+procedure TPixieTagBar.SetTagShape(Value: TPixieTagShape);
+begin
+  FCore.TagShape := Value;
+end;
+
+function TPixieTagBar.GetAutoHeight: Boolean;
+begin
+  Result := FCore.AutoHeight;
+end;
+
+procedure TPixieTagBar.SetAutoHeight(Value: Boolean);
+begin
+  FCore.AutoHeight := Value;
+end;
+
+function TPixieTagBar.GetShowBorder: Boolean;
+begin
+  Result := FCore.ShowBorder;
+end;
+
+procedure TPixieTagBar.SetShowBorder(Value: Boolean);
+begin
+  FCore.ShowBorder := Value;
+  Invalidate;
+end;
+
+function TPixieTagBar.GetBorderColor: TPixieWebColor;
+begin
+  Result := FCore.BorderColor;
+end;
+
+procedure TPixieTagBar.SetBorderColor(const Value: TPixieWebColor);
+begin
+  FCore.BorderColor := Value;
+  Invalidate;
+end;
+
+function TPixieTagBar.GetFontFamily: string;
+begin
+  Result := FCore.FontFamily;
+end;
+
+procedure TPixieTagBar.SetFontFamily(const Value: string);
+begin
+  FCore.FontFamily := Value;
+end;
+
+function TPixieTagBar.GetFontSize: Single;
+begin
+  Result := FCore.FontSize;
+end;
+
+procedure TPixieTagBar.SetFontSize(Value: Single);
+begin
+  FCore.FontSize := Value;
+end;
+
+function TPixieTagBar.GetOnTagChecked: TPixieTagCheckedEvent;
+begin
+  Result := FCore.OnTagChecked;
+end;
+
+procedure TPixieTagBar.SetOnTagChecked(Value: TPixieTagCheckedEvent);
+begin
+  FCore.OnTagChecked := Value;
+end;
+
+function TPixieTagBar.GetOnChanged: TNotifyEvent;
+begin
+  Result := FCore.OnChanged;
+end;
+
+procedure TPixieTagBar.SetOnChanged(Value: TNotifyEvent);
+begin
+  FCore.OnChanged := Value;
+end;
+
+function TPixieTagBar.GetOnTagAdding: TPixieTagAddingEvent;
+begin
+  Result := FCore.OnTagAdding;
+end;
+
+procedure TPixieTagBar.SetOnTagAdding(Value: TPixieTagAddingEvent);
+begin
+  FCore.OnTagAdding := Value;
+end;
+
+function TPixieTagBar.GetOnTagDeleting: TPixieTagDeletingEvent;
+begin
+  Result := FCore.OnTagDeleting;
+end;
+
+procedure TPixieTagBar.SetOnTagDeleting(Value: TPixieTagDeletingEvent);
+begin
+  FCore.OnTagDeleting := Value;
+end;
+
+function TPixieTagBar.GetOnTagChanging: TPixieTagChangingEvent;
+begin
+  Result := FCore.OnTagChanging;
+end;
+
+procedure TPixieTagBar.SetOnTagChanging(Value: TPixieTagChangingEvent);
+begin
+  FCore.OnTagChanging := Value;
+end;
 
 // =========================================================================
 // Public API forwarding
 // =========================================================================
 
-function TPixieTagBar.AddTag(const Text: string): Integer;                                                        begin Result := FCore.AddTag(Text) end;
-function TPixieTagBar.AddTag(const Text: string; Color: TPixieWebColor): Integer;                                 begin Result := FCore.AddTag(Text, Color) end;
-function TPixieTagBar.AddTag(const Text: string; Color: TPixieWebColor; const ALeadIcon, ATrailIcon: string): Integer; begin Result := FCore.AddTag(Text, Color, ALeadIcon, ATrailIcon) end;
-procedure TPixieTagBar.DeleteTag(ID: Integer);                                begin FCore.DeleteTag(ID) end;
-procedure TPixieTagBar.ClearTags;                                             begin FCore.ClearTags end;
-function TPixieTagBar.FindTag(ID: Integer; out Tag: TPixieTagDef): Boolean;   begin Result := FCore.FindTag(ID, Tag) end;
-procedure TPixieTagBar.UpdateTag(ID: Integer; const NewText: string; NewColor: TPixieWebColor);                                        begin FCore.UpdateTag(ID, NewText, NewColor) end;
-procedure TPixieTagBar.UpdateTag(ID: Integer; const NewText: string; NewColor: TPixieWebColor; const ALeadIcon, ATrailIcon: string);   begin FCore.UpdateTag(ID, NewText, NewColor, ALeadIcon, ATrailIcon) end;
-function TPixieTagBar.TagCount: Integer;                                      begin Result := FCore.TagCount end;
-function TPixieTagBar.GetTag(Index: Integer): TPixieTagDef;                   begin Result := FCore.GetTag(Index) end;
-procedure TPixieTagBar.CheckTag(ID: Integer; AChecked: Boolean);              begin FCore.CheckTag(ID, AChecked) end;
-procedure TPixieTagBar.CheckAll;                                              begin FCore.CheckAll end;
-procedure TPixieTagBar.UncheckAll;                                            begin FCore.UncheckAll end;
-function TPixieTagBar.IsChecked(ID: Integer): Boolean;                        begin Result := FCore.IsChecked(ID) end;
-function TPixieTagBar.GetCheckedIDs: TArray<Integer>;                         begin Result := FCore.GetCheckedIDs end;
+function TPixieTagBar.AddTag(const Text: string): Integer;
+begin
+  Result := FCore.AddTag(Text);
+end;
+
+function TPixieTagBar.AddTag(const Text: string; Color: TPixieWebColor): Integer;
+begin
+  Result := FCore.AddTag(Text, Color);
+end;
+
+function TPixieTagBar.AddTag(const Text: string; Color: TPixieWebColor;
+  const ALeadIcon, ATrailIcon: string): Integer;
+begin
+  Result := FCore.AddTag(Text, Color, ALeadIcon, ATrailIcon);
+end;
+
+procedure TPixieTagBar.DeleteTag(ID: Integer);
+begin
+  FCore.DeleteTag(ID);
+end;
+
+procedure TPixieTagBar.ClearTags;
+begin
+  FCore.ClearTags;
+end;
+
+function TPixieTagBar.FindTag(ID: Integer; out Tag: TPixieTagDef): Boolean;
+begin
+  Result := FCore.FindTag(ID, Tag);
+end;
+
+procedure TPixieTagBar.UpdateTag(ID: Integer; const NewText: string;
+  NewColor: TPixieWebColor);
+begin
+  FCore.UpdateTag(ID, NewText, NewColor);
+end;
+
+procedure TPixieTagBar.UpdateTag(ID: Integer; const NewText: string;
+  NewColor: TPixieWebColor; const ALeadIcon, ATrailIcon: string);
+begin
+  FCore.UpdateTag(ID, NewText, NewColor, ALeadIcon, ATrailIcon);
+end;
+
+function TPixieTagBar.TagCount: Integer;
+begin
+  Result := FCore.TagCount;
+end;
+
+function TPixieTagBar.GetTag(Index: Integer): TPixieTagDef;
+begin
+  Result := FCore.GetTag(Index);
+end;
+
+procedure TPixieTagBar.CheckTag(ID: Integer; AChecked: Boolean);
+begin
+  FCore.CheckTag(ID, AChecked);
+end;
+
+procedure TPixieTagBar.CheckAll;
+begin
+  FCore.CheckAll;
+end;
+
+procedure TPixieTagBar.UncheckAll;
+begin
+  FCore.UncheckAll;
+end;
+
+function TPixieTagBar.IsChecked(ID: Integer): Boolean;
+begin
+  Result := FCore.IsChecked(ID);
+end;
+
+function TPixieTagBar.GetCheckedIDs: TArray<Integer>;
+begin
+  Result := FCore.GetCheckedIDs;
+end;
 
 end.

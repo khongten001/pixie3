@@ -5,14 +5,15 @@ unit PixieDemoMain;
 interface
 
 uses
-  Classes, SysUtils, Math, Forms, Controls, Graphics, Dialogs, ComCtrls,
-  StdCtrls, ExtCtrls, Buttons,
+  Classes, SysUtils, Math,
   {$ifdef windows}Windows,{$endif}
   fphttpclient, opensslsockets,
   Pixie.HtmlView, Pixie.NativeContainer, Pixie.Url,
   Pixie.Element, Pixie.Document, Pixie.PdfExport,
   Pixie.SvgView, Pixie.PaintBox, Pixie.DrawingCanvas,
-  PixieDemoContent, PixieDemoPaintBox;
+  Pixie.TagBar, Pixie.TagBar.Base, Pixie.TagBar.Render, Pixie.WebColor,
+  PixieDemoContent, PixieDemoPaintBox,
+  Forms, Controls, Graphics, Dialogs, ComCtrls, StdCtrls, ExtCtrls, Buttons;
 
 type
   TMainForm = class(TForm)
@@ -60,7 +61,20 @@ type
     FPaintStart: Int64;
     FFetchAccum: Int64;
     FNavWarningShown: Boolean;
+    TabTagBar: TTabSheet;
+    TagBarToolbar: TPanel;
+    CbTagShape: TComboBox;
+    LblTagShape: TLabel;
+    ChkTagAutoHeight: TCheckBox;
+    TagBarEditor: TPixieTagBar;
+    TagBarFilter: TPixieTagBar;
+    TagBarAssign: TPixieTagBar;
+    TagBarDisplay: TPixieTagBar;
     procedure NavigateToUrl(const Url: string);
+    procedure CreateTagBarTab;
+    procedure PopulateTagBarTags(Bar: TPixieTagBar);
+    procedure TagBarShapeChange(Sender: TObject);
+    procedure TagBarAutoHeightChange(Sender: TObject);
   end;
 
 var
@@ -157,6 +171,216 @@ begin
   CbAlignment.Items.Add('Centre Vert');
   CbAlignment.Items.Add('Centre Both');
   CbAlignment.ItemIndex := 3;
+
+  // TagBar tab
+  CreateTagBarTab;
+end;
+
+// ---------------------------------------------------------------------------
+// TagBar tab
+// ---------------------------------------------------------------------------
+
+procedure TMainForm.CreateTagBarTab;
+var
+  ScrollBox: TScrollBox;
+  Lbl: TLabel;
+  Y: Integer;
+begin
+  TabTagBar := TTabSheet.Create(PageControl);
+  TabTagBar.PageControl := PageControl;
+  TabTagBar.Caption := 'TagBar';
+
+  // --- Toolbar ---
+  TagBarToolbar := TPanel.Create(TabTagBar);
+  TagBarToolbar.Parent := TabTagBar;
+  TagBarToolbar.Align := alTop;
+  TagBarToolbar.Height := 36;
+  TagBarToolbar.BevelOuter := bvNone;
+
+  LblTagShape := TLabel.Create(TagBarToolbar);
+  LblTagShape.Parent := TagBarToolbar;
+  LblTagShape.Left := 8;
+  LblTagShape.Top := 10;
+  LblTagShape.Caption := 'Shape:';
+
+  CbTagShape := TComboBox.Create(TagBarToolbar);
+  CbTagShape.Parent := TagBarToolbar;
+  CbTagShape.Left := 56;
+  CbTagShape.Top := 6;
+  CbTagShape.Width := 130;
+  CbTagShape.Style := csDropDownList;
+  CbTagShape.Items.Add('Pill');
+  CbTagShape.Items.Add('Rounded Rect');
+  CbTagShape.Items.Add('Rectangle');
+  CbTagShape.ItemIndex := 1;
+  CbTagShape.OnChange := @TagBarShapeChange;
+
+  ChkTagAutoHeight := TCheckBox.Create(TagBarToolbar);
+  ChkTagAutoHeight.Parent := TagBarToolbar;
+  ChkTagAutoHeight.Left := 200;
+  ChkTagAutoHeight.Top := 8;
+  ChkTagAutoHeight.Width := 100;
+  ChkTagAutoHeight.Caption := 'AutoHeight';
+  ChkTagAutoHeight.Checked := True;
+  ChkTagAutoHeight.OnChange := @TagBarAutoHeightChange;
+
+  // --- ScrollBox for tag bars ---
+  ScrollBox := TScrollBox.Create(TabTagBar);
+  ScrollBox.Parent := TabTagBar;
+  ScrollBox.Align := alClient;
+  ScrollBox.BorderStyle := bsNone;
+
+  Y := 4;
+
+  // Editor
+  Lbl := TLabel.Create(ScrollBox);
+  Lbl.Parent := ScrollBox;
+  Lbl.Align := alTop;
+  Lbl.Top := Y;
+  Lbl.Caption := 'Editor (full editing):';
+  Lbl.Font.Style := [fsBold];
+  Lbl.BorderSpacing.Left := 8;
+  Lbl.BorderSpacing.Top := 8;
+  Lbl.BorderSpacing.Right := 4;
+  Lbl.BorderSpacing.Bottom := 2;
+  Inc(Y, 24);
+
+  TagBarEditor := TPixieTagBar.Create(Self);
+  TagBarEditor.Parent := ScrollBox;
+  TagBarEditor.Align := alTop;
+  TagBarEditor.Top := Y;
+  TagBarEditor.Color := clWindow;
+  TagBarEditor.ShowBorder := True;
+  TagBarEditor.TagShape := tsRoundedRect;
+  TagBarEditor.AutoHeight := True;
+  TagBarEditor.Options := TagBarEditorOpts;
+  TagBarEditor.BorderSpacing.Left := 4;
+  TagBarEditor.BorderSpacing.Right := 4;
+  PopulateTagBarTags(TagBarEditor);
+  Inc(Y, 36);
+
+  // Filter
+  Lbl := TLabel.Create(ScrollBox);
+  Lbl.Parent := ScrollBox;
+  Lbl.Align := alTop;
+  Lbl.Top := Y;
+  Lbl.Caption := 'Filter (check only):';
+  Lbl.Font.Style := [fsBold];
+  Lbl.BorderSpacing.Left := 8;
+  Lbl.BorderSpacing.Top := 8;
+  Lbl.BorderSpacing.Right := 4;
+  Lbl.BorderSpacing.Bottom := 2;
+  Inc(Y, 24);
+
+  TagBarFilter := TPixieTagBar.Create(Self);
+  TagBarFilter.Parent := ScrollBox;
+  TagBarFilter.Align := alTop;
+  TagBarFilter.Top := Y;
+  TagBarFilter.Color := clWindow;
+  TagBarFilter.ShowBorder := True;
+  TagBarFilter.TagShape := tsRoundedRect;
+  TagBarFilter.AutoHeight := True;
+  TagBarFilter.Options := TagBarFilterOpts;
+  TagBarFilter.BorderSpacing.Left := 4;
+  TagBarFilter.BorderSpacing.Right := 4;
+  PopulateTagBarTags(TagBarFilter);
+  Inc(Y, 36);
+
+  // Assign
+  Lbl := TLabel.Create(ScrollBox);
+  Lbl.Parent := ScrollBox;
+  Lbl.Align := alTop;
+  Lbl.Top := Y;
+  Lbl.Caption := 'Assign (check + create):';
+  Lbl.Font.Style := [fsBold];
+  Lbl.BorderSpacing.Left := 8;
+  Lbl.BorderSpacing.Top := 8;
+  Lbl.BorderSpacing.Right := 4;
+  Lbl.BorderSpacing.Bottom := 2;
+  Inc(Y, 24);
+
+  TagBarAssign := TPixieTagBar.Create(Self);
+  TagBarAssign.Parent := ScrollBox;
+  TagBarAssign.Align := alTop;
+  TagBarAssign.Top := Y;
+  TagBarAssign.Color := clWindow;
+  TagBarAssign.ShowBorder := True;
+  TagBarAssign.TagShape := tsRoundedRect;
+  TagBarAssign.AutoHeight := True;
+  TagBarAssign.Options := TagBarAssignOpts;
+  TagBarAssign.BorderSpacing.Left := 4;
+  TagBarAssign.BorderSpacing.Right := 4;
+  PopulateTagBarTags(TagBarAssign);
+  Inc(Y, 36);
+
+  // Display
+  Lbl := TLabel.Create(ScrollBox);
+  Lbl.Parent := ScrollBox;
+  Lbl.Align := alTop;
+  Lbl.Top := Y;
+  Lbl.Caption := 'Display (read-only, checked tags only):';
+  Lbl.Font.Style := [fsBold];
+  Lbl.BorderSpacing.Left := 8;
+  Lbl.BorderSpacing.Top := 8;
+  Lbl.BorderSpacing.Right := 4;
+  Lbl.BorderSpacing.Bottom := 2;
+  Inc(Y, 24);
+
+  TagBarDisplay := TPixieTagBar.Create(Self);
+  TagBarDisplay.Parent := ScrollBox;
+  TagBarDisplay.Align := alTop;
+  TagBarDisplay.Top := Y;
+  TagBarDisplay.Color := clWindow;
+  TagBarDisplay.ShowBorder := True;
+  TagBarDisplay.TagShape := tsRoundedRect;
+  TagBarDisplay.AutoHeight := True;
+  TagBarDisplay.Options := TagBarDisplayOpts;
+  TagBarDisplay.BorderSpacing.Left := 4;
+  TagBarDisplay.BorderSpacing.Right := 4;
+  PopulateTagBarTags(TagBarDisplay);
+  TagBarDisplay.CheckTag(TagBarDisplay.GetTag(0).ID, True);
+  TagBarDisplay.CheckTag(TagBarDisplay.GetTag(2).ID, True);
+  TagBarDisplay.CheckTag(TagBarDisplay.GetTag(4).ID, True);
+end;
+
+procedure TMainForm.PopulateTagBarTags(Bar: TPixieTagBar);
+begin
+  Bar.AddTag('Env:Production', TPixieWebColor.Create($F4, $43, $36), '🔴', '');
+  Bar.AddTag('Env:Staging',    TPixieWebColor.Create($FF, $98, $00), '🟠', '');
+  Bar.AddTag('DC:London',      TPixieWebColor.Create($21, $96, $F3), '🌍', '');
+  Bar.AddTag('DC:New York',    TPixieWebColor.Create($4C, $AF, $50), '📍', '');
+  Bar.AddTag('Router',         TPixieWebColor.Create($9C, $27, $B0));
+  Bar.AddTag('Server',         TPixieWebColor.Create($00, $96, $88), '🖥', '');
+  Bar.AddTag('Cloud',          TPixieWebColor.Create($79, $55, $48), '☁', '');
+  Bar.AddTag('Critical',       TPixieWebColor.Create($60, $7D, $8B), '⚠', '');
+end;
+
+procedure TMainForm.TagBarShapeChange(Sender: TObject);
+var
+  Shape: TPixieTagShape;
+begin
+  case CbTagShape.ItemIndex of
+    0: Shape := tsPill;
+    1: Shape := tsRoundedRect;
+    2: Shape := tsRect;
+  else
+    Shape := tsPill;
+  end;
+  TagBarEditor.TagShape := Shape;
+  TagBarFilter.TagShape := Shape;
+  TagBarAssign.TagShape := Shape;
+  TagBarDisplay.TagShape := Shape;
+end;
+
+procedure TMainForm.TagBarAutoHeightChange(Sender: TObject);
+var
+  AH: Boolean;
+begin
+  AH := ChkTagAutoHeight.Checked;
+  TagBarEditor.AutoHeight := AH;
+  TagBarFilter.AutoHeight := AH;
+  TagBarAssign.AutoHeight := AH;
+  TagBarDisplay.AutoHeight := AH;
 end;
 
 // ---------------------------------------------------------------------------

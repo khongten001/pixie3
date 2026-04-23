@@ -7,7 +7,7 @@ unit Pixie.TagBar.FMX;
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.UITypes,
   FMX.Controls, FMX.Types,
   Pixie.Types, Pixie.WebColor, Pixie.Canvas,
   Pixie.CustomControl.FMX,
@@ -20,6 +20,7 @@ type
   private
     FCore: TPixieTagBarCore;
     FCaretTimer: TTimer;
+    FBackgroundColor: TPixieWebColor;
 
     procedure DoCaretTimer(Sender: TObject);
 
@@ -44,6 +45,11 @@ type
     procedure SetTagShape(Value: TPixieTagShape);
     function GetAutoHeight: Boolean;
     procedure SetAutoHeight(Value: Boolean);
+    function GetShowBorder: Boolean;
+    procedure SetShowBorder(Value: Boolean);
+    function GetBorderColor: TPixieWebColor;
+    procedure SetBorderColor(const Value: TPixieWebColor);
+    procedure SetBackgroundColor(const Value: TPixieWebColor);
     function GetFontFamily: string;
     procedure SetFontFamily(const Value: string);
     function GetFontSize: Single;
@@ -64,6 +70,7 @@ type
     procedure DoMouseLeave; override;
     procedure Resize; override;
     procedure DoExit; override;
+    procedure DialogKey(var Key: Word; Shift: TShiftState); override;
     procedure KeyDown(var Key: Word; var KeyChar: System.WideChar;
       Shift: TShiftState); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
@@ -95,12 +102,17 @@ type
     procedure UncheckAll;
     function IsChecked(ID: Integer): Boolean;
     function GetCheckedIDs: TArray<Integer>;
+  public
+    property BorderColor: TPixieWebColor read GetBorderColor write SetBorderColor;
+    property BackgroundColor: TPixieWebColor read FBackgroundColor write SetBackgroundColor;
   published
     property Options: TPixieTagBarOptions read GetOptions write SetOptions;
     property TagShape: TPixieTagShape read GetTagShape write SetTagShape
       default tsPill;
     property AutoHeight: Boolean read GetAutoHeight write SetAutoHeight
       default True;
+    property ShowBorder: Boolean read GetShowBorder write SetShowBorder
+      default False;
     property FontFamily: string read GetFontFamily write SetFontFamily;
     property FontSize: Single read GetFontSize write SetFontSize;
 
@@ -149,6 +161,8 @@ constructor TPixieTagBar.Create(AOwner: TComponent);
 begin
   FCore := nil;
   inherited Create(AOwner);
+  CanFocus := True;
+  FBackgroundColor := TPixieWebColor.White;
   Width := 300;
   Height := 36;
 
@@ -215,7 +229,7 @@ end;
 
 function TPixieTagBar.HostGetBackgroundColor: TPixieWebColor;
 begin
-  Result := GetBackgroundColor;
+  Result := FBackgroundColor;
 end;
 
 procedure TPixieTagBar.HostSetFocus;
@@ -288,6 +302,19 @@ procedure TPixieTagBar.MouseUp(Button: TMouseButton; Shift: TShiftState;
 begin
   inherited;
   FCore.HandleMouseUp(Button = TMouseButton.mbLeft, Round(X), Round(Y));
+end;
+
+procedure TPixieTagBar.DialogKey(var Key: Word; Shift: TShiftState);
+begin
+  if Key in [vkLeft, vkRight, vkUp, vkDown] then
+  begin
+    if FCore.HandleKeyDown(Key, Shift) then
+    begin
+      Key := 0;
+      Exit;
+    end;
+  end;
+  inherited;
 end;
 
 procedure TPixieTagBar.KeyDown(var Key: Word; var KeyChar: System.WideChar;
@@ -367,6 +394,34 @@ end;
 procedure TPixieTagBar.SetAutoHeight(Value: Boolean);
 begin
   FCore.AutoHeight := Value;
+end;
+
+function TPixieTagBar.GetShowBorder: Boolean;
+begin
+  Result := FCore.ShowBorder;
+end;
+
+procedure TPixieTagBar.SetShowBorder(Value: Boolean);
+begin
+  FCore.ShowBorder := Value;
+  InvalidateRect(LocalRect);
+end;
+
+function TPixieTagBar.GetBorderColor: TPixieWebColor;
+begin
+  Result := FCore.BorderColor;
+end;
+
+procedure TPixieTagBar.SetBorderColor(const Value: TPixieWebColor);
+begin
+  FCore.BorderColor := Value;
+  InvalidateRect(LocalRect);
+end;
+
+procedure TPixieTagBar.SetBackgroundColor(const Value: TPixieWebColor);
+begin
+  FBackgroundColor := Value;
+  InvalidateRect(LocalRect);
 end;
 
 function TPixieTagBar.GetFontFamily: string;

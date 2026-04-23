@@ -20,7 +20,7 @@
             <Filename Value="../bin/PixieDemo-$(TargetOS)-$(TargetCPU)"/>
           </Target>
           <SearchPaths>
-            <OtherUnitFiles Value="../../source/common;../../source/htmlview;../../source/svgview;../../source/paintbox;../common;../../package"/>
+            <OtherUnitFiles Value="../../source/common;../../source/htmlview;../../source/svgview;../../source/paintbox;../../source/tagbar;../common;../../package"/>
             <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
@@ -53,7 +53,7 @@
             <Filename Value="../bin/PixieDemo-$(TargetOS)-$(TargetCPU)"/>
           </Target>
           <SearchPaths>
-            <OtherUnitFiles Value="../../source/common;../../source/htmlview;../../source/svgview;../../source/paintbox;../common;../../package"/>
+            <OtherUnitFiles Value="../../source/common;../../source/htmlview;../../source/svgview;../../source/paintbox;../../source/tagbar;../common;../../package"/>
             <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <Parsing>
@@ -109,7 +109,7 @@
       <Filename Value="../bin/PixieDemo"/>
     </Target>
     <SearchPaths>
-      <OtherUnitFiles Value="../../source/common;../../source/htmlview;../../source/svgview;../../source/paintbox;../common;../../package"/>
+      <OtherUnitFiles Value="../../source/common;../../source/htmlview;../../source/svgview;../../source/paintbox;../../source/tagbar;../common;../../package"/>
       <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>

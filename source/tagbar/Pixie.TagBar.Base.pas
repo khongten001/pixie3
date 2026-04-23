@@ -10,7 +10,7 @@ unit Pixie.TagBar.Base;
 interface
 
 uses
-  SysUtils, Classes, Math, Generics.Collections,
+  SysUtils, Classes, Math, DateUtils, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Canvas,
   Pixie.TagBar.Colors, Pixie.TagBar.Render;
 
@@ -122,6 +122,8 @@ type
     FSpacingH: Single;
     FSpacingV: Single;
     FPadding: Single;
+    FShowBorder: Boolean;
+    FBorderColor: TPixieWebColor;
 
     // Layout cache
     FLayout: TPixieTagLayoutList;
@@ -144,7 +146,7 @@ type
     FEditColor: TPixieWebColor;
 
     // Double-click detection
-    FLastClickTick: UInt64;
+    FLastClickTime: TDateTime;
     FLastClickIndex: Integer;
 
     // Events
@@ -242,6 +244,8 @@ type
     property AutoHeight: Boolean read FAutoHeight write SetAutoHeight;
     property FontFamily: string read FFontFamily write SetFontFamily;
     property FontSize: Single read FFontSize write SetFontSize;
+    property ShowBorder: Boolean read FShowBorder write FShowBorder;
+    property BorderColor: TPixieWebColor read FBorderColor write FBorderColor;
 
     { Events }
     property OnTagChecked: TPixieTagCheckedEvent
@@ -280,6 +284,7 @@ begin
   FOptions := [tboShowAll, tboAllowCheck];
   FTagShape := tsPill;
   FAutoHeight := True;
+  FBorderColor := TPixieWebColor.Create($80, $80, $80);
   FFontSize := 13;
   FSpacingH := 6;
   FSpacingV := 6;
@@ -301,7 +306,7 @@ begin
   FEditCaretPos := 1;
   FEditCaretVisible := False;
 
-  FLastClickTick := 0;
+  FLastClickTime := 0;
   FLastClickIndex := -1;
 end;
 
@@ -507,11 +512,15 @@ begin
 
     // Use edit text if renaming this tag
     if (FEditMode = temRename) and (I = FEditTagIndex) then
-      PillText := FEditText
+    begin
+      PillText := FEditText;
+      PillOpts := GetPillOptions(False) + [tpoEditing];
+    end
     else
+    begin
       PillText := Tag.Text;
-
-    PillOpts := GetPillOptions(False);
+      PillOpts := GetPillOptions(False);
+    end;
     M := MeasureTagPill(FCanvas, FFont, PillText,
       Tag.LeadIcon, Tag.TrailIcon, PillH, PillOpts);
 
@@ -535,7 +544,7 @@ begin
   // Add-new edit pill
   if FEditMode = temAddNew then
   begin
-    PillOpts := [];
+    PillOpts := [tpoEditing];
     M := MeasureTagPill(FCanvas, FFont, FEditText, '', '', PillH, PillOpts);
     // Minimum width for empty text
     if M.TotalWidth < PillH * 1.5 then
@@ -687,7 +696,7 @@ begin
         PillText := FEditText;
         PillLeadIcon := '';
         PillTrailIcon := '';
-        PillOpts := [];
+        PillOpts := [tpoEditing];
         State := tpsEditing;
         EditIdx := I;
       end
@@ -699,11 +708,14 @@ begin
         if (FEditMode = temRename) and (L.TagIndex = FEditTagIndex) then
         begin
           PillText := FEditText;
+          PillOpts := GetPillOptions(False) + [tpoEditing];
           EditIdx := I;
         end
         else
+        begin
           PillText := FTags[L.TagIndex].Text;
-        PillOpts := GetPillOptions(False);
+          PillOpts := GetPillOptions(False);
+        end;
         State := GetPillState(L.TagIndex, I);
       end
       else
@@ -746,6 +758,10 @@ begin
       FCanvas.DrawRect(L.X - 1, L.Y - 1,
         L.Metrics.TotalWidth + 2, PillH + 2, FocusColor, 1.5);
     end;
+
+    // 1px border around entire control
+    if FShowBorder then
+      FCanvas.DrawRect(0, 0, ViewW, ViewH, FBorderColor, 1.0);
   finally
     FCanvas.EndPaint;
   end;
@@ -762,7 +778,7 @@ var
   L: TPixieTagPillLayout;
   TagIdx, TagID: Integer;
   Allow: Boolean;
-  Tick: UInt64;
+  ClickTime: TDateTime;
 begin
   if not IsLeft then Exit;
   if tboReadOnly in FOptions then Exit;
@@ -818,16 +834,17 @@ begin
   end;
 
   // Double-click detection for rename
-  Tick := GetTickCount64;
+  ClickTime := Now;
   if (tboAllowEdit in FOptions) and (TagIdx >= 0) and
-     (TagIdx = FLastClickIndex) and (Tick - FLastClickTick < 400) then
+     (TagIdx = FLastClickIndex) and
+     (MilliSecondsBetween(ClickTime, FLastClickTime) < 400) then
   begin
     BeginEdit(temRename, TagIdx);
     FPressedIndex := -1;
-    FLastClickTick := 0;
+    FLastClickTime := 0;
     Exit;
   end;
-  FLastClickTick := Tick;
+  FLastClickTime := ClickTime;
   FLastClickIndex := TagIdx;
 
   if Assigned(OnHostInvalidate) then

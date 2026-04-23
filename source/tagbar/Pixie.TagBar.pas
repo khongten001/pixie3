@@ -46,6 +46,10 @@ type
     procedure SetTagShape(Value: TPixieTagShape);
     function GetAutoHeight: Boolean;
     procedure SetAutoHeight(Value: Boolean);
+    function GetShowBorder: Boolean;
+    procedure SetShowBorder(Value: Boolean);
+    function GetBorderColor: TPixieWebColor;
+    procedure SetBorderColor(const Value: TPixieWebColor);
     function GetFontFamily: string;
     procedure SetFontFamily(const Value: string);
     function GetFontSize: Single;
@@ -99,12 +103,16 @@ type
     procedure UncheckAll;
     function IsChecked(ID: Integer): Boolean;
     function GetCheckedIDs: TArray<Integer>;
+  public
+    property BorderColor: TPixieWebColor read GetBorderColor write SetBorderColor;
   published
     property Options: TPixieTagBarOptions read GetOptions write SetOptions;
     property TagShape: TPixieTagShape read GetTagShape write SetTagShape
       default tsPill;
     property AutoHeight: Boolean read GetAutoHeight write SetAutoHeight
       default True;
+    property ShowBorder: Boolean read GetShowBorder write SetShowBorder
+      default False;
     property FontFamily: string read GetFontFamily write SetFontFamily;
     property FontSize: Single read GetFontSize write SetFontSize;
 
@@ -361,6 +369,28 @@ end;
 procedure TPixieTagBar.SetAutoHeight(Value: Boolean);
 begin
   FCore.AutoHeight := Value;
+end;
+
+function TPixieTagBar.GetShowBorder: Boolean;
+begin
+  Result := FCore.ShowBorder;
+end;
+
+procedure TPixieTagBar.SetShowBorder(Value: Boolean);
+begin
+  FCore.ShowBorder := Value;
+  Invalidate;
+end;
+
+function TPixieTagBar.GetBorderColor: TPixieWebColor;
+begin
+  Result := FCore.BorderColor;
+end;
+
+procedure TPixieTagBar.SetBorderColor(const Value: TPixieWebColor);
+begin
+  FCore.BorderColor := Value;
+  Invalidate;
 end;
 
 function TPixieTagBar.GetFontFamily: string;
