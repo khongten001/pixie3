@@ -255,6 +255,11 @@ type
     psid_border_bottom_right_radius_y,
     psid_border_bottom_left_radius_y,
 
+    psid_outline,
+    psid_outline_width,
+    psid_outline_style,
+    psid_outline_color,
+
     psid_list_style,
     psid_list_style_type,
     psid_list_style_position,

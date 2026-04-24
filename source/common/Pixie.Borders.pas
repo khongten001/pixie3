@@ -76,6 +76,8 @@ type
     Bottom: TPixieBorder;
     Radius: TPixieBorderRadiuses;
     procedure Init;
+    procedure InitUniform(AWidth: TPixiePixel; AStyle: TPixieBorderStyle;
+      AColor: TPixieWebColor);
     procedure InitFromCss(const CssBorders: TPixieCssBorders);
     function IsVisible: Boolean;
     procedure ResolveOutsetInset;
@@ -244,6 +246,16 @@ begin
   Right.Init;
   Bottom.Init;
   Radius.Init;
+end;
+
+procedure TPixieBorders.InitUniform(AWidth: TPixiePixel;
+  AStyle: TPixieBorderStyle; AColor: TPixieWebColor);
+begin
+  Init;
+  Left.Width := AWidth;   Left.Style := AStyle;   Left.Color := AColor;
+  Right.Width := AWidth;  Right.Style := AStyle;  Right.Color := AColor;
+  Top.Width := AWidth;    Top.Style := AStyle;    Top.Color := AColor;
+  Bottom.Width := AWidth; Bottom.Style := AStyle; Bottom.Color := AColor;
 end;
 
 procedure TPixieBorders.InitFromCss(const CssBorders: TPixieCssBorders);

@@ -1097,8 +1097,9 @@ begin
   Info.DecorationLine := Descr.DecorationLine;
   Info.SmallCaps := Descr.Variant = fvSmallCaps;
 
-  // Map font weight and style
-  DWWeight := Descr.Weight;
+  // Map font weight and style — clamp to DirectWrite range (1..950)
+  // CSS Fonts Level 4 allows 1..1000 but DirectWrite max is ULTRA_BLACK (950)
+  DWWeight := EnsureRange(Descr.Weight, 1, DWRITE_FONT_WEIGHT_ULTRA_BLACK);
   if Descr.Style = fstItalic then
     DWStyle := DWRITE_FONT_STYLE_ITALIC
   else

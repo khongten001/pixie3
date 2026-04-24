@@ -233,6 +233,7 @@ var
   CrossGap: TPixiePixel;
   I: Integer;
   Ln: TPixieFlexLine;
+  El: TPixieRenderItem;
   ItemHeight: TPixiePixel;
 begin
   // Determine direction
@@ -444,6 +445,15 @@ begin
     FPos.Height := Max(FPos.Height, ItemHeight);
   end;
 
+  // Render absolutely/fixed-positioned children (out of flex flow)
+  for I := 0 to FChildren.Count - 1 do
+  begin
+    El := FChildren[I];
+    if (El.SrcEl.Css.ElPosition = epAbsolute) or
+       (El.SrcEl.Css.ElPosition = epFixed) then
+      El.Render(0, 0, SelfSize, FmtCtx);
+  end;
+
   // Calculate final position
   FPos.MoveTo(X, Y);
   FPos.X := FPos.X + ContentOffsetLeft;
@@ -499,6 +509,13 @@ begin
   for I := 0 to FChildren.Count - 1 do
   begin
     El := FChildren[I];
+
+    // Absolutely/fixed-positioned children are out-of-flow and do not
+    // participate in flex layout (CSS Flexbox §4.1).
+    if (El.SrcEl.Css.ElPosition = epAbsolute) or
+       (El.SrcEl.Css.ElPosition = epFixed) then
+      Continue;
+
     if IsRowDirection then
       Item := TPixieFlexItemRow.Create(El)
     else

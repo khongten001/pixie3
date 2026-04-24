@@ -99,6 +99,11 @@ type
     FCssBorders: TPixieCssBorders;
     FCssOffsets: TPixieCssOffsets;
 
+    // Outline
+    FOutlineWidth: TPixiePixel;
+    FOutlineStyle: TPixieBorderStyle;
+    FOutlineColor: TPixieWebColor;
+
     // Colour fields
     FColor: TPixieWebColor;
     FTextDecorationColor: TPixieWebColor;
@@ -223,6 +228,11 @@ type
     property CssPadding: TPixieCssMargins read FCssPadding write FCssPadding;
     property CssBorders: TPixieCssBorders read FCssBorders write FCssBorders;
     property CssOffsets: TPixieCssOffsets read FCssOffsets write FCssOffsets;
+
+    // Outline
+    property OutlineWidth: TPixiePixel read FOutlineWidth;
+    property OutlineStyle: TPixieBorderStyle read FOutlineStyle;
+    property OutlineColor: TPixieWebColor read FOutlineColor;
 
     // Colour properties
     property Color: TPixieWebColor read FColor write FColor;
@@ -1018,6 +1028,7 @@ var
   CalcCtx: TCalcContext;
   AutoLen: TPixieCssLength;
   ZeroLen: TPixieCssLength;
+  TmpLen: TPixieCssLength;
   FS: TPixiePixel;
 begin
   Assert(El is TPixieHtmlTag);
@@ -1280,6 +1291,24 @@ begin
   CtxCvtUnits(FCssBorders.Radius.BottomLeftY, FFontMetrics, Ctx);
   CtxCvtUnits(FCssBorders.Radius.BottomRightX, FFontMetrics, Ctx);
   CtxCvtUnits(FCssBorders.Radius.BottomRightY, FFontMetrics, Ctx);
+
+  // Outline
+  FOutlineStyle := TPixieBorderStyle(Tag.GetPropertyInt(
+    Ord(psid_outline_style), False, Ord(bsNone),
+    PtrUInt(@FOutlineStyle) - PtrUInt(Self)));
+  if FOutlineStyle in [bsNone, bsHidden] then
+    FOutlineWidth := 0
+  else
+  begin
+    TmpLen := Tag.GetPropertyLength(Ord(psid_outline_width), False,
+      TPixieCssLength.Create(BorderWidthMediumValue, cssUnitsPx),
+      PtrUInt(@FOutlineWidth) - PtrUInt(Self));
+    CtxCvtUnits(TmpLen, FFontMetrics, Ctx);
+    FOutlineWidth := TmpLen.Val;
+  end;
+  FOutlineColor := GetColorProperty(El,
+    Ord(psid_outline_color), False, FColor,
+    PtrUInt(@FOutlineColor) - PtrUInt(Self));
 
   // 12. Border collapse and spacing
   FBorderCollapse := TPixieBorderCollapse(Tag.GetPropertyInt(

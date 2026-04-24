@@ -117,6 +117,7 @@ type
     procedure ParseBorder(Tokens: TPixieCssTokenList; Important: Boolean);
     procedure ParseBorderSide(Name: Integer; Tokens: TPixieCssTokenList; Important: Boolean);
     procedure ParseBorderRadius(Tokens: TPixieCssTokenList; Important: Boolean);
+    procedure ParseOutline(Tokens: TPixieCssTokenList; Important: Boolean);
 
     procedure ParseListStyle(Tokens: TPixieCssTokenList; const BaseUrl: string; Important: Boolean);
 
@@ -324,6 +325,10 @@ begin
     Ord(psid_grid_column_start), Ord(psid_grid_column_end)]);
   AddShorthand(Ord(psid_grid_row), [
     Ord(psid_grid_row_start), Ord(psid_grid_row_end)]);
+
+  AddShorthand(Ord(psid_outline), [
+    Ord(psid_outline_width), Ord(psid_outline_style),
+    Ord(psid_outline_color)]);
 
   AddShorthand(Ord(psid_text_decoration), [
     Ord(psid_text_decoration_color), Ord(psid_text_decoration_line),
@@ -1919,6 +1924,12 @@ begin
     Exit;
   end;
 
+  if Name = Ord(psid_outline) then
+  begin
+    ParseOutline(Tokens, Important);
+    Exit;
+  end;
+
   if (Name = Ord(psid_border_left)) or (Name = Ord(psid_border_right)) or
      (Name = Ord(psid_border_top)) or (Name = Ord(psid_border_bottom)) then
   begin
@@ -2700,6 +2711,19 @@ begin
   AddParsedProperty(Ord(psid_border_right_color), TPixiePropertyValue.FromColor(Color, Important));
   AddParsedProperty(Ord(psid_border_top_color), TPixiePropertyValue.FromColor(Color, Important));
   AddParsedProperty(Ord(psid_border_bottom_color), TPixiePropertyValue.FromColor(Color, Important));
+end;
+
+procedure TPixieStyle.ParseOutline(Tokens: TPixieCssTokenList; Important: Boolean);
+var
+  Width: TPixieCssLength;
+  Style: Integer;
+  Color: TPixieWebColor;
+begin
+  if not ParseBorderHelper(Tokens, Width, Style, Color) then
+    Exit;
+  AddParsedProperty(Ord(psid_outline_width), TPixiePropertyValue.FromLength(Width, Important));
+  AddParsedProperty(Ord(psid_outline_style), TPixiePropertyValue.FromInt(Style, Important));
+  AddParsedProperty(Ord(psid_outline_color), TPixiePropertyValue.FromColor(Color, Important));
 end;
 
 procedure TPixieStyle.ParseBorderSide(Name: Integer; Tokens: TPixieCssTokenList;

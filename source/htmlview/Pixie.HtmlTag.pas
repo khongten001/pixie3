@@ -1472,7 +1472,7 @@ end;
 procedure TPixieHtmlTag.DrawBackground(Hdc: PtrUInt; X, Y: TPixiePixel;
   Clip: PPixiePosition; Ri: Pointer);
 var
-  Pos, BorderBox, ContentBox: TPixiePosition;
+  Pos, BorderBox, OutlineBox, ContentBox: TPixiePosition;
   RiObj: TPixieRenderItem;
   VOffset, BOffset: TPixiePixel;
   Bg: TPixieBackground;
@@ -1646,6 +1646,20 @@ begin
         Borders.Radius := Bdr.Radius.CalcPercents(
           BorderBox.Width, BorderBox.Height);
         Doc.Container.DrawBorders(Hdc, Borders, BorderBox, IsRoot);
+      end;
+
+      // Draw outline (outside border box, does not affect layout)
+      if (FCss.OutlineStyle > bsHidden) and (FCss.OutlineWidth > 0) then
+      begin
+        Borders.InitUniform(FCss.OutlineWidth, FCss.OutlineStyle,
+          FCss.OutlineColor);
+        OutlineBox := BorderBox;
+        OutlineBox.X := OutlineBox.X - FCss.OutlineWidth;
+        OutlineBox.Y := OutlineBox.Y - FCss.OutlineWidth;
+        OutlineBox.Width := OutlineBox.Width + FCss.OutlineWidth * 2;
+        OutlineBox.Height := OutlineBox.Height + FCss.OutlineWidth * 2;
+        OutlineBox.DoRound;
+        Doc.Container.DrawBorders(Hdc, Borders, OutlineBox, False);
       end;
     end;
   end

@@ -371,6 +371,7 @@ const
     '}' +
 
     'button, input[type="submit"], input[type="button"], input[type="reset"] {' +
+    '  font-size: 13.333px;' +
     '  padding: 4px 14px;' +
     '  cursor: default;' +
     '  vertical-align: middle;' +

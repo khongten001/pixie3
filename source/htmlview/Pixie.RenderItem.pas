@@ -757,8 +757,9 @@ var
   ParentAlign: TPixieTextAlign;
 begin
   Result := 0;
-  if ((FElement.Css.Display = displayBlock) or
-      (FElement.Css.Display = displayTable)) and
+  if (FElement.Css.Display in [displayBlock, displayTable,
+      displayFlex, displayInlineFlex,
+      displayGrid, displayInlineGrid]) and
      (FElement.Css.ElPosition <> epAbsolute) and
      (FElement.Css.Float_ = efNone) then
   begin
