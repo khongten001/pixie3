@@ -702,18 +702,18 @@ begin
         Result := FContainer.PtToPx(Val.Val * 72 / 25.4)
       else
         Result := Val.Val * 96 / 25.4;
-    cssUnitsVw:
+    cssUnitsVw, cssUnitsCqw, cssUnitsCqi:
       Result := FMedia.Width * Val.Val / 100;
-    cssUnitsVh:
+    cssUnitsVh, cssUnitsCqh, cssUnitsCqb:
       Result := FMedia.Height * Val.Val / 100;
-    cssUnitsVmin:
+    cssUnitsVmin, cssUnitsCqmin:
     begin
       if FMedia.Width < FMedia.Height then
         Result := FMedia.Width * Val.Val / 100
       else
         Result := FMedia.Height * Val.Val / 100;
     end;
-    cssUnitsVmax:
+    cssUnitsVmax, cssUnitsCqmax:
     begin
       if FMedia.Width > FMedia.Height then
         Result := FMedia.Width * Val.Val / 100

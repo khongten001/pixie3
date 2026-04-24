@@ -952,7 +952,7 @@ begin
       Exit;
     UnitStr := PixieLowerCase(Token.Str);
     UnitIdx := PixieValueIndex(UnitStr,
-      '%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch;fr');
+      '%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch;fr;cqw;cqh;cqi;cqb;cqmin;cqmax');
     if UnitIdx < 0 then
       Exit;
     Len := TPixieCssLength.Create(Token.Number, TPixieCssUnits(UnitIdx + 1));
@@ -1822,13 +1822,15 @@ begin
   if (Name = Ord(psid_width)) or (Name = Ord(psid_height)) or
      (Name = Ord(psid_min_width)) or (Name = Ord(psid_min_height)) then
   begin
-    AddLengthProperty(Name, Val, 'auto', clfLengthPercentage or clfPositive, Important);
+    AddLengthProperty(Name, Val, 'auto;fit-content;min-content;max-content',
+      clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 
   if (Name = Ord(psid_max_width)) or (Name = Ord(psid_max_height)) then
   begin
-    AddLengthProperty(Name, Val, 'none', clfLengthPercentage or clfPositive, Important);
+    AddLengthProperty(Name, Val, 'none;fit-content;min-content;max-content',
+      clfLengthPercentage or clfPositive, Important);
     Exit;
   end;
 

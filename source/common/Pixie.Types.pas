@@ -211,7 +211,7 @@ type
   );
 
   // CSS units
-  // 'none;%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch'
+  // 'none;%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch;fr;cqw;cqh;cqi;cqb;cqmin;cqmax'
   TPixieCssUnits = (
     cssUnitsNone,
     cssUnitsPercentage,
@@ -230,6 +230,12 @@ type
     cssUnitsRem,
     cssUnitsCh,
     cssUnitsFr,
+    cssUnitsCqw,
+    cssUnitsCqh,
+    cssUnitsCqi,
+    cssUnitsCqb,
+    cssUnitsCqmin,
+    cssUnitsCqmax,
     cssUnitsCalc
   );
 
@@ -543,6 +549,13 @@ const
   SizeModeExactHeight = $02;
   SizeModeContent     = $04;
 
+  // Width/height predefined keyword indices (match AddLengthProperty
+  // keyword strings in Pixie.Style.pas; widAuto doubles as 'none' for max-*)
+  widAuto       = 0;  // also 'none' for max-width/max-height
+  widFitContent = 1;
+  widMinContent = 2;  // parsed but layout treats as auto (stub)
+  widMaxContent = 3;  // parsed but layout treats as auto (stub)
+
   // Flex align items flags (combined with enum ordinals)
   FlexAlignItemsFirst  = $100;
   FlexAlignItemsLast   = $200;
@@ -569,7 +582,7 @@ const
   BorderStyleStrings = 'none;hidden;dotted;dashed;solid;double;groove;ridge;inset;outset';
   ElementFloatStrings = 'none;left;right';
   ElementClearStrings = 'none;left;right;both';
-  CssUnitsStrings = 'none;%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch;fr';
+  CssUnitsStrings = 'none;%;in;cm;mm;em;ex;pt;pc;px;vw;vh;vmin;vmax;rem;ch;fr;cqw;cqh;cqi;cqb;cqmin;cqmax';
   BackgroundAttachmentStrings = 'scroll;fixed';
   BackgroundRepeatStrings = 'repeat;repeat-x;repeat-y;no-repeat';
   BackgroundBoxStrings = 'border-box;padding-box;content-box';

@@ -192,6 +192,18 @@ begin
       RetWidth := SelfSize.Width.Value;
   end;
 
+  // fit-content shrink-to-fit: use content width clamped to available space
+  if (CbContext.SizeMode and SizeModeContent) = 0 then
+  begin
+    if SrcEl.Css.CssWidth.IsPredefined and
+       (SrcEl.Css.CssWidth.Predef = widFitContent) and
+       (RetWidth < FPos.Width) then
+    begin
+      FPos.Width := RetWidth;
+      RequiresRerender := True;
+    end;
+  end;
+
   // Fix width with max-width
   if SelfSize.MaxWidth.ValueType <> cbcNone then
   begin

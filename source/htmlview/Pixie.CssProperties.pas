@@ -324,10 +324,15 @@ begin
         Result := Ctx.Cont.PtToPx(Val.Val * 12)
       else
         Result := Val.Val * 96 / 6;
-    cssUnitsVw:   Result := Ctx.Media.Width * Val.Val / 100;
-    cssUnitsVh:   Result := Ctx.Media.Height * Val.Val / 100;
-    cssUnitsVmin: Result := Min(Ctx.Media.Width, Ctx.Media.Height) * Val.Val / 100;
-    cssUnitsVmax: Result := Max(Ctx.Media.Width, Ctx.Media.Height) * Val.Val / 100;
+    // Container query units fall through to viewport (no container-type support)
+    cssUnitsVw, cssUnitsCqw, cssUnitsCqi:
+      Result := Ctx.Media.Width * Val.Val / 100;
+    cssUnitsVh, cssUnitsCqh, cssUnitsCqb:
+      Result := Ctx.Media.Height * Val.Val / 100;
+    cssUnitsVmin, cssUnitsCqmin:
+      Result := Min(Ctx.Media.Width, Ctx.Media.Height) * Val.Val / 100;
+    cssUnitsVmax, cssUnitsCqmax:
+      Result := Max(Ctx.Media.Width, Ctx.Media.Height) * Val.Val / 100;
     cssUnitsPercentage: Result := Val.Val; // stays as percentage
   else
     Result := Val.Val; // cssUnitsPx, cssUnitsNone
@@ -586,6 +591,8 @@ var
   InheritedWeight: Integer;
   Fm: TPixieFontMetrics;
   SelfMono, ParentMono: Boolean;
+  CqWidth: TPixiePixel;
+  CqEl: TPixieElement;
 begin
   Assert(El is TPixieHtmlTag);
   Assert((Doc = nil) or (Doc is TPixieDocument));
@@ -663,6 +670,48 @@ begin
   begin
     if Sz.Units = cssUnitsPercentage then
       FS := Sz.CalcPercent(ParentSz)
+    else if Sz.Units in [cssUnitsCqw, cssUnitsCqi, cssUnitsCqh, cssUnitsCqb,
+                          cssUnitsCqmin, cssUnitsCqmax] then
+    begin
+      // Container query units in font-size: walk up the parent chain to find
+      // the nearest ancestor with an explicit width or max-width as the
+      // container size. Approximates container-type:inline-size without
+      // full container query support.
+      CqWidth := 0;
+      CqEl := Tag.Parent;
+      while CqEl <> nil do
+      begin
+        if CqEl.Css <> nil then
+        begin
+          if not CqEl.Css.CssWidth.IsPredefined and
+             (CqEl.Css.CssWidth.Units = cssUnitsPx) then
+          begin
+            CqWidth := CqEl.Css.CssWidth.Val;
+            Break;
+          end;
+          if not CqEl.Css.CssMaxWidth.IsPredefined and
+             (CqEl.Css.CssMaxWidth.Units = cssUnitsPx) and
+             (CqEl.Css.CssMaxWidth.Val > 0) then
+          begin
+            CqWidth := CqEl.Css.CssMaxWidth.Val;
+            Break;
+          end;
+        end;
+        CqEl := CqEl.Parent;
+      end;
+      if CqWidth <= 0 then
+        CqWidth := Ctx.Media.Width;
+      case Sz.Units of
+        cssUnitsCqw, cssUnitsCqi:
+          FS := CqWidth * Sz.Val / 100;
+        cssUnitsCqh, cssUnitsCqb:
+          FS := Ctx.Media.Height * Sz.Val / 100;
+        cssUnitsCqmin:
+          FS := Min(CqWidth, Ctx.Media.Height) * Sz.Val / 100;
+        cssUnitsCqmax:
+          FS := Max(CqWidth, Ctx.Media.Height) * Sz.Val / 100;
+      end;
+    end
     else
     begin
       FillChar(Fm, SizeOf(Fm), 0);
