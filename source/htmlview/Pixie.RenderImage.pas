@@ -149,7 +149,10 @@ begin
         FPos.Width := MaxWidth;
     end;
 
-    if Sz.Width <> 0 then
+    // Flex/grid stretch provides a definite cross size — use it
+    if (SelfSize.Height.ValueType <> cbcAuto) and (SelfSize.Height.Value > 0) then
+      FPos.Height := SelfSize.Height.Value
+    else if Sz.Width <> 0 then
       FPos.Height := FPos.Width * Sz.Height / Sz.Width
     else
       FPos.Height := Sz.Height;
