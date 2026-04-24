@@ -180,7 +180,7 @@ type
     procedure MapAlignToTextAlign(const AttrValue: string);
 
   private
-    procedure HandleCounterProperties;
+    procedure HandleCounterProperties(const AStyle: TPixieStyle);
 
     function GetDocumentMode: TPixieDocumentMode;
     function MatchDocLang(const Lang: string): Boolean;
@@ -1418,7 +1418,7 @@ end;
 procedure TPixieHtmlTag.AddStyle(const AStyle: TPixieStyle);
 begin
   FStyle.Combine(AStyle);
-  HandleCounterProperties;
+  HandleCounterProperties(AStyle);
 end;
 
 // Draw (stub for Phase 4 — full implementation in Phase 5)
@@ -1930,15 +1930,20 @@ end;
 
 // Counter handling
 
-procedure TPixieHtmlTag.HandleCounterProperties;
+procedure TPixieHtmlTag.HandleCounterProperties(
+  const AStyle: TPixieStyle);
 var
   Prop: TPixiePropertyValue;
   Vec: TPixieStringVector;
   I, Val: Integer;
   Name: string;
 begin
+  // Process counters from the incoming style only, not the combined
+  // FStyle — otherwise counters are re-processed each time a new
+  // selector matches the same element.
+
   // counter-reset: name [value] name [value] ...
-  Prop := FStyle.GetProperty(Ord(psid_counter_reset));
+  Prop := AStyle.GetProperty(Ord(psid_counter_reset));
   if (Prop.Kind = pkStringVector) and (Prop.StringVecVal <> nil) then
   begin
     Vec := Prop.StringVecVal;
@@ -1957,7 +1962,7 @@ begin
   end;
 
   // counter-increment: name [value] name [value] ...
-  Prop := FStyle.GetProperty(Ord(psid_counter_increment));
+  Prop := AStyle.GetProperty(Ord(psid_counter_increment));
   if (Prop.Kind = pkStringVector) and (Prop.StringVecVal <> nil) then
   begin
     Vec := Prop.StringVecVal;
@@ -2147,28 +2152,7 @@ end;
 
 function TPixieHtmlTag.GetListMarkerText(Index: Integer): string;
 begin
-  case FCss.ListStyleType of
-    lstDecimal:
-      Result := IntToStr(Index);
-    lstDecimalLeadingZero:
-    begin
-      Result := IntToStr(Index);
-      if Length(Result) = 1 then
-        Result := '0' + Result;
-    end;
-    lstLowerLatin, lstLowerAlpha:
-      Result := PixieToLatinLower(Index);
-    lstLowerGreek:
-      Result := PixieToGreekLower(Index);
-    lstUpperAlpha, lstUpperLatin:
-      Result := PixieToLatinUpper(Index);
-    lstLowerRoman:
-      Result := PixieToRomanLower(Index);
-    lstUpperRoman:
-      Result := PixieToRomanUpper(Index);
-  else
-    Result := '';
-  end;
+  Result := PixieFormatListCounter(Index, FCss.ListStyleType);
 end;
 
 procedure TPixieHtmlTag.DrawListMarker(Hdc: PtrUInt;

@@ -265,10 +265,21 @@ begin
       end;
     end;
 
-    // counter(name)
+    // counter(name[, style])
     1:
     begin
-      AddText(GetCounterValue(Params));
+      Tokens := TPixieStringVector.Create;
+      try
+        PixieSplitString(Params, Tokens, ',');
+        for I := 0 to Tokens.Count - 1 do
+          Tokens[I] := PixieTrim(Tokens[I]);
+        if Tokens.Count >= 2 then
+          AddText(GetCounterValue(Tokens[0], Tokens[1]))
+        else
+          AddText(GetCounterValue(Tokens[0]));
+      finally
+        Tokens.Free;
+      end;
     end;
 
     // counters(name, separator)

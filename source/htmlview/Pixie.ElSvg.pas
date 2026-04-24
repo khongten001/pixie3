@@ -201,6 +201,10 @@ begin
   if (P.Width <= 0) or (P.Height <= 0) then
     Exit;
 
+  // Pass the inherited CSS color to the SVG renderer so that
+  // fill="currentColor" and stroke="currentColor" resolve correctly.
+  FRenderer.SetCurrentColor(FCss.Color);
+
   FRenderer.RenderToRect(P.X, P.Y, P.Width, P.Height);
 end;
 

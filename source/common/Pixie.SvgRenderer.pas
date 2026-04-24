@@ -301,6 +301,9 @@ type
       out W, H: Single): Boolean;
     // Override viewport dimensions (call after ParseSvg, before rendering)
     procedure SetViewport(AWidth, AHeight: Single);
+    // Set the initial CSS 'color' property for currentColor resolution
+    // (call after ParseSvg, before rendering).
+    procedure SetCurrentColor(AColor: TPixieWebColor);
     // Render the parsed document by walking the SVG tree.
     procedure RenderDocument;
     // Free the parsed document.
@@ -4681,6 +4684,11 @@ procedure TPixieSvgRendererBase.SetViewport(AWidth, AHeight: Single);
 begin
   FViewBoxW := AWidth;
   FViewBoxH := AHeight;
+end;
+
+procedure TPixieSvgRendererBase.SetCurrentColor(AColor: TPixieWebColor);
+begin
+  FInitState.Color := AColor;
 end;
 
 procedure TPixieSvgRendererBase.RenderDocument;

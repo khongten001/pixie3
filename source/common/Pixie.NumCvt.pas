@@ -4,16 +4,23 @@ unit Pixie.NumCvt;
 
 interface
 
+uses
+  Pixie.Types;
+
 function PixieToLatinLower(Value: Integer): string;
 function PixieToLatinUpper(Value: Integer): string;
 function PixieToGreekLower(Value: Integer): string;
 function PixieToRomanLower(Value: Integer): string;
 function PixieToRomanUpper(Value: Integer): string;
 
+// Format a counter value using the given list style type.
+function PixieFormatListCounter(Value: Integer;
+  Style: TPixieListStyleType): string;
+
 implementation
 
 uses
-  Pixie.Utf8;
+  SysUtils, Pixie.Utf8;
 
 const
   LatinLower: array[0..25] of Char = (
@@ -145,6 +152,33 @@ begin
       Result := Result + RomanData[I].Numeral;
       Dec(Value, RomanData[I].Value);
     end;
+end;
+
+function PixieFormatListCounter(Value: Integer;
+  Style: TPixieListStyleType): string;
+begin
+  case Style of
+    lstDecimal:
+      Result := IntToStr(Value);
+    lstDecimalLeadingZero:
+    begin
+      Result := IntToStr(Value);
+      if Length(Result) = 1 then
+        Result := '0' + Result;
+    end;
+    lstLowerLatin, lstLowerAlpha:
+      Result := PixieToLatinLower(Value);
+    lstLowerGreek:
+      Result := PixieToGreekLower(Value);
+    lstUpperAlpha, lstUpperLatin:
+      Result := PixieToLatinUpper(Value);
+    lstLowerRoman:
+      Result := PixieToRomanLower(Value);
+    lstUpperRoman:
+      Result := PixieToRomanUpper(Value);
+  else
+    Result := IntToStr(Value);
+  end;
 end;
 
 end.

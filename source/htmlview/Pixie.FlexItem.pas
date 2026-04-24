@@ -941,7 +941,7 @@ begin
   if FlexBasisPredefined then
   begin
     if (Predef = Ord(fbAuto)) and Ri.Css.CssWidth.IsPredefined then
-      Predef := Ord(fbContent);
+      Predef := Ord(fbMaxContent);
 
     case Predef of
       Ord(fbAuto):
@@ -962,7 +962,9 @@ begin
       end;
       Ord(fbMaxContent):
       begin
-        Ri.Render(0, 0, SelfSize, TPixieFormattingContext(FmtCtx));
+        Ri.Render(0, 0,
+          SelfSize.NewWidth(SelfSize.RenderWidth.Value, SizeModeContent),
+          TPixieFormattingContext(FmtCtx));
         BaseSize := Ri.Width;
       end;
     else

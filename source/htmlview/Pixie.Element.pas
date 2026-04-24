@@ -171,7 +171,8 @@ type
 
     // Counters
     function GetCounterValue(
-      const CounterName: string): string;
+      const CounterName: string;
+      const CounterStyle: string = ''): string;
     function GetCountersValue(
       const Params: TPixieStringVector): string;
     procedure IncrementCounter(CounterNameId: Integer;
@@ -210,7 +211,21 @@ implementation
 uses
   Pixie.Document, Pixie.RenderItem, Pixie.RenderBlock,
   Pixie.RenderInline, Pixie.RenderImage, Pixie.RenderTable,
-  Pixie.RenderFlex, Pixie.RenderGrid;
+  Pixie.RenderFlex, Pixie.RenderGrid, Pixie.NumCvt;
+
+function FormatCounterValue(Value: Integer;
+  const Style: string): string;
+var
+  Idx: Integer;
+begin
+  if Style = '' then
+    Exit(IntToStr(Value));
+  Idx := PixieValueIndex(Style, ListStyleTypeStrings);
+  if Idx >= 0 then
+    Result := PixieFormatListCounter(Value, TPixieListStyleType(Idx))
+  else
+    Result := IntToStr(Value);
+end;
 
 { TPixieElement }
 
@@ -734,22 +749,23 @@ end;
 // Counter implementation
 
 function TPixieElement.GetCounterValue(
-  const CounterName: string): string;
+  const CounterName: string;
+  const CounterStyle: string): string;
 var
   FoundEl: TPixieElement;
   FoundValue: Integer;
 begin
   if FindCounter(PixieId(CounterName), FoundEl, FoundValue) then
-    Result := IntToStr(FoundValue)
+    Result := FormatCounterValue(FoundValue, CounterStyle)
   else
-    Result := '0';
+    Result := FormatCounterValue(0, CounterStyle);
 end;
 
 function TPixieElement.GetCountersValue(
   const Params: TPixieStringVector): string;
 var
   CounterNameId: Integer;
-  Delims: string;
+  Delims, CounterStyle: string;
   Values: TPixieStringVector;
   Siblings: TPixieElementList;
   Current, Sib: TPixieElement;
@@ -763,6 +779,10 @@ begin
   CounterNameId := PixieId(Params[0]);
   Delims := Params[1];
   Delims := PixieTrim(Delims, '"''');
+  if Params.Count >= 3 then
+    CounterStyle := PixieTrim(Params[2])
+  else
+    CounterStyle := '';
 
   Values := TPixieStringVector.Create;
   try
@@ -774,7 +794,7 @@ begin
     begin
       if (Current.FCounterValues <> nil) and
          Current.FCounterValues.TryGetValue(CounterNameId, Val) then
-        Values.Add(IntToStr(Val))
+        Values.Add(FormatCounterValue(Val, CounterStyle))
       else
       begin
         Siblings := Current.GetSiblingsBefore;
@@ -788,7 +808,7 @@ begin
             if (Sib.FCounterValues <> nil) and
                Sib.FCounterValues.TryGetValue(CounterNameId, Val) then
             begin
-              Values.Add(IntToStr(Val));
+              Values.Add(FormatCounterValue(Val, CounterStyle));
               Break;
             end;
           end;
@@ -800,7 +820,7 @@ begin
     end;
 
     if Values.Count = 0 then
-      Result := '0'
+      Result := FormatCounterValue(0, CounterStyle)
     else
     begin
       // Reverse the values (collected from child to root)
@@ -872,13 +892,17 @@ begin
   end
   else
   begin
-    // No counter in scope — auto-create on the originating element
-    // (parent for pseudo-elements, self otherwise).
+    // No counter in scope — auto-create on the parent element so
+    // that sibling elements can find and increment the same counter.
+    // For pseudo-elements the parent is the host element, go one
+    // level higher so siblings of the host share the counter.
     if (GetTag = Ord(psid__tag_before)) or
        (GetTag = Ord(psid__tag_after)) then
       TargetEl := Parent
     else
       TargetEl := Self;
+    if (TargetEl <> nil) and (TargetEl.FParent <> nil) then
+      TargetEl := TargetEl.FParent;
     if TargetEl <> nil then
     begin
       if TargetEl.FCounterValues = nil then
