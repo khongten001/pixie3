@@ -471,8 +471,16 @@ begin
 end;
 
 function TPixieCssProperties.GetZIndex: Integer;
+var
+  V: Single;
 begin
-  Result := Round(FZIndex.Val);
+  V := FZIndex.Val;
+  if V >= MaxInt then
+    Result := MaxInt
+  else if V <= -MaxInt then
+    Result := -MaxInt
+  else
+    Result := Round(V);
 end;
 
 procedure TPixieCssProperties.SetZIndex(Value: Integer);
