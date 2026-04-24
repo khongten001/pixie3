@@ -2055,11 +2055,12 @@ end;
 procedure TPixieSvgRendererBase.ApplyMask(Node: Pointer;
   out NeedMaskRestore: Boolean);
 var
-  MaskStr, MaskId, Href, ChildTag, UseHref, UseTargetId: string;
+  MaskStr, MaskId, Href, ChildTag, UseHref, UseTargetId, TransStr: string;
   MaskEl, UseTarget: Pointer;
   Child: TDOMNode;
   ContentNode: Pointer;
   MX, MY, MW, MH: Single;
+  M: TPixieSvgMatrix;
 begin
   NeedMaskRestore := False;
   if FIdMap = nil then Exit;
@@ -2107,7 +2108,27 @@ begin
     end;
     Child := Child.NextSibling;
   end;
-  if Href = '' then Exit;
+  if Href = '' then
+  begin
+    // No image child — treat mask shapes as a clip path (binary mask).
+    // Walk all children and emit their geometry, same as ApplyClipPath.
+    Child := TDOMNode(MaskEl).FirstChild;
+    while Child <> nil do
+    begin
+      if Child.NodeType = xntElement then
+      begin
+        TransStr := GetAttr(Child, 'transform');
+        if TransStr <> '' then
+          M := ParseTransform(TransStr)
+        else
+          M := TPixieSvgMatrix.Identity;
+        EmitShapeGeometry(Child, M);
+      end;
+      Child := Child.NextSibling;
+    end;
+    DoClipPath;
+    Exit;
+  end;
 
   // Use the image element's own dimensions for mask placement
   MX := ParseSvgFloat(GetAttr(ContentNode, 'x', '0'));
