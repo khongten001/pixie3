@@ -3381,15 +3381,59 @@ end;
 
 // --- Grid parsing ---
 
+const
+  GridTrackKeywords = 'auto;min-content;max-content';
+  GridTrackFlags = clfLength or clfPercentage or clfPositive;
+
+function ParseSingleGridTrack(const Tok: TPixieCssToken;
+  Vec: TPixieLengthVector): Boolean;
+var
+  J, CommaIdx: Integer;
+  Args: TPixieCssTokenList;
+  Len, MinLen, MaxLen, MarkerLen: TPixieCssLength;
+begin
+  Result := False;
+
+  // minmax(min, max)
+  if (Tok.TokenType = cssTokenCvFunction) and
+     (LowerCase(Tok.Str) = 'minmax') and (Tok.Value <> nil) then
+  begin
+    Args := Tok.Value;
+    CommaIdx := -1;
+    for J := 0 to Args.Count - 1 do
+      if Args[J].TokenType = cssTokenComma then
+      begin
+        CommaIdx := J;
+        Break;
+      end;
+    if (CommaIdx <= 0) or (CommaIdx >= Args.Count - 1) then Exit;
+    if not PixieParseCssLength(Args[0], MinLen,
+        GridTrackFlags, GridTrackKeywords) then Exit;
+    if not PixieParseCssLength(Args[CommaIdx + 1], MaxLen,
+        GridTrackFlags, GridTrackKeywords) then Exit;
+    MarkerLen := TPixieCssLength.PredefValue(CssGridMinmaxMarker);
+    Vec.Add(MarkerLen);
+    Vec.Add(MinLen);
+    Vec.Add(MaxLen);
+    Result := True;
+    Exit;
+  end;
+
+  // Plain length / percentage / fr / auto / min-content / max-content
+  if PixieParseCssLength(Tok, Len, GridTrackFlags, GridTrackKeywords) then
+  begin
+    Vec.Add(Len);
+    Result := True;
+  end;
+end;
+
 procedure TPixieStyle.ParseGridTemplate(Name: Integer;
   Tokens: TPixieCssTokenList; Important: Boolean);
 var
   Vec: TPixieLengthVector;
-  I, J: Integer;
+  I, J, K, RepeatCount, BeforeCount, AddedCount, CommaIdx: Integer;
   Tok: TPixieCssToken;
-  Len, MinLen, MaxLen, MarkerLen: TPixieCssLength;
   Args: TPixieCssTokenList;
-  CommaIdx: Integer;
 begin
   // grid-template-columns / grid-template-rows: <track-list> | none
   if (Tokens.Count = 1) and (TokenIdent(Tokens[0]) = 'none') then
@@ -3404,12 +3448,11 @@ begin
   begin
     Tok := Tokens[I];
 
-    // Check for minmax() function (component value function from CSS parser)
+    // repeat(<integer>, <track-list>) — auto-fill/auto-fit not supported
     if (Tok.TokenType = cssTokenCvFunction) and
-       (LowerCase(Tok.Str) = 'minmax') and (Tok.Value <> nil) then
+       (LowerCase(Tok.Str) = 'repeat') and (Tok.Value <> nil) then
     begin
       Args := Tok.Value;
-      // Find comma separator
       CommaIdx := -1;
       for J := 0 to Args.Count - 1 do
         if Args[J].TokenType = cssTokenComma then
@@ -3417,41 +3460,29 @@ begin
           CommaIdx := J;
           Break;
         end;
-
-      if (CommaIdx > 0) and (CommaIdx < Args.Count - 1) then
-      begin
-        // Parse min value (before comma)
-        if not PixieParseCssLength(Args[0], MinLen,
-            clfLength or clfPercentage or clfPositive, 'auto;min-content;max-content') then
-        begin
-          Vec.Free;
-          Exit;
-        end;
-        // Parse max value (after comma)
-        if not PixieParseCssLength(Args[CommaIdx + 1], MaxLen,
-            clfLength or clfPercentage or clfPositive, 'auto;min-content;max-content') then
-        begin
-          Vec.Free;
-          Exit;
-        end;
-
-        // Encode as marker + min + max (3 entries per minmax track)
-        MarkerLen := TPixieCssLength.PredefValue(CssGridMinmaxMarker);
-        Vec.Add(MarkerLen);
-        Vec.Add(MinLen);
-        Vec.Add(MaxLen);
-      end
-      else
+      if (CommaIdx <= 0) or (CommaIdx >= Args.Count - 1) or
+         (Args[0].TokenType <> cssTokenNumber) or
+         (Args[0].Number < 1) then
       begin
         Vec.Free;
         Exit;
       end;
+      RepeatCount := Trunc(Args[0].Number);
+      BeforeCount := Vec.Count;
+      for J := CommaIdx + 1 to Args.Count - 1 do
+        if not ParseSingleGridTrack(Args[J], Vec) then
+        begin
+          Vec.Free;
+          Exit;
+        end;
+      AddedCount := Vec.Count - BeforeCount;
+      for K := 1 to RepeatCount - 1 do
+        for J := 0 to AddedCount - 1 do
+          Vec.Add(Vec[BeforeCount + J]);
       Continue;
     end;
 
-    if PixieParseCssLength(Tok, Len, clfLength or clfPercentage or clfPositive, 'auto') then
-      Vec.Add(Len)
-    else
+    if not ParseSingleGridTrack(Tok, Vec) then
     begin
       Vec.Free;
       Exit;
