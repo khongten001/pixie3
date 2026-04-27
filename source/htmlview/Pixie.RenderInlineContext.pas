@@ -357,7 +357,7 @@ begin
     // clear-floats logic can push it past them.
     if (not AddBox) and Item.GetEl.SrcEl.IsBlockFormattingContext and
        (Item.GetRenderedMinWidth >
-        FLineBoxes[FLineBoxes.Count - 1].Right -
+        FLineBoxes[FLineBoxes.Count - 1].LineRight -
         FLineBoxes[FLineBoxes.Count - 1].Left) then
       AddBox := True;
   end;
