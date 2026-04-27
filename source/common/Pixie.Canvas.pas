@@ -158,6 +158,12 @@ type
     procedure FreeImage(Handle: TPixieImageHandle); virtual; abstract;
     procedure GetImageSize(Handle: TPixieImageHandle;
       out W, H: Single); virtual; abstract;
+    // Returns True when the image has no natural size (e.g. an SVG with
+    // only a viewBox and no width/height). When True, AspectRatio is the
+    // natural width/height ratio so callers can fit the image to a
+    // container while preserving aspect.
+    function GetImageAspectInfo(Handle: TPixieImageHandle;
+      out AspectRatio: Single): Boolean; virtual;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); virtual; abstract;
     procedure FillTiledImage(Handle: TPixieImageHandle;
@@ -249,6 +255,13 @@ begin
   ClearTextWidthCache;
   FTextWidthCache.Free;
   inherited Destroy;
+end;
+
+function TPixieCanvas.GetImageAspectInfo(Handle: TPixieImageHandle;
+  out AspectRatio: Single): Boolean;
+begin
+  AspectRatio := 0;
+  Result := False;
 end;
 
 procedure TPixieCanvas.ClearTextWidthCache;

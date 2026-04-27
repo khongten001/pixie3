@@ -31,6 +31,8 @@ type
     SvgRenderer: TObject;     // TPixieSvgCanvasRenderer (owns)
     ImgWidth: UINT;
     ImgHeight: UINT;
+    AspectOnly: Boolean;       // True when SVG has only viewBox (no width/height)
+    AspectRatio: Single;       // viewBox width / height when AspectOnly
   end;
 
   TPixieD2DImageList = TList<PPixieD2DImage>;
@@ -145,6 +147,8 @@ type
     procedure FreeImage(Handle: TPixieImageHandle); override;
     procedure GetImageSize(Handle: TPixieImageHandle;
       out W, H: Single); override;
+    function GetImageAspectInfo(Handle: TPixieImageHandle;
+      out AspectRatio: Single): Boolean; override;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); override;
     procedure FillTiledImage(Handle: TPixieImageHandle;
@@ -1481,6 +1485,8 @@ begin
   Info.SvgRenderer := Renderer;
   Info.ImgWidth := Round(W);
   Info.ImgHeight := Round(H);
+  Info.AspectOnly := not Renderer.HasExplicitSize;
+  Info.AspectRatio := Renderer.GetAspectRatio;
   Result := RegisterImage(Info);
 end;
 
@@ -1674,6 +1680,20 @@ begin
   Info := PPixieD2DImage(Handle);
   W := Info.ImgWidth;
   H := Info.ImgHeight;
+end;
+
+function TPixieD2DCanvas.GetImageAspectInfo(Handle: TPixieImageHandle;
+  out AspectRatio: Single): Boolean;
+var
+  Info: PPixieD2DImage;
+begin
+  AspectRatio := 0;
+  Result := False;
+  if Handle = 0 then Exit;
+  Info := PPixieD2DImage(Handle);
+  Result := Info.AspectOnly;
+  if Result then
+    AspectRatio := Info.AspectRatio;
 end;
 
 procedure TPixieD2DCanvas.DrawImage(Handle: TPixieImageHandle;

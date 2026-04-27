@@ -33,6 +33,8 @@ type
     SvgRenderer: TObject;  // TPixieSvgCanvasRenderer (owns)
     ImgWidth: Integer;
     ImgHeight: Integer;
+    AspectOnly: Boolean;
+    AspectRatio: Single;
     destructor Destroy; override;
   end;
 
@@ -136,6 +138,8 @@ type
     procedure FreeImage(Handle: TPixieImageHandle); override;
     procedure GetImageSize(Handle: TPixieImageHandle;
       out W, H: Single); override;
+    function GetImageAspectInfo(Handle: TPixieImageHandle;
+      out AspectRatio: Single): Boolean; override;
     procedure DrawImage(Handle: TPixieImageHandle;
       DstX, DstY, DstW, DstH: Single); override;
     procedure FillTiledImage(Handle: TPixieImageHandle;
@@ -1270,6 +1274,8 @@ begin
   Info.SvgRenderer := Renderer;
   Info.ImgWidth := Round(W);
   Info.ImgHeight := Round(H);
+  Info.AspectOnly := not Renderer.HasExplicitSize;
+  Info.AspectRatio := Renderer.GetAspectRatio;
   Result := TPixieImageHandle(Info);
 end;
 
@@ -1359,6 +1365,20 @@ begin
   Info := TPixieCairoImage(Handle);
   W := Info.ImgWidth;
   H := Info.ImgHeight;
+end;
+
+function TPixieCairoCanvas.GetImageAspectInfo(Handle: TPixieImageHandle;
+  out AspectRatio: Single): Boolean;
+var
+  Info: TPixieCairoImage;
+begin
+  AspectRatio := 0;
+  Result := False;
+  if Handle = 0 then Exit;
+  Info := TPixieCairoImage(Handle);
+  Result := Info.AspectOnly;
+  if Result then
+    AspectRatio := Info.AspectRatio;
 end;
 
 procedure TPixieCairoCanvas.DrawImage(Handle: TPixieImageHandle;

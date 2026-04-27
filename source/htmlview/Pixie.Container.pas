@@ -58,6 +58,12 @@ type
       RedrawOnReady: Boolean); virtual; abstract;
     procedure GetImageSize(const Src, BaseUrl: string;
       out Sz: TPixieSize); virtual; abstract;
+    // Combined size + aspect-only lookup with a single cache hit. When
+    // AspectOnly is True (e.g. SVG with viewBox but no width/height),
+    // AspectRatio gives width/height and Sz reports the viewBox extents.
+    procedure GetImageInfo(const Src, BaseUrl: string;
+      out Sz: TPixieSize; out AspectOnly: Boolean;
+      out AspectRatio: Single); virtual;
     procedure DrawImage(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
       const Url, BaseUrl: string); virtual; abstract;
     procedure DrawSolidFill(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
@@ -134,6 +140,16 @@ uses
   Pixie.Utf8;
 
 { TPixieContainer }
+
+procedure TPixieContainer.GetImageInfo(const Src, BaseUrl: string;
+  out Sz: TPixieSize; out AspectOnly: Boolean; out AspectRatio: Single);
+begin
+  Sz.Width := 0;
+  Sz.Height := 0;
+  AspectOnly := False;
+  AspectRatio := 0;
+  GetImageSize(Src, BaseUrl, Sz);
+end;
 
 procedure TPixieContainer.PushOpacity(AOpacity: Single);
 begin

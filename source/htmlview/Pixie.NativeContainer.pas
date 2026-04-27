@@ -111,6 +111,9 @@ type
       const Marker: TPixieListMarker); override;
     procedure LoadImage(const Src, ABaseUrl: string;
       RedrawOnReady: Boolean); override;
+    procedure GetImageInfo(const Src, ABaseUrl: string;
+      out Sz: TPixieSize; out AspectOnly: Boolean;
+      out AspectRatio: Single); override;
     procedure GetImageSize(const Src, ABaseUrl: string;
       out Sz: TPixieSize); override;
     procedure DrawImage(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
@@ -853,6 +856,26 @@ begin
     FCanvas.GetImageSize(Handle, W, H);
     Sz.Width := W;
     Sz.Height := H;
+  end;
+end;
+
+procedure TPixieNativeContainer.GetImageInfo(const Src, ABaseUrl: string;
+  out Sz: TPixieSize; out AspectOnly: Boolean; out AspectRatio: Single);
+var
+  Handle: TPixieImageHandle;
+  W, H: Single;
+begin
+  Sz.Width := 0;
+  Sz.Height := 0;
+  AspectOnly := False;
+  AspectRatio := 0;
+  Handle := GetCachedImage(Src, ABaseUrl);
+  if Handle <> 0 then
+  begin
+    FCanvas.GetImageSize(Handle, W, H);
+    Sz.Width := W;
+    Sz.Height := H;
+    AspectOnly := FCanvas.GetImageAspectInfo(Handle, AspectRatio);
   end;
 end;
 

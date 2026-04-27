@@ -156,6 +156,7 @@ type
     FSvgRoot: Pointer;
     FInitState: TPixieSvgState;
     FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH: Single;
+    FHasExplicitSize: Boolean;
     FOverflowVisible: Boolean;
     FGradients: TPixieSvgGradientMap;
     FPatternInfos: TPixieSvgPatternInfoMap;
@@ -299,6 +300,13 @@ type
     // Parse SVG XML, extract dimensions. Call RenderDocument after setup.
     function ParseSvg(Data: Pointer; Size: Integer;
       out W, H: Single): Boolean;
+    // True when the SVG root element specified explicit width AND height
+    // attributes (i.e. has a natural size). False when only viewBox is
+    // present, indicating an aspect-ratio-only image. Valid after ParseSvg.
+    function HasExplicitSize: Boolean;
+    // Returns the SVG's natural aspect ratio (viewBox width / viewBox
+    // height, or W / H if no viewBox), or 0 when neither is available.
+    function GetAspectRatio: Single;
     // Override viewport dimensions (call after ParseSvg, before rendering)
     procedure SetViewport(AWidth, AHeight: Single);
     // Set the initial CSS 'color' property for currentColor resolution
@@ -4602,6 +4610,11 @@ begin
     else
       H := 0;
 
+    // Track whether the SVG has a natural size (both width AND height
+    // explicitly set). When only viewBox is present, callers may treat the
+    // image as having only an aspect ratio.
+    FHasExplicitSize := (W > 0) and (H > 0);
+
     // Determine overflow: browsers default to visible for the outermost
     // <svg>, only clipping when overflow="hidden" is explicitly set
     OverflowStr := LowerCase(Trim(
@@ -4684,6 +4697,19 @@ procedure TPixieSvgRendererBase.SetViewport(AWidth, AHeight: Single);
 begin
   FViewBoxW := AWidth;
   FViewBoxH := AHeight;
+end;
+
+function TPixieSvgRendererBase.HasExplicitSize: Boolean;
+begin
+  Result := FHasExplicitSize;
+end;
+
+function TPixieSvgRendererBase.GetAspectRatio: Single;
+begin
+  if FViewBoxH > 0 then
+    Result := FViewBoxW / FViewBoxH
+  else
+    Result := 0;
 end;
 
 procedure TPixieSvgRendererBase.SetCurrentColor(AColor: TPixieWebColor);

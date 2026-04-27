@@ -900,6 +900,8 @@ var
   ImgLayer: TPixieBackgroundImage;
   ImgSz: TPixieSize;
   ImgArWidth, ImgArHeight: TPixiePixel;
+  ImgAspectOnly: Boolean;
+  ImgAspectRatio: Single;
   ImgNewSz: TPixieSize;
   NewOriginBox: TPixiePosition;
   AutoAuto: TPixieCssSize;
@@ -1012,8 +1014,23 @@ begin
     if ImgLayer <> nil then
     try
       Assert(ElObj.GetDocument is TPixieDocument);
-      TPixieDocument(ElObj.GetDocument).Container.GetImageSize(
-        ImgLayer.Url, ImgLayer.BaseUrl, ImgSz);
+      TPixieDocument(ElObj.GetDocument).Container.GetImageInfo(
+        ImgLayer.Url, ImgLayer.BaseUrl, ImgSz, ImgAspectOnly, ImgAspectRatio);
+
+      // SVGs with only a viewBox have an aspect ratio but no natural
+      // size. Per CSS, background-size: auto on such an image fills the
+      // background area preserving aspect — equivalent to 'contain'.
+      if ImgAspectOnly and (ImgAspectRatio > 0) and
+         SizeVal.Width.IsPredefined and
+         (SizeVal.Width.Predef = Ord(bszAuto)) and
+         SizeVal.Height.IsPredefined and
+         (SizeVal.Height.Predef = Ord(bszAuto)) then
+      begin
+        SizeVal.Width := TPixieCssLength.PredefValue(Ord(bszContain));
+        ImgSz.Width := ImgAspectRatio;
+        ImgSz.Height := 1;
+      end;
+
       if (ImgSz.Width <> 0) and (ImgSz.Height <> 0) then
       begin
         ImgNewSz := ImgSz;
