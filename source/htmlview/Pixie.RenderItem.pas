@@ -701,7 +701,12 @@ var
   CLeft, CTop: TPixiePixel;
   Fmt: TPixieFormattingContext;
 begin
-  CalcOutlines(CbContext.Width.Value);
+  // CSS Sizing 3: percentages on margin/padding/border resolve to zero
+  // during intrinsic (min/max-content) sizing.
+  if (CbContext.SizeMode and SizeModeContent) <> 0 then
+    CalcOutlines(0)
+  else
+    CalcOutlines(CbContext.Width.Value);
 
   FPos.Clear;
   FPos.MoveTo(X, Y);
@@ -2363,6 +2368,7 @@ var
 begin
   Result.Init;
   Result.ContextIdx := CbContext.ContextIdx + 1;
+  Result.SizeMode := CbContext.SizeMode and SizeModeContent;
   Result.Width.Value := CbContext.Width.Value - ContentOffsetWidth;
   Result.MaxWidth.Value := Result.Width.Value;
   if (FElement.Css.ElPosition <> epAbsolute) and

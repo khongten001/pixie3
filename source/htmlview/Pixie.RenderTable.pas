@@ -349,10 +349,12 @@ begin
           begin
             // Min content width
             Cell^.MinWidth := TPixieRenderItem(Cell^.El).Render(0, 0,
-              SelfSize.NewWidth(TPixieRenderItem(Cell^.El).ContentOffsetWidth), FmtCtx);
+              SelfSize.NewWidth(TPixieRenderItem(Cell^.El).ContentOffsetWidth,
+                SizeModeContent), FmtCtx);
             // Max content width
             Cell^.MaxWidth := TPixieRenderItem(Cell^.El).Render(0, 0,
-              SelfSize.NewWidth(SelfSize.RenderWidth.Value - TableWidthSpacing), FmtCtx);
+              SelfSize.NewWidth(SelfSize.RenderWidth.Value - TableWidthSpacing,
+                SizeModeContent), FmtCtx);
           end;
         end;
       end;

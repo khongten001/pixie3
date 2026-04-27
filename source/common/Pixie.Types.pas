@@ -1032,7 +1032,9 @@ begin
   Result := Self;
   Result.RenderWidth.Value := W - (Result.Width.Value - Result.RenderWidth.Value);
   Result.Width.Value := W;
-  Result.SizeMode := ASizeMode;
+  // SizeModeContent stays sticky down the tree so percentage padding
+  // resolves to zero in intrinsic-sizing passes (CSS Sizing 3).
+  Result.SizeMode := ASizeMode or (Self.SizeMode and SizeModeContent);
 end;
 
 function TPixieContainingBlockContext.NewWidthHeight(W, H: TPixiePixel; ASizeMode: UInt32): TPixieContainingBlockContext;
@@ -1041,7 +1043,7 @@ begin
   Result.RenderWidth.Value := W - (Result.Width.Value - Result.RenderWidth.Value);
   Result.Width.Value := W;
   Result.Height.Value := H;
-  Result.SizeMode := ASizeMode;
+  Result.SizeMode := ASizeMode or (Self.SizeMode and SizeModeContent);
 end;
 
 { TPixiePixelPixelCache }
