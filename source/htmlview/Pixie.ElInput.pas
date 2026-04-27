@@ -531,9 +531,7 @@ begin
     TextW := Length(Label_) * FCss.FontMetrics.ChWidth;
 
   Sz.Width := TextW;
-  Sz.Height := FCss.FontMetrics.Height;
-  if FCss.LineHeight.ComputedValue > Sz.Height then
-    Sz.Height := FCss.LineHeight.ComputedValue;
+  Sz.Height := FCss.IntrinsicLineHeight;
 end;
 
 procedure TPixieElButton.Draw(Hdc: PtrUInt; X, Y: TPixiePixel;

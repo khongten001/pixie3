@@ -266,6 +266,9 @@ type
     // Line height
     property LineHeight: TPixieCssLineHeight read FLineHeight write FLineHeight;
     property CssLineHeight: TPixieCssLength read GetCssLineHeight write SetCssLineHeight;
+    // Single-line form-control intrinsic height: max(font height,
+    // line-height) so inputs/buttons match surrounding line boxes.
+    function IntrinsicLineHeight: TPixiePixel;
 
     // Special converted accessors
     property ZIndex: Integer read GetZIndex write SetZIndex;
@@ -506,6 +509,13 @@ end;
 function TPixieCssProperties.GetCssLineHeight: TPixieCssLength;
 begin
   Result := FLineHeight.CssValue;
+end;
+
+function TPixieCssProperties.IntrinsicLineHeight: TPixiePixel;
+begin
+  Result := FFontMetrics.Height;
+  if FLineHeight.ComputedValue > Result then
+    Result := FLineHeight.ComputedValue;
 end;
 
 procedure TPixieCssProperties.SetCssLineHeight(const Value: TPixieCssLength);

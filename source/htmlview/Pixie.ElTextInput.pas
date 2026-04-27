@@ -1447,7 +1447,7 @@ begin
     Sz.Width := Cv.MeasureText(StringOfChar('0', CharCount), FCss.Font)
   else
     Sz.Width := CharCount * FCss.FontMetrics.ChWidth;
-  Sz.Height := FCss.FontMetrics.Height;
+  Sz.Height := FCss.IntrinsicLineHeight;
 end;
 
 function TPixieElTextInput.DumpGetName: string;
