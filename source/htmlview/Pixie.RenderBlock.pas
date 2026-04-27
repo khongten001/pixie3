@@ -187,9 +187,17 @@ begin
   end
   else
   begin
-    FPos.Width := RetWidth;
-    if (SelfSize.Width.ValueType = cbcAbsolute) and (RetWidth > SelfSize.Width.Value) then
+    // Intrinsic sizing: a definite CSS width is the box's contribution,
+    // not the content width. Without this, an empty element with
+    // `width: 1em` (e.g. a div whose only purpose is to show a
+    // background-image) collapses to 0 during the parent's track sizing.
+    if SelfSize.Width.ValueType = cbcAbsolute then
+    begin
+      FPos.Width := SelfSize.Width.Value;
       RetWidth := SelfSize.Width.Value;
+    end
+    else
+      FPos.Width := RetWidth;
   end;
 
   // fit-content shrink-to-fit: use content width clamped to available space
@@ -256,14 +264,12 @@ begin
       FPos.Height := FloatsHeight;
   end;
 
-  // Content-sizing height clamp
+  // Content-sizing height: a definite CSS height is the box's
+  // contribution, regardless of content (mirrors the width logic above).
   if (CbContext.SizeMode and SizeModeContent) <> 0 then
   begin
     if SelfSize.Height.ValueType = cbcAbsolute then
-    begin
-      if FPos.Height > SelfSize.Height.Value then
-        FPos.Height := SelfSize.Height.Value;
-    end;
+      FPos.Height := SelfSize.Height.Value;
   end;
 
   // Fix height with min-height
