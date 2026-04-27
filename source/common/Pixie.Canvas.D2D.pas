@@ -1501,7 +1501,8 @@ var
   Converter: IWICFormatConverter;
   IW, IH: UINT;
   WicBmp: IWICBitmap;
-  Stream: TFileStream;
+  FileStream: TFileStream;
+  MemStream: TMemoryStream;
   Buf: Pointer;
   BufSize: Integer;
   Pixels: Pointer;
@@ -1521,19 +1522,17 @@ begin
   if FWicFactory = nil then Exit;
   WPath := UnicodeString(Resolved);
 
+  // Fast path: WIC by filename. The extension hints at the decoder, so a
+  // .png that's really a WebP can land on the wrong decoder — fall
+  // through to byte-sniffed paths below on failure.
   if not Failed(FWicFactory.CreateDecoderFromFilename(PWideChar(WPath),
-    GUID_NULL, GENERIC_READ, 0, Decoder)) then
+    GUID_NULL, GENERIC_READ, 0, Decoder)) and
+     not Failed(Decoder.GetFrame(0, Frame)) and
+     not Failed(FWicFactory.CreateFormatConverter(Converter)) and
+     not Failed(Converter.Initialize(Frame, GUID_WICPixelFormat32bppPBGRA,
+       WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then
   begin
-    if Failed(Decoder.GetFrame(0, Frame)) then Exit;
-
-    // Convert to premultiplied BGRA for D2D compatibility
-    if Failed(FWicFactory.CreateFormatConverter(Converter)) then Exit;
-    if Failed(Converter.Initialize(Frame, GUID_WICPixelFormat32bppPBGRA,
-      WICBitmapDitherTypeNone, nil, 0, WICBitmapPaletteTypeCustom)) then
-      Exit;
-
     Frame.GetSize(IW, IH);
-
     New(Info);
     FillChar(Info^, SizeOf(TPixieD2DImage), 0);
     Info.WicSource := Converter;
@@ -1543,17 +1542,37 @@ begin
     Exit;
   end;
 
-  // WIC decoder failed — try libwebp for .webp files
-  if (LowerCase(ExtractFileExt(Resolved)) = '.webp') and
-     PixieWebPAvailable then
-  begin
-    Stream := TFileStream.Create(Resolved, fmOpenRead or fmShareDenyNone);
+  // Read once, dispatch from the buffer.
+  try
+    FileStream := TFileStream.Create(Resolved, fmOpenRead or fmShareDenyNone);
+  except
+    on EFOpenError do Exit;
+  end;
+  try
+    BufSize := FileStream.Size;
+    if BufSize < 12 then Exit;
+    GetMem(Buf, BufSize);
     try
-      BufSize := Stream.Size;
-      if BufSize = 0 then Exit;
-      GetMem(Buf, BufSize);
+      FileStream.ReadBuffer(Buf^, BufSize);
+
+      // Retry WIC with content-based detection (handles WebP-saved-as-.png
+      // on Win10+ where WIC has native WebP support installed).
+      MemStream := TMemoryStream.Create;
       try
-        Stream.ReadBuffer(Buf^, BufSize);
+        MemStream.WriteBuffer(Buf^, BufSize);
+        MemStream.Position := 0;
+        Result := LoadImageFromStream(MemStream);
+        if Result <> 0 then Exit;
+      finally
+        MemStream.Free;
+      end;
+
+      // libwebp fallback for systems without WIC WebP support. Sniff
+      // RIFF/WEBP magic so we don't waste libwebp on unrelated files.
+      if PixieWebPAvailable and
+         CompareMem(Buf, PAnsiChar('RIFF'), 4) and
+         CompareMem(PAnsiChar(Buf) + 8, PAnsiChar('WEBP'), 4) then
+      begin
         if PixieWebPDecode(Buf, BufSize, PW, PH, Pixels) then
         try
           if not Failed(FWicFactory.CreateBitmapFromMemory(
@@ -1570,12 +1589,12 @@ begin
         finally
           PixieWebPFreePixels(Pixels);
         end;
-      finally
-        FreeMem(Buf);
       end;
     finally
-      Stream.Free;
+      FreeMem(Buf);
     end;
+  finally
+    FileStream.Free;
   end;
 end;
 
