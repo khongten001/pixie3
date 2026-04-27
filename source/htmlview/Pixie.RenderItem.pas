@@ -43,6 +43,7 @@ type
     FRelShiftDone: Boolean;              // True after ApplyRelativeShift ran
     FPositioned: TPixieRenderItemVector; // non-owning
     FScrollView: TPixieScrollView;       // owned, can be nil
+    FIntrinsicMinWidth: TPixiePixel;     // CSS min-content width; 0 = unknown
 
     function CalculateContainingBlockContext(
       const CbContext: TPixieContainingBlockContext): TPixieContainingBlockContext;
@@ -139,6 +140,9 @@ type
     function IsFlexItem: Boolean;
     function IsGridItem: Boolean;
 
+    // CSS min-content width; falls back to FPos.Width when not computed.
+    function GetIntrinsicMinWidth: TPixiePixel; virtual;
+
     // Core render pipeline
     function Render(X, Y: TPixiePixel;
       const CbContext: TPixieContainingBlockContext;
@@ -221,6 +225,7 @@ begin
   FRelShiftDone := False;
   FPositioned := nil;
   FScrollView := nil;
+  FIntrinsicMinWidth := 0;
   FPos.Clear;
   FMargins.Init;
   FPadding.Init;
@@ -528,6 +533,14 @@ end;
 function TPixieRenderItem.ContentOffsetHeight: TPixiePixel;
 begin
   Result := ContentOffsetTop + ContentOffsetBottom;
+end;
+
+function TPixieRenderItem.GetIntrinsicMinWidth: TPixiePixel;
+begin
+  if FIntrinsicMinWidth > 0 then
+    Result := FIntrinsicMinWidth
+  else
+    Result := FPos.Width;
 end;
 
 // --- Render offset (box-sizing aware) ---

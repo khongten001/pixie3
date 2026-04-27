@@ -60,6 +60,7 @@ type
 
     function GetRenderedMinWidth: TPixiePixel; virtual;
     procedure SetRenderedMinWidth(Value: TPixiePixel); virtual;
+    function GetIntrinsicMinWidth: TPixiePixel; virtual;
 
     procedure ResetItemsHeight;
     procedure AddItemHeight(ItemTop, ItemBottom: TPixiePixel);
@@ -83,6 +84,7 @@ type
     function Right: TPixiePixel; override;
     function Left: TPixiePixel; override;
     function GetRenderedMinWidth: TPixiePixel; override;
+    function GetIntrinsicMinWidth: TPixiePixel; override;
     procedure YShift(Delta: TPixiePixel); override;
   end;
 
@@ -141,6 +143,7 @@ type
     function Width: TPixiePixel;
     function LineRight: TPixiePixel;
     function MinWidth: TPixiePixel;
+    function IntrinsicMinWidth: TPixiePixel;
     function Baseline: TPixiePixel;
     function TopMargin: TPixiePixel;
     function BottomMargin: TPixiePixel;
@@ -337,6 +340,11 @@ begin
   FRenderedMinWidth := Value;
 end;
 
+function TPixieLineBoxItem.GetIntrinsicMinWidth: TPixiePixel;
+begin
+  Result := FElement.GetIntrinsicMinWidth;
+end;
+
 procedure TPixieLineBoxItem.ResetItemsHeight;
 begin
   FItemsTop := 0;
@@ -420,6 +428,11 @@ end;
 function TPixieLbiStart.GetRenderedMinWidth: TPixiePixel;
 begin
   Result := Width;
+end;
+
+function TPixieLbiStart.GetIntrinsicMinWidth: TPixiePixel;
+begin
+  Result := GetRenderedMinWidth;
 end;
 
 procedure TPixieLbiStart.YShift(Delta: TPixiePixel);
@@ -575,6 +588,15 @@ end;
 function TPixieLineBox.MinWidth: TPixiePixel;
 begin
   Result := FMinWidth;
+end;
+
+function TPixieLineBox.IntrinsicMinWidth: TPixiePixel;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FItems.Count - 1 do
+    Result := Result + FItems[I].GetIntrinsicMinWidth;
 end;
 
 function TPixieLineBox.Baseline: TPixiePixel;

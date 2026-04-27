@@ -231,10 +231,11 @@ var
   LinePos, AddBeforeLine, AddAfterLine: TPixiePixel;
   Add: TPixiePixel;
   CrossGap: TPixiePixel;
-  I: Integer;
+  I, J: Integer;
   Ln: TPixieFlexLine;
   El: TPixieRenderItem;
   ItemHeight: TPixiePixel;
+  MinSum, MaxMin, ItemMin: TPixiePixel;
 begin
   // Determine direction
   IsRowDirection := True;
@@ -295,13 +296,30 @@ begin
   SumCrossSize := 0;
   SumMainSize := 0;
   RetWidth := 0;
+  FIntrinsicMinWidth := 0;
 
   // Resolve flexible lengths
   for I := 0 to FLines.Count - 1 do
   begin
     Ln := FLines[I];
     if IsRowDirection then
+    begin
       RetWidth := RetWidth + Ln.BaseSize;
+      // CSS min-content: nowrap → sum of items + gaps; wrap → largest item
+      MinSum := 0;
+      MaxMin := 0;
+      for J := 0 to Ln.Items.Count - 1 do
+      begin
+        ItemMin := Ln.Items[J].MinSize;
+        MinSum := MinSum + ItemMin;
+        if ItemMin > MaxMin then
+          MaxMin := ItemMin;
+      end;
+      if SingleLine then
+        FIntrinsicMinWidth := Max(FIntrinsicMinWidth, MinSum + Ln.TotalMainGap)
+      else
+        FIntrinsicMinWidth := Max(FIntrinsicMinWidth, MaxMin);
+    end;
     Ln.Init(ContainerMainSize, FitContainer, IsRowDirection, SelfSize, FmtCtx);
     SumCrossSize := SumCrossSize + Ln.CrossSize;
     SumMainSize := Max(SumMainSize, Ln.MainSize);

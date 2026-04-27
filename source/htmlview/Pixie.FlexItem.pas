@@ -139,6 +139,7 @@ type
     procedure DistributeFreeSpaceGrow(ContainerMainSize: TPixiePixel);
     procedure DistributeFreeSpaceShrink(ContainerMainSize: TPixiePixel);
     function FixMinMaxViolations: Boolean;
+    function TotalMainGap: TPixiePixel;
   end;
 
 implementation
@@ -190,15 +191,9 @@ var
   MaxCrossSizeSet: Boolean;
   TopVal, BottomVal: TPixiePixel;
   ElRetWidth: TPixiePixel;
-  TotalGap: TPixiePixel;
 begin
-  // Subtract total gap from available main size for flex distribution
-  TotalGap := 0;
-  if (MainGap > 0) and (Items.Count > 1) then
-    TotalGap := MainGap * (Items.Count - 1);
-
   if not FitContainer then
-    DistributeFreeSpace(ContainerMainSize - TotalGap);
+    DistributeFreeSpace(ContainerMainSize - TotalMainGap);
 
   CrossSize := 0;
   MainSize := 0;
@@ -515,6 +510,14 @@ begin
   end;
 end;
 
+function TPixieFlexLine.TotalMainGap: TPixiePixel;
+begin
+  if (MainGap > 0) and (Items.Count > 1) then
+    Result := MainGap * (Items.Count - 1)
+  else
+    Result := 0;
+end;
+
 function TPixieFlexLine.FixMinMaxViolations: Boolean;
 var
   TotalViolation: TPixiePixel;
@@ -649,17 +652,14 @@ var
   ItemRemainder: TPixiePixel;
   DistributeStep: TPixiePixel;
   Height: TPixiePixel;
-  TotalGap: TPixiePixel;
+  Gap: TPixiePixel;
   I: Integer;
   Item: TPixieFlexItem;
 begin
-  TotalGap := 0;
-  if (MainGap > 0) and (Items.Count > 1) then
-    TotalGap := MainGap * (Items.Count - 1);
-
-  FreeMainSize := ContainerMainSize - MainSize - TotalGap;
+  Gap := TotalMainGap;
+  FreeMainSize := ContainerMainSize - MainSize - Gap;
   DistributeMainAutoMargins(FreeMainSize);
-  FreeMainSize := ContainerMainSize - MainSize - TotalGap;
+  FreeMainSize := ContainerMainSize - MainSize - Gap;
 
   case JustifyContent of
     fjcLeft, fjcRight:

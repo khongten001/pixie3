@@ -402,14 +402,43 @@ var
   WasCleared: Boolean;
   Items: TPixieLineBoxItemList;
   LineTop, LineLeft, LineRight: TPixiePixel;
+  NewLeft, NewRight: TPixiePixel;
+  FirstLineMargin, TextIndent: TPixiePixel;
   SzFont: TPixiePixel;
   I: Integer;
   Lbi: TPixieLineBoxItem;
+  LastBox: TPixieLineBox;
 begin
   if FLineBoxes.Count = 0 then
     Exit;
 
-  ElFront := FLineBoxes[FLineBoxes.Count - 1].GetFirstTextPart;
+  LastBox := FLineBoxes[FLineBoxes.Count - 1];
+  NewLeft := 0;
+  NewRight := SelfSize.RenderWidth.Value;
+  FmtCtx.GetLineLeftRight(LastBox.Top, SelfSize.RenderWidth.Value,
+    NewLeft, NewRight);
+
+  // Skip the re-render when the new bounds don't tighten the line, or
+  // when the content's CSS min-content still fits — re-flowing flex items
+  // with margin: auto would only redistribute slack space.
+  FirstLineMargin := 0;
+  TextIndent := 0;
+  if FLineBoxes.Count = 1 then
+  begin
+    if (SrcEl.Css.ListStyleType <> lstNone) and
+       (SrcEl.Css.ListStylePosition = lspInside) then
+      FirstLineMargin := SrcEl.Css.FontSize;
+    if SrcEl.Css.CssTextIndent.Val <> 0 then
+      TextIndent := SrcEl.Css.CssTextIndent.CalcPercent(SelfSize.Width.Value);
+  end;
+  if (NewLeft <= LastBox.Left - FirstLineMargin - TextIndent) and
+     (NewRight >= LastBox.LineRight) then
+    Exit;
+  if (LastBox.Left >= NewLeft) and
+     (LastBox.Left + LastBox.IntrinsicMinWidth <= NewRight) then
+    Exit;
+
+  ElFront := LastBox.GetFirstTextPart;
   WasCleared := False;
 
   if (ElFront <> nil) and (ElFront.SrcEl.Css.Clear_ <> ecNone) then
