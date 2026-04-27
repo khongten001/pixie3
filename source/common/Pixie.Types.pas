@@ -784,6 +784,8 @@ type
     function IsDefault: Boolean;
     procedure SetValue(NewVal: TPixiePixel);
     function Value: TPixiePixel;
+    // Clamp AValue down to this value when set; no-op when default.
+    procedure ClampMax(var AValue: TPixiePixel);
   end;
 
   // Generic collection types
@@ -1141,6 +1143,12 @@ end;
 function TPixieDefValue.Value: TPixiePixel;
 begin
   Result := FValue;
+end;
+
+procedure TPixieDefValue.ClampMax(var AValue: TPixiePixel);
+begin
+  if (not FIsDefault) and (AValue > FValue) then
+    AValue := FValue;
 end;
 
 end.

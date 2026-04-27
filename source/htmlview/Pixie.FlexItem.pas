@@ -930,6 +930,15 @@ begin
     MaxSize.SetValue(Ri.Css.CssMaxWidth.CalcPercent(SelfSize.RenderWidth.Value) +
       Ri.RenderOffsetWidth);
 
+  // CSS Flex § 4.5: when min-width is auto and max-width is definite,
+  // the automatic minimum is clamped to max-width. Otherwise an item whose
+  // intrinsic min-content exceeds max-width (e.g. a flex-wrap container
+  // whose children only wrap once it's narrower than their un-wrapped
+  // natural total) overshoots its declared max-width.
+  if Ri.Css.CssMinWidth.IsPredefined and
+     (Ri.Css.CssMinWidth.Predef = widAuto) then
+    MaxSize.ClampMax(MinSize);
+
   // Flex basis
   FlexBasisPredefined := Ri.Css.FlexBasis.IsPredefined;
   Predef := Ord(fbAuto);
@@ -1124,6 +1133,11 @@ begin
   if not Ri.Css.CssMaxHeight.IsPredefined then
     MaxSize.SetValue(Ri.Css.CssMaxHeight.CalcPercent(SelfSize.Height.Value) +
       Ri.RenderOffsetHeight);
+
+  // Same auto-min clamp as the row variant (CSS Flex § 4.5).
+  if Ri.Css.CssMinHeight.IsPredefined and
+     (Ri.Css.CssMinHeight.Predef = widAuto) then
+    MaxSize.ClampMax(MinSize);
 
   // Flex basis
   FlexBasisPredefined := Ri.Css.FlexBasis.IsPredefined;
