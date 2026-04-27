@@ -4597,15 +4597,20 @@ begin
     ParseViewBox(PixieDomToStr(SvgRoot.GetAttribute('viewBox')),
       FViewBoxX, FViewBoxY, FViewBoxW, FViewBoxH);
 
-    // Parse width/height, fall back to viewBox
-    WidthStr := PixieDomToStr(SvgRoot.GetAttribute('width'));
-    HeightStr := PixieDomToStr(SvgRoot.GetAttribute('height'));
+    // Parse width/height, fall back to viewBox.
+    // Percentage width/height on the outermost <svg> resolve against the
+    // SVG viewport. When the renderer has no caller-supplied viewport (e.g.
+    // SVG used as an <img> source), percentages contribute no intrinsic
+    // dimension — fall through to the viewBox so the image keeps its
+    // natural aspect ratio.
+    WidthStr := Trim(PixieDomToStr(SvgRoot.GetAttribute('width')));
+    HeightStr := Trim(PixieDomToStr(SvgRoot.GetAttribute('height')));
 
-    if WidthStr <> '' then
+    if (WidthStr <> '') and (WidthStr[Length(WidthStr)] <> '%') then
       W := ParseSvgFloat(WidthStr)
     else
       W := 0;
-    if HeightStr <> '' then
+    if (HeightStr <> '') and (HeightStr[Length(HeightStr)] <> '%') then
       H := ParseSvgFloat(HeightStr)
     else
       H := 0;
