@@ -997,13 +997,14 @@ var
   ContainerWidth, ContainerHeight: TPixiePixel;
   HeightIsAuto: Boolean;
   TotalHeight, RetWidth: TPixiePixel;
-  I: Integer;
+  I, RowIdx: Integer;
   T: TPixieGridTrack;
   Ri: TPixieRenderItem;
   Item: TPixieGridItem;
   CellW, CellH: TPixiePixel;
   Mode: UInt32;
-  JustifyI: Integer;
+  JustifyI, AlignI: Integer;
+  RowsChanged: Boolean;
 begin
   ContainerWidth := SelfSize.RenderWidth.Value;
   HeightIsAuto := (SelfSize.Height.ValueType = cbcAuto) and
@@ -1036,6 +1037,8 @@ begin
   // 6. Resolve row tracks
   ResolveRowTracks(ContainerHeight, HeightIsAuto);
 
+  RowsChanged := False;
+
   // Re-render items at resolved cell sizes
   for I := 0 to FItems.Count - 1 do
   begin
@@ -1051,8 +1054,18 @@ begin
     if JustifyI = Ord(faiNormal) then
       JustifyI := Ord(faiStretch);
 
+    // Resolve align-self for this item (cross-axis = vertical for grid)
+    AlignI := Ord(Ri.SrcEl.Css.FlexAlignSelf);
+    if AlignI = Ord(faiAuto) then
+      AlignI := Ord(Css.FlexAlignItems);
+    if AlignI = Ord(faiNormal) then
+      AlignI := Ord(faiStretch);
+
     Mode := 0;
-    if Ri.SrcEl.Css.CssHeight.IsPredefined then
+    // Only stretch auto-height items to cell height when align is stretch.
+    // For center/start/end, keep content height so PositionItems can offset.
+    if Ri.SrcEl.Css.CssHeight.IsPredefined and
+       ((AlignI and $FF) = Ord(faiStretch)) then
       Mode := Mode or SizeModeExactHeight;
 
     if Ri.SrcEl.Css.CssWidth.IsPredefined and
@@ -1077,7 +1090,29 @@ begin
           Mode),
         FmtCtx);
     end;
+
+    // First-pass row sizing used SizeModeContent and ignored explicit CSS
+    // heights. Now that the item has been rendered with proper modes,
+    // grow auto/fr row tracks to fit any items that ended up taller.
+    if Item.Placement.RowEnd - Item.Placement.RowStart = 1 then
+    begin
+      RowIdx := Item.Placement.RowStart;
+      if (RowIdx >= 0) and (RowIdx < FRowTracks.Count) then
+      begin
+        T := FRowTracks[RowIdx];
+        if (T.Size.IsPredefined or (T.Size.Units = cssUnitsFr)) and
+           (Ri.Height > T.Base) then
+        begin
+          T.Base := Ri.Height;
+          FRowTracks[RowIdx] := T;
+          RowsChanged := True;
+        end;
+      end;
+    end;
   end;
+
+  if RowsChanged then
+    ResolveRowTracks(ContainerHeight, HeightIsAuto);
 
   // 7. Position items in their cells
   PositionItems;
