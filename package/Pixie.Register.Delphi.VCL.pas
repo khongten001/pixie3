@@ -9,11 +9,12 @@ procedure Register;
 implementation
 
 uses
-  Classes, Pixie.HtmlView.VCL, Pixie.SvgView.VCL;
+  Classes, Pixie.HtmlView.VCL, Pixie.PaintBox.VCL, Pixie.SvgView.VCL, Pixie.TagBar.VCL;
 
 procedure Register;
 begin
-  RegisterComponents('Pixie', [TPixieHtmlView, TPixieSvgView]);
+  RegisterComponents('Pixie',
+    [TPixieHtmlView, TPixiePaintBox, TPixieSvgView, TPixieTagBar]);
 end;
 
 end.
