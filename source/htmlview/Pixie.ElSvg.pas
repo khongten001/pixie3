@@ -157,17 +157,11 @@ begin
 end;
 
 procedure TPixieElSvg.ParseAttributes;
-var
-  Val: string;
 begin
-  Val := GetAttr('width');
-  if Val <> '' then
-    MapToDimensionProperty(Ord(psid_width), Val);
-
-  Val := GetAttr('height');
-  if Val <> '' then
-    MapToDimensionProperty(Ord(psid_height), Val);
-
+  // SVG width/height attributes are presentation attributes — they set the
+  // intrinsic content size (via GetContentSize) but must NOT be promoted to
+  // CSS properties, otherwise they override author CSS like
+  // `header .home svg { width: 3rem }`. The renderer reads them itself.
   inherited ParseAttributes;
 end;
 
