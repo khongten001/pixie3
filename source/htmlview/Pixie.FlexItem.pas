@@ -1205,11 +1205,13 @@ begin
   if AutoMarginCrossStart then
   begin
     Ri.FMargins.Left := Margin;
-    Ri.FPos.X := Ri.FPos.X + Ri.ContentOffsetLeft;
+    // ContentOffsetLeft already includes FMargins.Left (just set above),
+    // so positioning at ContentOffsetLeft places content past the margin.
+    Ri.FPos.X := Ri.ContentOffsetLeft;
   end;
   if AutoMarginCrossEnd then
     Ri.FMargins.Right := Margin;
-  // Returns false here (no return true like row direction)
+  Result := True;
 end;
 
 procedure TPixieFlexItemColumn.SetMainPosition(Pos: TPixiePixel);
