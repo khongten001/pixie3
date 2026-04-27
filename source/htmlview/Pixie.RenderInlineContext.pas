@@ -211,6 +211,7 @@ var
   FirstLineMargin, TextIndent: TPixiePixel;
   SzFont: TPixiePixel;
   I: Integer;
+  RequiredWidth: TPixiePixel;
 begin
   Items := FinishLastBox(False, SelfSize);
   try
@@ -228,15 +229,22 @@ begin
 
     if Item.GetEl.SrcEl.IsInline or Item.GetEl.SrcEl.IsBlockFormattingContext then
     begin
-      if Item.GetEl.Width > LineCtx.Right - LineCtx.Left then
+      // CSS 2.1 § 9.5: a box establishing a new BFC must not overlap
+      // floats. The rendered Width may have shrunk to the squeezed
+      // line space; RenderedMinWidth is the box's true intrinsic width.
+      RequiredWidth := Max(Item.GetEl.Width, Item.GetRenderedMinWidth);
+      if RequiredWidth > LineCtx.Width then
       begin
         LineCtx.Top := FmtCtx.FindNextLineTop(LineCtx.Top,
-          Item.GetEl.Width, SelfSize.RenderWidth.Value);
+          RequiredWidth, SelfSize.RenderWidth.Value);
         LineCtx.Left := 0;
         LineCtx.Right := SelfSize.RenderWidth.Value;
         LineCtx.FixTop;
         FmtCtx.GetLineLeftRight(LineCtx.Top, SelfSize.RenderWidth.Value,
           LineCtx.Left, LineCtx.Right);
+        if Item.GetEl.SrcEl.IsBlockFormattingContext then
+          Item.GetEl.Render(LineCtx.Left, LineCtx.Top,
+            SelfSize.NewWidth(LineCtx.Width), FmtCtx);
       end;
     end;
 
@@ -344,6 +352,14 @@ begin
     if FLineBoxes[FLineBoxes.Count - 1].CanHold(Item,
        SrcEl.Css.WhiteSpace) then
       AddBox := False;
+    // CSS 2.1 § 9.5: a BFC item that doesn't fit the current line's
+    // float-narrowed space must go to a fresh line box so NewBox's
+    // clear-floats logic can push it past them.
+    if (not AddBox) and Item.GetEl.SrcEl.IsBlockFormattingContext and
+       (Item.GetRenderedMinWidth >
+        FLineBoxes[FLineBoxes.Count - 1].Right -
+        FLineBoxes[FLineBoxes.Count - 1].Left) then
+      AddBox := True;
   end;
   if AddBox then
     NewBox(Item, LineCtx, SelfSize, FmtCtx)
