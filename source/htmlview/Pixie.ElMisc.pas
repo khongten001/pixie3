@@ -19,6 +19,7 @@ type
   public
     constructor Create(ADoc: TObject);
     procedure ParseAttributes; override;
+    procedure ComputeStyles(Recursive: Boolean = True); override;
     function IsBody: Boolean; override;
   end;
 
@@ -182,6 +183,19 @@ begin
   Val := GetAttr('text');
   if Val <> '' then
     FStyle.AddProperty(Ord(psid_color), Val);
+end;
+
+procedure TPixieElBody.ComputeStyles(Recursive: Boolean);
+begin
+  inherited ComputeStyles(Recursive);
+
+  // CSS Overflow § 3.3: a non-visible overflow value on <body> propagates
+  // to the viewport (body's used value becomes visible) when <html>
+  // itself has overflow: visible. Without this, body's own overflow
+  // turns it into a fixed-height scroll container that clips its content.
+  if (FCss.Overflow <> ovVisible) and
+     (Parent <> nil) and (Parent.Css.Overflow = ovVisible) then
+    FCss.Overflow := ovVisible;
 end;
 
 function TPixieElBody.IsBody: Boolean;
