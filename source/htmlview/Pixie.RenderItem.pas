@@ -2329,6 +2329,19 @@ end;
 
 // --- Containing block context ---
 
+// CSS Sizing 3 § 2.4: a percentage height resolves to 'auto' when the
+// containing block's height is itself indefinite (propagated through
+// auto-height ancestors). Without this guard, height:100% on any
+// descendant cascades unchanged from the initial containing block down
+// through every auto-height ancestor and stretches to the viewport.
+function PercentAgainstAutoParent(const Len: TPixieCssLength;
+  const HCtx: TPixieTypedPixel): Boolean; inline;
+begin
+  Result := (not Len.IsPredefined) and
+    (Len.Units = cssUnitsPercentage) and
+    (HCtx.ValueType = cbcAuto);
+end;
+
 procedure TPixieRenderItem.CalcCbLength(const Len: TPixieCssLength;
   PercentBase: TPixiePixel; var OutValue: TPixieTypedPixel);
 var
@@ -2452,7 +2465,7 @@ begin
           end;
         end;
       end;
-      if UseHeight then
+      if UseHeight and not PercentAgainstAutoParent(CssH, CbContext.Height) then
         CalcCbLength(CssH, CbContext.Height.Value, Result.Height);
     end;
 
@@ -2479,8 +2492,10 @@ begin
   end;
   if (CbContext.SizeMode and SizeModeExactHeight) = 0 then
   begin
-    CalcCbLength(FElement.Css.CssMinHeight, CbContext.Height.Value, Result.MinHeight);
-    CalcCbLength(FElement.Css.CssMaxHeight, CbContext.Height.Value, Result.MaxHeight);
+    if not PercentAgainstAutoParent(FElement.Css.CssMinHeight, CbContext.Height) then
+      CalcCbLength(FElement.Css.CssMinHeight, CbContext.Height.Value, Result.MinHeight);
+    if not PercentAgainstAutoParent(FElement.Css.CssMaxHeight, CbContext.Height) then
+      CalcCbLength(FElement.Css.CssMaxHeight, CbContext.Height.Value, Result.MaxHeight);
   end;
 
   // Fix box sizing
