@@ -94,7 +94,13 @@ begin
 
   MinRenderedWidth := El.Render(LineLeft, LineTop, SelfSize.NewWidth(LineRight), FmtCtx);
   if (MinRenderedWidth < El.Width) and El.SrcEl.Css.CssWidth.IsPredefined then
-    El.Render(LineLeft, LineTop, SelfSize.NewWidth(MinRenderedWidth), FmtCtx);
+    // The shrink-to-fit re-render must keep the float's percentage margins
+    // resolved against the actual containing block (not the new tiny width),
+    // so pass the content width with SizeModeExactWidth to skip CalcOutlines.
+    El.Render(LineLeft, LineTop,
+      SelfSize.NewWidth(MinRenderedWidth - El.ContentOffsetWidth,
+                        SizeModeExactWidth),
+      FmtCtx);
 
   // Build the floated box record
   Fb.Pos := TPixiePosition.Create(El.FPos.X - El.ContentOffsetLeft,
