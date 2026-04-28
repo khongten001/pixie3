@@ -606,6 +606,7 @@ var
   SelfMono, ParentMono: Boolean;
   CqWidth: TPixiePixel;
   CqEl: TPixieElement;
+  FontSizeCalcCtx: TCalcContext;
 begin
   Assert(El is TPixieHtmlTag);
   Assert((Doc = nil) or (Doc is TPixieDocument));
@@ -626,11 +627,6 @@ begin
       'serif',
       PtrUInt(@FFontFamily) - PtrUInt(Self));
 
-  // Font size
-  Sz := Tag.GetPropertyLength(Ord(psid_font_size), True,
-    TPixieCssLength.PredefValue(Ord(fsMedium)),
-    PtrUInt(@FCssFontSize) - PtrUInt(Self));
-
   if Ctx.Cont <> nil then
     DocFontSize := Ctx.Cont.GetDefaultFontSize
   else
@@ -641,6 +637,23 @@ begin
     ParentSz := ElParent.Css.GetFontSize
   else
     ParentSz := DocFontSize;
+
+  // CSS Values 4: em in font-size resolves against the parent's
+  // font-size, not the element's own (still being computed here).
+  // ExHeight/ChWidth = 0 leaves any ex/ch term deferred until the full
+  // resolve pass that runs after metrics are known.
+  FontSizeCalcCtx.EmSize := ParentSz;
+  FontSizeCalcCtx.RemSize := Ctx.RootFontSize;
+  FontSizeCalcCtx.ExHeight := 0;
+  FontSizeCalcCtx.ChWidth := 0;
+  FontSizeCalcCtx.VwPx := Ctx.Media.Width;
+  FontSizeCalcCtx.VhPx := Ctx.Media.Height;
+  Tag.Style.ResolveCalcForKey(Ord(psid_font_size), FontSizeCalcCtx);
+
+  // Font size
+  Sz := Tag.GetPropertyLength(Ord(psid_font_size), True,
+    TPixieCssLength.PredefValue(Ord(fsMedium)),
+    PtrUInt(@FCssFontSize) - PtrUInt(Self));
 
   if Sz.IsPredefined then
   begin

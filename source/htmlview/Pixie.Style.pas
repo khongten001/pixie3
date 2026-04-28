@@ -158,6 +158,11 @@ type
     // units (em/rem/vw/vh). Called from Compute after font metrics are known.
     procedure ResolveCalc(const Ctx: TCalcContext);
 
+    // Resolve a single property's deferred calc() using the supplied
+    // context. Used to resolve font-size's calc before the rest of font
+    // metrics are known (CSS Values 4: em in font-size = parent's font).
+    procedure ResolveCalcForKey(Key: Integer; const Ctx: TCalcContext);
+
     property Properties: TPixiePropsMap read FProperties;
   end;
 
@@ -697,9 +702,18 @@ begin
       else if UnitStr = 'rem' then
         V.Px := Tok.Number * GCalcCtx^.RemSize
       else if UnitStr = 'ex' then
-        V.Px := Tok.Number * GCalcCtx^.ExHeight
+      begin
+        // ExHeight/ChWidth = 0 means the metric isn't available yet
+        // (e.g. font-size pre-pass); refuse to resolve so the property
+        // stays deferred for the later full pass.
+        if GCalcCtx^.ExHeight = 0 then Exit(False);
+        V.Px := Tok.Number * GCalcCtx^.ExHeight;
+      end
       else if UnitStr = 'ch' then
-        V.Px := Tok.Number * GCalcCtx^.ChWidth
+      begin
+        if GCalcCtx^.ChWidth = 0 then Exit(False);
+        V.Px := Tok.Number * GCalcCtx^.ChWidth;
+      end
       else if UnitStr = 'vw' then
         V.Px := Tok.Number * GCalcCtx^.VwPx / 100
       else if UnitStr = 'vh' then
@@ -3368,32 +3382,32 @@ begin
   end;
 end;
 
-procedure TPixieStyle.ResolveCalc(const Ctx: TCalcContext);
+procedure TPixieStyle.ResolveCalcForKey(Key: Integer; const Ctx: TCalcContext);
 var
-  Keys: TPixieIntArray;
-  I, Key: Integer;
   Prop: TPixiePropertyValue;
 begin
+  // Common case is "no deferred calc on this key" — exit before
+  // touching the global so we don't pay an exception frame for nothing.
+  if not FProperties.TryGetValue(Key, Prop) then Exit;
+  if not Prop.HasCalc then Exit;
+  if Prop.Kind <> pkTokenVector then Exit;
+  if Prop.TokenVecVal = nil then Exit;
   GCalcCtx := @Ctx;
   try
-    Keys := FProperties.Keys.ToArray;
-    for I := 0 to Length(Keys) - 1 do
-    begin
-      Key := Keys[I];
-      if not FProperties.TryGetValue(Key, Prop) then
-        Continue;
-      if not Prop.HasCalc then
-        Continue;
-      if Prop.Kind <> pkTokenVector then
-        Continue;
-      if Prop.TokenVecVal = nil then
-        Continue;
-      // Re-parse with calc context now available
-      AddProperty(Key, Prop.TokenVecVal, '', Prop.Important);
-    end;
+    AddProperty(Key, Prop.TokenVecVal, '', Prop.Important);
   finally
     GCalcCtx := nil;
   end;
+end;
+
+procedure TPixieStyle.ResolveCalc(const Ctx: TCalcContext);
+var
+  Keys: TPixieIntArray;
+  I: Integer;
+begin
+  Keys := FProperties.Keys.ToArray;
+  for I := 0 to Length(Keys) - 1 do
+    ResolveCalcForKey(Keys[I], Ctx);
 end;
 
 // --- Grid parsing ---
