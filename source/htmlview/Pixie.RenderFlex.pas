@@ -278,14 +278,15 @@ begin
       SingleLine := True;
       FitContainer := True;
     end;
-    if (SelfSize.MinHeight.ValueType <> cbcNone) and
-       (SelfSize.MinHeight.Value > ContainerMainSize) then
-      ContainerMainSize := SelfSize.MinHeight.Value;
-    // Max-height only clamps the main size; it must not flip wrap mode
-    // (flex-wrap controls that on its own).
+    // CSS 2.1 § 10.7: max-height clamps first, min-height enforces the
+    // floor afterwards so min-height wins on conflict. Neither bound
+    // flips wrap mode (flex-wrap controls that on its own).
     if (SelfSize.MaxHeight.ValueType <> cbcNone) and
        (SelfSize.MaxHeight.Value < ContainerMainSize) then
       ContainerMainSize := SelfSize.MaxHeight.Value;
+    if (SelfSize.MinHeight.ValueType <> cbcNone) and
+       (SelfSize.MinHeight.Value > ContainerMainSize) then
+      ContainerMainSize := SelfSize.MinHeight.Value;
   end;
 
   // Split flex items into lines

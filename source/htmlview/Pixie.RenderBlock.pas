@@ -272,28 +272,29 @@ begin
       FPos.Height := SelfSize.Height.Value;
   end;
 
-  // Fix height with min-height
-  if SelfSize.MinHeight.ValueType <> cbcNone then
-  begin
-    if FPos.Height < SelfSize.MinHeight.Value then
-      FPos.Height := SelfSize.MinHeight.Value;
-  end
-  else if FPos.Height < 0 then
+  if FPos.Height < 0 then
     FPos.Height := 0;
 
   // CSS Sizing 4 § 3: aspect-ratio derives the missing dimension when
   // width is definite and height is auto. Computed after the explicit
   // height has been applied so an explicit `height` still wins, but
-  // before max-height clamping (which the derived size must still respect).
+  // before min/max clamping (which the derived size must still respect).
   if (SrcEl.Css.AspectRatio > 0) and
      SrcEl.Css.CssHeight.IsPredefined and (FPos.Width > 0) then
     FPos.Height := FPos.Width / SrcEl.Css.AspectRatio;
 
-  // Fix height with max-height
+  // CSS 2.1 § 10.7: max-height clamps first, min-height enforces the
+  // floor afterwards so min-height wins on conflict.
   if SelfSize.MaxHeight.ValueType <> cbcNone then
   begin
     if FPos.Height > SelfSize.MaxHeight.Value then
       FPos.Height := SelfSize.MaxHeight.Value;
+  end;
+
+  if SelfSize.MinHeight.ValueType <> cbcNone then
+  begin
+    if FPos.Height < SelfSize.MinHeight.Value then
+      FPos.Height := SelfSize.MinHeight.Value;
   end;
 
   // Calculate final position
