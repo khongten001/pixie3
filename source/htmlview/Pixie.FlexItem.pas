@@ -910,7 +910,8 @@ begin
   if Ri.Css.CssMargins.Bottom.IsPredefined then
     AutoMarginCrossEnd := True;
 
-  // Min size
+  // Min size — always stored as the outer (margin-box) main-axis size
+  // so it's directly comparable with BaseSize / MaxSize.
   ContentSizeSet := False;
   ContentSize := 0;
   if Ri.Css.CssMinWidth.IsPredefined then
@@ -919,7 +920,7 @@ begin
       SelfSize.NewWidth(Ri.ContentOffsetWidth, SizeModeContent),
       TPixieFormattingContext(FmtCtx));
     ContentSizeSet := True;
-    MinSize := ContentSize;
+    MinSize := ContentSize + Ri.RenderOffsetWidth;
   end
   else
     MinSize := Ri.Css.CssMinWidth.CalcPercent(SelfSize.RenderWidth.Value) +
@@ -960,14 +961,14 @@ begin
         BaseSize := Ri.Render(0, 0,
           SelfSize.NewWidth(Ri.ContentOffsetWidth,
             SizeModeContent),
-          TPixieFormattingContext(FmtCtx));
+          TPixieFormattingContext(FmtCtx)) + Ri.RenderOffsetWidth;
       Ord(fbMinContent):
       begin
         if not ContentSizeSet then
           ContentSize := Ri.Render(0, 0,
             SelfSize.NewWidth(Ri.ContentOffsetWidth, SizeModeContent),
             TPixieFormattingContext(FmtCtx));
-        BaseSize := ContentSize;
+        BaseSize := ContentSize + Ri.RenderOffsetWidth;
       end;
       Ord(fbMaxContent):
       begin
@@ -1118,12 +1119,13 @@ begin
   if Ri.Css.CssMargins.Right.IsPredefined then
     AutoMarginCrossEnd := True;
 
-  // Min size
+  // Min size — always stored as the outer (margin-box) main-axis size
+  // so it's directly comparable with BaseSize / MaxSize.
   if Ri.Css.CssMinHeight.IsPredefined then
   begin
     Ri.Render(0, 0, SelfSize.NewWidth(SelfSize.RenderWidth.Value, SizeModeContent),
       TPixieFormattingContext(FmtCtx));
-    MinSize := Ri.Height;
+    MinSize := Ri.Height + Ri.RenderOffsetHeight;
   end
   else
     MinSize := Ri.Css.CssMinHeight.CalcPercent(SelfSize.Height.Value) +
@@ -1159,7 +1161,7 @@ begin
       Ord(fbMaxContent), Ord(fbFitContent):
       begin
         Ri.Render(0, 0, SelfSize, TPixieFormattingContext(FmtCtx));
-        BaseSize := Ri.Height;
+        BaseSize := Ri.Height + Ri.RenderOffsetHeight;
       end;
       Ord(fbMinContent):
         BaseSize := MinSize;
