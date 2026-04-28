@@ -46,6 +46,7 @@ type
     TagBarFilter: TPixieTagBar;
     TagBarAssign: TPixieTagBar;
     TagBarDisplay: TPixieTagBar;
+    TagBarSettings: TPixieTagBar;
     FPaintBoxScale: Single;
     FCardCount: Integer;
     FParseStart: Int64;
@@ -71,6 +72,7 @@ type
     procedure NavigateToUrl(const Url: string);
     procedure CreateTagBarTab;
     procedure PopulateTagBarTags(Bar: TPixieTagBar);
+    procedure PopulateTagBarTagsPlain(Bar: TPixieTagBar);
     procedure TagBarShapeChange(Sender: TObject);
     procedure TagBarAutoHeightChange(Sender: TObject);
     function Scale(Value: Integer): Integer;
@@ -389,11 +391,16 @@ begin
   AddLabel('Display (read-only, checked tags only):');
   TagBarDisplay := AddBar(TagBarDisplayOpts);
 
+  // Settings
+  AddLabel('Settings (always checked, colour swatches, no toggle):');
+  TagBarSettings := AddBar(TagBarSettingsOpts);
+
   // Populate all bars
   PopulateTagBarTags(TagBarEditor);
   PopulateTagBarTags(TagBarFilter);
   PopulateTagBarTags(TagBarAssign);
   PopulateTagBarTags(TagBarDisplay);
+  PopulateTagBarTagsPlain(TagBarSettings);
 
   // Check some tags in Display so they are visible
   TagBarDisplay.CheckTag(TagBarDisplay.GetTag(0).ID, True);
@@ -420,6 +427,18 @@ begin
     #$26A0, '');        // Warning (BMP)
 end;
 
+procedure TMainForm.PopulateTagBarTagsPlain(Bar: TPixieTagBar);
+begin
+  Bar.AddTag('Production', TPixieWebColor.Create($F4, $43, $36));
+  Bar.AddTag('Staging',    TPixieWebColor.Create($FF, $98, $00));
+  Bar.AddTag('London',     TPixieWebColor.Create($21, $96, $F3));
+  Bar.AddTag('New York',   TPixieWebColor.Create($4C, $AF, $50));
+  Bar.AddTag('Router',     TPixieWebColor.Create($9C, $27, $B0));
+  Bar.AddTag('Server',     TPixieWebColor.Create($00, $96, $88));
+  Bar.AddTag('Cloud',      TPixieWebColor.Create($79, $55, $48));
+  Bar.AddTag('Critical',   TPixieWebColor.Create($60, $7D, $8B));
+end;
+
 procedure TMainForm.TagBarShapeChange(Sender: TObject);
 var
   Shape: TPixieTagShape;
@@ -435,6 +454,7 @@ begin
   TagBarFilter.TagShape := Shape;
   TagBarAssign.TagShape := Shape;
   TagBarDisplay.TagShape := Shape;
+  TagBarSettings.TagShape := Shape;
 end;
 
 procedure TMainForm.TagBarAutoHeightChange(Sender: TObject);
@@ -446,6 +466,7 @@ begin
   TagBarFilter.AutoHeight := Auto;
   TagBarAssign.AutoHeight := Auto;
   TagBarDisplay.AutoHeight := Auto;
+  TagBarSettings.AutoHeight := Auto;
 end;
 
 // ---------------------------------------------------------------------------

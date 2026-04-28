@@ -34,7 +34,9 @@ type
     tboAllowCheck,
     tboAllowCreate,
     tboAllowEdit,
-    tboReadOnly
+    tboReadOnly,
+    tboAlwaysChecked,
+    tboShowColorSwatch
   );
   TPixieTagBarOptions = set of TPixieTagBarOption;
 
@@ -82,6 +84,9 @@ const
   TagBarEditorOpts: TPixieTagBarOptions =
     [tboShowAll, tboAllowCheck, tboAllowCreate, tboAllowEdit,
      tboShowDismiss];
+  TagBarSettingsOpts: TPixieTagBarOptions =
+    [tboShowAll, tboAllowCreate, tboAllowEdit, tboShowDismiss,
+     tboAlwaysChecked, tboShowColorSwatch];
 
   { Virtual key codes (platform-neutral) }
   tbVK_RETURN = 13;
@@ -383,6 +388,8 @@ begin
   end;
   if tboShowDismiss in FOptions then
     Include(Result, tpoShowDismiss);
+  if tboShowColorSwatch in FOptions then
+    Include(Result, tpoShowColorSwatch);
 end;
 
 function TPixieTagBarCore.GetPillState(TagIndex, LayoutIndex: Integer): TPixieTagPillState;
@@ -401,8 +408,9 @@ begin
   if (FEditMode = temRename) and (TagIndex = FEditTagIndex) then
     Exit(tpsEditing);
 
-  TagChecked := (TagIndex >= 0) and (TagIndex < FTags.Count) and
-    FChecked.ContainsKey(FTags[TagIndex].ID);
+  TagChecked := (tboAlwaysChecked in FOptions) or
+    ((TagIndex >= 0) and (TagIndex < FTags.Count) and
+     FChecked.ContainsKey(FTags[TagIndex].ID));
 
   if TagChecked then
   begin

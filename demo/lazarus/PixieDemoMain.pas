@@ -70,9 +70,11 @@ type
     TagBarFilter: TPixieTagBar;
     TagBarAssign: TPixieTagBar;
     TagBarDisplay: TPixieTagBar;
+    TagBarSettings: TPixieTagBar;
     procedure NavigateToUrl(const Url: string);
     procedure CreateTagBarTab;
     procedure PopulateTagBarTags(Bar: TPixieTagBar);
+    procedure PopulateTagBarTagsPlain(Bar: TPixieTagBar);
     procedure TagBarShapeChange(Sender: TObject);
     procedure TagBarAutoHeightChange(Sender: TObject);
   end;
@@ -341,6 +343,32 @@ begin
   TagBarDisplay.CheckTag(TagBarDisplay.GetTag(0).ID, True);
   TagBarDisplay.CheckTag(TagBarDisplay.GetTag(2).ID, True);
   TagBarDisplay.CheckTag(TagBarDisplay.GetTag(4).ID, True);
+  Inc(Y, 36);
+
+  Lbl := TLabel.Create(ScrollBox);
+  Lbl.Parent := ScrollBox;
+  Lbl.Align := alTop;
+  Lbl.Top := Y;
+  Lbl.Caption := 'Settings (always checked, colour swatches, no toggle):';
+  Lbl.Font.Style := [fsBold];
+  Lbl.BorderSpacing.Left := 8;
+  Lbl.BorderSpacing.Top := 8;
+  Lbl.BorderSpacing.Right := 4;
+  Lbl.BorderSpacing.Bottom := 2;
+  Inc(Y, 24);
+
+  TagBarSettings := TPixieTagBar.Create(Self);
+  TagBarSettings.Parent := ScrollBox;
+  TagBarSettings.Align := alTop;
+  TagBarSettings.Top := Y;
+  TagBarSettings.Color := clWindow;
+  TagBarSettings.ShowBorder := True;
+  TagBarSettings.TagShape := tsRoundedRect;
+  TagBarSettings.AutoHeight := True;
+  TagBarSettings.Options := TagBarSettingsOpts;
+  TagBarSettings.BorderSpacing.Left := 4;
+  TagBarSettings.BorderSpacing.Right := 4;
+  PopulateTagBarTagsPlain(TagBarSettings);
 end;
 
 procedure TMainForm.PopulateTagBarTags(Bar: TPixieTagBar);
@@ -353,6 +381,18 @@ begin
   Bar.AddTag('Server',         TPixieWebColor.Create($00, $96, $88), '🖥', '');
   Bar.AddTag('Cloud',          TPixieWebColor.Create($79, $55, $48), '☁', '');
   Bar.AddTag('Critical',       TPixieWebColor.Create($60, $7D, $8B), '⚠', '');
+end;
+
+procedure TMainForm.PopulateTagBarTagsPlain(Bar: TPixieTagBar);
+begin
+  Bar.AddTag('Production', TPixieWebColor.Create($F4, $43, $36));
+  Bar.AddTag('Staging',    TPixieWebColor.Create($FF, $98, $00));
+  Bar.AddTag('London',     TPixieWebColor.Create($21, $96, $F3));
+  Bar.AddTag('New York',   TPixieWebColor.Create($4C, $AF, $50));
+  Bar.AddTag('Router',     TPixieWebColor.Create($9C, $27, $B0));
+  Bar.AddTag('Server',     TPixieWebColor.Create($00, $96, $88));
+  Bar.AddTag('Cloud',      TPixieWebColor.Create($79, $55, $48));
+  Bar.AddTag('Critical',   TPixieWebColor.Create($60, $7D, $8B));
 end;
 
 procedure TMainForm.TagBarShapeChange(Sender: TObject);
@@ -370,6 +410,7 @@ begin
   TagBarFilter.TagShape := Shape;
   TagBarAssign.TagShape := Shape;
   TagBarDisplay.TagShape := Shape;
+  TagBarSettings.TagShape := Shape;
 end;
 
 procedure TMainForm.TagBarAutoHeightChange(Sender: TObject);
@@ -381,6 +422,7 @@ begin
   TagBarFilter.AutoHeight := AH;
   TagBarAssign.AutoHeight := AH;
   TagBarDisplay.AutoHeight := AH;
+  TagBarSettings.AutoHeight := AH;
 end;
 
 // ---------------------------------------------------------------------------

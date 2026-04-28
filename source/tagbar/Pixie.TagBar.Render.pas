@@ -21,7 +21,8 @@ type
     tpsInactive, tpsEditing
   );
 
-  TPixieTagPillOption = (tpoShowDismiss, tpoIsAddButton, tpoEditing);
+  TPixieTagPillOption = (tpoShowDismiss, tpoIsAddButton, tpoEditing,
+    tpoShowColorSwatch);
   TPixieTagPillOptions = set of TPixieTagPillOption;
 
   TPixieTagHitZone = (thzNone, thzPill, thzLeadIcon, thzDismiss);
@@ -141,10 +142,17 @@ begin
 
   CurX := PadH;
 
-  // Lead icon
+  // Lead icon or code-drawn colour swatch
   if LeadIcon <> '' then
   begin
     LeadW := Canvas.MeasureText(LeadIcon, Font);
+    Result.LeadIconRect := TPixiePosition.Create(
+      CurX, 0, LeadW, PillHeight);
+    CurX := CurX + LeadW + Gap;
+  end
+  else if tpoShowColorSwatch in Options then
+  begin
+    LeadW := PillHeight * 0.5;
     Result.LeadIconRect := TPixiePosition.Create(
       CurX, 0, LeadW, PillHeight);
     CurX := CurX + LeadW + Gap;
@@ -227,6 +235,7 @@ var
   FillColor, SufFillColor, TxtColor, SufTxtColor, BrdColor: TPixieWebColor;
   Radius, InnerRadius, LeftInner, RightInner, RightInner2: TPixieBorderRadiuses;
   Bw, R, Ri, Ri2, TextY, Arm, Cx, Cy, SepAbs: Single;
+  SwSize, SwX, SwY, SwR: Single;
   IsChecked, HasSuffix: Boolean;
 begin
   // Compute colours from state
@@ -323,13 +332,28 @@ begin
       InnerRadius, FillColor);
   end;
 
-  // Lead icon
+  // Lead icon or code-drawn colour swatch
   if not Metrics.LeadIconRect.IsEmpty then
   begin
-    TextY := Y + (PillHeight - FontMetrics.Height) / 2;
-    Canvas.DrawText(LeadIcon, Font, TxtColor,
-      X + Metrics.LeadIconRect.X, TextY,
-      Metrics.LeadIconRect.Width, FontMetrics.Height);
+    if (LeadIcon = '') and (tpoShowColorSwatch in Options) then
+    begin
+      // Darker outline keeps the swatch visible on near-white tag colours.
+      SwSize := Metrics.LeadIconRect.Width;
+      SwX := X + Metrics.LeadIconRect.X;
+      SwY := Y + (PillHeight - SwSize) / 2;
+      SwR := SwSize * 0.2;
+      Canvas.FillRoundedRect(SwX, SwY, SwSize, SwSize,
+        SwR, PixieTagBlend(Base, TPixieWebColor.Black, 0.15));
+      Canvas.FillRoundedRect(SwX + 1, SwY + 1, SwSize - 2, SwSize - 2,
+        Max(SwR - 1, 0), Base);
+    end
+    else if LeadIcon <> '' then
+    begin
+      TextY := Y + (PillHeight - FontMetrics.Height) / 2;
+      Canvas.DrawText(LeadIcon, Font, TxtColor,
+        X + Metrics.LeadIconRect.X, TextY,
+        Metrics.LeadIconRect.Width, FontMetrics.Height);
+    end;
   end;
 
   // Text

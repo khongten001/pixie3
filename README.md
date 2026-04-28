@@ -19,7 +19,7 @@
 
 Pixie is a set of drop-in visual components for Lazarus and Delphi that render HTML, SVG, and custom graphics using platform-native APIs. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
 
-Three components are included: `TPixieHtmlView` (HTML/CSS rendering with interaction), `TPixieSvgView` (proportional SVG display), and `TPixiePaintBox` (drawing surface with a TCanvas-like API).
+Four components are included: `TPixieHtmlView` (HTML/CSS rendering with interaction), `TPixieSvgView` (proportional SVG display), `TPixiePaintBox` (drawing surface with a TCanvas-like API), and `TPixieTagBar` (interactive coloured tag pills with checking, editing, and colour cycling).
 
 All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration where available. Five rendering backends are included so the same code works across operating systems and frameworks:
 
@@ -94,7 +94,7 @@ All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration 
 
 1. Open `package/Pixie.Package.Lazarus.lpk` in the Lazarus IDE.
 2. Click **Compile**, then **Use > Install**.
-3. Restart the IDE. `TPixieHtmlView`, `TPixieSvgView`, and `TPixiePaintBox` appear on the **Pixie** component palette tab.
+3. Restart the IDE. `TPixieHtmlView`, `TPixieSvgView`, `TPixiePaintBox`, and `TPixieTagBar` appear on the **Pixie** component palette tab.
 
 Or add the package as a dependency without installing:
 
