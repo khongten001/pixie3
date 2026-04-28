@@ -838,8 +838,8 @@ begin
         El := TPixieElCheckbox.Create(Self)
       else if InputType = 'radio' then
         El := TPixieElRadio.Create(Self)
-      else if (InputType = '') or (InputType = 'text') or
-              (InputType = 'password') then
+      else if (InputType = '') or PixieValueInList(InputType,
+              'text;password;search;email;url;tel;number') then
         El := TPixieElTextInput.Create(Self)
       else if (InputType = 'submit') or (InputType = 'button') or
               (InputType = 'reset') then
