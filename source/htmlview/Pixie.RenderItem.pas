@@ -2467,6 +2467,20 @@ begin
       end;
       if UseHeight and not PercentAgainstAutoParent(CssH, CbContext.Height) then
         CalcCbLength(CssH, CbContext.Height.Value, Result.Height);
+
+      // CSS Sizing 4 § 3: when aspect-ratio derives a definite height from a
+      // definite width, surface it as the children's containing-block
+      // height so percentage descendants resolve against it instead of
+      // falling through the indefinite-parent rule. Sibling to the FPos
+      // derivation in TPixieRenderBlock.Render (which sizes this box).
+      if (FElement.Css.AspectRatio > 0) and
+         (Result.Height.ValueType = cbcAuto) and
+         (Result.Width.ValueType <> cbcAuto) and
+         (Result.Width.Value > 0) then
+      begin
+        Result.Height.Value := Result.Width.Value / FElement.Css.AspectRatio;
+        Result.Height.ValueType := cbcAbsolute;
+      end;
     end;
 
     // Adjust for table/root
