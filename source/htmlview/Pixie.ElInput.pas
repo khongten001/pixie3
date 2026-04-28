@@ -94,7 +94,8 @@ uses
   Math,
   Pixie.StringId, Pixie.Style, Pixie.Borders, Pixie.Background,
   Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.RenderItem, Pixie.RenderInput;
+  Pixie.RenderItem, Pixie.RenderInput,
+  Pixie.Document;
 
 const
   InputIntrinsicSize = 16;
@@ -291,10 +292,18 @@ end;
 procedure TPixieElLabel.OnClick;
 var
   Input: TPixieElement;
+  ForId: string;
 begin
   if not InputClickInProgress then
   begin
-    Input := FindFirstInput(Self);
+    // <label for="..."> targets the (sibling/cousin) input by id;
+    // descendant lookup is only the fallback.
+    Input := nil;
+    ForId := GetAttr('for', '');
+    if (ForId <> '') and (FDoc is TPixieDocument) then
+      Input := TPixieDocument(FDoc).GetElementById(ForId);
+    if Input = nil then
+      Input := FindFirstInput(Self);
     if Input is TPixieElCheckbox then
       TPixieElCheckbox(Input).Toggle
     else if Input is TPixieElRadio then
@@ -674,7 +683,8 @@ begin
   if Label_ <> '' then
   begin
     TextW := Cv.MeasureText(Label_, FCss.Font);
-    TextX := BX + (BW - TextW) / 2;
+    // Honour text-indent — used as the a11y hack for icon-only buttons.
+    TextX := BX + (BW - TextW) / 2 + FCss.CssTextIndent.CalcPercent(BW);
     TextY := BY + (BH - FCss.FontMetrics.Height) / 2;
 
     Cv.DrawText(Label_, FCss.Font, TextColor,
