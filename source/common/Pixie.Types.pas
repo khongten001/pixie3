@@ -547,6 +547,7 @@ const
   SizeModeNormal      = $00;
   SizeModeExactWidth  = $01;
   SizeModeExactHeight = $02;
+  SizeModeExactEither = SizeModeExactWidth or SizeModeExactHeight;
   SizeModeContent     = $04;
 
   // Width/height predefined keyword indices (match AddLengthProperty

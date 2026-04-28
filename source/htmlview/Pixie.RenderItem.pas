@@ -702,10 +702,14 @@ var
   Fmt: TPixieFormattingContext;
 begin
   // CSS Sizing 3: percentages on margin/padding/border resolve to zero
-  // during intrinsic (min/max-content) sizing.
+  // during intrinsic (min/max-content) sizing. In SizeModeExact*
+  // CbContext.Width holds the element's own exact size (not the parent
+  // CB width), so re-resolving percentages against it would use the
+  // wrong base; preserve the values computed during the prior non-exact
+  // pass that set them from the actual parent CB.
   if (CbContext.SizeMode and SizeModeContent) <> 0 then
     CalcOutlines(0)
-  else
+  else if (CbContext.SizeMode and SizeModeExactEither) = 0 then
     CalcOutlines(CbContext.Width.Value);
 
   FPos.Clear;
