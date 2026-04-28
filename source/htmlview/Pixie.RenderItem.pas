@@ -781,7 +781,8 @@ begin
   Result := 0;
   if (FElement.Css.Display in [displayBlock, displayTable,
       displayFlex, displayInlineFlex,
-      displayGrid, displayInlineGrid]) and
+      displayGrid, displayInlineGrid,
+      displayFlowRoot]) and
      (FElement.Css.ElPosition <> epAbsolute) and
      (FElement.Css.Float_ = efNone) then
   begin
