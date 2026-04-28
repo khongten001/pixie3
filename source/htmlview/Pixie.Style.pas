@@ -2131,6 +2131,23 @@ begin
     Exit;
   end;
 
+  // aspect-ratio: <number> | <number> / <number> | auto
+  // Stored as a Single (width / height); 0 means unset/auto.
+  if Name = Ord(psid_aspect_ratio) then
+  begin
+    if (Val <> nil) and (Val.TokenType = cssTokenNumber) and (Val.Number > 0) then
+      AddParsedProperty(Name, TPixiePropertyValue.FromFloat(Val.Number, Important))
+    else if (Tokens.Count = 3) and
+            (Tokens[0].TokenType = cssTokenNumber) and
+            (Tokens[0].Number > 0) and
+            (Tokens[1].TokenType = Ord('/')) and
+            (Tokens[2].TokenType = cssTokenNumber) and
+            (Tokens[2].Number > 0) then
+      AddParsedProperty(Name, TPixiePropertyValue.FromFloat(
+        Tokens[0].Number / Tokens[2].Number, Important));
+    Exit;
+  end;
+
   if Name = Ord(psid_flex_basis) then
   begin
     AddLengthProperty(Name, Val, FlexBasisStrings, clfLengthPercentage or clfPositive, Important);

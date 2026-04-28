@@ -113,6 +113,7 @@ type
     FOpacity: Single;
     FFlexGrow: Single;
     FFlexShrink: Single;
+    FAspectRatio: Single;  // 0 = auto/unset; otherwise width / height
     FTextDecorationLine: Integer;
     FOrder: Integer;
 
@@ -241,6 +242,7 @@ type
 
     // Float/integer properties
     property Opacity: Single read FOpacity write FOpacity;
+    property AspectRatio: Single read FAspectRatio write FAspectRatio;
     property FlexGrow: Single read FFlexGrow write FFlexGrow;
     property FlexShrink: Single read FFlexShrink write FFlexShrink;
     property TextDecorationLine: Integer read FTextDecorationLine write FTextDecorationLine;
@@ -458,6 +460,7 @@ begin
   FOpacity := 1;
   FFlexGrow := 0;
   FFlexShrink := 1;
+  FAspectRatio := 0;  // 0 = auto/unset
   FTextDecorationLine := TextDecorationLineNone;
   FTextDecorationStyle := tdsSolid;
   FTextEmphasisPosition := TextEmphasisPositionOver;
@@ -1465,6 +1468,10 @@ begin
   // 18a. Opacity
   FOpacity := Tag.GetPropertyFloat(Ord(psid_opacity), False, 1,
     PtrUInt(@FOpacity) - PtrUInt(Self));
+
+  // 18b. Aspect-ratio (0 = unset/auto)
+  FAspectRatio := Tag.GetPropertyFloat(Ord(psid_aspect_ratio), False, 0,
+    PtrUInt(@FAspectRatio) - PtrUInt(Self));
 
   // 19. Background
   ComputeBackground(El, Doc);

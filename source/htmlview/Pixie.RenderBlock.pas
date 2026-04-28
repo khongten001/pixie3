@@ -281,6 +281,14 @@ begin
   else if FPos.Height < 0 then
     FPos.Height := 0;
 
+  // CSS Sizing 4 § 3: aspect-ratio derives the missing dimension when
+  // width is definite and height is auto. Computed after the explicit
+  // height has been applied so an explicit `height` still wins, but
+  // before max-height clamping (which the derived size must still respect).
+  if (SrcEl.Css.AspectRatio > 0) and
+     SrcEl.Css.CssHeight.IsPredefined and (FPos.Width > 0) then
+    FPos.Height := FPos.Width / SrcEl.Css.AspectRatio;
+
   // Fix height with max-height
   if SelfSize.MaxHeight.ValueType <> cbcNone then
   begin
