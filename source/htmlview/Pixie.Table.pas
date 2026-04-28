@@ -122,6 +122,7 @@ type
     procedure DistributeMaxWidth(AWidth: TPixiePixel; Start, End_: Integer);
     procedure DistributeMinWidth(AWidth: TPixiePixel; Start, End_: Integer);
     procedure DistributeWidth(AWidth: TPixiePixel; Start, End_: Integer);
+    procedure DistributeBeyondMax(AWidth: TPixiePixel; Start, End_: Integer);
     function CalcTableWidth(BlockWidth: TPixiePixel; IsAuto: Boolean;
       out MinTableWidth, MaxTableWidth: TPixiePixel): TPixiePixel;
     procedure CalcHorizontalPositions(const TableBorders: TPixieMargins;
@@ -614,6 +615,52 @@ begin
   end;
 end;
 
+// Spread excess width across auto columns by MaxWidth ratio. Without
+// this, a rigid auto column (MaxWidth == MinWidth, e.g. a cell holding
+// a single image with no break opportunity) would never grow past its
+// content size, while flexible neighbours hog all remaining space.
+procedure TPixieTableGrid.DistributeBeyondMax(AWidth: TPixiePixel;
+  Start, End_: Integer);
+var
+  Col, LastAuto: Integer;
+  ColP: PPixieTableColumn;
+  TotalMax, Add, AddedWidth: TPixiePixel;
+begin
+  if not ((Start >= 0) and (Start < FColsCount) and
+          (End_ >= 0) and (End_ < FColsCount)) then
+    Exit;
+
+  TotalMax := 0;
+  LastAuto := -1;
+  for Col := Start to End_ do
+    if FColumns[Col].CssWidth.IsPredefined then
+    begin
+      LastAuto := Col;
+      TotalMax := TotalMax + FColumns[Col].MaxWidth;
+    end;
+
+  if (LastAuto < 0) or (TotalMax <= 0) then
+  begin
+    DistributeWidth(AWidth, Start, End_);
+    Exit;
+  end;
+
+  AddedWidth := 0;
+  for Col := Start to End_ do
+    if FColumns[Col].CssWidth.IsPredefined then
+    begin
+      Add := AWidth * (FColumns[Col].MaxWidth / TotalMax);
+      ColP := FColumns.Ptr(Col);
+      ColP^.Width := ColP^.Width + Add;
+      AddedWidth := AddedWidth + Add;
+    end;
+  if AddedWidth < AWidth then
+  begin
+    ColP := FColumns.Ptr(LastAuto);
+    ColP^.Width := ColP^.Width + (AWidth - AddedWidth);
+  end;
+end;
+
 function TPixieTableGrid.CalcTableWidth(BlockWidth: TPixiePixel; IsAuto: Boolean;
   out MinTableWidth, MaxTableWidth: TPixiePixel): TPixiePixel;
 var
@@ -676,8 +723,10 @@ begin
         Result := CurWidth;
         Exit;
       end;
-    end;
-    DistributeWidth(BlockWidth - CurWidth, 0, FColsCount - 1);
+      DistributeBeyondMax(BlockWidth - CurWidth, 0, FColsCount - 1);
+    end
+    else
+      DistributeWidth(BlockWidth - CurWidth, 0, FColsCount - 1);
     CurWidth := 0;
     for Col := 0 to FColsCount - 1 do
       CurWidth := CurWidth + FColumns[Col].Width;
