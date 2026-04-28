@@ -577,6 +577,23 @@ begin
   for I := 0 to Items.Count - 1 do
   begin
     Item := Items[I];
+    // <br> as a flex child forces a new flex line and is itself dropped
+    // (matches Chrome — strict spec wraps the run + <br> + run into one
+    // anonymous flex item with internal inline formatting; the visible
+    // effect is the same).
+    if (TPixieRenderItem(Item.El).SrcEl <> nil) and
+       TPixieRenderItem(Item.El).SrcEl.IsBreak then
+    begin
+      if Line.Items.Count > 0 then
+      begin
+        Result.Add(Line);
+        Line := TPixieFlexLine.Create(ReverseMain, ReverseCross);
+        Line.MainGap := MainGap;
+      end;
+      Items.OwnsObjects := True;
+      Items[I] := nil;
+      Continue;
+    end;
     if (Line.Items.Count > 0) and (not SingleLine) and
        (Line.MainSize + MainGap + Item.MainSize > ContainerMainSize) then
     begin
