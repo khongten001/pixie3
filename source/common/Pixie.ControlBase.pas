@@ -79,23 +79,20 @@ end;
 // ---------------------------------------------------------------------------
 
 function TPixieControlBase.GetScaleFactor: Single;
-{$IFDEF MSWINDOWS}
 var
   F: TCustomForm;
-{$ENDIF}
 begin
-  {$IFDEF MSWINDOWS}
+  // Layout scale is PPI/96 on every widgetset because (PPI * CanvasScaleFactor)
+  // is the unified effective DPI. Each widgetset splits fractional display
+  // scaling differently between PPI and CanvasScaleFactor (e.g. GTK3 reports
+  // PPI=144/CSF=1.0, Qt5/6 reports PPI=96/CSF=1.5), but the product is the
+  // same and PPI/96 yields the correct layout multiplier regardless: the
+  // canvas-level CanvasScaleFactor handles the rest of the upscale.
   F := GetParentForm(Self);
   if F <> nil then
     Result := F.PixelsPerInch / 96
   else
     Result := Screen.PixelsPerInch / 96;
-  {$ELSE}
-  // Non-Windows: ClientWidth/ClientHeight are already in logical points,
-  // so no DPI compensation is needed for layout. The backing buffer density
-  // (Retina 2x etc.) is handled separately via SetViewSize's ACanvasScale.
-  Result := 1.0;
-  {$ENDIF}
 end;
 
 function TPixieControlBase.GetBackgroundColor: TPixieWebColor;
