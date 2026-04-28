@@ -147,7 +147,11 @@ begin
 
   Ws := SrcEl.Css.WhiteSpace;
   FIterSkipSpaces := (Ws = wsNormal) or (Ws = wsNowrap) or (Ws = wsPreLine);
-  FIterWasSpace := False;
+  // CSS Text 3: white space at the beginning of an inline formatting
+  // context is removed. Seed FIterWasSpace so a leading whitespace-only
+  // text node is dropped (otherwise it creates a phantom line box that
+  // breaks vertical-align: middle on table-cells).
+  FIterWasSpace := FIterSkipSpaces;
   FIterSelfSize := SelfSize;
   FIterFmtCtx := FmtCtx;
 
