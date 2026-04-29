@@ -290,13 +290,12 @@ end;
 
 procedure TMainForm.CreateTagBarTab;
 var
-  ScrollBox: TScrollBox;
   Y: Single;
 
   function AddLabel(const ACaption: string): TLabel;
   begin
     Result := TLabel.Create(Self);
-    Result.Parent := ScrollBox;
+    Result.Parent := TagBarLayout;
     Result.Align := TAlignLayout.Top;
     Result.Position.Y := Y;
     Result.Text := ACaption;
@@ -310,7 +309,7 @@ var
   function AddBar(AOptions: TPixieTagBarOptions): TPixieTagBar;
   begin
     Result := TPixieTagBar.Create(Self);
-    Result.Parent := ScrollBox;
+    Result.Parent := TagBarLayout;
     Result.Align := TAlignLayout.Top;
     Result.Position.Y := Y;
     Result.ShowBorder := True;
@@ -361,11 +360,6 @@ begin
   ChkTagAutoHeight.Text := 'Auto Height';
   ChkTagAutoHeight.IsChecked := True;
   ChkTagAutoHeight.OnChange := TagBarAutoHeightChange;
-
-  // Scrollable area for tag bars
-  ScrollBox := TScrollBox.Create(TagBarLayout);
-  ScrollBox.Parent := TagBarLayout;
-  ScrollBox.Align := TAlignLayout.Client;
 
   Y := 4;
 

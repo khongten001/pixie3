@@ -11,7 +11,7 @@ interface
 
 uses
   SysUtils, Classes, Math, DateUtils, Generics.Collections,
-  Pixie.Types, Pixie.WebColor, Pixie.Canvas,
+  Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Canvas,
   Pixie.TagBar.Colors, Pixie.TagBar.Render;
 
 type
@@ -42,6 +42,10 @@ type
 
   { Inline editing mode }
   TPixieTagEditMode = (temNone, temAddNew, temRename);
+
+  { Scrolling mode }
+  TPixieTagBarScrollMode = (smNone, smVertical, smHorizontal, smAuto);
+  TPixieTagBarScrollAxis = (saHorizontal, saVertical);
 
   { Layout record — position and metrics of each rendered pill }
   TPixieTagPillLayout = record
@@ -97,8 +101,16 @@ const
   tbVK_RIGHT  = 39;
   tbVK_HOME   = 36;
   tbVK_END    = 35;
+  tbVK_PRIOR  = 33;
+  tbVK_NEXT   = 34;
   tbVK_SPACE  = 32;
   tbVK_F2     = 113;
+
+  { Scrollbar dimensions }
+  tbScrollbarWidth     = 4;
+  tbScrollbarMargin    = 2;
+  tbScrollbarMinThumb  = 16;
+  tbScrollWheelStep    = 40;
 
 type
   { TPixieTagBarCore }
@@ -136,7 +148,16 @@ type
     FLayout: TPixieTagLayoutList;
     FLayoutValid: Boolean;
     FContentHeight: Single;
+    FContentWidth: Single;
     FUpdatingHeight: Boolean;
+
+    // Scrolling
+    FScrollMode: TPixieTagBarScrollMode;
+    FScrollX: Single;
+    FScrollY: Single;
+    FScrollDragging: Boolean;
+    FScrollDragAxis: TPixieTagBarScrollAxis;
+    FScrollDragOffset: Single;
 
     // Interaction
     FHoverIndex: Integer;
@@ -176,6 +197,24 @@ type
     function NextPaletteColor: TPixieWebColor;
     function FindTagIndex(ID: Integer): Integer;
 
+    // Scrolling
+    function EffectiveScrollMode: TPixieTagBarScrollMode;
+    function ViewWidth: Single;
+    function ViewHeight: Single;
+    function ViewExtent(Axis: TPixieTagBarScrollAxis): Single;
+    function ContentExtent(Axis: TPixieTagBarScrollAxis): Single;
+    function MaxScroll(Axis: TPixieTagBarScrollAxis): Single;
+    function HasScrollbar(Axis: TPixieTagBarScrollAxis): Boolean;
+    function ScrollOffset(Axis: TPixieTagBarScrollAxis): Single;
+    procedure SetScrollOffset(Axis: TPixieTagBarScrollAxis; Value: Single);
+    procedure ClampScroll;
+    procedure ScrollBy(DX, DY: Single);
+    procedure GetScrollThumb(Axis: TPixieTagBarScrollAxis;
+      out TPos, TSize: Single);
+    function HitScrollbar(Axis: TPixieTagBarScrollAxis; MX, MY: Integer;
+      out OnThumb: Boolean): Boolean;
+    procedure ScrollPage(Axis: TPixieTagBarScrollAxis; Forward: Boolean);
+
     // Editing
     procedure BeginEdit(Mode: TPixieTagEditMode; TagIndex: Integer);
     procedure CommitEdit;
@@ -192,6 +231,7 @@ type
     procedure SetEmptyMessage(const Value: string);
     function ShowEmptyMessage: Boolean;
     procedure SetFontSize(Value: Single);
+    procedure SetScrollMode(Value: TPixieTagBarScrollMode);
   public
     { Host callbacks — set by wrapper }
     OnHostInvalidate: TPixieTagBarHostNotify;
@@ -216,6 +256,7 @@ type
     procedure HandleMouseUp(IsLeft: Boolean; X, Y: Integer);
     procedure HandleMouseMove(X, Y: Integer);
     procedure HandleMouseLeave;
+    function HandleMouseWheel(WheelDelta: Integer; ShiftDown: Boolean): Boolean;
     function HandleKeyDown(var Key: Word; Shift: TShiftState): Boolean;
     function HandleCharInput(const Ch: string): Boolean;
     procedure HandleCaretTimer;
@@ -251,6 +292,8 @@ type
     property Options: TPixieTagBarOptions read FOptions write SetOptions;
     property TagShape: TPixieTagShape read FTagShape write SetTagShape;
     property AutoHeight: Boolean read FAutoHeight write SetAutoHeight;
+    property ScrollMode: TPixieTagBarScrollMode
+      read FScrollMode write SetScrollMode;
     property FontFamily: string read FFontFamily write SetFontFamily;
     property FontSize: Single read FFontSize write SetFontSize;
     property ShowBorder: Boolean read FShowBorder write FShowBorder;
@@ -305,6 +348,14 @@ begin
   FLayoutValid := False;
   FUpdatingHeight := False;
   FContentHeight := 0;
+  FContentWidth := 0;
+
+  FScrollMode := smAuto;
+  FScrollX := 0;
+  FScrollY := 0;
+  FScrollDragging := False;
+  FScrollDragAxis := saVertical;
+  FScrollDragOffset := 0;
 
   FHoverIndex := -1;
   FHoverZone := thzNone;
@@ -442,14 +493,16 @@ function TPixieTagBarCore.LayoutHitTest(MX, MY: Integer;
 var
   I: Integer;
   L: TPixieTagPillLayout;
-  LocalX, LocalY: Single;
+  WX, WY, LocalX, LocalY: Single;
 begin
   Zone := thzNone;
+  WX := MX + FScrollX;
+  WY := MY + FScrollY;
   for I := FLayout.Count - 1 downto 0 do
   begin
     L := FLayout[I];
-    LocalX := MX - L.X;
-    LocalY := MY - L.Y;
+    LocalX := WX - L.X;
+    LocalY := WY - L.Y;
     Zone := HitTestTagPill(LocalX, LocalY, L.Metrics);
     if Zone <> thzNone then
       Exit(I);
@@ -476,6 +529,174 @@ begin
 end;
 
 // =========================================================================
+// Scrolling helpers
+// =========================================================================
+
+function TPixieTagBarCore.ViewWidth: Single;
+begin
+  if Assigned(OnHostGetViewWidth) then
+    Result := OnHostGetViewWidth
+  else
+    Result := 300;
+end;
+
+function TPixieTagBarCore.ViewHeight: Single;
+begin
+  if Assigned(OnHostGetViewHeight) then
+    Result := OnHostGetViewHeight
+  else
+    Result := 36;
+end;
+
+function TPixieTagBarCore.EffectiveScrollMode: TPixieTagBarScrollMode;
+var
+  PillH: Single;
+begin
+  if FAutoHeight then
+    Exit(smNone);
+  if FScrollMode = smAuto then
+  begin
+    PillH := GetPillHeight;
+    if (PillH > 0) and (ViewHeight < PillH * 1.5) then
+      Result := smHorizontal
+    else
+      Result := smVertical;
+  end
+  else
+    Result := FScrollMode;
+end;
+
+function TPixieTagBarCore.ViewExtent(Axis: TPixieTagBarScrollAxis): Single;
+begin
+  if Axis = saVertical then
+    Result := ViewHeight
+  else
+    Result := ViewWidth;
+end;
+
+function TPixieTagBarCore.ContentExtent(Axis: TPixieTagBarScrollAxis): Single;
+begin
+  if Axis = saVertical then
+    Result := FContentHeight
+  else
+    Result := FContentWidth;
+end;
+
+function TPixieTagBarCore.MaxScroll(Axis: TPixieTagBarScrollAxis): Single;
+var
+  Mode: TPixieTagBarScrollMode;
+begin
+  Mode := EffectiveScrollMode;
+  if ((Axis = saVertical) and (Mode = smVertical)) or
+     ((Axis = saHorizontal) and (Mode = smHorizontal)) then
+    Result := Max(0, ContentExtent(Axis) - ViewExtent(Axis))
+  else
+    Result := 0;
+end;
+
+function TPixieTagBarCore.HasScrollbar(Axis: TPixieTagBarScrollAxis): Boolean;
+begin
+  Result := MaxScroll(Axis) > 0.5;
+end;
+
+function TPixieTagBarCore.ScrollOffset(Axis: TPixieTagBarScrollAxis): Single;
+begin
+  if Axis = saVertical then Result := FScrollY else Result := FScrollX;
+end;
+
+procedure TPixieTagBarCore.SetScrollOffset(Axis: TPixieTagBarScrollAxis;
+  Value: Single);
+begin
+  if Axis = saVertical then FScrollY := Value else FScrollX := Value;
+end;
+
+procedure TPixieTagBarCore.ClampScroll;
+var
+  MaxX, MaxY: Single;
+begin
+  MaxX := MaxScroll(saHorizontal);
+  MaxY := MaxScroll(saVertical);
+  FScrollX := EnsureRange(FScrollX, 0, MaxX);
+  FScrollY := EnsureRange(FScrollY, 0, MaxY);
+end;
+
+procedure TPixieTagBarCore.ScrollBy(DX, DY: Single);
+var
+  OldX, OldY: Single;
+begin
+  OldX := FScrollX;
+  OldY := FScrollY;
+  FScrollX := FScrollX + DX;
+  FScrollY := FScrollY + DY;
+  ClampScroll;
+  if (FScrollX <> OldX) or (FScrollY <> OldY) then
+    if Assigned(OnHostInvalidate) then
+      OnHostInvalidate;
+end;
+
+procedure TPixieTagBarCore.GetScrollThumb(Axis: TPixieTagBarScrollAxis;
+  out TPos, TSize: Single);
+var
+  Track, Content, View, Off, MaxOff: Single;
+begin
+  View := ViewExtent(Axis);
+  Track := View - tbScrollbarMargin * 2;
+  Content := ContentExtent(Axis);
+  if Content <= 0 then
+  begin
+    TPos := tbScrollbarMargin;
+    TSize := Track;
+    Exit;
+  end;
+  TSize := Track * (View / Content);
+  if TSize < tbScrollbarMinThumb then TSize := tbScrollbarMinThumb;
+  if TSize > Track then TSize := Track;
+  MaxOff := MaxScroll(Axis);
+  Off := ScrollOffset(Axis);
+  if MaxOff > 0 then
+    TPos := tbScrollbarMargin + (Off / MaxOff) * (Track - TSize)
+  else
+    TPos := tbScrollbarMargin;
+end;
+
+function TPixieTagBarCore.HitScrollbar(Axis: TPixieTagBarScrollAxis;
+  MX, MY: Integer; out OnThumb: Boolean): Boolean;
+var
+  Gutter, TPos, TSize, MainCoord: Single;
+begin
+  OnThumb := False;
+  if not HasScrollbar(Axis) then Exit(False);
+  if Axis = saVertical then
+  begin
+    Gutter := ViewWidth - tbScrollbarWidth - tbScrollbarMargin;
+    Result := MX >= Gutter - tbScrollbarMargin;
+    MainCoord := MY;
+  end
+  else
+  begin
+    Gutter := ViewHeight - tbScrollbarWidth - tbScrollbarMargin;
+    Result := MY >= Gutter - tbScrollbarMargin;
+    MainCoord := MX;
+  end;
+  if not Result then Exit;
+  GetScrollThumb(Axis, TPos, TSize);
+  OnThumb := (MainCoord >= TPos) and (MainCoord <= TPos + TSize);
+end;
+
+procedure TPixieTagBarCore.ScrollPage(Axis: TPixieTagBarScrollAxis;
+  Forward: Boolean);
+var
+  Step: Single;
+begin
+  Step := ViewExtent(Axis);
+  if not Forward then Step := -Step;
+  if Axis = saVertical then
+    ScrollBy(0, Step)
+  else
+    ScrollBy(Step, 0);
+end;
+
+// =========================================================================
 // Layout engine
 // =========================================================================
 
@@ -483,18 +704,20 @@ procedure TPixieTagBarCore.PerformLayout;
 var
   I: Integer;
   Tag: TPixieTagDef;
-  PillH, Pad, SpH, SpV, MaxW, CurX, CurY, Scale: Single;
+  PillH, Pad, SpH, SpV, MaxW, CurX, CurY, Scale, MaxX: Single;
   PillText: string;
   PillOpts: TPixieTagPillOptions;
   M: TPixieTagPillMetrics;
   L: TPixieTagPillLayout;
   NewH: Integer;
+  NoWrap: Boolean;
 begin
   FLayout.Clear;
   if (FCanvas = nil) or (FFont = 0) then
   begin
     FLayoutValid := True;
     FContentHeight := 0;
+    FContentWidth := 0;
     Exit;
   end;
 
@@ -511,8 +734,12 @@ begin
   else
     MaxW := 300;
 
+  // In horizontal-scroll mode pills never wrap to a second row
+  NoWrap := EffectiveScrollMode = smHorizontal;
+
   CurX := Pad;
   CurY := Pad;
+  MaxX := Pad;
 
   FEmptyMessageWidth := 0;
   if ShowEmptyMessage then
@@ -544,8 +771,9 @@ begin
     M := MeasureTagPill(FCanvas, FFont, PillText,
       Tag.LeadIcon, Tag.TrailIcon, PillH, PillOpts);
 
-    // Wrap to next row if needed
-    if (CurX + M.TotalWidth > MaxW - Pad) and (CurX > Pad + 0.5) then
+    // Wrap to next row if needed (suppressed in horizontal-scroll mode)
+    if not NoWrap and
+       (CurX + M.TotalWidth > MaxW - Pad) and (CurX > Pad + 0.5) then
     begin
       CurX := Pad;
       CurY := CurY + PillH + SpV;
@@ -558,7 +786,9 @@ begin
     L.Metrics := M;
     FLayout.Add(L);
 
-    CurX := CurX + M.TotalWidth + SpH;
+    CurX := CurX + M.TotalWidth;
+    if CurX > MaxX then MaxX := CurX;
+    CurX := CurX + SpH;
   end;
 
   // Add-new edit pill
@@ -574,7 +804,8 @@ begin
       M.ContentRect.Width := M.TotalWidth;
     end;
 
-    if (CurX + M.TotalWidth > MaxW - Pad) and (CurX > Pad + 0.5) then
+    if not NoWrap and
+       (CurX + M.TotalWidth > MaxW - Pad) and (CurX > Pad + 0.5) then
     begin
       CurX := Pad;
       CurY := CurY + PillH + SpV;
@@ -586,7 +817,9 @@ begin
     L.IsAddButton := False;
     L.Metrics := M;
     FLayout.Add(L);
-    CurX := CurX + M.TotalWidth + SpH;
+    CurX := CurX + M.TotalWidth;
+    if CurX > MaxX then MaxX := CurX;
+    CurX := CurX + SpH;
   end;
 
   // "+" add button
@@ -595,7 +828,8 @@ begin
     PillOpts := [tpoIsAddButton];
     M := MeasureTagPill(FCanvas, FFont, '+', '', '', PillH, PillOpts, FTagShape);
 
-    if (CurX + M.TotalWidth > MaxW - Pad) and (CurX > Pad + 0.5) then
+    if not NoWrap and
+       (CurX + M.TotalWidth > MaxW - Pad) and (CurX > Pad + 0.5) then
     begin
       CurX := Pad;
       CurY := CurY + PillH + SpV;
@@ -607,11 +841,14 @@ begin
     L.IsAddButton := True;
     L.Metrics := M;
     FLayout.Add(L);
-    CurX := CurX + M.TotalWidth + SpH;
+    CurX := CurX + M.TotalWidth;
+    if CurX > MaxX then MaxX := CurX;
   end;
 
   FContentHeight := CurY + PillH + Pad;
+  FContentWidth := MaxX + Pad;
   FLayoutValid := True;
+  ClampScroll;
 
   // Auto-height adjustment
   if FAutoHeight and not FUpdatingHeight then
@@ -641,7 +878,7 @@ procedure TPixieTagBarCore.HandlePaint(APaintHandle: PtrUInt);
 var
   I: Integer;
   L: TPixieTagPillLayout;
-  PillH, CaretX, CaretY1, CaretY2: Single;
+  PillH, CaretX, CaretY1, CaretY2, OX, OY: Single;
   State: TPixieTagPillState;
   BaseColor: TPixieWebColor;
   PillText: string;
@@ -653,6 +890,10 @@ var
   ScaleFactor, CanvasScale: Single;
   BgColor: TPixieWebColor;
   HostFocused: Boolean;
+  ClipPos: TPixiePosition;
+  ClipRadius: TPixieBorderRadiuses;
+  ThumbX, ThumbY, ThumbW, ThumbH, GutterX, GutterY: Single;
+  TrackColor, ThumbColor: TPixieWebColor;
 begin
   if FCanvas = nil then Exit;
 
@@ -699,90 +940,127 @@ begin
         FPadding * ScaleFactor, (ViewH - FFontMetrics.Height) / 2,
         FEmptyMessageWidth, FFontMetrics.Height);
 
-    // Draw pills
-    for I := 0 to FLayout.Count - 1 do
-    begin
-      L := FLayout[I];
+    // Clip pills + caret + focus ring to the viewport so scrolled content
+    // does not draw under the border or the scrollbar gutter.
+    OX := -FScrollX;
+    OY := -FScrollY;
+    ClipPos := TPixiePosition.Create(0, 0, ViewW, ViewH);
+    ClipRadius.Init;
+    FCanvas.SaveState;
+    try
+      FCanvas.SetClipRect(ClipPos, ClipRadius);
 
-      if L.IsAddButton then
+      // Draw pills
+      for I := 0 to FLayout.Count - 1 do
       begin
-        BaseColor := TPixieWebColor.Create($60, $7D, $8B);
-        PillText := '+';
-        PillLeadIcon := '';
-        PillTrailIcon := '';
-        PillOpts := [tpoIsAddButton];
-        if I = FHoverIndex then
-          State := tpsHover
-        else
-          State := tpsRest;
-      end
-      else if (L.TagIndex = -1) and (FEditMode = temAddNew) then
-      begin
-        BaseColor := FEditColor;
-        PillText := FEditText;
-        PillLeadIcon := '';
-        PillTrailIcon := '';
-        PillOpts := [tpoEditing];
-        State := tpsEditing;
-        EditIdx := I;
-      end
-      else if L.TagIndex >= 0 then
-      begin
-        BaseColor := FTags[L.TagIndex].Color;
-        PillLeadIcon := FTags[L.TagIndex].LeadIcon;
-        PillTrailIcon := FTags[L.TagIndex].TrailIcon;
-        if (FEditMode = temRename) and (L.TagIndex = FEditTagIndex) then
+        L := FLayout[I];
+
+        if L.IsAddButton then
         begin
+          BaseColor := TPixieWebColor.Create($60, $7D, $8B);
+          PillText := '+';
+          PillLeadIcon := '';
+          PillTrailIcon := '';
+          PillOpts := [tpoIsAddButton];
+          if I = FHoverIndex then
+            State := tpsHover
+          else
+            State := tpsRest;
+        end
+        else if (L.TagIndex = -1) and (FEditMode = temAddNew) then
+        begin
+          BaseColor := FEditColor;
           PillText := FEditText;
-          PillOpts := GetPillOptions(False) + [tpoEditing];
+          PillLeadIcon := '';
+          PillTrailIcon := '';
+          PillOpts := [tpoEditing];
+          State := tpsEditing;
           EditIdx := I;
         end
-        else
+        else if L.TagIndex >= 0 then
         begin
-          PillText := FTags[L.TagIndex].Text;
-          PillOpts := GetPillOptions(False);
-        end;
-        State := GetPillState(L.TagIndex, I);
-      end
-      else
-        Continue;
+          BaseColor := FTags[L.TagIndex].Color;
+          PillLeadIcon := FTags[L.TagIndex].LeadIcon;
+          PillTrailIcon := FTags[L.TagIndex].TrailIcon;
+          if (FEditMode = temRename) and (L.TagIndex = FEditTagIndex) then
+          begin
+            PillText := FEditText;
+            PillOpts := GetPillOptions(False) + [tpoEditing];
+            EditIdx := I;
+          end
+          else
+          begin
+            PillText := FTags[L.TagIndex].Text;
+            PillOpts := GetPillOptions(False);
+          end;
+          State := GetPillState(L.TagIndex, I);
+        end
+        else
+          Continue;
 
-      DrawTagPill(FCanvas, FFont, FFontMetrics, PillText,
-        PillLeadIcon, PillTrailIcon,
-        L.X, L.Y, PillH, BaseColor, BgColor, State, FTagShape, PillOpts,
-        L.Metrics);
+        DrawTagPill(FCanvas, FFont, FFontMetrics, PillText,
+          PillLeadIcon, PillTrailIcon,
+          L.X + OX, L.Y + OY, PillH, BaseColor, BgColor, State, FTagShape,
+          PillOpts, L.Metrics);
+      end;
+
+      // Caret
+      if (FEditMode <> temNone) and FEditCaretVisible and (EditIdx >= 0) then
+      begin
+        L := FLayout[EditIdx];
+        CaretX := L.X + OX + L.Metrics.TextX +
+          FCanvas.MeasureText(Copy(FEditText, 1, FEditCaretPos - 1), FFont);
+        CaretY1 := L.Y + OY + (PillH - FFontMetrics.Height) / 2;
+        CaretY2 := CaretY1 + FFontMetrics.Height;
+
+        if FEditMode = temAddNew then
+          BaseColor := FEditColor
+        else if (FEditTagIndex >= 0) and (FEditTagIndex < FTags.Count) then
+          BaseColor := FTags[FEditTagIndex].Color
+        else
+          BaseColor := TPixieWebColor.Black;
+
+        FCanvas.DrawLine(CaretX, CaretY1, CaretX, CaretY2,
+          PixieTagTextColor(BaseColor, False), 1.0);
+      end;
+
+      // Focus ring
+      HostFocused := False;
+      if Assigned(OnHostIsFocused) then
+        HostFocused := OnHostIsFocused;
+      if HostFocused and (FFocusIndex >= 0) and (FFocusIndex < FLayout.Count) then
+      begin
+        L := FLayout[FFocusIndex];
+        FocusColor := TPixieWebColor.Create($33, $99, $FF, $AA);
+        FCanvas.DrawRect(L.X + OX - 1, L.Y + OY - 1,
+          L.Metrics.TotalWidth + 2, PillH + 2, FocusColor, 1.5);
+      end;
+    finally
+      FCanvas.RestoreState;
     end;
 
-    // Caret
-    if (FEditMode <> temNone) and FEditCaretVisible and (EditIdx >= 0) then
+    // Scrollbars (overlay, drawn after clip is released)
+    if HasScrollbar(saVertical) then
     begin
-      L := FLayout[EditIdx];
-      CaretX := L.X + L.Metrics.TextX +
-        FCanvas.MeasureText(Copy(FEditText, 1, FEditCaretPos - 1), FFont);
-      CaretY1 := L.Y + (PillH - FFontMetrics.Height) / 2;
-      CaretY2 := CaretY1 + FFontMetrics.Height;
-
-      if FEditMode = temAddNew then
-        BaseColor := FEditColor
-      else if (FEditTagIndex >= 0) and (FEditTagIndex < FTags.Count) then
-        BaseColor := FTags[FEditTagIndex].Color
-      else
-        BaseColor := TPixieWebColor.Black;
-
-      FCanvas.DrawLine(CaretX, CaretY1, CaretX, CaretY2,
-        PixieTagTextColor(BaseColor, False), 1.0);
+      TrackColor := PixieScrollbarTrackColor(BgColor);
+      ThumbColor := PixieScrollbarThumbColor(BgColor);
+      GetScrollThumb(saVertical, ThumbY, ThumbH);
+      GutterX := ViewW - tbScrollbarWidth - tbScrollbarMargin;
+      FCanvas.FillRect(GutterX, tbScrollbarMargin,
+        tbScrollbarWidth, ViewH - tbScrollbarMargin * 2, TrackColor);
+      FCanvas.FillRoundedRect(GutterX, ThumbY,
+        tbScrollbarWidth, ThumbH, tbScrollbarWidth / 2, ThumbColor);
     end;
-
-    // Focus ring
-    HostFocused := False;
-    if Assigned(OnHostIsFocused) then
-      HostFocused := OnHostIsFocused;
-    if HostFocused and (FFocusIndex >= 0) and (FFocusIndex < FLayout.Count) then
+    if HasScrollbar(saHorizontal) then
     begin
-      L := FLayout[FFocusIndex];
-      FocusColor := TPixieWebColor.Create($33, $99, $FF, $AA);
-      FCanvas.DrawRect(L.X - 1, L.Y - 1,
-        L.Metrics.TotalWidth + 2, PillH + 2, FocusColor, 1.5);
+      TrackColor := PixieScrollbarTrackColor(BgColor);
+      ThumbColor := PixieScrollbarThumbColor(BgColor);
+      GetScrollThumb(saHorizontal, ThumbX, ThumbW);
+      GutterY := ViewH - tbScrollbarWidth - tbScrollbarMargin;
+      FCanvas.FillRect(tbScrollbarMargin, GutterY,
+        ViewW - tbScrollbarMargin * 2, tbScrollbarWidth, TrackColor);
+      FCanvas.FillRoundedRect(ThumbX, GutterY,
+        ThumbW, tbScrollbarWidth, tbScrollbarWidth / 2, ThumbColor);
     end;
 
     // 1px border around entire control
@@ -803,14 +1081,39 @@ var
   Zone: TPixieTagHitZone;
   L: TPixieTagPillLayout;
   TagIdx, TagID: Integer;
-  Allow: Boolean;
+  Allow, OnThumb: Boolean;
   ClickTime: TDateTime;
+  Axis: TPixieTagBarScrollAxis;
+  TPos, TSize, MainCoord: Single;
 begin
   if not IsLeft then Exit;
-  if tboReadOnly in FOptions then Exit;
 
   if Assigned(OnHostSetFocus) then
     OnHostSetFocus;
+
+  // Scrollbar interaction (active even when read-only)
+  for Axis := Low(TPixieTagBarScrollAxis) to High(TPixieTagBarScrollAxis) do
+    if HitScrollbar(Axis, X, Y, OnThumb) then
+    begin
+      GetScrollThumb(Axis, TPos, TSize);
+      if OnThumb then
+      begin
+        FScrollDragging := True;
+        FScrollDragAxis := Axis;
+        if Axis = saVertical then
+          FScrollDragOffset := Y - TPos
+        else
+          FScrollDragOffset := X - TPos;
+      end
+      else
+      begin
+        if Axis = saVertical then MainCoord := Y else MainCoord := X;
+        ScrollPage(Axis, MainCoord >= TPos);
+      end;
+      Exit;
+    end;
+
+  if tboReadOnly in FOptions then Exit;
 
   HitIdx := LayoutHitTest(X, Y, Zone);
   FPressedIndex := HitIdx;
@@ -885,6 +1188,14 @@ var
 begin
   if not IsLeft then Exit;
 
+  if FScrollDragging then
+  begin
+    FScrollDragging := False;
+    if Assigned(OnHostInvalidate) then
+      OnHostInvalidate;
+    Exit;
+  end;
+
   HitIdx := LayoutHitTest(X, Y, Zone);
 
   // Toggle check if same pill, zone is pill body, and check allowed
@@ -906,7 +1217,29 @@ procedure TPixieTagBarCore.HandleMouseMove(X, Y: Integer);
 var
   HitIdx: Integer;
   Zone: TPixieTagHitZone;
+  Track, TPos, TSize, NewThumb, NewScroll, MaxOff, MainCoord: Single;
 begin
+  if FScrollDragging then
+  begin
+    Track := ViewExtent(FScrollDragAxis) - tbScrollbarMargin * 2;
+    GetScrollThumb(FScrollDragAxis, TPos, TSize);
+    if FScrollDragAxis = saVertical then MainCoord := Y else MainCoord := X;
+    NewThumb := EnsureRange(MainCoord - FScrollDragOffset,
+      tbScrollbarMargin, tbScrollbarMargin + Track - TSize);
+    MaxOff := MaxScroll(FScrollDragAxis);
+    if (Track - TSize) > 0 then
+      NewScroll := (NewThumb - tbScrollbarMargin) / (Track - TSize) * MaxOff
+    else
+      NewScroll := 0;
+    if NewScroll <> ScrollOffset(FScrollDragAxis) then
+    begin
+      SetScrollOffset(FScrollDragAxis, NewScroll);
+      if Assigned(OnHostInvalidate) then
+        OnHostInvalidate;
+    end;
+    Exit;
+  end;
+
   HitIdx := LayoutHitTest(X, Y, Zone);
 
   if (HitIdx <> FHoverIndex) or (Zone <> FHoverZone) then
@@ -931,6 +1264,9 @@ end;
 
 procedure TPixieTagBarCore.HandleMouseLeave;
 begin
+  // Drop any in-flight thumb drag — MouseUp may not fire if the mouse
+  // leaves the control before release.
+  FScrollDragging := False;
   if FHoverIndex <> -1 then
   begin
     FHoverIndex := -1;
@@ -938,6 +1274,28 @@ begin
     if Assigned(OnHostInvalidate) then
       OnHostInvalidate;
   end;
+end;
+
+function TPixieTagBarCore.HandleMouseWheel(WheelDelta: Integer;
+  ShiftDown: Boolean): Boolean;
+var
+  Step: Single;
+  Axis: TPixieTagBarScrollAxis;
+begin
+  Result := False;
+  if EffectiveScrollMode = smNone then Exit;
+
+  Step := -(WheelDelta / 120) * tbScrollWheelStep;
+
+  // Shift inverts the active axis
+  if EffectiveScrollMode = smVertical then Axis := saVertical
+  else Axis := saHorizontal;
+  if ShiftDown then
+    if Axis = saVertical then Axis := saHorizontal else Axis := saVertical;
+
+  if MaxScroll(Axis) <= 0 then Exit;
+  if Axis = saVertical then ScrollBy(0, Step) else ScrollBy(Step, 0);
+  Result := True;
 end;
 
 // =========================================================================
@@ -1025,8 +1383,47 @@ begin
 
   // --- Navigation mode ---
   case Key of
+    tbVK_PRIOR:
+      if EffectiveScrollMode <> smNone then
+      begin
+        if EffectiveScrollMode = smHorizontal then
+          ScrollPage(saHorizontal, False)
+        else
+          ScrollPage(saVertical, False);
+        Result := True;
+      end;
+    tbVK_NEXT:
+      if EffectiveScrollMode <> smNone then
+      begin
+        if EffectiveScrollMode = smHorizontal then
+          ScrollPage(saHorizontal, True)
+        else
+          ScrollPage(saVertical, True);
+        Result := True;
+      end;
+    tbVK_HOME:
+      if (FScrollX <> 0) or (FScrollY <> 0) then
+      begin
+        ScrollBy(-FScrollX, -FScrollY);
+        Result := True;
+      end;
+    tbVK_END:
+      if (MaxScroll(saHorizontal) > 0) or (MaxScroll(saVertical) > 0) then
+      begin
+        ScrollBy(MaxScroll(saHorizontal) - FScrollX,
+          MaxScroll(saVertical) - FScrollY);
+        Result := True;
+      end;
     tbVK_LEFT:
-      if FFocusIndex > 0 then
+      if EffectiveScrollMode = smHorizontal then
+      begin
+        if MaxScroll(saHorizontal) > 0 then
+        begin
+          ScrollBy(-tbScrollWheelStep, 0);
+          Result := True;
+        end;
+      end
+      else if FFocusIndex > 0 then
       begin
         Dec(FFocusIndex);
         if Assigned(OnHostInvalidate) then
@@ -1034,7 +1431,15 @@ begin
         Result := True;
       end;
     tbVK_RIGHT:
-      if FFocusIndex < FLayout.Count - 1 then
+      if EffectiveScrollMode = smHorizontal then
+      begin
+        if MaxScroll(saHorizontal) > 0 then
+        begin
+          ScrollBy(tbScrollWheelStep, 0);
+          Result := True;
+        end;
+      end
+      else if FFocusIndex < FLayout.Count - 1 then
       begin
         Inc(FFocusIndex);
         if Assigned(OnHostInvalidate) then
@@ -1340,6 +1745,17 @@ begin
   if FAutoHeight <> Value then
   begin
     FAutoHeight := Value;
+    InvalidateLayout;
+  end;
+end;
+
+procedure TPixieTagBarCore.SetScrollMode(Value: TPixieTagBarScrollMode);
+begin
+  if FScrollMode <> Value then
+  begin
+    FScrollMode := Value;
+    FScrollX := 0;
+    FScrollY := 0;
     InvalidateLayout;
   end;
 end;

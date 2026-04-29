@@ -46,6 +46,8 @@ type
     procedure SetTagShape(Value: TPixieTagShape);
     function GetAutoHeight: Boolean;
     procedure SetAutoHeight(Value: Boolean);
+    function GetScrollMode: TPixieTagBarScrollMode;
+    procedure SetScrollMode(Value: TPixieTagBarScrollMode);
     function GetShowBorder: Boolean;
     procedure SetShowBorder(Value: Boolean);
     function GetBorderColor: TPixieWebColor;
@@ -79,6 +81,8 @@ type
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer); override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+      MousePos: TPoint): Boolean; override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -113,6 +117,8 @@ type
       default tsPill;
     property AutoHeight: Boolean read GetAutoHeight write SetAutoHeight
       default True;
+    property ScrollMode: TPixieTagBarScrollMode
+      read GetScrollMode write SetScrollMode default smAuto;
     property ShowBorder: Boolean read GetShowBorder write SetShowBorder
       default False;
     property FontFamily: string read GetFontFamily write SetFontFamily;
@@ -294,6 +300,14 @@ begin
   FCore.HandleMouseUp(Button = mbLeft, X, Y);
 end;
 
+function TPixieTagBar.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
+begin
+  Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
+  if Result then Exit;
+  Result := FCore.HandleMouseWheel(WheelDelta, ssShift in Shift);
+end;
+
 // =========================================================================
 // Keyboard handling
 // =========================================================================
@@ -372,6 +386,16 @@ end;
 procedure TPixieTagBar.SetAutoHeight(Value: Boolean);
 begin
   FCore.AutoHeight := Value;
+end;
+
+function TPixieTagBar.GetScrollMode: TPixieTagBarScrollMode;
+begin
+  Result := FCore.ScrollMode;
+end;
+
+procedure TPixieTagBar.SetScrollMode(Value: TPixieTagBarScrollMode);
+begin
+  FCore.ScrollMode := Value;
 end;
 
 function TPixieTagBar.GetShowBorder: Boolean;

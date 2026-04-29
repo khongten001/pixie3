@@ -184,7 +184,6 @@ end;
 
 procedure TMainForm.CreateTagBarTab;
 var
-  ScrollBox: TScrollBox;
   Lbl: TLabel;
   Y: Integer;
 begin
@@ -226,17 +225,11 @@ begin
   ChkTagAutoHeight.Checked := True;
   ChkTagAutoHeight.OnChange := @TagBarAutoHeightChange;
 
-  // --- ScrollBox for tag bars ---
-  ScrollBox := TScrollBox.Create(TabTagBar);
-  ScrollBox.Parent := TabTagBar;
-  ScrollBox.Align := alClient;
-  ScrollBox.BorderStyle := bsNone;
-
   Y := 4;
 
   // Editor
-  Lbl := TLabel.Create(ScrollBox);
-  Lbl.Parent := ScrollBox;
+  Lbl := TLabel.Create(TabTagBar);
+  Lbl.Parent := TabTagBar;
   Lbl.Align := alTop;
   Lbl.Top := Y;
   Lbl.Caption := 'Editor (full editing):';
@@ -248,7 +241,7 @@ begin
   Inc(Y, 24);
 
   TagBarEditor := TPixieTagBar.Create(Self);
-  TagBarEditor.Parent := ScrollBox;
+  TagBarEditor.Parent := TabTagBar;
   TagBarEditor.Align := alTop;
   TagBarEditor.Top := Y;
   TagBarEditor.Color := clWindow;
@@ -263,8 +256,8 @@ begin
   Inc(Y, 36);
 
   // Filter
-  Lbl := TLabel.Create(ScrollBox);
-  Lbl.Parent := ScrollBox;
+  Lbl := TLabel.Create(TabTagBar);
+  Lbl.Parent := TabTagBar;
   Lbl.Align := alTop;
   Lbl.Top := Y;
   Lbl.Caption := 'Filter (check only):';
@@ -276,7 +269,7 @@ begin
   Inc(Y, 24);
 
   TagBarFilter := TPixieTagBar.Create(Self);
-  TagBarFilter.Parent := ScrollBox;
+  TagBarFilter.Parent := TabTagBar;
   TagBarFilter.Align := alTop;
   TagBarFilter.Top := Y;
   TagBarFilter.Color := clWindow;
@@ -290,8 +283,8 @@ begin
   Inc(Y, 36);
 
   // Assign
-  Lbl := TLabel.Create(ScrollBox);
-  Lbl.Parent := ScrollBox;
+  Lbl := TLabel.Create(TabTagBar);
+  Lbl.Parent := TabTagBar;
   Lbl.Align := alTop;
   Lbl.Top := Y;
   Lbl.Caption := 'Assign (check + create):';
@@ -303,7 +296,7 @@ begin
   Inc(Y, 24);
 
   TagBarAssign := TPixieTagBar.Create(Self);
-  TagBarAssign.Parent := ScrollBox;
+  TagBarAssign.Parent := TabTagBar;
   TagBarAssign.Align := alTop;
   TagBarAssign.Top := Y;
   TagBarAssign.Color := clWindow;
@@ -317,8 +310,8 @@ begin
   Inc(Y, 36);
 
   // Display
-  Lbl := TLabel.Create(ScrollBox);
-  Lbl.Parent := ScrollBox;
+  Lbl := TLabel.Create(TabTagBar);
+  Lbl.Parent := TabTagBar;
   Lbl.Align := alTop;
   Lbl.Top := Y;
   Lbl.Caption := 'Display (read-only, checked tags only):';
@@ -330,7 +323,7 @@ begin
   Inc(Y, 24);
 
   TagBarDisplay := TPixieTagBar.Create(Self);
-  TagBarDisplay.Parent := ScrollBox;
+  TagBarDisplay.Parent := TabTagBar;
   TagBarDisplay.Align := alTop;
   TagBarDisplay.Top := Y;
   TagBarDisplay.Color := clWindow;
@@ -346,8 +339,8 @@ begin
   TagBarDisplay.CheckTag(TagBarDisplay.GetTag(4).ID, True);
   Inc(Y, 36);
 
-  Lbl := TLabel.Create(ScrollBox);
-  Lbl.Parent := ScrollBox;
+  Lbl := TLabel.Create(TabTagBar);
+  Lbl.Parent := TabTagBar;
   Lbl.Align := alTop;
   Lbl.Top := Y;
   Lbl.Caption := 'Settings (always checked, colour swatches, no toggle):';
@@ -359,7 +352,7 @@ begin
   Inc(Y, 24);
 
   TagBarSettings := TPixieTagBar.Create(Self);
-  TagBarSettings.Parent := ScrollBox;
+  TagBarSettings.Parent := TabTagBar;
   TagBarSettings.Align := alTop;
   TagBarSettings.Top := Y;
   TagBarSettings.Color := clWindow;

@@ -33,6 +33,11 @@ function PixieTagTextColor(const Base: TPixieWebColor;
 function PixieTagBorderColor(const Base: TPixieWebColor): TPixieWebColor;
 function PixieTagMutedTextColor(const Bg: TPixieWebColor): TPixieWebColor;
 
+{ Scrollbar colours — semi-transparent grey, dark on light backgrounds and
+  light on dark backgrounds }
+function PixieScrollbarThumbColor(const Bg: TPixieWebColor): TPixieWebColor;
+function PixieScrollbarTrackColor(const Bg: TPixieWebColor): TPixieWebColor;
+
 { Default palette — 8 well-separated hues }
 function PixieTagDefaultPalette: TPixieTagPaletteArray;
 
@@ -152,6 +157,22 @@ end;
 function PixieTagMutedTextColor(const Bg: TPixieWebColor): TPixieWebColor;
 begin
   Result := PixieTagBlend(TPixieWebColor.Black, Bg, 0.5);
+end;
+
+function PixieScrollbarThumbColor(const Bg: TPixieWebColor): TPixieWebColor;
+begin
+  if PixieTagLuminance(Bg) > 0.5 then
+    Result := TPixieWebColor.Create($80, $80, $80, $A0)
+  else
+    Result := TPixieWebColor.Create($D0, $D0, $D0, $A0);
+end;
+
+function PixieScrollbarTrackColor(const Bg: TPixieWebColor): TPixieWebColor;
+begin
+  if PixieTagLuminance(Bg) > 0.5 then
+    Result := TPixieWebColor.Create($80, $80, $80, $18)
+  else
+    Result := TPixieWebColor.Create($D0, $D0, $D0, $18);
 end;
 
 // ---------------------------------------------------------------------------
