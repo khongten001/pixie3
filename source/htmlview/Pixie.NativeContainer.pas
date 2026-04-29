@@ -276,6 +276,15 @@ begin
     Exit;
   end;
 
+  // Protocol-relative URL: assume https for local-file bases. Without this,
+  // "//host/..." falls through to LoadFromFile which Windows treats as UNC
+  // "\\host\..." and stalls ~10 s on SMB connection per missing resource.
+  if (Length(Src) >= 2) and (Src[1] = '/') and (Src[2] = '/') then
+  begin
+    Result := 'https:' + Src;
+    Exit;
+  end;
+
   // Local filesystem: absolute path — return as-is
   if (Length(Src) > 0) and
      ((Src[1] = '/') or (Src[1] = '\') or
