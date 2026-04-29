@@ -54,7 +54,7 @@ type
     function GetLastBaseline(AType: TPixieBaselineType): TPixiePixel;
 
     procedure ApplyMainAutoMargins; virtual; abstract;
-    function ApplyCrossAutoMargins(ACrossSize: TPixiePixel): Boolean; virtual; abstract;
+    function ApplyCrossAutoMargins(ACrossStart, ACrossSize: TPixiePixel): Boolean; virtual; abstract;
     procedure SetMainPosition(Pos: TPixiePixel); virtual; abstract;
     procedure SetCrossPosition(Pos: TPixiePixel); virtual; abstract;
     function GetElMainSize: TPixiePixel; virtual; abstract;
@@ -72,7 +72,7 @@ type
   TPixieFlexItemRow = class(TPixieFlexItem)
   public
     procedure ApplyMainAutoMargins; override;
-    function ApplyCrossAutoMargins(ACrossSize: TPixiePixel): Boolean; override;
+    function ApplyCrossAutoMargins(ACrossStart, ACrossSize: TPixiePixel): Boolean; override;
     procedure SetMainPosition(Pos: TPixiePixel); override;
     procedure SetCrossPosition(Pos: TPixiePixel); override;
     function GetElMainSize: TPixiePixel; override;
@@ -90,7 +90,7 @@ type
   TPixieFlexItemColumn = class(TPixieFlexItem)
   public
     procedure ApplyMainAutoMargins; override;
-    function ApplyCrossAutoMargins(ACrossSize: TPixiePixel): Boolean; override;
+    function ApplyCrossAutoMargins(ACrossStart, ACrossSize: TPixiePixel): Boolean; override;
     procedure SetMainPosition(Pos: TPixiePixel); override;
     procedure SetCrossPosition(Pos: TPixiePixel); override;
     function GetElMainSize: TPixiePixel; override;
@@ -826,7 +826,7 @@ procedure TPixieFlexItem.Place(var Ln: TPixieFlexLine; AMainPos: TPixiePixel;
 begin
   ApplyMainAutoMargins;
   SetMainPosition(AMainPos);
-  if not ApplyCrossAutoMargins(Ln.CrossSize) then
+  if not ApplyCrossAutoMargins(Ln.CrossStart, Ln.CrossSize) then
   begin
     case Align and $FF of
       Ord(faiBaseline):
@@ -1003,7 +1003,7 @@ begin
     Ri.FMargins.Right := AutoMarginMainEnd.Value;
 end;
 
-function TPixieFlexItemRow.ApplyCrossAutoMargins(ACrossSize: TPixiePixel): Boolean;
+function TPixieFlexItemRow.ApplyCrossAutoMargins(ACrossStart, ACrossSize: TPixiePixel): Boolean;
 var
   Ri: TPixieRenderItem;
   MarginsNum: Integer;
@@ -1021,12 +1021,10 @@ begin
     Inc(MarginsNum);
   Margin := (ACrossSize - Ri.Height) / MarginsNum;
   if AutoMarginCrossStart then
-  begin
     Ri.FMargins.Top := Margin;
-    Ri.FPos.Y := Ri.ContentOffsetTop;
-  end;
   if AutoMarginCrossEnd then
     Ri.FMargins.Bottom := Margin;
+  Ri.FPos.Y := ACrossStart + Ri.ContentOffsetTop;
   Result := True;
 end;
 
@@ -1201,7 +1199,7 @@ begin
     Ri.FMargins.Bottom := AutoMarginMainEnd.Value;
 end;
 
-function TPixieFlexItemColumn.ApplyCrossAutoMargins(ACrossSize: TPixiePixel): Boolean;
+function TPixieFlexItemColumn.ApplyCrossAutoMargins(ACrossStart, ACrossSize: TPixiePixel): Boolean;
 var
   Ri: TPixieRenderItem;
   MarginsNum: Integer;
@@ -1219,14 +1217,10 @@ begin
     Inc(MarginsNum);
   Margin := (ACrossSize - Ri.Width) / MarginsNum;
   if AutoMarginCrossStart then
-  begin
     Ri.FMargins.Left := Margin;
-    // ContentOffsetLeft already includes FMargins.Left (just set above),
-    // so positioning at ContentOffsetLeft places content past the margin.
-    Ri.FPos.X := Ri.ContentOffsetLeft;
-  end;
   if AutoMarginCrossEnd then
     Ri.FMargins.Right := Margin;
+  Ri.FPos.X := ACrossStart + Ri.ContentOffsetLeft;
   Result := True;
 end;
 
