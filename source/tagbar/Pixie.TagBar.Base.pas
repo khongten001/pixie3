@@ -1256,7 +1256,8 @@ begin
 
     if Assigned(OnHostSetCursor) then
     begin
-      if (Zone = thzDismiss) or (Zone = thzLeadIcon) then
+      if (Zone = thzDismiss) or
+         ((Zone = thzLeadIcon) and (tboAllowEdit in FOptions)) then
         OnHostSetCursor(pxCurHandPoint)
       else if (HitIdx >= 0) and FLayout[HitIdx].IsAddButton then
         OnHostSetCursor(pxCurHandPoint)
