@@ -31,6 +31,7 @@ function PixieTagInactiveFill(const Base: TPixieWebColor): TPixieWebColor;
 function PixieTagTextColor(const Base: TPixieWebColor;
   Checked: Boolean): TPixieWebColor;
 function PixieTagBorderColor(const Base: TPixieWebColor): TPixieWebColor;
+function PixieTagOutlineColor(const Base: TPixieWebColor): TPixieWebColor;
 function PixieTagMutedTextColor(const Bg: TPixieWebColor): TPixieWebColor;
 
 { Scrollbar colours — semi-transparent grey, dark on light backgrounds and
@@ -152,6 +153,13 @@ end;
 function PixieTagBorderColor(const Base: TPixieWebColor): TPixieWebColor;
 begin
   Result := PixieTagWithAlpha(Base, 80);
+end;
+
+// Stronger border for outlined unchecked pills, where the border is the
+// primary visual cue rather than a soft frame around a tinted fill.
+function PixieTagOutlineColor(const Base: TPixieWebColor): TPixieWebColor;
+begin
+  Result := PixieTagWithAlpha(Base, 200);
 end;
 
 function PixieTagMutedTextColor(const Bg: TPixieWebColor): TPixieWebColor;

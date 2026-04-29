@@ -236,24 +236,34 @@ var
   Radius, InnerRadius, LeftInner, RightInner, RightInner2: TPixieBorderRadiuses;
   Bw, R, Ri, Ri2, TextY, Arm, Cx, Cy, SepAbs: Single;
   SwSize, SwX, SwY, SwR: Single;
-  IsChecked, HasSuffix: Boolean;
+  IsChecked, IsOutlined, HasSuffix: Boolean;
 begin
   // Compute colours from state
   IsChecked := State in [tpsChecked, tpsCheckedHover, tpsCheckedPress];
-  case State of
-    tpsRest:         FillColor := PixieTagRestFill(Base);
-    tpsHover:        FillColor := PixieTagHoverFill(Base);
-    tpsPress:        FillColor := PixieTagPressFill(Base);
-    tpsChecked:      FillColor := PixieTagCheckedFill(Base);
-    tpsCheckedHover: FillColor := PixieTagBlend(Base, TPixieWebColor.White, 0.15);
-    tpsCheckedPress: FillColor := PixieTagBlend(Base, TPixieWebColor.Black, 0.15);
-    tpsInactive:     FillColor := PixieTagInactiveFill(Base);
-    tpsEditing:      FillColor := PixieTagRestFill(Base);
-  end;
-  TxtColor := PixieTagTextColor(Base, IsChecked);
-  BrdColor := PixieTagBorderColor(Base);
-
+  IsOutlined := State in [tpsRest, tpsHover, tpsPress];
   HasSuffix := Metrics.SepX > 0;
+  // Outlined-at-rest single-part pills show through to the bar background;
+  // skip the HSL round-trip in PixieTagRestFill since we'd overwrite it.
+  // Split (HasSuffix) pills keep the rest tint on the prefix half so the
+  // key:value visual stays legible.
+  if IsOutlined and (State = tpsRest) and not HasSuffix then
+    FillColor := BgColor
+  else
+    case State of
+      tpsRest:         FillColor := PixieTagRestFill(Base);
+      tpsHover:        FillColor := PixieTagHoverFill(Base);
+      tpsPress:        FillColor := PixieTagPressFill(Base);
+      tpsChecked:      FillColor := PixieTagCheckedFill(Base);
+      tpsCheckedHover: FillColor := PixieTagBlend(Base, TPixieWebColor.White, 0.15);
+      tpsCheckedPress: FillColor := PixieTagBlend(Base, TPixieWebColor.Black, 0.15);
+      tpsInactive:     FillColor := PixieTagInactiveFill(Base);
+      tpsEditing:      FillColor := PixieTagRestFill(Base);
+    end;
+  TxtColor := PixieTagTextColor(Base, IsChecked);
+  if IsOutlined then
+    BrdColor := PixieTagOutlineColor(Base)
+  else
+    BrdColor := PixieTagBorderColor(Base);
 
   // Compute radii from shape
   case Shape of
@@ -267,7 +277,10 @@ begin
   Radius.BottomRightX := R; Radius.BottomRightY := R;
   Radius.BottomLeftX := R;  Radius.BottomLeftY := R;
 
-  Bw := 1.0;
+  if IsOutlined then
+    Bw := 1.5
+  else
+    Bw := 1.0;
   Ri := Max(R - Bw, 0);
 
   // Border (outer rounded rect — always one continuous shape)
@@ -322,7 +335,6 @@ begin
   end
   else
   begin
-    // Single fill (unchanged)
     InnerRadius.TopLeftX := Ri;     InnerRadius.TopLeftY := Ri;
     InnerRadius.TopRightX := Ri;    InnerRadius.TopRightY := Ri;
     InnerRadius.BottomRightX := Ri; InnerRadius.BottomRightY := Ri;
