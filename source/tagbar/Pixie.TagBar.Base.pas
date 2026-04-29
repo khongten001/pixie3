@@ -212,8 +212,9 @@ type
     procedure GetScrollThumb(Axis: TPixieTagBarScrollAxis;
       out TPos, TSize: Single);
     function HitScrollbar(Axis: TPixieTagBarScrollAxis; MX, MY: Integer;
-      out OnThumb: Boolean): Boolean;
-    procedure ScrollPage(Axis: TPixieTagBarScrollAxis; Forward: Boolean);
+      out OnThumb: Boolean; out TPos, TSize: Single): Boolean;
+    procedure ScrollPage(Axis: TPixieTagBarScrollAxis; Down: Boolean);
+    function ScrollAxisFor(Mode: TPixieTagBarScrollMode): TPixieTagBarScrollAxis;
 
     // Editing
     procedure BeginEdit(Mode: TPixieTagEditMode; TagIndex: Integer);
@@ -660,11 +661,13 @@ begin
 end;
 
 function TPixieTagBarCore.HitScrollbar(Axis: TPixieTagBarScrollAxis;
-  MX, MY: Integer; out OnThumb: Boolean): Boolean;
+  MX, MY: Integer; out OnThumb: Boolean; out TPos, TSize: Single): Boolean;
 var
-  Gutter, TPos, TSize, MainCoord: Single;
+  Gutter, MainCoord: Single;
 begin
   OnThumb := False;
+  TPos := 0;
+  TSize := 0;
   if not HasScrollbar(Axis) then Exit(False);
   if Axis = saVertical then
   begin
@@ -684,16 +687,22 @@ begin
 end;
 
 procedure TPixieTagBarCore.ScrollPage(Axis: TPixieTagBarScrollAxis;
-  Forward: Boolean);
+  Down: Boolean);
 var
   Step: Single;
 begin
   Step := ViewExtent(Axis);
-  if not Forward then Step := -Step;
+  if not Down then Step := -Step;
   if Axis = saVertical then
     ScrollBy(0, Step)
   else
     ScrollBy(Step, 0);
+end;
+
+function TPixieTagBarCore.ScrollAxisFor(
+  Mode: TPixieTagBarScrollMode): TPixieTagBarScrollAxis;
+begin
+  if Mode = smHorizontal then Result := saHorizontal else Result := saVertical;
 end;
 
 // =========================================================================
@@ -734,7 +743,6 @@ begin
   else
     MaxW := 300;
 
-  // In horizontal-scroll mode pills never wrap to a second row
   NoWrap := EffectiveScrollMode = smHorizontal;
 
   CurX := Pad;
@@ -1093,9 +1101,8 @@ begin
 
   // Scrollbar interaction (active even when read-only)
   for Axis := Low(TPixieTagBarScrollAxis) to High(TPixieTagBarScrollAxis) do
-    if HitScrollbar(Axis, X, Y, OnThumb) then
+    if HitScrollbar(Axis, X, Y, OnThumb, TPos, TSize) then
     begin
-      GetScrollThumb(Axis, TPos, TSize);
       if OnThumb then
       begin
         FScrollDragging := True;
@@ -1285,15 +1292,13 @@ begin
   Result := False;
   if EffectiveScrollMode = smNone then Exit;
 
-  Step := -(WheelDelta / 120) * tbScrollWheelStep;
-
   // Shift inverts the active axis
-  if EffectiveScrollMode = smVertical then Axis := saVertical
-  else Axis := saHorizontal;
+  Axis := ScrollAxisFor(EffectiveScrollMode);
   if ShiftDown then
     if Axis = saVertical then Axis := saHorizontal else Axis := saVertical;
 
   if MaxScroll(Axis) <= 0 then Exit;
+  Step := -(WheelDelta / 120) * tbScrollWheelStep;
   if Axis = saVertical then ScrollBy(0, Step) else ScrollBy(Step, 0);
   Result := True;
 end;
@@ -1386,19 +1391,13 @@ begin
     tbVK_PRIOR:
       if EffectiveScrollMode <> smNone then
       begin
-        if EffectiveScrollMode = smHorizontal then
-          ScrollPage(saHorizontal, False)
-        else
-          ScrollPage(saVertical, False);
+        ScrollPage(ScrollAxisFor(EffectiveScrollMode), False);
         Result := True;
       end;
     tbVK_NEXT:
       if EffectiveScrollMode <> smNone then
       begin
-        if EffectiveScrollMode = smHorizontal then
-          ScrollPage(saHorizontal, True)
-        else
-          ScrollPage(saVertical, True);
+        ScrollPage(ScrollAxisFor(EffectiveScrollMode), True);
         Result := True;
       end;
     tbVK_HOME:
