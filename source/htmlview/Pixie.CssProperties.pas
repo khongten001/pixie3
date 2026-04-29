@@ -920,9 +920,18 @@ begin
   else
     InitComputeContext(Tag, Ctx);
 
-  // Background color
-  FBg.Color := GetColorProperty(El, Ord(psid_background_color), False,
-    TPixieWebColor.Transparent, 0);
+  // Background color (FBg is a separate object — byte-offset trick N/A)
+  Prop := Tag.Style.GetProperty(Ord(psid_background_color));
+  if Prop.Kind = pkColor then
+  begin
+    FBg.Color := Prop.ColorVal;
+    if FBg.Color.IsCurrentColor then
+      FBg.Color := FColor;
+  end
+  else if (Prop.Kind = pkInherit) and (Tag.Parent <> nil) then
+    FBg.Color := Tag.Parent.Css.Bg.Color
+  else
+    FBg.Color := TPixieWebColor.Transparent;
 
   // Position X
   Prop := Tag.Style.GetProperty(Ord(psid_background_position_x));
