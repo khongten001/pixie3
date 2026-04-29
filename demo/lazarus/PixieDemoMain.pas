@@ -256,6 +256,7 @@ begin
   TagBarEditor.TagShape := tsRoundedRect;
   TagBarEditor.AutoHeight := True;
   TagBarEditor.Options := TagBarEditorOpts;
+  TagBarEditor.EmptyMessage := 'No tags — click + to add one';
   TagBarEditor.BorderSpacing.Left := 4;
   TagBarEditor.BorderSpacing.Right := 4;
   PopulateTagBarTags(TagBarEditor);

@@ -129,6 +129,8 @@ type
     FPadding: Single;
     FShowBorder: Boolean;
     FBorderColor: TPixieWebColor;
+    FEmptyMessage: string;
+    FEmptyMessageWidth: Single;
 
     // Layout cache
     FLayout: TPixieTagLayoutList;
@@ -187,6 +189,8 @@ type
     procedure SetTagShape(Value: TPixieTagShape);
     procedure SetAutoHeight(Value: Boolean);
     procedure SetFontFamily(const Value: string);
+    procedure SetEmptyMessage(const Value: string);
+    function ShowEmptyMessage: Boolean;
     procedure SetFontSize(Value: Single);
   public
     { Host callbacks — set by wrapper }
@@ -251,6 +255,7 @@ type
     property FontSize: Single read FFontSize write SetFontSize;
     property ShowBorder: Boolean read FShowBorder write FShowBorder;
     property BorderColor: TPixieWebColor read FBorderColor write FBorderColor;
+    property EmptyMessage: string read FEmptyMessage write SetEmptyMessage;
 
     { Events }
     property OnTagChecked: TPixieTagCheckedEvent
@@ -509,6 +514,13 @@ begin
   CurX := Pad;
   CurY := Pad;
 
+  FEmptyMessageWidth := 0;
+  if ShowEmptyMessage then
+  begin
+    FEmptyMessageWidth := FCanvas.MeasureText(FEmptyMessage, FFont);
+    CurX := CurX + FEmptyMessageWidth + SpH;
+  end;
+
   // Visible tags
   for I := 0 to FTags.Count - 1 do
   begin
@@ -680,6 +692,12 @@ begin
 
     PillH := GetPillHeight;
     EditIdx := -1;
+
+    if ShowEmptyMessage then
+      FCanvas.DrawText(FEmptyMessage, FFont,
+        PixieTagMutedTextColor(BgColor),
+        FPadding * ScaleFactor, (ViewH - FFontMetrics.Height) / 2,
+        FEmptyMessageWidth, FFontMetrics.Height);
 
     // Draw pills
     for I := 0 to FLayout.Count - 1 do
@@ -1324,6 +1342,21 @@ begin
     FAutoHeight := Value;
     InvalidateLayout;
   end;
+end;
+
+procedure TPixieTagBarCore.SetEmptyMessage(const Value: string);
+begin
+  if FEmptyMessage <> Value then
+  begin
+    FEmptyMessage := Value;
+    InvalidateLayout;
+  end;
+end;
+
+function TPixieTagBarCore.ShowEmptyMessage: Boolean;
+begin
+  Result := (FTags.Count = 0) and (FEmptyMessage <> '') and
+    (FEditMode <> temAddNew);
 end;
 
 procedure TPixieTagBarCore.SetFontFamily(const Value: string);

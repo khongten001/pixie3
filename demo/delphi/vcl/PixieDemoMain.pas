@@ -378,6 +378,7 @@ begin
   // Editor
   AddLabel('Editor (full editing):');
   TagBarEditor := AddBar(TagBarEditorOpts);
+  TagBarEditor.EmptyMessage := 'No tags — click + to add one';
 
   // Filter
   AddLabel('Filter (check only):');

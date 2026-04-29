@@ -54,6 +54,8 @@ type
     procedure SetFontFamily(const Value: string);
     function GetFontSize: Single;
     procedure SetFontSize(Value: Single);
+    function GetEmptyMessage: string;
+    procedure SetEmptyMessage(const Value: string);
     function GetOnTagChecked: TPixieTagCheckedEvent;
     procedure SetOnTagChecked(Value: TPixieTagCheckedEvent);
     function GetOnChanged: TNotifyEvent;
@@ -115,6 +117,7 @@ type
       default False;
     property FontFamily: string read GetFontFamily write SetFontFamily;
     property FontSize: Single read GetFontSize write SetFontSize;
+    property EmptyMessage: string read GetEmptyMessage write SetEmptyMessage;
 
     property OnTagChecked: TPixieTagCheckedEvent
       read GetOnTagChecked write SetOnTagChecked;
@@ -411,6 +414,16 @@ end;
 procedure TPixieTagBar.SetFontSize(Value: Single);
 begin
   FCore.FontSize := Value;
+end;
+
+function TPixieTagBar.GetEmptyMessage: string;
+begin
+  Result := FCore.EmptyMessage;
+end;
+
+procedure TPixieTagBar.SetEmptyMessage(const Value: string);
+begin
+  FCore.EmptyMessage := Value;
 end;
 
 function TPixieTagBar.GetOnTagChecked: TPixieTagCheckedEvent;

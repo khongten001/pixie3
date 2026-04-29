@@ -31,6 +31,7 @@ function PixieTagInactiveFill(const Base: TPixieWebColor): TPixieWebColor;
 function PixieTagTextColor(const Base: TPixieWebColor;
   Checked: Boolean): TPixieWebColor;
 function PixieTagBorderColor(const Base: TPixieWebColor): TPixieWebColor;
+function PixieTagMutedTextColor(const Bg: TPixieWebColor): TPixieWebColor;
 
 { Default palette — 8 well-separated hues }
 function PixieTagDefaultPalette: TPixieTagPaletteArray;
@@ -146,6 +147,11 @@ end;
 function PixieTagBorderColor(const Base: TPixieWebColor): TPixieWebColor;
 begin
   Result := PixieTagWithAlpha(Base, 80);
+end;
+
+function PixieTagMutedTextColor(const Bg: TPixieWebColor): TPixieWebColor;
+begin
+  Result := PixieTagBlend(TPixieWebColor.Black, Bg, 0.5);
 end;
 
 // ---------------------------------------------------------------------------
