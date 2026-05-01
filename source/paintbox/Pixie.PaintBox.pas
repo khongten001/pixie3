@@ -42,6 +42,7 @@ type
     property OnMouseLeave;
     property OnMouseMove;
     property OnMouseUp;
+    property OnMouseWheel;
     property OnResize;
   end;
 
