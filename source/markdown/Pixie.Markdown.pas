@@ -36,17 +36,26 @@ uses
   Pixie.Markdown.Parser, Pixie.Markdown.InlineParser,
   Pixie.Markdown.HtmlWriter;
 
+type
+  TPixieMdLinkRefMap = Pixie.Markdown.Parser.TPixieMdLinkRefMap;
+
 function PixieMarkdownToHtml(const Md: string;
   Options: TPixieMdOptions): string;
 var
   Doc: TPixieMdNode;
+  RefDefs: TPixieMdLinkRefMap;
 begin
-  Doc := TPixieMdParser.ParseBlocks(Md, nil, Options);
+  RefDefs := TPixieMdLinkRefMap.Create;
   try
-    TPixieMdInlineParser.ParseInlinesIntoBlocks(Doc, Options);
-    Result := TPixieMdHtmlWriter.Write(Doc, Options);
+    Doc := TPixieMdParser.ParseBlocks(Md, RefDefs, Options);
+    try
+      TPixieMdInlineParser.ParseInlinesIntoBlocks(Doc, RefDefs, Options);
+      Result := TPixieMdHtmlWriter.Write(Doc, Options);
+    finally
+      Doc.Free;
+    end;
   finally
-    Doc.Free;
+    RefDefs.Free;
   end;
 end;
 

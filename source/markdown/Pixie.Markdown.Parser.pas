@@ -39,6 +39,7 @@ type
   end;
 
 procedure PixieMdSplitLines(const S: string; out Lines: TArray<string>);
+function NormalizeLinkLabel(const S: string): string;
 
 implementation
 
@@ -449,6 +450,294 @@ begin
   end;
 end;
 
+// GFM task list marker: [ ] or [x] or [X] followed by space/EOL.
+// Returns offset after marker (and trailing space) or 0.
+function ProbeTaskMarker(const S: string; Offset: Integer;
+  out Checked: Boolean): Integer;
+var
+  Len: Integer;
+  C: Char;
+begin
+  Result := 0;
+  Checked := False;
+  Len := Length(S);
+  if Offset + 2 > Len then Exit;
+  if S[Offset] <> '[' then Exit;
+  C := S[Offset + 1];
+  if (C <> ' ') and (C <> 'x') and (C <> 'X') then Exit;
+  if S[Offset + 2] <> ']' then Exit;
+  if (Offset + 3 <= Len) and (S[Offset + 3] <> ' ') and
+     (S[Offset + 3] <> #9) then Exit;
+  Checked := (C = 'x') or (C = 'X');
+  Result := Offset + 3;
+  if (Result <= Len) and ((S[Result] = ' ') or (S[Result] = #9)) then
+    Inc(Result);
+end;
+
+// GFM table delimiter row: optional leading | then cells of dashes with
+// optional flanking colons. Returns column count or 0; fills Aligns.
+function ProbeTableDelimiter(const S: string; Offset: Integer;
+  out Aligns: TArray<TPixieMdCellAlign>): Integer;
+var
+  I, Len, Start, J, DashCount: Integer;
+  Cell, Trimmed: string;
+  Left, Right: Boolean;
+  Cols: TList<TPixieMdCellAlign>;
+begin
+  Result := 0;
+  Aligns := nil;
+  Len := Length(S);
+  I := Offset;
+  while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
+  if (I <= Len) and (S[I] = '|') then Inc(I);
+  Cols := TList<TPixieMdCellAlign>.Create;
+  try
+    while I <= Len do
+    begin
+      Start := I;
+      while (I <= Len) and (S[I] <> '|') do Inc(I);
+      Cell := Copy(S, Start, I - Start);
+      Trimmed := TrimSpaces(Cell);
+      if Trimmed = '' then
+      begin
+        if I > Len then Break;
+        Exit;
+      end;
+      Left := False;
+      Right := False;
+      J := 1;
+      if (J <= Length(Trimmed)) and (Trimmed[J] = ':') then
+      begin
+        Left := True;
+        Inc(J);
+      end;
+      DashCount := 0;
+      while (J <= Length(Trimmed)) and (Trimmed[J] = '-') do
+      begin
+        Inc(J);
+        Inc(DashCount);
+      end;
+      if (J <= Length(Trimmed)) and (Trimmed[J] = ':') then
+      begin
+        Right := True;
+        Inc(J);
+      end;
+      if (DashCount = 0) or (J <= Length(Trimmed)) then Exit;
+      if Left and Right then Cols.Add(maCenter)
+      else if Right then Cols.Add(maRight)
+      else if Left then Cols.Add(maLeft)
+      else Cols.Add(maNone);
+      if I <= Len then Inc(I);
+    end;
+    if Cols.Count = 0 then Exit;
+    Aligns := Cols.ToArray;
+    Result := Cols.Count;
+  finally
+    Cols.Free;
+  end;
+end;
+
+// Splits a GFM table row line into cell strings. Pipes are escapable
+// as \| within cell content.
+procedure SplitTableRow(const S: string; out Cells: TArray<string>);
+var
+  Buf: TList<string>;
+  Cur: string;
+  I, Len: Integer;
+begin
+  Buf := TList<string>.Create;
+  try
+    Len := Length(S);
+    I := 1;
+    while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
+    if (I <= Len) and (S[I] = '|') then Inc(I);
+    Cur := '';
+    while I <= Len do
+    begin
+      if (S[I] = '\') and (I < Len) and (S[I + 1] = '|') then
+      begin
+        Cur := Cur + '|';
+        Inc(I, 2);
+      end
+      else if S[I] = '|' then
+      begin
+        Buf.Add(TrimSpaces(Cur));
+        Cur := '';
+        Inc(I);
+      end
+      else
+      begin
+        Cur := Cur + S[I];
+        Inc(I);
+      end;
+    end;
+    Cur := TrimSpaces(Cur);
+    if (Cur <> '') or (Buf.Count = 0) then
+      Buf.Add(Cur);
+    Cells := Buf.ToArray;
+  finally
+    Buf.Free;
+  end;
+end;
+
+// Normalises a link-reference label per CommonMark: trim, lowercase
+// ASCII, collapse internal whitespace runs to a single space.
+function NormalizeLinkLabel(const S: string): string;
+var
+  I, Len: Integer;
+  C: Char;
+  PrevSpace: Boolean;
+begin
+  Result := '';
+  Len := Length(S);
+  PrevSpace := False;
+  for I := 1 to Len do
+  begin
+    C := S[I];
+    case C of
+      ' ', #9, #10, #13:
+        if not PrevSpace and (Result <> '') then
+        begin
+          Result := Result + ' ';
+          PrevSpace := True;
+        end;
+      'A'..'Z':
+        begin
+          Result := Result + Chr(Ord(C) + 32);
+          PrevSpace := False;
+        end;
+    else
+      Result := Result + C;
+      PrevSpace := False;
+    end;
+  end;
+  if (Length(Result) > 0) and (Result[Length(Result)] = ' ') then
+    SetLength(Result, Length(Result) - 1);
+end;
+
+// Tries to consume a single-line link reference definition starting at
+// position 1 of Source. Returns the number of characters consumed (up
+// to and including the trailing newline if present), or 0 if Source
+// does not start with a valid ref def. Adds the resolved (label, url,
+// title) entry to RefMap, keyed by NormalizeLinkLabel(label).
+function TryConsumeLinkRefDef(const Source: string;
+  RefMap: TPixieMdLinkRefMap): Integer;
+var
+  I, Len, LabelStart, LabelEnd, TitleStart: Integer;
+  Label_, Url, Title: string;
+  TitleQuote: Char;
+  Saved: Integer;
+  Ref: TPixieMdLinkRef;
+  Key: string;
+begin
+  Result := 0;
+  Len := Length(Source);
+  I := 1;
+  while (I <= Len) and (Source[I] = ' ') and (I <= 4) do Inc(I);
+  if (I > Len) or (Source[I] <> '[') then Exit;
+  Inc(I);
+  LabelStart := I;
+  while I <= Len do
+  begin
+    if Source[I] = ']' then Break;
+    if Source[I] = '\' then Inc(I);
+    if (I > Len) or (Source[I] = #10) or (Source[I] = #13) then Exit;
+    Inc(I);
+  end;
+  if (I > Len) or (Source[I] <> ']') then Exit;
+  LabelEnd := I - 1;
+  Inc(I);
+  if (I > Len) or (Source[I] <> ':') then Exit;
+  Inc(I);
+  while (I <= Len) and ((Source[I] = ' ') or (Source[I] = #9)) do Inc(I);
+  if I > Len then Exit;
+
+  if Source[I] = '<' then
+  begin
+    Inc(I);
+    Url := '';
+    while (I <= Len) and (Source[I] <> '>') and
+          (Source[I] <> #10) and (Source[I] <> #13) do
+    begin
+      Url := Url + Source[I];
+      Inc(I);
+    end;
+    if (I > Len) or (Source[I] <> '>') then Exit;
+    Inc(I);
+  end
+  else
+  begin
+    Url := '';
+    while (I <= Len) and (Source[I] > ' ') do
+    begin
+      Url := Url + Source[I];
+      Inc(I);
+    end;
+    if Url = '' then Exit;
+  end;
+
+  Title := '';
+  Saved := I;
+  while (I <= Len) and ((Source[I] = ' ') or (Source[I] = #9)) do Inc(I);
+  if (I <= Len) and ((Source[I] = '"') or (Source[I] = '''') or
+     (Source[I] = '(')) then
+  begin
+    if Source[I] = '(' then TitleQuote := ')'
+    else TitleQuote := Source[I];
+    Inc(I);
+    TitleStart := I;
+    while (I <= Len) and (Source[I] <> TitleQuote) and
+          (Source[I] <> #10) do
+    begin
+      if Source[I] = '\' then Inc(I);
+      Inc(I);
+    end;
+    if (I <= Len) and (Source[I] = TitleQuote) then
+    begin
+      Title := Copy(Source, TitleStart, I - TitleStart);
+      Inc(I);
+    end
+    else
+      I := Saved;
+  end;
+
+  while (I <= Len) and ((Source[I] = ' ') or (Source[I] = #9)) do Inc(I);
+  if (I <= Len) and (Source[I] <> #10) and (Source[I] <> #13) then Exit;
+
+  // Consume line terminator.
+  if (I <= Len) and (Source[I] = #13) then Inc(I);
+  if (I <= Len) and (Source[I] = #10) then Inc(I);
+
+  Label_ := TrimSpaces(Copy(Source, LabelStart, LabelEnd - LabelStart + 1));
+  if Label_ = '' then Exit;
+  Key := NormalizeLinkLabel(Label_);
+  if not RefMap.ContainsKey(Key) then
+  begin
+    Ref.Url := Url;
+    Ref.Title := Title;
+    RefMap.Add(Key, Ref);
+  end;
+  Result := I - 1;
+end;
+
+function LineHasUnescapedPipe(const S: string): Boolean;
+var
+  I, Len: Integer;
+begin
+  Len := Length(S);
+  I := 1;
+  while I <= Len do
+  begin
+    if S[I] = '\' then Inc(I, 2)
+    else
+    begin
+      if S[I] = '|' then Exit(True);
+      Inc(I);
+    end;
+  end;
+  Result := False;
+end;
+
 // ---------------------------------------------------------------------------
 // Open-block stack
 // ---------------------------------------------------------------------------
@@ -456,7 +745,8 @@ end;
 type
   TOpenBlockKind = (
     obDocument, obBlockQuote, obList, obListItem,
-    obParagraph, obFencedCode, obIndentedCode, obHtmlBlock, obHeading);
+    obParagraph, obFencedCode, obIndentedCode, obHtmlBlock, obHeading,
+    obTable);
 
   TOpenBlock = class
     Node: TPixieMdNode;
@@ -467,6 +757,7 @@ type
     FenceIndent: Integer;
     HtmlStartType: Integer;
     Text: string;
+    TableAligns: TArray<TPixieMdCellAlign>;
   end;
 
   TPixieMdParserImpl = class
@@ -476,6 +767,8 @@ type
     FOptions: TPixieMdOptions;
     FOpen: TList<TOpenBlock>;
     FDoc: TPixieMdNode;
+    FRefDefs: TPixieMdLinkRefMap;
+    FOwnsRefDefs: Boolean;
 
     procedure StripFrontMatter;
     function LineWouldStartBlock(const Line: string;
@@ -493,19 +786,32 @@ type
     procedure AppendToParagraph(const Text: string);
     function TryStartListItem(const Line: string;
       var Offset: Integer): Boolean;
+    function TryStartTable(const Line: string; Offset: Integer): Boolean;
+    procedure AppendTableRow(TableOB: TOpenBlock; const RowLine: string);
   public
-    constructor Create(const Md: string; Options: TPixieMdOptions);
+    constructor Create(const Md: string; Options: TPixieMdOptions;
+      RefDefs: TPixieMdLinkRefMap);
     destructor Destroy; override;
     function Parse: TPixieMdNode;
   end;
 
 constructor TPixieMdParserImpl.Create(const Md: string;
-  Options: TPixieMdOptions);
+  Options: TPixieMdOptions; RefDefs: TPixieMdLinkRefMap);
 begin
   inherited Create;
   FSource := Md;
   FOptions := Options;
   FOpen := TList<TOpenBlock>.Create;
+  if RefDefs = nil then
+  begin
+    FRefDefs := TPixieMdLinkRefMap.Create;
+    FOwnsRefDefs := True;
+  end
+  else
+  begin
+    FRefDefs := RefDefs;
+    FOwnsRefDefs := False;
+  end;
 end;
 
 destructor TPixieMdParserImpl.Destroy;
@@ -518,6 +824,8 @@ begin
       FOpen[I].Free;
     FOpen.Free;
   end;
+  if FOwnsRefDefs then
+    FRefDefs.Free;
   inherited Destroy;
 end;
 
@@ -602,9 +910,44 @@ procedure TPixieMdParserImpl.CloseBlock(OB: TOpenBlock);
 var
   S: string;
   TextChild: TPixieMdNode;
+  Consumed: Integer;
+  Parent: TPixieMdNode;
+  ParentIdx: Integer;
 begin
   case OB.Kind of
-    obParagraph, obHeading:
+    obParagraph:
+      begin
+        // Drain link reference definitions from the start of the
+        // paragraph; they vanish from rendered output but populate
+        // FRefDefs for the inline parser to resolve [text][label].
+        S := OB.Text;
+        repeat
+          Consumed := TryConsumeLinkRefDef(S, FRefDefs);
+          if Consumed = 0 then Break;
+          Delete(S, 1, Consumed);
+        until S = '';
+        S := TrimSpaces(S);
+        if S = '' then
+        begin
+          // Whole paragraph was ref defs — drop the empty paragraph node.
+          ParentIdx := FOpen.IndexOf(OB);
+          if ParentIdx > 0 then
+            Parent := FOpen[ParentIdx - 1].Node
+          else
+            Parent := FDoc;
+          if Parent = nil then Parent := FDoc;
+          Parent.Children.Extract(OB.Node);
+          OB.Node.Free;
+          OB.Node := nil;
+        end
+        else
+        begin
+          TextChild := TPixieMdNode.Create(mnText);
+          TextChild.Literal := S;
+          OB.Node.AddChild(TextChild);
+        end;
+      end;
+    obHeading:
       begin
         // Raw inline source becomes a single mnText child here; the
         // inline parser later replaces it with the parsed inline tree.
@@ -724,7 +1067,8 @@ var
   ListChar: Char;
   Container, ListOB, ItemOB: TOpenBlock;
   ListNode, ItemNode: TPixieMdNode;
-  I, ListIdx: Integer;
+  I, ListIdx, TaskAfter: Integer;
+  TaskChecked: Boolean;
 begin
   Result := False;
   PreSpaces := 0;
@@ -785,7 +1129,117 @@ begin
   FOpen.Add(ItemOB);
 
   Offset := AfterMarker;
+
+  if (moGfmTaskLists in FOptions) and (Offset <= Length(Line)) then
+  begin
+    TaskAfter := ProbeTaskMarker(Line, Offset, TaskChecked);
+    if TaskAfter > 0 then
+    begin
+      ItemNode.IsTaskItem := True;
+      ItemNode.TaskChecked := TaskChecked;
+      Offset := TaskAfter;
+    end;
+  end;
+
   Result := True;
+end;
+
+function TPixieMdParserImpl.TryStartTable(const Line: string;
+  Offset: Integer): Boolean;
+var
+  Paragraph: TOpenBlock;
+  TmpOff, Indent, ColCount: Integer;
+  Aligns: TArray<TPixieMdCellAlign>;
+  HeaderLine: string;
+  NL: Integer;
+  HeaderCells: TArray<string>;
+  Parent, TableNode, Row, Cell, TextChild: TPixieMdNode;
+  ParaIdx, ChildIdx, I: Integer;
+  TableOB: TOpenBlock;
+begin
+  Result := False;
+  if not (moGfmTables in FOptions) then Exit;
+  Paragraph := DeepestLeaf;
+  if (Paragraph = nil) or (Paragraph.Kind <> obParagraph) then Exit;
+  if not LineHasUnescapedPipe(Paragraph.Text) then Exit;
+
+  TmpOff := Offset;
+  SkipIndent(Line, TmpOff, 3, Indent);
+  ColCount := ProbeTableDelimiter(Line, TmpOff, Aligns);
+  if ColCount = 0 then Exit;
+
+  // Header is the last line of the paragraph (typically the only line).
+  NL := Length(Paragraph.Text);
+  while (NL > 0) and (Paragraph.Text[NL] <> #10) do Dec(NL);
+  if NL > 0 then
+    HeaderLine := Copy(Paragraph.Text, NL + 1, Length(Paragraph.Text))
+  else
+    HeaderLine := Paragraph.Text;
+  SplitTableRow(HeaderLine, HeaderCells);
+  if Length(HeaderCells) <> ColCount then Exit;
+
+  ParaIdx := FOpen.IndexOf(Paragraph);
+  if ParaIdx > 0 then
+    Parent := FOpen[ParaIdx - 1].Node
+  else
+    Parent := FDoc;
+  if Parent = nil then Parent := FDoc;
+  ChildIdx := Parent.Children.IndexOf(Paragraph.Node);
+  Parent.Children.Extract(Paragraph.Node);
+  Paragraph.Node.Free;
+  Paragraph.Free;
+  FOpen.Delete(ParaIdx);
+
+  TableNode := TPixieMdNode.Create(mnTable);
+  Parent.Children.Insert(ChildIdx, TableNode);
+
+  Row := TPixieMdNode.Create(mnTableRow);
+  Row.IsHeaderRow := True;
+  TableNode.AddChild(Row);
+  for I := 0 to ColCount - 1 do
+  begin
+    Cell := TPixieMdNode.Create(mnTableCell);
+    Cell.CellAlignment := Aligns[I];
+    if HeaderCells[I] <> '' then
+    begin
+      TextChild := TPixieMdNode.Create(mnText);
+      TextChild.Literal := HeaderCells[I];
+      Cell.AddChild(TextChild);
+    end;
+    Row.AddChild(Cell);
+  end;
+
+  TableOB := TOpenBlock.Create;
+  TableOB.Node := TableNode;
+  TableOB.Kind := obTable;
+  TableOB.TableAligns := Aligns;
+  FOpen.Add(TableOB);
+  Result := True;
+end;
+
+procedure TPixieMdParserImpl.AppendTableRow(TableOB: TOpenBlock;
+  const RowLine: string);
+var
+  Cells: TArray<string>;
+  Row, Cell, TextChild: TPixieMdNode;
+  I, ColCount: Integer;
+begin
+  ColCount := Length(TableOB.TableAligns);
+  SplitTableRow(RowLine, Cells);
+  Row := TPixieMdNode.Create(mnTableRow);
+  TableOB.Node.AddChild(Row);
+  for I := 0 to ColCount - 1 do
+  begin
+    Cell := TPixieMdNode.Create(mnTableCell);
+    Cell.CellAlignment := TableOB.TableAligns[I];
+    if (I < Length(Cells)) and (Cells[I] <> '') then
+    begin
+      TextChild := TPixieMdNode.Create(mnText);
+      TextChild.Literal := Cells[I];
+      Cell.AddChild(TextChild);
+    end;
+    Row.AddChild(Cell);
+  end;
 end;
 
 procedure TPixieMdParserImpl.ProcessLine(const Line: string;
@@ -832,6 +1286,22 @@ begin
     Leaf.Text := Leaf.Text + Line + sLineBreak;
     if IsHtmlBlockEnd(Line, Leaf.HtmlStartType) then
       CloseBlocksFrom(FOpen.IndexOf(Leaf));
+    Exit;
+  end;
+
+  // Open table: each non-blank line is another row; blank line ends.
+  if (Leaf <> nil) and (Leaf.Kind = obTable) then
+  begin
+    if IsBlank or not LineHasUnescapedPipe(Copy(Line, Offset,
+      Length(Line))) then
+    begin
+      CloseBlocksFrom(FOpen.IndexOf(Leaf));
+      // Re-process this line in case it starts a new block.
+      if not IsBlank then
+        ProcessLine(Line, False);
+      Exit;
+    end;
+    AppendTableRow(Leaf, Copy(Line, Offset, Length(Line)));
     Exit;
   end;
 
@@ -934,7 +1404,13 @@ begin
     Exit;
   end;
 
-  // 4. Setext heading underline (when paragraph is open). Must come
+  // 4a. GFM table — paragraph above + delimiter row converts the
+  // paragraph into a <table>. Must come BEFORE setext/thematic so a
+  // pipe-bearing setext-like line is recognised as a table delim.
+  if TryStartTable(Line, Offset) then
+    Exit;
+
+  // 4b. Setext heading underline (when paragraph is open). Must come
   // BEFORE thematic break because '---' matches both, and setext wins
   // when a paragraph is open above it.
   if (Leaf <> nil) and (Leaf.Kind = obParagraph) then
@@ -1064,7 +1540,7 @@ class function TPixieMdParser.ParseBlocks(const Md: string;
 var
   Impl: TPixieMdParserImpl;
 begin
-  Impl := TPixieMdParserImpl.Create(Md, Options);
+  Impl := TPixieMdParserImpl.Create(Md, Options, RefDefs);
   try
     Result := Impl.Parse;
   finally

@@ -21,20 +21,24 @@ interface
 
 uses
   Classes, SysUtils, Generics.Collections,
-  Pixie.Markdown.Types;
+  Pixie.Markdown.Types, Pixie.Markdown.Parser;
 
 type
   TPixieMdInlineParser = class
   public
     // Parses inline source and returns a list of inline nodes. Caller
     // owns the returned nodes; pass them to a parent's AddChild.
+    // RefDefs (when non-nil) lets [text][label] resolve to a stored
+    // link target.
     class function Parse(const Source: string;
+      RefDefs: TPixieMdLinkRefMap = nil;
       Options: TPixieMdOptions = DefaultPixieMdOptions): TPixieMdNodeList;
 
     // Walks Doc, replacing the single mnText child the block parser
     // left in paragraphs / headings / list items / table cells with
     // parsed inline trees.
     class procedure ParseInlinesIntoBlocks(Doc: TPixieMdNode;
+      RefDefs: TPixieMdLinkRefMap = nil;
       Options: TPixieMdOptions = DefaultPixieMdOptions);
   end;
 
@@ -452,6 +456,65 @@ begin
   Result := I + 1;
 end;
 
+// Reference-style link: [text][label] (full), [text][] (collapsed),
+// or [text] alone (shortcut). Returns True if a matching label was
+// found in RefDefs and fills LabelText / Url / Title / AfterEnd.
+function TryReferenceLink(const S: string; Start: Integer;
+  RefDefs: TPixieMdLinkRefMap;
+  out LabelText, Url, Title: string;
+  out AfterEnd: Integer): Boolean;
+var
+  I, Len, BracketDepth, RefStart, RefEnd, AfterText: Integer;
+  RefLabel: string;
+  Ref: TPixieMdLinkRef;
+begin
+  Result := False;
+  Len := Length(S);
+  if (Start > Len) or (S[Start] <> '[') then Exit;
+  I := Start + 1;
+  BracketDepth := 1;
+  while I <= Len do
+  begin
+    if S[I] = '\' then
+    begin
+      Inc(I, 2);
+      Continue;
+    end;
+    if S[I] = '[' then Inc(BracketDepth)
+    else if S[I] = ']' then
+    begin
+      Dec(BracketDepth);
+      if BracketDepth = 0 then Break;
+    end;
+    Inc(I);
+  end;
+  if (I > Len) or (S[I] <> ']') then Exit;
+  LabelText := Copy(S, Start + 1, I - Start - 1);
+  AfterText := I + 1;
+
+  // Optional [label] following the text label.
+  RefLabel := '';
+  if (AfterText <= Len) and (S[AfterText] = '[') then
+  begin
+    I := AfterText + 1;
+    RefStart := I;
+    while (I <= Len) and (S[I] <> ']') do Inc(I);
+    if (I > Len) or (S[I] <> ']') then Exit;
+    RefEnd := I - 1;
+    RefLabel := Copy(S, RefStart, RefEnd - RefStart + 1);
+    AfterText := I + 1;
+  end;
+  // Empty -> collapsed; no second bracket pair -> shortcut. Both reuse
+  // LabelText as the lookup key.
+  if RefLabel = '' then RefLabel := LabelText;
+
+  if not RefDefs.TryGetValue(NormalizeLinkLabel(RefLabel), Ref) then Exit;
+  Url := Ref.Url;
+  Title := Ref.Title;
+  AfterEnd := AfterText;
+  Result := True;
+end;
+
 // ---------------------------------------------------------------------------
 // Emphasis processor
 // ---------------------------------------------------------------------------
@@ -584,6 +647,7 @@ end;
 // ---------------------------------------------------------------------------
 
 function ParseImpl(const Source: string;
+  RefDefs: TPixieMdLinkRefMap;
   Options: TPixieMdOptions): TPixieMdNodeList;
 var
   I, Len, Start, RunLen: Integer;
@@ -721,8 +785,26 @@ begin
             Node := TPixieMdNode.Create(mnLink);
             Node.LinkUrl := Url;
             Node.LinkTitle := Title;
-            // Recursively parse label text into the link's children.
-            InlineList := ParseImpl(LabelText, Options);
+            InlineList := ParseImpl(LabelText, RefDefs, Options);
+            try
+              while InlineList.Count > 0 do
+                Node.AddChild(InlineList.Extract(InlineList[0]));
+            finally
+              InlineList.Free;
+            end;
+            Result.Add(Node);
+            I := AfterLink;
+            Continue;
+          end;
+          // Try reference-style link: [text][label] or [text][] or [text]
+          if (RefDefs <> nil) and TryReferenceLink(Source, I, RefDefs,
+            LabelText, Url, Title, AfterLink) then
+          begin
+            FlushText(Pending, Result);
+            Node := TPixieMdNode.Create(mnLink);
+            Node.LinkUrl := Url;
+            Node.LinkTitle := Title;
+            InlineList := ParseImpl(LabelText, RefDefs, Options);
             try
               while InlineList.Count > 0 do
                 Node.AddChild(InlineList.Extract(InlineList[0]));
@@ -771,7 +853,8 @@ begin
               FlushText(Pending, Result);
               Node := TPixieMdNode.Create(mnStrikethrough);
               InlineList := ParseImpl(
-                Copy(Source, StrikeStart, StrikeEnd - StrikeStart), Options);
+                Copy(Source, StrikeStart, StrikeEnd - StrikeStart),
+                RefDefs, Options);
               try
                 while InlineList.Count > 0 do
                   Node.AddChild(InlineList.Extract(InlineList[0]));
@@ -829,31 +912,31 @@ begin
 end;
 
 class function TPixieMdInlineParser.Parse(const Source: string;
+  RefDefs: TPixieMdLinkRefMap;
   Options: TPixieMdOptions): TPixieMdNodeList;
 begin
-  Result := ParseImpl(Source, Options);
+  Result := ParseImpl(Source, RefDefs, Options);
 end;
 
 // ---------------------------------------------------------------------------
 // Tree walk: replace block-parser's raw mnText with parsed inlines
 // ---------------------------------------------------------------------------
 
-procedure ProcessBlock(Node: TPixieMdNode; Options: TPixieMdOptions); forward;
+procedure ProcessBlock(Node: TPixieMdNode; RefDefs: TPixieMdLinkRefMap;
+  Options: TPixieMdOptions); forward;
 
-procedure ProcessLeaf(Node: TPixieMdNode; Options: TPixieMdOptions);
+procedure ProcessLeaf(Node: TPixieMdNode; RefDefs: TPixieMdLinkRefMap;
+  Options: TPixieMdOptions);
 var
   Source: string;
   InlineList: TPixieMdNodeList;
   Child: TPixieMdNode;
 begin
-  // Pull current text out (single mnText child the block parser left).
   if (Node.ChildCount = 1) and (Node.Children[0].Kind = mnText) then
   begin
     Source := Node.Children[0].Literal;
-    // Free the text child by clearing Children, then re-add parsed
-    // inlines.
     Node.Children.Clear;
-    InlineList := TPixieMdInlineParser.Parse(Source, Options);
+    InlineList := TPixieMdInlineParser.Parse(Source, RefDefs, Options);
     try
       while InlineList.Count > 0 do
       begin
@@ -866,7 +949,8 @@ begin
   end;
 end;
 
-procedure ProcessBlock(Node: TPixieMdNode; Options: TPixieMdOptions);
+procedure ProcessBlock(Node: TPixieMdNode; RefDefs: TPixieMdLinkRefMap;
+  Options: TPixieMdOptions);
 var
   I: Integer;
 begin
@@ -874,18 +958,18 @@ begin
     mnDocument, mnBlockQuote, mnList, mnListItem, mnTable, mnTableRow:
       if Node.HasChildren then
         for I := 0 to Node.ChildCount - 1 do
-          ProcessBlock(Node.Children[I], Options);
+          ProcessBlock(Node.Children[I], RefDefs, Options);
     mnHeading, mnParagraph, mnTableCell:
-      ProcessLeaf(Node, Options);
+      ProcessLeaf(Node, RefDefs, Options);
     // mnCodeBlock, mnHtmlBlock, mnThematicBreak: nothing to do
   end;
 end;
 
 class procedure TPixieMdInlineParser.ParseInlinesIntoBlocks(Doc: TPixieMdNode;
-  Options: TPixieMdOptions);
+  RefDefs: TPixieMdLinkRefMap; Options: TPixieMdOptions);
 begin
   if Doc <> nil then
-    ProcessBlock(Doc, Options);
+    ProcessBlock(Doc, RefDefs, Options);
 end;
 
 end.
