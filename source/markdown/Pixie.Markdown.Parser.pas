@@ -12,9 +12,9 @@ unit Pixie.Markdown.Parser;
 //
 // Implements ATX and setext headings, thematic breaks, blockquotes,
 // fenced and indented code blocks, ordered and unordered lists with
-// nesting, basic HTML blocks, paragraphs, lazy continuation, and YAML
-// front-matter stripping. Tables, link reference definitions, and task
-// list items are not yet implemented.
+// nesting, basic HTML blocks, paragraphs, lazy continuation, YAML
+// front-matter stripping, GFM tables, GFM task list items, and
+// single-line link reference definitions.
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
@@ -543,7 +543,19 @@ procedure SplitTableRow(const S: string; out Cells: TArray<string>);
 var
   Buf: TList<string>;
   Cur: string;
-  I, Len: Integer;
+  CellStart, I, Len: Integer;
+  HasEscape: Boolean;
+
+  procedure FlushCell;
+  begin
+    if HasEscape then
+      Buf.Add(TrimSpaces(Cur))
+    else
+      Buf.Add(TrimSpaces(Copy(S, CellStart, I - CellStart)));
+    Cur := '';
+    HasEscape := False;
+  end;
+
 begin
   Buf := TList<string>.Create;
   try
@@ -551,27 +563,39 @@ begin
     I := 1;
     while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
     if (I <= Len) and (S[I] = '|') then Inc(I);
+    CellStart := I;
     Cur := '';
+    HasEscape := False;
     while I <= Len do
     begin
       if (S[I] = '\') and (I < Len) and (S[I + 1] = '|') then
       begin
+        // Materialise the prefix into Cur so we can strip the backslash.
+        if not HasEscape then
+        begin
+          Cur := Copy(S, CellStart, I - CellStart);
+          HasEscape := True;
+        end;
         Cur := Cur + '|';
         Inc(I, 2);
       end
       else if S[I] = '|' then
       begin
-        Buf.Add(TrimSpaces(Cur));
-        Cur := '';
+        FlushCell;
         Inc(I);
+        CellStart := I;
       end
       else
       begin
-        Cur := Cur + S[I];
+        if HasEscape then
+          Cur := Cur + S[I];
         Inc(I);
       end;
     end;
-    Cur := TrimSpaces(Cur);
+    if HasEscape then
+      Cur := TrimSpaces(Cur)
+    else
+      Cur := TrimSpaces(Copy(S, CellStart, I - CellStart));
     if (Cur <> '') or (Buf.Count = 0) then
       Buf.Add(Cur);
     Cells := Buf.ToArray;
@@ -584,56 +608,67 @@ end;
 // ASCII, collapse internal whitespace runs to a single space.
 function NormalizeLinkLabel(const S: string): string;
 var
-  I, Len: Integer;
+  I, Len, Out_: Integer;
   C: Char;
   PrevSpace: Boolean;
 begin
-  Result := '';
   Len := Length(S);
+  SetLength(Result, Len);
+  Out_ := 0;
   PrevSpace := False;
   for I := 1 to Len do
   begin
     C := S[I];
     case C of
       ' ', #9, #10, #13:
-        if not PrevSpace and (Result <> '') then
+        if not PrevSpace and (Out_ > 0) then
         begin
-          Result := Result + ' ';
+          Inc(Out_);
+          Result[Out_] := ' ';
           PrevSpace := True;
         end;
       'A'..'Z':
         begin
-          Result := Result + Chr(Ord(C) + 32);
+          Inc(Out_);
+          Result[Out_] := Chr(Ord(C) + 32);
           PrevSpace := False;
         end;
     else
-      Result := Result + C;
+      Inc(Out_);
+      Result[Out_] := C;
       PrevSpace := False;
     end;
   end;
-  if (Length(Result) > 0) and (Result[Length(Result)] = ' ') then
-    SetLength(Result, Length(Result) - 1);
+  if (Out_ > 0) and (Result[Out_] = ' ') then
+    Dec(Out_);
+  SetLength(Result, Out_);
 end;
 
-// Tries to consume a single-line link reference definition starting at
-// position 1 of Source. Returns the number of characters consumed (up
-// to and including the trailing newline if present), or 0 if Source
-// does not start with a valid ref def. Adds the resolved (label, url,
-// title) entry to RefMap, keyed by NormalizeLinkLabel(label).
-function TryConsumeLinkRefDef(const Source: string;
-  RefMap: TPixieMdLinkRefMap): Integer;
+// Tries to consume a single-line link reference definition from Source
+// starting at Cursor (1-based). On success, advances Cursor past the
+// consumed characters (including the trailing newline if present) and
+// returns True. On failure, Cursor is unchanged and the function
+// returns False. The resolved (label, url, title) entry is added to
+// RefMap keyed by NormalizeLinkLabel(label).
+function TryConsumeLinkRefDef(const Source: string; var Cursor: Integer;
+  RefMap: TPixieMdLinkRefMap): Boolean;
 var
-  I, Len, LabelStart, LabelEnd, TitleStart: Integer;
+  I, Len, LabelStart, LabelEnd, TitleStart, UrlStart, SpaceCount: Integer;
   Label_, Url, Title: string;
   TitleQuote: Char;
   Saved: Integer;
   Ref: TPixieMdLinkRef;
   Key: string;
 begin
-  Result := 0;
+  Result := False;
   Len := Length(Source);
-  I := 1;
-  while (I <= Len) and (Source[I] = ' ') and (I <= 4) do Inc(I);
+  I := Cursor;
+  SpaceCount := 0;
+  while (I <= Len) and (Source[I] = ' ') and (SpaceCount < 3) do
+  begin
+    Inc(I);
+    Inc(SpaceCount);
+  end;
   if (I > Len) or (Source[I] <> '[') then Exit;
   Inc(I);
   LabelStart := I;
@@ -655,24 +690,20 @@ begin
   if Source[I] = '<' then
   begin
     Inc(I);
-    Url := '';
+    UrlStart := I;
     while (I <= Len) and (Source[I] <> '>') and
           (Source[I] <> #10) and (Source[I] <> #13) do
-    begin
-      Url := Url + Source[I];
       Inc(I);
-    end;
     if (I > Len) or (Source[I] <> '>') then Exit;
+    Url := Copy(Source, UrlStart, I - UrlStart);
     Inc(I);
   end
   else
   begin
-    Url := '';
+    UrlStart := I;
     while (I <= Len) and (Source[I] > ' ') do
-    begin
-      Url := Url + Source[I];
       Inc(I);
-    end;
+    Url := Copy(Source, UrlStart, I - UrlStart);
     if Url = '' then Exit;
   end;
 
@@ -717,7 +748,8 @@ begin
     Ref.Title := Title;
     RefMap.Add(Key, Ref);
   end;
-  Result := I - 1;
+  Cursor := I;
+  Result := True;
 end;
 
 function LineHasUnescapedPipe(const S: string): Boolean;
@@ -910,7 +942,7 @@ procedure TPixieMdParserImpl.CloseBlock(OB: TOpenBlock);
 var
   S: string;
   TextChild: TPixieMdNode;
-  Consumed: Integer;
+  Cursor: Integer;
   Parent: TPixieMdNode;
   ParentIdx: Integer;
 begin
@@ -920,12 +952,13 @@ begin
         // Drain link reference definitions from the start of the
         // paragraph; they vanish from rendered output but populate
         // FRefDefs for the inline parser to resolve [text][label].
-        S := OB.Text;
-        repeat
-          Consumed := TryConsumeLinkRefDef(S, FRefDefs);
-          if Consumed = 0 then Break;
-          Delete(S, 1, Consumed);
-        until S = '';
+        Cursor := 1;
+        while TryConsumeLinkRefDef(OB.Text, Cursor, FRefDefs) do
+          ;
+        if Cursor > 1 then
+          S := Copy(OB.Text, Cursor, Length(OB.Text) - Cursor + 1)
+        else
+          S := OB.Text;
         S := TrimSpaces(S);
         if S = '' then
         begin
