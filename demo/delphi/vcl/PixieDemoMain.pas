@@ -8,6 +8,7 @@ uses
   Pixie.HtmlView.VCL, Pixie.NativeContainer, Pixie.Url,
   Pixie.Element, Pixie.Document, Pixie.PdfExport,
   Pixie.SvgView.VCL, Pixie.PaintBox.VCL, Pixie.DrawingCanvas,
+  Pixie.MarkdownView.VCL,
   Pixie.TagBar.VCL, Pixie.TagBar.Base, Pixie.TagBar.Render, Pixie.WebColor,
   PixieDemoContent, PixieDemoPaintBox,
   Vcl.Forms, Vcl.Controls, Vcl.Graphics, Vcl.Dialogs, Vcl.ComCtrls,
@@ -47,12 +48,20 @@ type
     TagBarAssign: TPixieTagBar;
     TagBarDisplay: TPixieTagBar;
     TagBarSettings: TPixieTagBar;
+    TabMarkdownView: TTabSheet;
+    MdToolbar: TPanel;
+    BtnLoadMd: TButton;
+    BtnReloadMd: TButton;
+    BtnSaveMdPdf: TButton;
+    ChkMdDefaultStyles: TCheckBox;
+    PixieMarkdownView: TPixieMarkdownView;
     FPaintBoxScale: Single;
     FCardCount: Integer;
     FParseStart: Int64;
     FPaintStart: Int64;
     FFetchAccum: Int64;
     FNavWarningShown: Boolean;
+    FMdPath: string;
     procedure BtnOpenClick(Sender: TObject);
     procedure BtnSavePdfClick(Sender: TObject);
     procedure BtnGoClick(Sender: TObject);
@@ -71,6 +80,12 @@ type
     procedure ZoomSliderChange(Sender: TObject);
     procedure NavigateToUrl(const Url: string);
     procedure CreateTagBarTab;
+    procedure CreateMarkdownTab(const ResourcePath: string);
+    procedure LoadMarkdownFile(const Path: string);
+    procedure BtnLoadMdClick(Sender: TObject);
+    procedure BtnReloadMdClick(Sender: TObject);
+    procedure BtnSaveMdPdfClick(Sender: TObject);
+    procedure MdDefaultStylesChange(Sender: TObject);
     procedure PopulateTagBarTags(Bar: TPixieTagBar);
     procedure PopulateTagBarTagsPlain(Bar: TPixieTagBar);
     procedure TagBarShapeChange(Sender: TObject);
@@ -261,6 +276,9 @@ begin
   PixiePaintBox.Color := clWhite;
   PixiePaintBox.OnPaint := PaintBoxPaint;
 
+  // --- Markdown tab ---
+  CreateMarkdownTab(ImgPath);
+
   // --- TagBar tab ---
   CreateTagBarTab;
 
@@ -287,6 +305,113 @@ begin
   end;
 
   PixieHtmlView.LoadFromString(PixieDemoHtmlContent(ImgPath, SvgPath), ImgPath);
+end;
+
+// ---------------------------------------------------------------------------
+// Markdown tab
+// ---------------------------------------------------------------------------
+
+procedure TMainForm.CreateMarkdownTab(const ResourcePath: string);
+begin
+  TabMarkdownView := TTabSheet.Create(PageControl);
+  TabMarkdownView.PageControl := PageControl;
+  TabMarkdownView.Caption := 'Markdown View';
+
+  MdToolbar := TPanel.Create(TabMarkdownView);
+  MdToolbar.Parent := TabMarkdownView;
+  MdToolbar.Align := alTop;
+  MdToolbar.Height := Scale(36);
+  MdToolbar.BevelOuter := bvNone;
+
+  BtnLoadMd := TButton.Create(MdToolbar);
+  BtnLoadMd.Parent := MdToolbar;
+  BtnLoadMd.SetBounds(Scale(4), Scale(6), Scale(120), Scale(24));
+  BtnLoadMd.Caption := 'Load .md file';
+  BtnLoadMd.OnClick := BtnLoadMdClick;
+
+  BtnReloadMd := TButton.Create(MdToolbar);
+  BtnReloadMd.Parent := MdToolbar;
+  BtnReloadMd.SetBounds(Scale(128), Scale(6), Scale(70), Scale(24));
+  BtnReloadMd.Caption := 'Reload';
+  BtnReloadMd.OnClick := BtnReloadMdClick;
+
+  BtnSaveMdPdf := TButton.Create(MdToolbar);
+  BtnSaveMdPdf.Parent := MdToolbar;
+  BtnSaveMdPdf.SetBounds(Scale(202), Scale(6), Scale(90), Scale(24));
+  BtnSaveMdPdf.Caption := 'Save as PDF';
+  BtnSaveMdPdf.OnClick := BtnSaveMdPdfClick;
+
+  ChkMdDefaultStyles := TCheckBox.Create(MdToolbar);
+  ChkMdDefaultStyles.Parent := MdToolbar;
+  ChkMdDefaultStyles.SetBounds(Scale(304), Scale(8), Scale(160), Scale(24));
+  ChkMdDefaultStyles.Caption := 'Use default styles';
+  ChkMdDefaultStyles.Checked := True;
+  ChkMdDefaultStyles.OnClick := MdDefaultStylesChange;
+
+  PixieMarkdownView := TPixieMarkdownView.Create(Self);
+  PixieMarkdownView.Parent := TabMarkdownView;
+  PixieMarkdownView.Align := alClient;
+  PixieMarkdownView.BorderStyle := bsSingle;
+  PixieMarkdownView.Color := clWhite;
+
+  if FileExists(ResourcePath + 'sample.md') then
+    LoadMarkdownFile(ResourcePath + 'sample.md');
+end;
+
+procedure TMainForm.LoadMarkdownFile(const Path: string);
+begin
+  FMdPath := Path;
+  PixieMarkdownView.LoadMarkdownFromFile(Path);
+end;
+
+procedure TMainForm.BtnLoadMdClick(Sender: TObject);
+var
+  Dlg: TOpenDialog;
+begin
+  Dlg := TOpenDialog.Create(nil);
+  try
+    Dlg.Filter := 'Markdown files (*.md;*.markdown)|*.md;*.markdown|' +
+      'All files (*.*)|*.*';
+    Dlg.Options := Dlg.Options + [ofFileMustExist];
+    if Dlg.Execute then
+      LoadMarkdownFile(Dlg.FileName);
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TMainForm.BtnReloadMdClick(Sender: TObject);
+begin
+  if FMdPath <> '' then
+    LoadMarkdownFile(FMdPath);
+end;
+
+procedure TMainForm.BtnSaveMdPdfClick(Sender: TObject);
+var
+  Dlg: TSaveDialog;
+begin
+  if FMdPath = '' then Exit;
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Filter := 'PDF files (*.pdf)|*.pdf';
+    Dlg.DefaultExt := '.pdf';
+    Dlg.FileName := 'markdown.pdf';
+    if not Dlg.Execute then Exit;
+    try
+      PixieDemoSaveMarkdownAsPdf(FMdPath, Dlg.FileName);
+      StatusBar.Panels[0].Text := 'PDF saved.';
+    except
+      on E: Exception do
+        ShowMessage(E.ClassName + ': ' + E.Message);
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TMainForm.MdDefaultStylesChange(Sender: TObject);
+begin
+  PixieMarkdownView.UseDefaultStyles := ChkMdDefaultStyles.Checked;
 end;
 
 // ---------------------------------------------------------------------------

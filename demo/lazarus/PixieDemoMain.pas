@@ -11,6 +11,7 @@ uses
   Pixie.HtmlView, Pixie.NativeContainer, Pixie.Url,
   Pixie.Element, Pixie.Document, Pixie.PdfExport,
   Pixie.SvgView, Pixie.PaintBox, Pixie.DrawingCanvas,
+  Pixie.MarkdownView,
   Pixie.TagBar, Pixie.TagBar.Base, Pixie.TagBar.Render, Pixie.WebColor,
   PixieDemoContent, PixieDemoPaintBox,
   Forms, Controls, Graphics, Dialogs, ComCtrls, StdCtrls, ExtCtrls, Buttons;
@@ -71,8 +72,22 @@ type
     TagBarAssign: TPixieTagBar;
     TagBarDisplay: TPixieTagBar;
     TagBarSettings: TPixieTagBar;
+    TabMarkdownView: TTabSheet;
+    MdToolbar: TPanel;
+    BtnLoadMd: TSpeedButton;
+    BtnReloadMd: TSpeedButton;
+    BtnSaveMdPdf: TSpeedButton;
+    ChkMdDefaultStyles: TCheckBox;
+    PixieMarkdownView: TPixieMarkdownView;
+    FMdPath: string;
     procedure NavigateToUrl(const Url: string);
     procedure CreateTagBarTab;
+    procedure CreateMarkdownTab(const ResourcePath: string);
+    procedure LoadMarkdownFile(const Path: string);
+    procedure BtnLoadMdClick(Sender: TObject);
+    procedure BtnReloadMdClick(Sender: TObject);
+    procedure BtnSaveMdPdfClick(Sender: TObject);
+    procedure MdDefaultStylesChange(Sender: TObject);
     procedure PopulateTagBarTags(Bar: TPixieTagBar);
     procedure PopulateTagBarTagsPlain(Bar: TPixieTagBar);
     procedure TagBarShapeChange(Sender: TObject);
@@ -174,8 +189,129 @@ begin
   CbAlignment.Items.Add('Centre Both');
   CbAlignment.ItemIndex := 3;
 
-  // TagBar tab
+  CreateMarkdownTab(ImgPath);
   CreateTagBarTab;
+end;
+
+// ---------------------------------------------------------------------------
+// Markdown tab
+// ---------------------------------------------------------------------------
+
+procedure TMainForm.CreateMarkdownTab(const ResourcePath: string);
+begin
+  TabMarkdownView := TTabSheet.Create(PageControl);
+  TabMarkdownView.PageControl := PageControl;
+  TabMarkdownView.Caption := 'Markdown View';
+
+  MdToolbar := TPanel.Create(TabMarkdownView);
+  MdToolbar.Parent := TabMarkdownView;
+  MdToolbar.Align := alTop;
+  MdToolbar.Height := 36;
+  MdToolbar.BevelOuter := bvNone;
+
+  BtnLoadMd := TSpeedButton.Create(MdToolbar);
+  BtnLoadMd.Parent := MdToolbar;
+  BtnLoadMd.Left := 4;
+  BtnLoadMd.Top := 6;
+  BtnLoadMd.Width := 120;
+  BtnLoadMd.Height := 24;
+  BtnLoadMd.Caption := 'Load .md file';
+  BtnLoadMd.OnClick := @BtnLoadMdClick;
+
+  BtnReloadMd := TSpeedButton.Create(MdToolbar);
+  BtnReloadMd.Parent := MdToolbar;
+  BtnReloadMd.Left := 128;
+  BtnReloadMd.Top := 6;
+  BtnReloadMd.Width := 70;
+  BtnReloadMd.Height := 24;
+  BtnReloadMd.Caption := 'Reload';
+  BtnReloadMd.OnClick := @BtnReloadMdClick;
+
+  BtnSaveMdPdf := TSpeedButton.Create(MdToolbar);
+  BtnSaveMdPdf.Parent := MdToolbar;
+  BtnSaveMdPdf.Left := 202;
+  BtnSaveMdPdf.Top := 6;
+  BtnSaveMdPdf.Width := 90;
+  BtnSaveMdPdf.Height := 24;
+  BtnSaveMdPdf.Caption := 'Save as PDF';
+  BtnSaveMdPdf.OnClick := @BtnSaveMdPdfClick;
+
+  ChkMdDefaultStyles := TCheckBox.Create(MdToolbar);
+  ChkMdDefaultStyles.Parent := MdToolbar;
+  ChkMdDefaultStyles.Left := 304;
+  ChkMdDefaultStyles.Top := 8;
+  ChkMdDefaultStyles.Width := 160;
+  ChkMdDefaultStyles.Caption := 'Use default styles';
+  ChkMdDefaultStyles.Checked := True;
+  ChkMdDefaultStyles.OnChange := @MdDefaultStylesChange;
+
+  PixieMarkdownView := TPixieMarkdownView.Create(Self);
+  PixieMarkdownView.Parent := TabMarkdownView;
+  PixieMarkdownView.Align := alClient;
+  PixieMarkdownView.BorderStyle := bsSingle;
+  PixieMarkdownView.Color := clWhite;
+
+  if FileExists(ResourcePath + 'sample.md') then
+    LoadMarkdownFile(ResourcePath + 'sample.md');
+end;
+
+procedure TMainForm.LoadMarkdownFile(const Path: string);
+begin
+  FMdPath := Path;
+  // LoadMarkdownFromFile derives the base URL from the file path so
+  // relative image references (e.g. pixie-logo.svg in sample.md)
+  // resolve against the resources directory.
+  PixieMarkdownView.LoadMarkdownFromFile(Path);
+end;
+
+procedure TMainForm.BtnLoadMdClick(Sender: TObject);
+var
+  Dlg: TOpenDialog;
+begin
+  Dlg := TOpenDialog.Create(nil);
+  try
+    Dlg.Filter := 'Markdown files (*.md;*.markdown)|*.md;*.markdown|' +
+      'All files (*.*)|*.*';
+    Dlg.Options := Dlg.Options + [ofFileMustExist];
+    if Dlg.Execute then
+      LoadMarkdownFile(Dlg.FileName);
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TMainForm.BtnReloadMdClick(Sender: TObject);
+begin
+  if FMdPath <> '' then
+    LoadMarkdownFile(FMdPath);
+end;
+
+procedure TMainForm.BtnSaveMdPdfClick(Sender: TObject);
+var
+  Dlg: TSaveDialog;
+begin
+  if FMdPath = '' then Exit;
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Filter := 'PDF files (*.pdf)|*.pdf';
+    Dlg.DefaultExt := '.pdf';
+    Dlg.FileName := 'markdown.pdf';
+    if not Dlg.Execute then Exit;
+    try
+      PixieDemoSaveMarkdownAsPdf(FMdPath, Dlg.FileName);
+      StatusBar.Panels[0].Text := 'PDF saved.';
+    except
+      on E: Exception do
+        ShowMessage(E.ClassName + ': ' + E.Message);
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TMainForm.MdDefaultStylesChange(Sender: TObject);
+begin
+  PixieMarkdownView.UseDefaultStyles := ChkMdDefaultStyles.Checked;
 end;
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ interface
 
 uses
   SysUtils, Classes,
+  Pixie.Markdown, Pixie.PdfExport,
   Pixie.Element, Pixie.Document;
 
 const
@@ -29,6 +30,11 @@ function PixieDemoSampleSvg: string;
 
 function PixieDemoNavigationWarning(const Url, LineBreak: string): string;
 
+// Read MdPath, render to a full HTML document, and write it to OutPath
+// as a PDF via TPixiePdfExport. Centralised so all three demo flavours
+// (Lazarus, VCL, FMX) share the same conversion path.
+procedure PixieDemoSaveMarkdownAsPdf(const MdPath, OutPath: string);
+
 implementation
 
 // ---------------------------------------------------------------------------
@@ -44,6 +50,23 @@ begin
     'engine designed for rich content display, not a full web browser. ' +
     'Complex web pages may render incorrectly or incompletely.' + LineBreak + LineBreak +
     'Continue?';
+end;
+
+procedure PixieDemoSaveMarkdownAsPdf(const MdPath, OutPath: string);
+var
+  Pdf: TPixiePdfExport;
+  Html: string;
+begin
+  Html := PixieMarkdownToHtmlDocument(
+    PixieMarkdownReadFile(MdPath), 'Pixie Markdown');
+  Pdf := TPixiePdfExport.Create;
+  try
+    Pdf.Title := 'Pixie Markdown';
+    Pdf.BaseUrl := ExtractFilePath(MdPath);
+    Pdf.SaveToFile(Html, OutPath);
+  finally
+    Pdf.Free;
+  end;
 end;
 
 // ---------------------------------------------------------------------------
