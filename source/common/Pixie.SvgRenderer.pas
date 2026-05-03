@@ -211,6 +211,8 @@ type
       out Color: TPixieWebColor): Boolean;
     function ParseStyleAttribute(
       const StyleStr, PropName: string): string;
+    function BuildStyleMap(const StyleStr: string): TPixieSvgStyleMap;
+    function StyleVal(Map: TPixieSvgStyleMap; const Key: string): string;
     function ResolveNodeStyle(Node: Pointer): string;
     function InheritState(Node: Pointer;
       const ParentState: TPixieSvgState): TPixieSvgState;
@@ -998,6 +1000,39 @@ begin
   end;
 end;
 
+function TPixieSvgRendererBase.StyleVal(Map: TPixieSvgStyleMap;
+  const Key: string): string;
+begin
+  if (Map = nil) or not Map.TryGetValue(Key, Result) then
+    Result := '';
+end;
+
+function TPixieSvgRendererBase.BuildStyleMap(
+  const StyleStr: string): TPixieSvgStyleMap;
+var
+  P, SemiPos, ColonPos: Integer;
+  Key, Value: string;
+begin
+  Result := TPixieSvgStyleMap.Create;
+  P := 1;
+  while P <= Length(StyleStr) do
+  begin
+    SemiPos := Pos(';', StyleStr, P);
+    if SemiPos = 0 then
+      SemiPos := Length(StyleStr) + 1;
+
+    Key := Trim(Copy(StyleStr, P, SemiPos - P));
+    ColonPos := Pos(':', Key);
+    if ColonPos > 0 then
+    begin
+      Value := Trim(Copy(Key, ColonPos + 1, MaxInt));
+      Key := LowerCase(Trim(Copy(Key, 1, ColonPos - 1)));
+      Result.AddOrSetValue(Key, Value);
+    end;
+    P := SemiPos + 1;
+  end;
+end;
+
 // Builds the effective style string for a node by merging, in order:
 //   1. Type selector (@tag)
 //   2. Class selectors (.className) in order of appearance
@@ -1086,21 +1121,26 @@ var
   Pos1, Pos2: Integer;
   V: Single;
   Color: TPixieWebColor;
+  StyleMap: TPixieSvgStyleMap;
 begin
   Result := ParentState;
 
   StyleStr := ResolveNodeStyle(Node);
+  // Parse the style string once into a key->value map so the ~30 property
+  // lookups below are O(1) each instead of re-scanning the whole string.
+  StyleMap := BuildStyleMap(StyleStr);
+  try
 
   // CSS color property (resolve before fill/stroke for currentColor)
   // Inline style takes priority over presentation attributes per SVG/CSS spec
-  ColorStr := ParseStyleAttribute(StyleStr, 'color');
+  ColorStr := StyleVal(StyleMap, 'color');
   if ColorStr = '' then
     ColorStr := GetAttr(Node, 'color');
   if (ColorStr <> '') and (ColorStr <> 'inherit') and ParseSvgColor(ColorStr, Color) then
     Result.Color := Color;
 
   // Fill
-  FillStr := ParseStyleAttribute(StyleStr, 'fill');
+  FillStr := StyleVal(StyleMap, 'fill');
   if FillStr = '' then
     FillStr := GetAttr(Node, 'fill');
   if FillStr <> '' then
@@ -1142,7 +1182,7 @@ begin
   end;
 
   // Stroke
-  StrokeStr := ParseStyleAttribute(StyleStr, 'stroke');
+  StrokeStr := StyleVal(StyleMap, 'stroke');
   if StrokeStr = '' then
     StrokeStr := GetAttr(Node, 'stroke');
   if StrokeStr <> '' then
@@ -1184,14 +1224,14 @@ begin
   end;
 
   // Stroke width
-  StrokeWStr := ParseStyleAttribute(StyleStr, 'stroke-width');
+  StrokeWStr := StyleVal(StyleMap, 'stroke-width');
   if StrokeWStr = '' then
     StrokeWStr := GetAttr(Node, 'stroke-width');
   if TryParseSvgFloat(StrokeWStr, V) then
     Result.StrokeWidth := V;
 
   // Stroke line cap
-  LineCapStr := ParseStyleAttribute(StyleStr, 'stroke-linecap');
+  LineCapStr := StyleVal(StyleMap, 'stroke-linecap');
   if LineCapStr = '' then
     LineCapStr := GetAttr(Node, 'stroke-linecap');
   if LineCapStr = 'round' then
@@ -1202,7 +1242,7 @@ begin
     Result.LineCap := lcButt;
 
   // Stroke line join
-  LineJoinStr := ParseStyleAttribute(StyleStr, 'stroke-linejoin');
+  LineJoinStr := StyleVal(StyleMap, 'stroke-linejoin');
   if LineJoinStr = '' then
     LineJoinStr := GetAttr(Node, 'stroke-linejoin');
   if LineJoinStr = 'round' then
@@ -1213,7 +1253,7 @@ begin
     Result.LineJoin := ljMiter;
 
   // Stroke dash array
-  DashArrayStr := ParseStyleAttribute(StyleStr, 'stroke-dasharray');
+  DashArrayStr := StyleVal(StyleMap, 'stroke-dasharray');
   if DashArrayStr = '' then
     DashArrayStr := GetAttr(Node, 'stroke-dasharray');
   if DashArrayStr <> '' then
@@ -1226,7 +1266,7 @@ begin
   end;
 
   // Stroke dash offset
-  DashOffsetStr := ParseStyleAttribute(StyleStr, 'stroke-dashoffset');
+  DashOffsetStr := StyleVal(StyleMap, 'stroke-dashoffset');
   if DashOffsetStr = '' then
     DashOffsetStr := GetAttr(Node, 'stroke-dashoffset');
   if TryParseSvgFloat(DashOffsetStr, V) then
@@ -1234,21 +1274,21 @@ begin
 
   // Opacity (not inherited — each element defaults to 1.0 unless explicitly set)
   Result.Opacity := 1.0;
-  OpacStr := ParseStyleAttribute(StyleStr, 'opacity');
+  OpacStr := StyleVal(StyleMap, 'opacity');
   if OpacStr = '' then
     OpacStr := GetAttr(Node, 'opacity');
   if TryParseSvgFloat(OpacStr, V) then
     Result.Opacity := V;
 
   // Fill opacity
-  FillOpStr := ParseStyleAttribute(StyleStr, 'fill-opacity');
+  FillOpStr := StyleVal(StyleMap, 'fill-opacity');
   if FillOpStr = '' then
     FillOpStr := GetAttr(Node, 'fill-opacity');
   if TryParseSvgFloat(FillOpStr, V) then
     Result.FillOpacity := V;
 
   // Stroke opacity
-  StrokeOpStr := ParseStyleAttribute(StyleStr, 'stroke-opacity');
+  StrokeOpStr := StyleVal(StyleMap, 'stroke-opacity');
   if StrokeOpStr = '' then
     StrokeOpStr := GetAttr(Node, 'stroke-opacity');
   if TryParseSvgFloat(StrokeOpStr, V) then
@@ -1256,26 +1296,26 @@ begin
 
   // Font shorthand: font: [style] [weight] size[/line-height] family[, ...]
   // Parsed first so individual properties can override below
-  FontShorthand := ParseStyleAttribute(StyleStr, 'font');
+  FontShorthand := StyleVal(StyleMap, 'font');
   if FontShorthand <> '' then
     ParseFontShorthand(FontShorthand, Result);
 
   // Font family
-  FontFamilyStr := ParseStyleAttribute(StyleStr, 'font-family');
+  FontFamilyStr := StyleVal(StyleMap, 'font-family');
   if FontFamilyStr = '' then
     FontFamilyStr := GetAttr(Node, 'font-family');
   if FontFamilyStr <> '' then
     Result.FontFamily := NormalizeFontFamily(FontFamilyStr);
 
   // Font size — em/rem/% resolve against the already-inherited Result.FontSize.
-  FontSizeStr := ParseStyleAttribute(StyleStr, 'font-size');
+  FontSizeStr := StyleVal(StyleMap, 'font-size');
   if FontSizeStr = '' then
     FontSizeStr := GetAttr(Node, 'font-size');
   if FontSizeStr <> '' then
     Result.FontSize := ParseSvgLengthEm(FontSizeStr, Result.FontSize);
 
   // Font weight
-  FontWeightStr := ParseStyleAttribute(StyleStr, 'font-weight');
+  FontWeightStr := StyleVal(StyleMap, 'font-weight');
   if FontWeightStr = '' then
     FontWeightStr := GetAttr(Node, 'font-weight');
   if FontWeightStr <> '' then
@@ -1289,14 +1329,14 @@ begin
   end;
 
   // Font style
-  FontStyleStr := ParseStyleAttribute(StyleStr, 'font-style');
+  FontStyleStr := StyleVal(StyleMap, 'font-style');
   if FontStyleStr = '' then
     FontStyleStr := GetAttr(Node, 'font-style');
   if FontStyleStr <> '' then
     Result.FontItalic := (FontStyleStr = 'italic') or (FontStyleStr = 'oblique');
 
   // Letter spacing
-  LetterSpacingStr := ParseStyleAttribute(StyleStr, 'letter-spacing');
+  LetterSpacingStr := StyleVal(StyleMap, 'letter-spacing');
   if LetterSpacingStr = '' then
     LetterSpacingStr := GetAttr(Node, 'letter-spacing');
   if LetterSpacingStr <> '' then
@@ -1308,7 +1348,7 @@ begin
   end;
 
   // Baseline shift (super/sub/percentage/length)
-  BaselineShiftStr := ParseStyleAttribute(StyleStr, 'baseline-shift');
+  BaselineShiftStr := StyleVal(StyleMap, 'baseline-shift');
   if BaselineShiftStr = '' then
     BaselineShiftStr := GetAttr(Node, 'baseline-shift');
   if BaselineShiftStr <> '' then
@@ -1327,7 +1367,7 @@ begin
   end;
 
   // Dominant baseline
-  DomBaselineStr := ParseStyleAttribute(StyleStr, 'dominant-baseline');
+  DomBaselineStr := StyleVal(StyleMap, 'dominant-baseline');
   if DomBaselineStr = '' then
     DomBaselineStr := GetAttr(Node, 'dominant-baseline');
   if DomBaselineStr <> '' then
@@ -1354,7 +1394,7 @@ begin
   end;
 
   // Text anchor
-  AnchorStr := ParseStyleAttribute(StyleStr, 'text-anchor');
+  AnchorStr := StyleVal(StyleMap, 'text-anchor');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'text-anchor');
   if AnchorStr = 'middle' then
@@ -1365,7 +1405,7 @@ begin
     Result.TextAnchor := taLeft;
 
   // Text decoration
-  TextDecStr := ParseStyleAttribute(StyleStr, 'text-decoration');
+  TextDecStr := StyleVal(StyleMap, 'text-decoration');
   if TextDecStr = '' then
     TextDecStr := GetAttr(Node, 'text-decoration');
   if TextDecStr <> '' then
@@ -1386,7 +1426,7 @@ begin
   end;
 
   // Fill rule
-  AnchorStr := ParseStyleAttribute(StyleStr, 'fill-rule');
+  AnchorStr := StyleVal(StyleMap, 'fill-rule');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'fill-rule');
   if AnchorStr = 'evenodd' then
@@ -1397,7 +1437,7 @@ begin
   // paint-order: default is "fill stroke markers".  Per SVG spec, if only
   // "stroke" is listed the omitted values follow in default order, so
   // "stroke" alone means "stroke fill markers".  "normal" resets to default.
-  AnchorStr := ParseStyleAttribute(StyleStr, 'paint-order');
+  AnchorStr := StyleVal(StyleMap, 'paint-order');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'paint-order');
   if AnchorStr <> '' then
@@ -1416,7 +1456,7 @@ begin
 
   // Marker properties (inherited per SVG spec)
   // 'marker' shorthand sets all three at once
-  MarkerStr := ParseStyleAttribute(StyleStr, 'marker');
+  MarkerStr := StyleVal(StyleMap, 'marker');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker');
   if MarkerStr <> '' then
@@ -1434,19 +1474,19 @@ begin
       Result.MarkerEnd := MarkerStr;
     end;
   end;
-  MarkerStr := ParseStyleAttribute(StyleStr, 'marker-start');
+  MarkerStr := StyleVal(StyleMap, 'marker-start');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker-start');
   if MarkerStr <> '' then
     if MarkerStr = 'none' then Result.MarkerStart := ''
     else Result.MarkerStart := MarkerStr;
-  MarkerStr := ParseStyleAttribute(StyleStr, 'marker-mid');
+  MarkerStr := StyleVal(StyleMap, 'marker-mid');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker-mid');
   if MarkerStr <> '' then
     if MarkerStr = 'none' then Result.MarkerMid := ''
     else Result.MarkerMid := MarkerStr;
-  MarkerStr := ParseStyleAttribute(StyleStr, 'marker-end');
+  MarkerStr := StyleVal(StyleMap, 'marker-end');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker-end');
   if MarkerStr <> '' then
@@ -1462,7 +1502,7 @@ begin
 
   // Mix blend mode (non-inherited — reset per element)
   Result.BlendMode := bmNormal;
-  AnchorStr := ParseStyleAttribute(StyleStr, 'mix-blend-mode');
+  AnchorStr := StyleVal(StyleMap, 'mix-blend-mode');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'mix-blend-mode');
   if AnchorStr = 'multiply' then Result.BlendMode := bmMultiply
@@ -1481,6 +1521,9 @@ begin
   else if AnchorStr = 'color' then Result.BlendMode := bmColor
   else if AnchorStr = 'luminosity' then Result.BlendMode := bmLuminosity;
 
+  finally
+    StyleMap.Free;
+  end;
 end;
 
 // ===========================================================================
@@ -3862,22 +3905,35 @@ end;
 
 function TPixieSvgRendererBase.CollectAllText(Node: Pointer): string;
 var
-  Child: TDOMNode;
-  Tag: string;
-begin
-  Result := '';
-  Child := TDOMNode(Node).FirstChild;
-  while Child <> nil do
+  Builder: TStringBuilder;
+
+  procedure WalkInto(N: Pointer);
+  var
+    Child: TDOMNode;
+    Tag: string;
   begin
-    if Child.NodeType = xntText then
-      Result := Result + PixieDomToStr(Child.NodeValue)
-    else if Child.NodeType = xntElement then
+    Child := TDOMNode(N).FirstChild;
+    while Child <> nil do
     begin
-      Tag := LowerCase(PixieDomToStr(TDOMElement(Child).TagName));
-      if (Tag <> 'desc') and (Tag <> 'title') and (Tag <> 'metadata') then
-        Result := Result + CollectAllText(Child);
+      if Child.NodeType = xntText then
+        Builder.Append(PixieDomToStr(Child.NodeValue))
+      else if Child.NodeType = xntElement then
+      begin
+        Tag := LowerCase(PixieDomToStr(TDOMElement(Child).TagName));
+        if (Tag <> 'desc') and (Tag <> 'title') and (Tag <> 'metadata') then
+          WalkInto(Child);
+      end;
+      Child := Child.NextSibling;
     end;
-    Child := Child.NextSibling;
+  end;
+
+begin
+  Builder := TStringBuilder.Create;
+  try
+    WalkInto(Node);
+    Result := Builder.ToString;
+  finally
+    Builder.Free;
   end;
 end;
 
