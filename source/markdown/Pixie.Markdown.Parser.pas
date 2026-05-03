@@ -970,7 +970,7 @@ begin
   OB := DeepestLeaf;
   if (OB <> nil) and (OB.Kind = obParagraph) then
   begin
-    if OB.Text <> '' then OB.Text := OB.Text + sLineBreak;
+    if OB.Text <> '' then OB.Text := OB.Text + #10;
     OB.Text := OB.Text + Text;
     Exit;
   end;
@@ -1403,7 +1403,7 @@ begin
     if (not IsBlank) and (Leaf <> nil) and (Leaf.Kind = obParagraph) and
        not LineWouldStartBlock(Line, Offset) then
     begin
-      Leaf.Text := Leaf.Text + sLineBreak +
+      Leaf.Text := Leaf.Text + #10 +
         TrimSpaces(Copy(Line, Offset, Length(Line)));
       Exit;
     end;

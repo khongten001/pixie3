@@ -45,7 +45,7 @@ type
 implementation
 
 uses
-  Pixie.HtmlEntities, Pixie.Utf8;
+  Pixie.Utils, Pixie.HtmlEntities, Pixie.Utf8;
 
 function ResolveNamedEntity(const Name: string): string;
 var
@@ -394,6 +394,45 @@ begin
   end;
 end;
 
+// Percent-encode a URL per CommonMark output rules. Existing %XX
+// sequences pass through verbatim so already-encoded input is preserved.
+// The safe set follows cmark: RFC 3986 unreserved + sub-delims +
+// "/?:@&=$#" — note `[` and `]` are NOT safe (encoded as %5B / %5D).
+function MdPercentEncodeUrl(const S: string): string;
+const
+  HexChars: array[0..15] of Char = '0123456789ABCDEF';
+var
+  I, Len: Integer;
+  C: Char;
+begin
+  Len := Length(S);
+  Result := '';
+  I := 1;
+  while I <= Len do
+  begin
+    C := S[I];
+    if (C = '%') and (I + 2 <= Len) and
+       PixieIsHexDigit(Ord(S[I + 1])) and
+       PixieIsHexDigit(Ord(S[I + 2])) then
+    begin
+      Result := Result + S[I] + S[I + 1] + S[I + 2];
+      Inc(I, 3);
+      Continue;
+    end;
+    case C of
+      'A'..'Z', 'a'..'z', '0'..'9',
+      '-', '_', '.', '+', '~', '!', '*', '''', '(', ')',
+      ';', ',', '/', '?', ':', '@', '&', '=', '$', '#':
+        Result := Result + C;
+    else
+      Result := Result + '%' +
+        HexChars[(Ord(C) shr 4) and $F] +
+        HexChars[Ord(C) and $F];
+    end;
+    Inc(I);
+  end;
+end;
+
 // Link or image: [text](url "title") or ![alt](url "title").
 // Returns position after closing paren, or 0.
 function ScanLink(const S: string; Start: Integer; var IsImage: Boolean;
@@ -508,7 +547,7 @@ begin
   end;
   while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
   if (I > Len) or (S[I] <> ')') then Exit;
-  Url := MdProcessLinkPart(Url);
+  Url := MdPercentEncodeUrl(MdProcessLinkPart(Url));
   Title := MdProcessLinkPart(Title);
   Result := I + 1;
 end;
@@ -568,7 +607,7 @@ begin
   if not RefDefs.TryGetValue(NormalizeLinkLabel(RefLabel), Ref) then Exit;
   // Ref defs are stored verbatim; apply backslash + entity processing
   // at lookup time so the resolved URL/title match CommonMark output.
-  Url := MdProcessLinkPart(Ref.Url);
+  Url := MdPercentEncodeUrl(MdProcessLinkPart(Ref.Url));
   Title := MdProcessLinkPart(Ref.Title);
   AfterEnd := AfterText;
   Result := True;
@@ -802,6 +841,32 @@ end;
 
 function ParseImpl(const Source: string;
   RefDefs: TPixieMdLinkRefMap;
+  Options: TPixieMdOptions): TPixieMdNodeList; forward;
+
+// Build a link or image node and populate it by inline-parsing the
+// label as its children. Used by the four bracket forms (inline link,
+// reference link, inline image, reference image).
+function BuildLinkLikeNode(Kind: TPixieMdNodeKind;
+  const Url, Title, LabelText: string;
+  RefDefs: TPixieMdLinkRefMap;
+  Options: TPixieMdOptions): TPixieMdNode;
+var
+  InlineList: TPixieMdNodeList;
+begin
+  Result := TPixieMdNode.Create(Kind);
+  Result.LinkUrl := Url;
+  Result.LinkTitle := Title;
+  InlineList := ParseImpl(LabelText, RefDefs, Options);
+  try
+    while InlineList.Count > 0 do
+      Result.AddChild(InlineList.Extract(InlineList[0]));
+  finally
+    InlineList.Free;
+  end;
+end;
+
+function ParseImpl(const Source: string;
+  RefDefs: TPixieMdLinkRefMap;
   Options: TPixieMdOptions): TPixieMdNodeList;
 var
   I, Len, RunLen: Integer;
@@ -878,9 +943,9 @@ begin
             FlushText(Pending, Result);
             Node := TPixieMdNode.Create(mnLink);
             if IsEmail then
-              Node.LinkUrl := 'mailto:' + Url
+              Node.LinkUrl := 'mailto:' + MdPercentEncodeUrl(Url)
             else
-              Node.LinkUrl := Url;
+              Node.LinkUrl := MdPercentEncodeUrl(Url);
             Node.AddChild(NewText(Url));
             Result.Add(Node);
             I := AfterAuto;
@@ -923,11 +988,10 @@ begin
             if AfterLink > 0 then
             begin
               FlushText(Pending, Result);
-              Node := TPixieMdNode.Create(mnImage);
-              Node.LinkUrl := Url;
-              Node.LinkTitle := Title;
-              Node.ImageAlt := LabelText;
-              Result.Add(Node);
+              // Image alt is the inline-parsed label flattened to plain
+              // text by the writer.
+              Result.Add(BuildLinkLikeNode(mnImage, Url, Title,
+                LabelText, RefDefs, Options));
               I := AfterLink;
               Continue;
             end;
@@ -935,11 +999,8 @@ begin
               LabelText, Url, Title, AfterLink) then
             begin
               FlushText(Pending, Result);
-              Node := TPixieMdNode.Create(mnImage);
-              Node.LinkUrl := Url;
-              Node.LinkTitle := Title;
-              Node.ImageAlt := LabelText;
-              Result.Add(Node);
+              Result.Add(BuildLinkLikeNode(mnImage, Url, Title,
+                LabelText, RefDefs, Options));
               I := AfterLink;
               Continue;
             end;
@@ -955,36 +1016,17 @@ begin
           if AfterLink > 0 then
           begin
             FlushText(Pending, Result);
-            Node := TPixieMdNode.Create(mnLink);
-            Node.LinkUrl := Url;
-            Node.LinkTitle := Title;
-            InlineList := ParseImpl(LabelText, RefDefs, Options);
-            try
-              while InlineList.Count > 0 do
-                Node.AddChild(InlineList.Extract(InlineList[0]));
-            finally
-              InlineList.Free;
-            end;
-            Result.Add(Node);
+            Result.Add(BuildLinkLikeNode(mnLink, Url, Title,
+              LabelText, RefDefs, Options));
             I := AfterLink;
             Continue;
           end;
-          // Try reference-style link: [text][label] or [text][] or [text]
           if (RefDefs <> nil) and TryReferenceLink(Source, I, RefDefs,
             LabelText, Url, Title, AfterLink) then
           begin
             FlushText(Pending, Result);
-            Node := TPixieMdNode.Create(mnLink);
-            Node.LinkUrl := Url;
-            Node.LinkTitle := Title;
-            InlineList := ParseImpl(LabelText, RefDefs, Options);
-            try
-              while InlineList.Count > 0 do
-                Node.AddChild(InlineList.Extract(InlineList[0]));
-            finally
-              InlineList.Free;
-            end;
-            Result.Add(Node);
+            Result.Add(BuildLinkLikeNode(mnLink, Url, Title,
+              LabelText, RefDefs, Options));
             I := AfterLink;
             Continue;
           end;
