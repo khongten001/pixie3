@@ -118,6 +118,12 @@ begin
   end;
 end;
 
+procedure StripTrailingLf(var S: string);
+begin
+  if (Length(S) > 0) and (S[Length(S)] = #10) then
+    SetLength(S, Length(S) - 1);
+end;
+
 function StripTrailingWhitespace(const S: string): string;
 var
   I: Integer;
@@ -992,23 +998,13 @@ begin
           OB.Node.AddChild(TextChild);
         end;
       end;
-    obFencedCode, obIndentedCode:
+    obFencedCode, obIndentedCode, obHtmlBlock:
       begin
+        // Line accumulator uses bare LF; CommonMark output keeps literal
+        // LFs so the trailing one (sentinel from the last appended line)
+        // is dropped here.
         S := OB.Text;
-        // Strip a single trailing line break (sLineBreak from accumulator).
-        if (Length(S) >= Length(sLineBreak)) and
-           (Copy(S, Length(S) - Length(sLineBreak) + 1, Length(sLineBreak)) =
-            sLineBreak) then
-          SetLength(S, Length(S) - Length(sLineBreak));
-        OB.Node.Literal := S;
-      end;
-    obHtmlBlock:
-      begin
-        S := OB.Text;
-        if (Length(S) >= Length(sLineBreak)) and
-           (Copy(S, Length(S) - Length(sLineBreak) + 1, Length(sLineBreak)) =
-            sLineBreak) then
-          SetLength(S, Length(S) - Length(sLineBreak));
+        StripTrailingLf(S);
         OB.Node.Literal := S;
       end;
   end;
@@ -1076,11 +1072,13 @@ begin
       obFencedCode: ;
       obIndentedCode:
         begin
+          // Verify 4 cols of indent but leave Offset unchanged: the
+          // indented-code branch in ProcessLine re-strips 4 itself so
+          // excess indentation is preserved verbatim in the code text.
           if IsBlankLine(Line) then Continue;
           NewOffset := Offset;
           SkipIndent(Line, NewOffset, 4, Indent);
           if Indent < 4 then Exit(I);
-          Offset := NewOffset;
         end;
       obHtmlBlock: ;
       obParagraph:
@@ -1309,14 +1307,14 @@ begin
       Exit;
     end;
     SkipIndent(Line, Offset, Leaf.FenceIndent, Indent);
-    Leaf.Text := Leaf.Text + Copy(Line, Offset, Length(Line)) + sLineBreak;
+    Leaf.Text := Leaf.Text + Copy(Line, Offset, Length(Line)) + #10;
     Exit;
   end;
 
   // HTML block: append until end condition.
   if (Leaf <> nil) and (Leaf.Kind = obHtmlBlock) then
   begin
-    Leaf.Text := Leaf.Text + Line + sLineBreak;
+    Leaf.Text := Leaf.Text + Line + #10;
     if IsHtmlBlockEnd(Line, Leaf.HtmlStartType) then
       CloseBlocksFrom(FOpen.IndexOf(Leaf));
     Exit;
@@ -1360,7 +1358,7 @@ begin
       if Leaf.Kind = obParagraph then
         CloseBlocksFrom(FOpen.IndexOf(Leaf))
       else if Leaf.Kind = obIndentedCode then
-        Leaf.Text := Leaf.Text + sLineBreak;
+        Leaf.Text := Leaf.Text + #10;
     end;
     for ListIdx := FOpen.Count - 1 downto 0 do
       if FOpen[ListIdx].Kind = obList then
@@ -1379,7 +1377,7 @@ begin
   begin
     if (Leaf <> nil) and (Leaf.Kind = obIndentedCode) then
     begin
-      Leaf.Text := Leaf.Text + Copy(Line, TmpOff, Length(Line)) + sLineBreak;
+      Leaf.Text := Leaf.Text + Copy(Line, TmpOff, Length(Line)) + #10;
       Exit;
     end;
     if Leaf <> nil then CloseBlocksFrom(FOpen.IndexOf(Leaf));
@@ -1387,7 +1385,7 @@ begin
     CodeOB := TOpenBlock.Create;
     CodeOB.Node := CodeNode;
     CodeOB.Kind := obIndentedCode;
-    CodeOB.Text := Copy(Line, TmpOff, Length(Line)) + sLineBreak;
+    CodeOB.Text := Copy(Line, TmpOff, Length(Line)) + #10;
     AddLeaf(CodeOB);
     Exit;
   end;
@@ -1525,7 +1523,7 @@ begin
     HtmlOB.Node := HtmlNode;
     HtmlOB.Kind := obHtmlBlock;
     HtmlOB.HtmlStartType := HtmlType;
-    HtmlOB.Text := Line + sLineBreak;
+    HtmlOB.Text := Line + #10;
     AddLeaf(HtmlOB);
     if IsHtmlBlockEnd(Line, HtmlType) then
       CloseBlocksFrom(FOpen.IndexOf(HtmlOB));
