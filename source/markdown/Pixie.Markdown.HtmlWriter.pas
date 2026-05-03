@@ -49,6 +49,7 @@ begin
       '&': SB := SB + '&amp;';
       '<': SB := SB + '&lt;';
       '>': SB := SB + '&gt;';
+      '"': SB := SB + '&quot;';
     else
       SB := SB + C;
     end;

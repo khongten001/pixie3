@@ -323,10 +323,14 @@ begin
       Inc(I);
     if (I = NumStart) or (I > Len) or (S[I] <> ';') then Exit;
     if IsHex then
-      CodePoint := StrToIntDef('$' + Copy(S, NumStart, I - NumStart), 0)
+      CodePoint := StrToIntDef('$' + Copy(S, NumStart, I - NumStart), -1)
     else
-      CodePoint := StrToIntDef(Copy(S, NumStart, I - NumStart), 0);
-    if (CodePoint <= 0) or (CodePoint > $10FFFF) then
+      CodePoint := StrToIntDef(Copy(S, NumStart, I - NumStart), -1);
+    if (CodePoint < 0) or (CodePoint > $10FFFF) then
+      Exit;
+    // HTML output forbids NUL; surrogates aren't valid codepoints.
+    if (CodePoint = 0) or
+       ((CodePoint >= $D800) and (CodePoint <= $DFFF)) then
       CodePoint := $FFFD;
     Decoded := '';
     AppendUtf8Char(Decoded, CodePoint);
@@ -343,6 +347,51 @@ begin
   if Resolved = '' then Exit;
   Decoded := Resolved;
   Result := I + 1;
+end;
+
+// Apply backslash escapes and decode HTML entities in a link
+// destination or title (CommonMark "process link destination/title").
+// Also used for fenced-code info strings, which the spec processes the
+// same way. Other characters are passed through unchanged.
+function MdProcessLinkPart(const S: string): string;
+var
+  I, Len, AfterEntity: Integer;
+  Decoded: string;
+begin
+  // Fast path: most URLs/titles/CodeLang values contain neither '\' nor
+  // '&'. AnsiString refcounting makes Exit(S) a no-copy return.
+  if (Pos('\', S) = 0) and (Pos('&', S) = 0) then
+    Exit(S);
+  Len := Length(S);
+  Result := '';
+  I := 1;
+  while I <= Len do
+  begin
+    if (S[I] = '\') and (I < Len) and IsAsciiPunct(S[I + 1]) then
+    begin
+      Result := Result + S[I + 1];
+      Inc(I, 2);
+    end
+    else if S[I] = '&' then
+    begin
+      AfterEntity := ScanEntity(S, I, Decoded);
+      if AfterEntity > 0 then
+      begin
+        Result := Result + Decoded;
+        I := AfterEntity;
+      end
+      else
+      begin
+        Result := Result + S[I];
+        Inc(I);
+      end;
+    end
+    else
+    begin
+      Result := Result + S[I];
+      Inc(I);
+    end;
+  end;
 end;
 
 // Link or image: [text](url "title") or ![alt](url "title").
@@ -417,10 +466,11 @@ begin
     ParenDepth := 0;
     while I <= Len do
     begin
-      if S[I] = '\' then
+      // Keep \X raw so MdProcessLinkPart can later unescape; \( and \)
+      // must not affect ParenDepth tracking, hence the explicit skip.
+      if (S[I] = '\') and (I < Len) then
       begin
-        if I + 1 <= Len then
-          Url := Url + S[I + 1];
+        Url := Url + S[I] + S[I + 1];
         Inc(I, 2);
         Continue;
       end;
@@ -458,6 +508,8 @@ begin
   end;
   while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
   if (I > Len) or (S[I] <> ')') then Exit;
+  Url := MdProcessLinkPart(Url);
+  Title := MdProcessLinkPart(Title);
   Result := I + 1;
 end;
 
@@ -514,8 +566,10 @@ begin
   if RefLabel = '' then RefLabel := LabelText;
 
   if not RefDefs.TryGetValue(NormalizeLinkLabel(RefLabel), Ref) then Exit;
-  Url := Ref.Url;
-  Title := Ref.Title;
+  // Ref defs are stored verbatim; apply backslash + entity processing
+  // at lookup time so the resolved URL/title match CommonMark output.
+  Url := MdProcessLinkPart(Ref.Url);
+  Title := MdProcessLinkPart(Ref.Title);
   AfterEnd := AfterText;
   Result := True;
 end;
@@ -775,19 +829,23 @@ begin
     case C of
       '\':
         begin
-          // Backslash escape: \X for ASCII punctuation or \n -> hard break.
+          // Backslash escape: \X for ASCII punctuation, or \<line-end>
+          // (LF, CR, CRLF) as a hard break.
           if I + 1 <= Len then
           begin
-            if Source[I + 1] = #10 then
+            NextCh := Source[I + 1];
+            if (NextCh = #10) or (NextCh = #13) then
             begin
               FlushText(Pending, Result);
               Result.Add(TPixieMdNode.Create(mnLineBreak));
               Inc(I, 2);
+              if (NextCh = #13) and (I <= Len) and (Source[I] = #10) then
+                Inc(I);
               Continue;
             end;
-            if IsAsciiPunct(Source[I + 1]) then
+            if IsAsciiPunct(NextCh) then
             begin
-              Pending := Pending + Source[I + 1];
+              Pending := Pending + NextCh;
               Inc(I, 2);
               Continue;
             end;
@@ -1095,7 +1153,11 @@ begin
           ProcessBlock(Node.Children[I], RefDefs, Options);
     mnHeading, mnParagraph, mnTableCell:
       ProcessLeaf(Node, RefDefs, Options);
-    // mnCodeBlock, mnHtmlBlock, mnThematicBreak: nothing to do
+    mnCodeBlock:
+      // The block parser stores fenced-code info verbatim; CommonMark
+      // says it's processed like a link destination.
+      Node.CodeLang := MdProcessLinkPart(Node.CodeLang);
+    // mnHtmlBlock, mnThematicBreak: nothing to do
   end;
 end;
 
