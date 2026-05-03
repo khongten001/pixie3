@@ -790,6 +790,13 @@ type
     Node: TPixieMdNode;
     Kind: TOpenBlockKind;
     ListContentIndent: Integer;
+    // For obList: the marker character ('-', '*', '+') or delimiter
+    // ('.' / ')' for ordered). Different markers split into separate
+    // lists per CommonMark.
+    ListChar: Char;
+    // For obList: pending blank seen; consumed when the next item or
+    // sub-block joins (loose) or when the list closes (ignored).
+    HadBlank: Boolean;
     FenceChar: Char;
     FenceLen: Integer;
     FenceIndent: Integer;
@@ -821,6 +828,8 @@ type
     function CurrentContainer: TOpenBlock;
     procedure AddToContainer(Node: TPixieMdNode);
     procedure AddLeaf(OB: TOpenBlock);
+    function InnermostOpenList: Integer;
+    procedure ConfirmListLoose;
     procedure AppendToParagraph(const Text: string);
     function TryStartListItem(const Line: string;
       var Offset: Integer): Boolean;
@@ -916,8 +925,39 @@ begin
     Container.Node.AddChild(Node);
 end;
 
+function TPixieMdParserImpl.InnermostOpenList: Integer;
+var
+  I: Integer;
+begin
+  for I := FOpen.Count - 1 downto 0 do
+    if FOpen[I].Kind = obList then Exit(I);
+  Result := -1;
+end;
+
+// CommonMark "loose": when starting a new block while a list is open
+// and a blank was seen inside it, the list is loose. Only the innermost
+// open list matters since the blank/new block are inside it.
+procedure TPixieMdParserImpl.ConfirmListLoose;
+var
+  Idx: Integer;
+begin
+  Idx := InnermostOpenList;
+  if (Idx >= 0) and FOpen[Idx].HadBlank then
+  begin
+    FOpen[Idx].Node.ListTight := False;
+    FOpen[Idx].HadBlank := False;
+  end;
+end;
+
 procedure TPixieMdParserImpl.AddLeaf(OB: TOpenBlock);
 begin
+  // A list only legally contains list-items. When the topmost open
+  // container is a bare list (its last item just closed) and we're
+  // adding any other leaf, close the list first so the leaf becomes a
+  // sibling of the list, not a stray child.
+  while (FOpen.Count > 0) and (FOpen[FOpen.Count - 1].Kind = obList) do
+    CloseBlocksFrom(FOpen.Count - 1);
+  ConfirmListLoose;
   AddToContainer(OB.Node);
   FOpen.Add(OB);
 end;
@@ -1114,6 +1154,16 @@ begin
     IsOrdered, ListChar, OrderedStart, AfterMarker);
   if MarkerLen = 0 then Exit;
 
+  // CommonMark: ordered lists with start <> 1 cannot interrupt a
+  // paragraph; an empty list item also cannot. Without these
+  // restrictions a stray "14. ..." in a wrapped paragraph would split
+  // it into a list.
+  if (DeepestLeaf <> nil) and (DeepestLeaf.Kind = obParagraph) then
+  begin
+    if IsOrdered and (OrderedStart <> 1) then Exit;
+    if IsBlankLine(Copy(Line, AfterMarker, Length(Line))) then Exit;
+  end;
+
   ContentIndent := PreSpaces + (AfterMarker - Tmp);
   if (AfterMarker <= Length(Line)) and
      ((Line[AfterMarker] = ' ') or (Line[AfterMarker] = #9)) then
@@ -1124,22 +1174,31 @@ begin
   else
     Inc(ContentIndent);
 
+  // A new marker only continues the existing list when the topmost open
+  // container is that list (we just closed its previous item). When the
+  // topmost is a list-item, we're inside it and the marker starts a new
+  // sublist child of the item.
   Container := nil;
-  for I := FOpen.Count - 1 downto 0 do
-    if FOpen[I].Kind = obList then
-    begin
-      Container := FOpen[I];
-      Break;
-    end;
+  if (FOpen.Count > 0) and (FOpen[FOpen.Count - 1].Kind = obList) then
+    Container := FOpen[FOpen.Count - 1];
 
   if (Container <> nil) and
-     (Container.Node.ListOrdered = IsOrdered) then
+     (Container.Node.ListOrdered = IsOrdered) and
+     (Container.ListChar = ListChar) then
   begin
     ListIdx := FOpen.IndexOf(Container);
     CloseBlocksFrom(ListIdx + 1);
+    // A blank line preceding this new item means the items are
+    // separated by blanks, which makes the list loose.
+    ConfirmListLoose;
   end
   else
   begin
+    if Container <> nil then
+      CloseBlocksFrom(FOpen.IndexOf(Container));
+    // A new sublist inside an item that's part of a list with a pending
+    // blank counts as the "two blocks separated by blank" loose case.
+    ConfirmListLoose;
     ListNode := TPixieMdNode.Create(mnList);
     ListNode.ListOrdered := IsOrdered;
     ListNode.ListStart := OrderedStart;
@@ -1147,6 +1206,7 @@ begin
     ListOB := TOpenBlock.Create;
     ListOB.Node := ListNode;
     ListOB.Kind := obList;
+    ListOB.ListChar := ListChar;
     AddToContainer(ListNode);
     FOpen.Add(ListOB);
   end;
@@ -1360,13 +1420,12 @@ begin
       else if Leaf.Kind = obIndentedCode then
         Leaf.Text := Leaf.Text + #10;
     end;
-    for ListIdx := FOpen.Count - 1 downto 0 do
-      if FOpen[ListIdx].Kind = obList then
-      begin
-        if FOpen[ListIdx].Node.ChildCount > 0 then
-          FOpen[ListIdx].Node.ListTight := False;
-        Break;
-      end;
+    // Defer the loose decision: only loose if this list gets another
+    // item or sub-block after the blank. If the list closes without
+    // one, the blank stays inside the already-closed last item.
+    ListIdx := InnermostOpenList;
+    if (ListIdx >= 0) and (FOpen[ListIdx].Node.ChildCount > 0) then
+      FOpen[ListIdx].HadBlank := True;
     Exit;
   end;
 
