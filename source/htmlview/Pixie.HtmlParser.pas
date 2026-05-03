@@ -469,7 +469,7 @@ var
   I: Integer;
   Child: TPixieHtmlNode;
 begin
-  if Source = Self then Exit;
+  if (Source = nil) or (Source = Self) then Exit;
   for I := 0 to Source.Children.Count - 1 do
   begin
     Child := Source.Children[I];

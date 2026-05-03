@@ -162,6 +162,10 @@ type
     FPatternInfos: TPixieSvgPatternInfoMap;
     FIdMap: TPixieSvgIdMap;
     FStyleMap: TPixieSvgStyleMap;
+    // Scratch dictionary reused by InheritState across every element of
+    // a render walk; cleared and re-filled per element instead of
+    // allocating a fresh dict each time.
+    FInlineStyleMap: TPixieSvgStyleMap;
     FUseDepth: Integer;
     FSystemLanguage: string;
     // SVG 2 context paint (set while rendering marker children so
@@ -212,6 +216,8 @@ type
     function ParseStyleAttribute(
       const StyleStr, PropName: string): string;
     function BuildStyleMap(const StyleStr: string): TPixieSvgStyleMap;
+    procedure PopulateStyleMap(Map: TPixieSvgStyleMap;
+      const StyleStr: string);
     function StyleVal(Map: TPixieSvgStyleMap; const Key: string): string;
     function ResolveNodeStyle(Node: Pointer): string;
     function InheritState(Node: Pointer;
@@ -500,6 +506,7 @@ end;
 destructor TPixieSvgRendererBase.Destroy;
 begin
   ClearDocument;
+  FreeAndNil(FInlineStyleMap);
   inherited;
 end;
 
@@ -1003,17 +1010,23 @@ end;
 function TPixieSvgRendererBase.StyleVal(Map: TPixieSvgStyleMap;
   const Key: string): string;
 begin
-  if (Map = nil) or not Map.TryGetValue(Key, Result) then
+  if not Map.TryGetValue(Key, Result) then
     Result := '';
 end;
 
 function TPixieSvgRendererBase.BuildStyleMap(
   const StyleStr: string): TPixieSvgStyleMap;
-var
-  P, SemiPos, ColonPos: Integer;
-  Key, Value: string;
 begin
   Result := TPixieSvgStyleMap.Create;
+  PopulateStyleMap(Result, StyleStr);
+end;
+
+procedure TPixieSvgRendererBase.PopulateStyleMap(Map: TPixieSvgStyleMap;
+  const StyleStr: string);
+var
+  P, SemiPos, ColonPos: Integer;
+  Decl, Key, Value: string;
+begin
   P := 1;
   while P <= Length(StyleStr) do
   begin
@@ -1021,13 +1034,15 @@ begin
     if SemiPos = 0 then
       SemiPos := Length(StyleStr) + 1;
 
-    Key := Trim(Copy(StyleStr, P, SemiPos - P));
-    ColonPos := Pos(':', Key);
+    Decl := Trim(Copy(StyleStr, P, SemiPos - P));
+    ColonPos := Pos(':', Decl);
     if ColonPos > 0 then
     begin
-      Value := Trim(Copy(Key, ColonPos + 1, MaxInt));
-      Key := LowerCase(Trim(Copy(Key, 1, ColonPos - 1)));
-      Result.AddOrSetValue(Key, Value);
+      // Trim already applied to Decl; the two halves are sub-ranges so
+      // only the inside-facing edges can have whitespace.
+      Key := LowerCase(TrimRight(Copy(Decl, 1, ColonPos - 1)));
+      Value := TrimLeft(Copy(Decl, ColonPos + 1, MaxInt));
+      Map.AddOrSetValue(Key, Value);
     end;
     P := SemiPos + 1;
   end;
@@ -1112,7 +1127,6 @@ function TPixieSvgRendererBase.InheritState(Node: Pointer;
 var
   FillStr, StrokeStr, StrokeWStr, OpacStr: string;
   FillOpStr, StrokeOpStr, ColorStr: string;
-  StyleStr: string;
   FontFamilyStr, FontSizeStr, FontWeightStr, FontStyleStr, FontShorthand: string;
   LetterSpacingStr, TextDecStr, BaselineShiftStr, DomBaselineStr: string;
   LineCapStr, LineJoinStr: string;
@@ -1121,26 +1135,28 @@ var
   Pos1, Pos2: Integer;
   V: Single;
   Color: TPixieWebColor;
-  StyleMap: TPixieSvgStyleMap;
 begin
   Result := ParentState;
 
-  StyleStr := ResolveNodeStyle(Node);
-  // Parse the style string once into a key->value map so the ~30 property
-  // lookups below are O(1) each instead of re-scanning the whole string.
-  StyleMap := BuildStyleMap(StyleStr);
-  try
+  // Parse the inline style string once into a key->value map so the ~30
+  // property lookups below are O(1) each. The map is reused across every
+  // element by clearing rather than reallocating per call.
+  if FInlineStyleMap = nil then
+    FInlineStyleMap := TPixieSvgStyleMap.Create
+  else
+    FInlineStyleMap.Clear;
+  PopulateStyleMap(FInlineStyleMap, ResolveNodeStyle(Node));
 
   // CSS color property (resolve before fill/stroke for currentColor)
   // Inline style takes priority over presentation attributes per SVG/CSS spec
-  ColorStr := StyleVal(StyleMap, 'color');
+  ColorStr := StyleVal(FInlineStyleMap, 'color');
   if ColorStr = '' then
     ColorStr := GetAttr(Node, 'color');
   if (ColorStr <> '') and (ColorStr <> 'inherit') and ParseSvgColor(ColorStr, Color) then
     Result.Color := Color;
 
   // Fill
-  FillStr := StyleVal(StyleMap, 'fill');
+  FillStr := StyleVal(FInlineStyleMap, 'fill');
   if FillStr = '' then
     FillStr := GetAttr(Node, 'fill');
   if FillStr <> '' then
@@ -1182,7 +1198,7 @@ begin
   end;
 
   // Stroke
-  StrokeStr := StyleVal(StyleMap, 'stroke');
+  StrokeStr := StyleVal(FInlineStyleMap, 'stroke');
   if StrokeStr = '' then
     StrokeStr := GetAttr(Node, 'stroke');
   if StrokeStr <> '' then
@@ -1224,14 +1240,14 @@ begin
   end;
 
   // Stroke width
-  StrokeWStr := StyleVal(StyleMap, 'stroke-width');
+  StrokeWStr := StyleVal(FInlineStyleMap, 'stroke-width');
   if StrokeWStr = '' then
     StrokeWStr := GetAttr(Node, 'stroke-width');
   if TryParseSvgFloat(StrokeWStr, V) then
     Result.StrokeWidth := V;
 
   // Stroke line cap
-  LineCapStr := StyleVal(StyleMap, 'stroke-linecap');
+  LineCapStr := StyleVal(FInlineStyleMap, 'stroke-linecap');
   if LineCapStr = '' then
     LineCapStr := GetAttr(Node, 'stroke-linecap');
   if LineCapStr = 'round' then
@@ -1242,7 +1258,7 @@ begin
     Result.LineCap := lcButt;
 
   // Stroke line join
-  LineJoinStr := StyleVal(StyleMap, 'stroke-linejoin');
+  LineJoinStr := StyleVal(FInlineStyleMap, 'stroke-linejoin');
   if LineJoinStr = '' then
     LineJoinStr := GetAttr(Node, 'stroke-linejoin');
   if LineJoinStr = 'round' then
@@ -1253,7 +1269,7 @@ begin
     Result.LineJoin := ljMiter;
 
   // Stroke dash array
-  DashArrayStr := StyleVal(StyleMap, 'stroke-dasharray');
+  DashArrayStr := StyleVal(FInlineStyleMap, 'stroke-dasharray');
   if DashArrayStr = '' then
     DashArrayStr := GetAttr(Node, 'stroke-dasharray');
   if DashArrayStr <> '' then
@@ -1266,7 +1282,7 @@ begin
   end;
 
   // Stroke dash offset
-  DashOffsetStr := StyleVal(StyleMap, 'stroke-dashoffset');
+  DashOffsetStr := StyleVal(FInlineStyleMap, 'stroke-dashoffset');
   if DashOffsetStr = '' then
     DashOffsetStr := GetAttr(Node, 'stroke-dashoffset');
   if TryParseSvgFloat(DashOffsetStr, V) then
@@ -1274,21 +1290,21 @@ begin
 
   // Opacity (not inherited — each element defaults to 1.0 unless explicitly set)
   Result.Opacity := 1.0;
-  OpacStr := StyleVal(StyleMap, 'opacity');
+  OpacStr := StyleVal(FInlineStyleMap, 'opacity');
   if OpacStr = '' then
     OpacStr := GetAttr(Node, 'opacity');
   if TryParseSvgFloat(OpacStr, V) then
     Result.Opacity := V;
 
   // Fill opacity
-  FillOpStr := StyleVal(StyleMap, 'fill-opacity');
+  FillOpStr := StyleVal(FInlineStyleMap, 'fill-opacity');
   if FillOpStr = '' then
     FillOpStr := GetAttr(Node, 'fill-opacity');
   if TryParseSvgFloat(FillOpStr, V) then
     Result.FillOpacity := V;
 
   // Stroke opacity
-  StrokeOpStr := StyleVal(StyleMap, 'stroke-opacity');
+  StrokeOpStr := StyleVal(FInlineStyleMap, 'stroke-opacity');
   if StrokeOpStr = '' then
     StrokeOpStr := GetAttr(Node, 'stroke-opacity');
   if TryParseSvgFloat(StrokeOpStr, V) then
@@ -1296,26 +1312,26 @@ begin
 
   // Font shorthand: font: [style] [weight] size[/line-height] family[, ...]
   // Parsed first so individual properties can override below
-  FontShorthand := StyleVal(StyleMap, 'font');
+  FontShorthand := StyleVal(FInlineStyleMap, 'font');
   if FontShorthand <> '' then
     ParseFontShorthand(FontShorthand, Result);
 
   // Font family
-  FontFamilyStr := StyleVal(StyleMap, 'font-family');
+  FontFamilyStr := StyleVal(FInlineStyleMap, 'font-family');
   if FontFamilyStr = '' then
     FontFamilyStr := GetAttr(Node, 'font-family');
   if FontFamilyStr <> '' then
     Result.FontFamily := NormalizeFontFamily(FontFamilyStr);
 
   // Font size — em/rem/% resolve against the already-inherited Result.FontSize.
-  FontSizeStr := StyleVal(StyleMap, 'font-size');
+  FontSizeStr := StyleVal(FInlineStyleMap, 'font-size');
   if FontSizeStr = '' then
     FontSizeStr := GetAttr(Node, 'font-size');
   if FontSizeStr <> '' then
     Result.FontSize := ParseSvgLengthEm(FontSizeStr, Result.FontSize);
 
   // Font weight
-  FontWeightStr := StyleVal(StyleMap, 'font-weight');
+  FontWeightStr := StyleVal(FInlineStyleMap, 'font-weight');
   if FontWeightStr = '' then
     FontWeightStr := GetAttr(Node, 'font-weight');
   if FontWeightStr <> '' then
@@ -1329,14 +1345,14 @@ begin
   end;
 
   // Font style
-  FontStyleStr := StyleVal(StyleMap, 'font-style');
+  FontStyleStr := StyleVal(FInlineStyleMap, 'font-style');
   if FontStyleStr = '' then
     FontStyleStr := GetAttr(Node, 'font-style');
   if FontStyleStr <> '' then
     Result.FontItalic := (FontStyleStr = 'italic') or (FontStyleStr = 'oblique');
 
   // Letter spacing
-  LetterSpacingStr := StyleVal(StyleMap, 'letter-spacing');
+  LetterSpacingStr := StyleVal(FInlineStyleMap, 'letter-spacing');
   if LetterSpacingStr = '' then
     LetterSpacingStr := GetAttr(Node, 'letter-spacing');
   if LetterSpacingStr <> '' then
@@ -1348,7 +1364,7 @@ begin
   end;
 
   // Baseline shift (super/sub/percentage/length)
-  BaselineShiftStr := StyleVal(StyleMap, 'baseline-shift');
+  BaselineShiftStr := StyleVal(FInlineStyleMap, 'baseline-shift');
   if BaselineShiftStr = '' then
     BaselineShiftStr := GetAttr(Node, 'baseline-shift');
   if BaselineShiftStr <> '' then
@@ -1367,7 +1383,7 @@ begin
   end;
 
   // Dominant baseline
-  DomBaselineStr := StyleVal(StyleMap, 'dominant-baseline');
+  DomBaselineStr := StyleVal(FInlineStyleMap, 'dominant-baseline');
   if DomBaselineStr = '' then
     DomBaselineStr := GetAttr(Node, 'dominant-baseline');
   if DomBaselineStr <> '' then
@@ -1394,7 +1410,7 @@ begin
   end;
 
   // Text anchor
-  AnchorStr := StyleVal(StyleMap, 'text-anchor');
+  AnchorStr := StyleVal(FInlineStyleMap, 'text-anchor');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'text-anchor');
   if AnchorStr = 'middle' then
@@ -1405,7 +1421,7 @@ begin
     Result.TextAnchor := taLeft;
 
   // Text decoration
-  TextDecStr := StyleVal(StyleMap, 'text-decoration');
+  TextDecStr := StyleVal(FInlineStyleMap, 'text-decoration');
   if TextDecStr = '' then
     TextDecStr := GetAttr(Node, 'text-decoration');
   if TextDecStr <> '' then
@@ -1426,7 +1442,7 @@ begin
   end;
 
   // Fill rule
-  AnchorStr := StyleVal(StyleMap, 'fill-rule');
+  AnchorStr := StyleVal(FInlineStyleMap, 'fill-rule');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'fill-rule');
   if AnchorStr = 'evenodd' then
@@ -1437,7 +1453,7 @@ begin
   // paint-order: default is "fill stroke markers".  Per SVG spec, if only
   // "stroke" is listed the omitted values follow in default order, so
   // "stroke" alone means "stroke fill markers".  "normal" resets to default.
-  AnchorStr := StyleVal(StyleMap, 'paint-order');
+  AnchorStr := StyleVal(FInlineStyleMap, 'paint-order');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'paint-order');
   if AnchorStr <> '' then
@@ -1456,7 +1472,7 @@ begin
 
   // Marker properties (inherited per SVG spec)
   // 'marker' shorthand sets all three at once
-  MarkerStr := StyleVal(StyleMap, 'marker');
+  MarkerStr := StyleVal(FInlineStyleMap, 'marker');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker');
   if MarkerStr <> '' then
@@ -1474,19 +1490,19 @@ begin
       Result.MarkerEnd := MarkerStr;
     end;
   end;
-  MarkerStr := StyleVal(StyleMap, 'marker-start');
+  MarkerStr := StyleVal(FInlineStyleMap, 'marker-start');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker-start');
   if MarkerStr <> '' then
     if MarkerStr = 'none' then Result.MarkerStart := ''
     else Result.MarkerStart := MarkerStr;
-  MarkerStr := StyleVal(StyleMap, 'marker-mid');
+  MarkerStr := StyleVal(FInlineStyleMap, 'marker-mid');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker-mid');
   if MarkerStr <> '' then
     if MarkerStr = 'none' then Result.MarkerMid := ''
     else Result.MarkerMid := MarkerStr;
-  MarkerStr := StyleVal(StyleMap, 'marker-end');
+  MarkerStr := StyleVal(FInlineStyleMap, 'marker-end');
   if MarkerStr = '' then
     MarkerStr := GetAttr(Node, 'marker-end');
   if MarkerStr <> '' then
@@ -1502,7 +1518,7 @@ begin
 
   // Mix blend mode (non-inherited — reset per element)
   Result.BlendMode := bmNormal;
-  AnchorStr := StyleVal(StyleMap, 'mix-blend-mode');
+  AnchorStr := StyleVal(FInlineStyleMap, 'mix-blend-mode');
   if AnchorStr = '' then
     AnchorStr := GetAttr(Node, 'mix-blend-mode');
   if AnchorStr = 'multiply' then Result.BlendMode := bmMultiply
@@ -1520,10 +1536,6 @@ begin
   else if AnchorStr = 'saturation' then Result.BlendMode := bmSaturation
   else if AnchorStr = 'color' then Result.BlendMode := bmColor
   else if AnchorStr = 'luminosity' then Result.BlendMode := bmLuminosity;
-
-  finally
-    StyleMap.Free;
-  end;
 end;
 
 // ===========================================================================

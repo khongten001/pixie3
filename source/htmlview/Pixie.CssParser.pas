@@ -128,25 +128,22 @@ end;
 
 procedure TrimWhitespace(Tokens: TPixieCssTokenList);
 var
-  I, RemoveStart, RemoveCount: Integer;
+  TailStart, HeadCount: Integer;
 begin
-  // Trailing whitespace: scan back, single DeleteRange.
-  I := Tokens.Count - 1;
-  RemoveStart := -1;
-  while (I >= 0) and (Tokens[I].TokenType = cssTokenWhitespace) do
-  begin
-    RemoveStart := I;
-    Dec(I);
-  end;
-  if RemoveStart >= 0 then
-    Tokens.DeleteRange(RemoveStart, Tokens.Count - RemoveStart);
-  // Leading whitespace: scan forward, single DeleteRange.
-  RemoveCount := 0;
-  while (RemoveCount < Tokens.Count) and
-        (Tokens[RemoveCount].TokenType = cssTokenWhitespace) do
-    Inc(RemoveCount);
-  if RemoveCount > 0 then
-    Tokens.DeleteRange(0, RemoveCount);
+  // Trailing whitespace.
+  TailStart := Tokens.Count;
+  while (TailStart > 0) and
+        (Tokens[TailStart - 1].TokenType = cssTokenWhitespace) do
+    Dec(TailStart);
+  if TailStart < Tokens.Count then
+    Tokens.DeleteRange(TailStart, Tokens.Count - TailStart);
+  // Leading whitespace.
+  HeadCount := 0;
+  while (HeadCount < Tokens.Count) and
+        (Tokens[HeadCount].TokenType = cssTokenWhitespace) do
+    Inc(HeadCount);
+  if HeadCount > 0 then
+    Tokens.DeleteRange(0, HeadCount);
 end;
 
 function MirrorBracket(C: Char): Char;
