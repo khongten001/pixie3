@@ -26,7 +26,8 @@ function PixieMarkdownToHtmlDocument(const Md: string;
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  Pixie.Markdown.Parser, Pixie.Markdown.HtmlWriter;
 
 function HtmlEscape(const S: string): string;
 var
@@ -53,10 +54,15 @@ end;
 
 function PixieMarkdownToHtml(const Md: string;
   Options: TPixieMdOptions): string;
+var
+  Doc: TPixieMdNode;
 begin
-  // Phase 1 stub: escape and wrap in <pre>. Replaced by real parser in
-  // Phase 3+4.
-  Result := '<pre>' + HtmlEscape(Md) + '</pre>';
+  Doc := TPixieMdParser.ParseBlocks(Md, nil, Options);
+  try
+    Result := TPixieMdHtmlWriter.Write(Doc, Options);
+  finally
+    Doc.Free;
+  end;
 end;
 
 function PixieMarkdownToHtmlDocument(const Md: string;
