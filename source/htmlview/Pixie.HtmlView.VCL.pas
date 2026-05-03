@@ -11,7 +11,7 @@ uses
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
   Pixie.CustomControl.VCL,
-  Pixie.HtmlView.Base;
+  Pixie.HtmlView.Core;
 
 type
   { TPixieHtmlView }

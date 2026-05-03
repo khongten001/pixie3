@@ -101,7 +101,7 @@ contains
   Pixie.Canvas.FMX in '..\source\common\Pixie.Canvas.FMX.pas',
   Pixie.NativeContainer in '..\source\htmlview\Pixie.NativeContainer.pas',
   Pixie.TrueType in '..\source\htmlview\Pixie.TrueType.pas',
-  Pixie.HtmlView.Base in '..\source\htmlview\Pixie.HtmlView.Base.pas',
+  Pixie.HtmlView.Core in '..\source\htmlview\Pixie.HtmlView.Core.pas',
   Pixie.HtmlView.FMX in '..\source\htmlview\Pixie.HtmlView.FMX.pas',
   Pixie.SvgRenderer.Canvas in '..\source\common\Pixie.SvgRenderer.Canvas.pas',
   Pixie.SvgToPdf in '..\source\common\Pixie.SvgToPdf.pas',

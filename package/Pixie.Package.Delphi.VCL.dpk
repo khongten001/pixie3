@@ -98,7 +98,7 @@ contains
   Pixie.D2DHeaders in '..\source\common\Pixie.D2DHeaders.pas',
   Pixie.Canvas.D2D in '..\source\common\Pixie.Canvas.D2D.pas',
   Pixie.NativeContainer in '..\source\htmlview\Pixie.NativeContainer.pas',
-  Pixie.HtmlView.Base in '..\source\htmlview\Pixie.HtmlView.Base.pas',
+  Pixie.HtmlView.Core in '..\source\htmlview\Pixie.HtmlView.Core.pas',
   Pixie.HtmlView.VCL in '..\source\htmlview\Pixie.HtmlView.VCL.pas',
   Pixie.SimpleXml in '..\source\common\Pixie.SimpleXml.pas',
   Pixie.SvgRenderer in '..\source\common\Pixie.SvgRenderer.pas',

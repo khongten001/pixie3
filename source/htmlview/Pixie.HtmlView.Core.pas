@@ -1,4 +1,4 @@
-unit Pixie.HtmlView.Base;
+unit Pixie.HtmlView.Core;
 
 // TPixieHtmlViewCore — shared logic for all TPixieHtmlView implementations.
 // Contains document management, input handling, scrolling, layout, and painting.

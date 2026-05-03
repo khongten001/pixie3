@@ -181,7 +181,7 @@
         <DCCReference Include="..\source\common\Pixie.Canvas.FMX.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.NativeContainer.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.TrueType.pas"/>
-        <DCCReference Include="..\source\htmlview\Pixie.HtmlView.Base.pas"/>
+        <DCCReference Include="..\source\htmlview\Pixie.HtmlView.Core.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.HtmlView.FMX.pas"/>
         <DCCReference Include="..\source\common\Pixie.SvgRenderer.Canvas.pas"/>
         <DCCReference Include="..\source\common\Pixie.SvgToPdf.pas"/>

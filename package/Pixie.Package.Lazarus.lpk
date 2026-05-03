@@ -169,8 +169,8 @@
         <UnitName Value="Pixie.HtmlTag"/>
       </Item>
       <Item>
-        <Filename Value="../source/htmlview/Pixie.HtmlView.Base.pas"/>
-        <UnitName Value="Pixie.HtmlView.Base"/>
+        <Filename Value="../source/htmlview/Pixie.HtmlView.Core.pas"/>
+        <UnitName Value="Pixie.HtmlView.Core"/>
       </Item>
       <Item>
         <Filename Value="../source/htmlview/Pixie.HtmlView.pas"/>

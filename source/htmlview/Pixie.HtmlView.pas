@@ -12,7 +12,7 @@ uses
   LMessages, LCLType,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
-  Pixie.CustomControl, Pixie.HtmlView.Base
+  Pixie.CustomControl, Pixie.HtmlView.Core
   {$IFDEF MSWINDOWS}
     , JwaWinUser
   {$ENDIF};
