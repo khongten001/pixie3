@@ -8,22 +8,13 @@ unit Pixie.Markdown;
 
 interface
 
-type
-  TPixieMdOption = (
-    moAllowRawHtml,        // pass HTML through verbatim
-    moStripFrontMatter,    // strip --- ... --- YAML at top of document
-    moAutoHeadingIds,      // generate id="..." on <h*>
-    moGfmTables,           // | a | b | tables
-    moGfmStrikethrough,    // ~~text~~
-    moGfmTaskLists,        // - [x] item
-    moGfmAutolinks         // bare http://example.com URLs
-  );
-  TPixieMdOptions = set of TPixieMdOption;
+uses
+  Pixie.Markdown.Types;
 
-const
-  DefaultPixieMdOptions = [moAllowRawHtml, moStripFrontMatter,
-    moAutoHeadingIds, moGfmTables, moGfmStrikethrough, moGfmTaskLists,
-    moGfmAutolinks];
+type
+  // Re-export so callers only need Pixie.Markdown.
+  TPixieMdOption = Pixie.Markdown.Types.TPixieMdOption;
+  TPixieMdOptions = Pixie.Markdown.Types.TPixieMdOptions;
 
 function PixieMarkdownToHtml(const Md: string;
   Options: TPixieMdOptions = DefaultPixieMdOptions): string;

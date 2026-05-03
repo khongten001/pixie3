@@ -193,6 +193,14 @@
         <UnitName Value="Pixie.Markdown"/>
       </Item>
       <Item>
+        <Filename Value="../source/markdown/Pixie.Markdown.HtmlWriter.pas"/>
+        <UnitName Value="Pixie.Markdown.HtmlWriter"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/markdown/Pixie.Markdown.Types.pas"/>
+        <UnitName Value="Pixie.Markdown.Types"/>
+      </Item>
+      <Item>
         <Filename Value="../source/markdown/Pixie.MarkdownView.pas"/>
         <UnitName Value="Pixie.MarkdownView"/>
       </Item>

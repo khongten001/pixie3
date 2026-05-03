@@ -101,6 +101,8 @@ contains
   Pixie.HtmlView.Core in '..\source\htmlview\Pixie.HtmlView.Core.pas',
   Pixie.HtmlView.VCL.Base in '..\source\htmlview\Pixie.HtmlView.VCL.Base.pas',
   Pixie.HtmlView.VCL in '..\source\htmlview\Pixie.HtmlView.VCL.pas',
+  Pixie.Markdown.Types in '..\source\markdown\Pixie.Markdown.Types.pas',
+  Pixie.Markdown.HtmlWriter in '..\source\markdown\Pixie.Markdown.HtmlWriter.pas',
   Pixie.Markdown in '..\source\markdown\Pixie.Markdown.pas',
   Pixie.MarkdownView.VCL in '..\source\markdown\Pixie.MarkdownView.VCL.pas',
   Pixie.SimpleXml in '..\source\common\Pixie.SimpleXml.pas',
