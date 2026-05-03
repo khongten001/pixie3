@@ -1,6 +1,6 @@
 # Pixie HTML View — Usage Guide
 
-Pixie is a lightweight HTML/CSS rendering engine for Free Pascal and Delphi. It provides three visual components: `TPixieHtmlView` (HTML rendering with mouse interaction, text selection, focus, and form controls), `TPixieSvgView` (proportional SVG display with alignment), and `TPixiePaintBox` (drawing surface with a TCanvas-like stateful API).
+Pixie is a lightweight HTML/CSS rendering engine for Free Pascal and Delphi. It provides five visual components: `TPixieHtmlView` (HTML rendering with mouse interaction, text selection, focus, and form controls), `TPixieMarkdownView` (CommonMark + GFM Markdown, rendered through the HTML engine), `TPixieSvgView` (proportional SVG display with alignment), `TPixiePaintBox` (drawing surface with a TCanvas-like stateful API), and `TPixieTagBar` (interactive coloured tag pills).
 
 ## Installation
 
@@ -10,11 +10,11 @@ The package is located in `package/Pixie.Package.Lazarus.lpk`. Install it into t
 
 ### Delphi (VCL)
 
-Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE and install it. Or add `source/common` and `source/htmlview` to the unit search path (plus `source/svgview` or `source/paintbox` if needed) and use `Pixie.HtmlView.VCL` directly.
+Open `package/Pixie.Package.Delphi.VCL.dpk` in the Delphi IDE and install it. Or add `source/common` plus the per-component folders you need (`source/htmlview`, `source/markdown`, `source/svgview`, `source/paintbox`, `source/tagbar`) to the unit search path and use the `Pixie.*.VCL` units directly.
 
 ### Delphi (FMX)
 
-Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE and install it. Or add `source/common` and `source/htmlview` to the unit search path (plus `source/svgview` or `source/paintbox` if needed) and use `Pixie.HtmlView.FMX` directly. The FMX backend supports Windows, macOS, iOS, and Android.
+Open `package/Pixie.Package.Delphi.FMX.dpk` in the Delphi IDE and install it. Or add `source/common` plus the per-component folders you need to the unit search path and use the `Pixie.*.FMX` units directly. The FMX backend supports Windows, macOS, iOS, and Android.
 
 ## Quick Start
 
@@ -436,6 +436,29 @@ begin
 end;
 ```
 
+### Exporting Markdown
+
+`TPixiePdfExport` takes HTML, so first convert the Markdown source:
+
+```pascal
+uses Pixie.Markdown, Pixie.PdfExport;
+
+var
+  Pdf: TPixiePdfExport;
+  Html: string;
+begin
+  Html := PixieMarkdownToHtmlDocument(
+    PixieMarkdownReadFile('article.md'), 'Article');
+  Pdf := TPixiePdfExport.Create;
+  try
+    Pdf.BaseUrl := ExtractFilePath('article.md');  // for relative images
+    Pdf.SaveToFile(Html, 'article.pdf');
+  finally
+    Pdf.Free;
+  end;
+end;
+```
+
 ### Saving to a Stream
 
 ```pascal
@@ -509,6 +532,73 @@ Pdf.CustomHeight := 600;      // points
 - SVG images in PDF output are rendered as vector Form XObjects
 - Non-BMP characters (emoji) are not included in font subsets
 - Form controls are rendered but not interactive in PDF output
+
+## Markdown
+
+`TPixieMarkdownView` renders CommonMark + GFM Markdown by converting it to HTML and feeding it through the HtmlView engine. The output is the same fully-styled, selectable, interactive document — just authored in Markdown.
+
+Supported syntax: ATX and setext headings, paragraphs (with lazy continuation), thematic breaks, fenced code (`` ``` `` / `~~~` with language info) and indented code, blockquotes (nested), ordered/unordered/nested lists with tight/loose distinction, GFM tables with column alignment, GFM task lists (`- [x]` / `- [ ]`), CommonMark link reference definitions, autolinks (`<https://...>`, bare URLs as a GFM extension), images, raw HTML blocks and inline raw HTML, hard breaks, soft breaks, GFM strikethrough (`~~text~~`), full inline emphasis with the CommonMark left/right-flanking delimiter algorithm, backslash escapes, and HTML entity references. URL destinations are percent-encoded for output.
+
+### Loading Markdown
+
+```pascal
+PixieMarkdownView1.LoadMarkdownFromString(
+  '# Hello' + sLineBreak + sLineBreak + 'Some *emphasised* text.');
+
+PixieMarkdownView1.LoadMarkdownFromFile('README.md');
+
+PixieMarkdownView1.LoadMarkdownFromStream(Stream, BaseUrl);
+```
+
+`LoadMarkdownFromFile` derives the base URL from the file path so relative image references in the Markdown resolve to files next to it.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Markdown` | `TStrings` | Markdown source. Setting it rebuilds the rendered output. |
+| `UseDefaultStyles` | `Boolean` | When `True` (default), prepends a GitHub-flavoured stylesheet to the rendered HTML. Toggle off to style the output entirely from your own CSS. |
+
+The view inherits all of `TPixieHtmlView`'s behaviour — events, scrolling, zoom, copy/paste, focus, the lot.
+
+### Conversion Without a Component
+
+For headless use (PDF export, server-side generation, command-line tools), the conversion helpers in `Pixie.Markdown` work without any view:
+
+```pascal
+uses Pixie.Markdown;
+
+// Body fragment only
+Html := PixieMarkdownToHtml(MdText);
+
+// Full <html><head><style>...</style></head><body>...</body></html>
+Html := PixieMarkdownToHtmlDocument(MdText, 'Page Title');
+
+// UTF-8 file readers (BOM-aware)
+MdText := PixieMarkdownReadFile('article.md');
+
+// Default GitHub-style stylesheet, useful if rolling your own document
+Css := PixieDefaultMarkdownCss;
+```
+
+### Options
+
+`TPixieMdOptions` is a set type controlling parser behaviour. The defaults enable everything; pass a tighter set for stricter parsing:
+
+| Option | Description |
+|--------|-------------|
+| `moAllowRawHtml` | Pass HTML blocks and inline HTML through to the output. |
+| `moStripFrontMatter` | Strip a leading `--- ... ---` YAML block before parsing. |
+| `moAutoHeadingIds` | Generate GitHub-style `id="..."` attributes on headings (with deduplication). |
+| `moGfmTables` | Recognise `| col | col |` tables. |
+| `moGfmStrikethrough` | Recognise `~~text~~`. |
+| `moGfmTaskLists` | Recognise `- [x]` / `- [ ]`. |
+| `moGfmAutolinks` | Auto-link bare http(s) URLs in plain text. |
+
+```pascal
+// Strict CommonMark, no GFM
+Html := PixieMarkdownToHtml(MdText, [moAllowRawHtml]);
+```
 
 ## Known Limitations
 

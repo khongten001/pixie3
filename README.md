@@ -17,9 +17,9 @@
 
 ---
 
-Pixie is a set of drop-in visual components for Lazarus and Delphi that render HTML, SVG, and custom graphics using platform-native APIs. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
+Pixie is a set of drop-in visual components for Lazarus and Delphi that render HTML, SVG, Markdown, and custom graphics using platform-native APIs. No browser engine, no embedded Chromium, no external dependencies &mdash; just a single package you add to your project.
 
-Four components are included: `TPixieHtmlView` (HTML/CSS rendering with interaction), `TPixieSvgView` (proportional SVG display), `TPixiePaintBox` (drawing surface with a TCanvas-like API), and `TPixieTagBar` (interactive coloured tag pills with checking, editing, and colour cycling).
+Five components are included: `TPixieHtmlView` (HTML/CSS rendering with interaction), `TPixieMarkdownView` (CommonMark + GFM Markdown), `TPixieSvgView` (proportional SVG display), `TPixiePaintBox` (drawing surface with a TCanvas-like API), and `TPixieTagBar` (interactive coloured tag pills with checking, editing, and colour cycling).
 
 All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration where available. Five rendering backends are included so the same code works across operating systems and frameworks:
 
@@ -63,8 +63,15 @@ All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration 
 - Owner-drawn form controls: text input, password, textarea, checkbox, radio, button
 - Caret, selection, clipboard, undo, Tab/Shift+Tab focus cycling
 
+**Markdown**
+- CommonMark 0.31.2 with GFM extensions (tables, strikethrough, task lists, autolinks)
+- ~88% conformance against the official CommonMark spec test suite
+- `TPixieMarkdownView` renders Markdown through the same HTML/CSS engine, so output is fully styleable and selectable
+- GitHub-flavoured default stylesheet, toggleable via `UseDefaultStyles`
+- Public `PixieMarkdownToHtml` / `PixieMarkdownToHtmlDocument` helpers for conversion without a view component
+
 **PDF Export**
-- Export any HTML content to multi-page PDF with `TPixiePdfExport`
+- Export any HTML or Markdown content to multi-page PDF with `TPixiePdfExport`
 - TrueType font embedding with subsetting
 - Searchable/selectable text, images, gradients, borders, opacity
 - Configurable page size (A4, Letter, Legal, custom) and margins
@@ -94,7 +101,7 @@ All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration 
 
 1. Open `package/Pixie.Package.Lazarus.lpk` in the Lazarus IDE.
 2. Click **Compile**, then **Use > Install**.
-3. Restart the IDE. `TPixieHtmlView`, `TPixieSvgView`, `TPixiePaintBox`, and `TPixieTagBar` appear on the **Pixie** component palette tab.
+3. Restart the IDE. `TPixieHtmlView`, `TPixieMarkdownView`, `TPixieSvgView`, `TPixiePaintBox`, and `TPixieTagBar` appear on the **Pixie** component palette tab.
 
 Or add the package as a dependency without installing:
 
@@ -154,6 +161,24 @@ procedure TForm1.PixieHtmlView1AnchorClick(Sender: TObject; const Url: string);
 begin
   // handle the click as desired
 end;
+```
+
+Render Markdown:
+
+```pascal
+PixieMarkdownView1.LoadMarkdownFromString(
+  '# Hello' + sLineBreak +
+  '' + sLineBreak +
+  'Markdown with *emphasis*, **strong**, `code`, and a [link](https://example.com).');
+```
+
+Or convert Markdown to HTML without a component:
+
+```pascal
+uses Pixie.Markdown;
+
+Html := PixieMarkdownToHtml('# Title' + sLineBreak + sLineBreak +
+  '- one' + sLineBreak + '- two');
 ```
 
 Export to PDF:
