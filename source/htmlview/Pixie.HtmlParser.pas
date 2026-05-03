@@ -39,6 +39,7 @@ type
     constructor Create(AType: TPixieHtmlNodeType);
     destructor Destroy; override;
     function AppendChild(Child: TPixieHtmlNode): TPixieHtmlNode;
+    procedure AdoptAllChildrenFrom(Source: TPixieHtmlNode);
     function GetAttribute(const AName: string): string;
     function HasAttribute(const AName: string): Boolean;
     procedure SetAttribute(const AName, AValue: string);
@@ -252,7 +253,7 @@ type
     FFosterParenting: Boolean;
     FPendingTableChars: string;
     FPendingTableCharsHasNonWs: Boolean;
-    FTextBuffer: string;
+    FTextBuffer: TStringBuilder;
     FTextBufferType: TPixieHtmlNodeType;
     // Stack operations
     function CurrentNode: TPixieHtmlNode;
@@ -457,6 +458,25 @@ begin
   Child.Parent := Self;
   Children.Add(Child);
   Result := Child;
+end;
+
+// Bulk-moves every child of Source onto Self, in order, without the
+// O(n) Remove(Child) scan that AppendChild does per child. Use this
+// in adoption-agency fixups where AppendChild(Source.Children[0]) was
+// being called in a tight loop.
+procedure TPixieHtmlNode.AdoptAllChildrenFrom(Source: TPixieHtmlNode);
+var
+  I: Integer;
+  Child: TPixieHtmlNode;
+begin
+  if Source = Self then Exit;
+  for I := 0 to Source.Children.Count - 1 do
+  begin
+    Child := Source.Children[I];
+    Child.Parent := Self;
+    Children.Add(Child);
+  end;
+  Source.Children.Clear;
 end;
 
 procedure TPixieHtmlNode.RemoveChild(Child: TPixieHtmlNode);
@@ -2717,7 +2737,7 @@ begin
   FFramesetOk := True;
   FIgnoreNextLf := False;
   FFosterParenting := False;
-  FTextBuffer := '';
+  FTextBuffer := TStringBuilder.Create;
   FTextBufferType := hntWhitespace;
 end;
 
@@ -2727,6 +2747,7 @@ begin
   FOpenElements.Free;
   FActiveFormatting.Free;
   FTemplateInsertionModes.Free;
+  FTextBuffer.Free;
   // FDocument is returned to caller; don't free here
   inherited;
 end;
@@ -3127,7 +3148,7 @@ begin
     if not IsHtmlWhitespace(Ord(S[1])) then
       FTextBufferType := hntText;
   end;
-  FTextBuffer := FTextBuffer + S;
+  FTextBuffer.Append(S);
 end;
 
 procedure TPixieTreeBuilder.FlushTextBuffer;
@@ -3135,8 +3156,9 @@ var
   Node, Target, FosterTarget, InsertBefore, LastChild: TPixieHtmlNode;
   I: Integer;
   AllWhitespace: Boolean;
+  Buffered: string;
 begin
-  if FTextBuffer = '' then
+  if FTextBuffer.Length = 0 then
     Exit;
 
   // Determine target parent and insertion point
@@ -3151,13 +3173,15 @@ begin
   else
     Target := CurrentNode;
 
+  Buffered := FTextBuffer.ToString;
+
   // Try to merge with last text child of target (if inserting at end)
   if (InsertBefore = nil) and (Target.Children.Count > 0) then
   begin
     LastChild := Target.Children[Target.Children.Count - 1];
     if LastChild.NodeType in [hntText, hntWhitespace] then
     begin
-      LastChild.Text := LastChild.Text + FTextBuffer;
+      LastChild.Text := LastChild.Text + Buffered;
       // Upgrade whitespace to text if needed
       if LastChild.NodeType = hntWhitespace then
       begin
@@ -3171,7 +3195,7 @@ begin
         if not AllWhitespace then
           LastChild.NodeType := hntText;
       end;
-      FTextBuffer := '';
+      FTextBuffer.Clear;
       FTextBufferType := hntWhitespace;
       Exit;
     end;
@@ -3179,8 +3203,8 @@ begin
 
   // Determine if all whitespace
   AllWhitespace := True;
-  for I := 1 to Length(FTextBuffer) do
-    if not IsHtmlWhitespace(Ord(FTextBuffer[I])) then
+  for I := 1 to Length(Buffered) do
+    if not IsHtmlWhitespace(Ord(Buffered[I])) then
     begin
       AllWhitespace := False;
       Break;
@@ -3190,8 +3214,8 @@ begin
     Node := TPixieHtmlNode.Create(hntWhitespace)
   else
     Node := TPixieHtmlNode.Create(hntText);
-  Node.Text := FTextBuffer;
-  FTextBuffer := '';
+  Node.Text := Buffered;
+  FTextBuffer.Clear;
   FTextBufferType := hntWhitespace;
 
   if InsertBefore <> nil then
@@ -3364,8 +3388,7 @@ begin
       FOpenElements[NodeIdx] := NewNode;
 
       // Reparent: move node's children to newNode
-      while Node.Children.Count > 0 do
-        NewNode.AppendChild(Node.Children[0]);
+      NewNode.AdoptAllChildrenFrom(Node);
 
       // Replace in parent
       if Node.Parent <> nil then
@@ -3396,8 +3419,7 @@ begin
     NewNode := FormattingNode.CloneShallow;
 
     // Step 16: Move furthest block's children into clone
-    while FurthestBlock.Children.Count > 0 do
-      NewNode.AppendChild(FurthestBlock.Children[0]);
+    NewNode.AdoptAllChildrenFrom(FurthestBlock);
 
     // Step 17: Append clone to furthest block
     FurthestBlock.AppendChild(NewNode);
