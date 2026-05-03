@@ -873,6 +873,18 @@ begin
               I := AfterLink;
               Continue;
             end;
+            if (RefDefs <> nil) and TryReferenceLink(Source, I + 1, RefDefs,
+              LabelText, Url, Title, AfterLink) then
+            begin
+              FlushText(Pending, Result);
+              Node := TPixieMdNode.Create(mnImage);
+              Node.LinkUrl := Url;
+              Node.LinkTitle := Title;
+              Node.ImageAlt := LabelText;
+              Result.Add(Node);
+              I := AfterLink;
+              Continue;
+            end;
           end;
           Pending := Pending + C;
           Inc(I);
