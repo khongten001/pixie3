@@ -111,8 +111,6 @@ const
       'border-collapse: collapse; ' +
       'border-spacing: 0; ' +
       'margin-top: 0; margin-bottom: 16px; ' +
-      'display: block; ' +
-      'overflow: auto; ' +
     '}'#10 +
     'table th, table td { ' +
       'padding: 6px 13px; ' +
