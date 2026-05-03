@@ -169,7 +169,10 @@
         <DCCReference Include="..\source\common\Pixie.Canvas.D2D.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.NativeContainer.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.HtmlView.Core.pas"/>
+        <DCCReference Include="..\source\htmlview\Pixie.HtmlView.VCL.Base.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.HtmlView.VCL.pas"/>
+        <DCCReference Include="..\source\markdown\Pixie.Markdown.pas"/>
+        <DCCReference Include="..\source\markdown\Pixie.MarkdownView.VCL.pas"/>
         <DCCReference Include="..\source\common\Pixie.SimpleXml.pas"/>
         <DCCReference Include="..\source\common\Pixie.SvgRenderer.pas"/>
         <DCCReference Include="..\source\common\Pixie.SvgRenderer.Canvas.pas"/>

@@ -6,7 +6,7 @@
     <CompilerOptions>
       <Version Value="11"/>
       <SearchPaths>
-        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/paintbox;../source/svgview;../source/tagbar"/>
+        <OtherUnitFiles Value="../source/common;../source/htmlview;../source/markdown;../source/paintbox;../source/svgview;../source/tagbar"/>
         <UnitOutputDirectory Value="../lib/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
       </SearchPaths>
     </CompilerOptions>
@@ -173,6 +173,10 @@
         <UnitName Value="Pixie.HtmlView.Core"/>
       </Item>
       <Item>
+        <Filename Value="../source/htmlview/Pixie.HtmlView.Base.pas"/>
+        <UnitName Value="Pixie.HtmlView.Base"/>
+      </Item>
+      <Item>
         <Filename Value="../source/htmlview/Pixie.HtmlView.pas"/>
         <UnitName Value="Pixie.HtmlView"/>
       </Item>
@@ -183,6 +187,14 @@
       <Item>
         <Filename Value="../source/htmlview/Pixie.LineBox.pas"/>
         <UnitName Value="Pixie.LineBox"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/markdown/Pixie.Markdown.pas"/>
+        <UnitName Value="Pixie.Markdown"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/markdown/Pixie.MarkdownView.pas"/>
+        <UnitName Value="Pixie.MarkdownView"/>
       </Item>
       <Item>
         <Filename Value="../source/htmlview/Pixie.MasterCss.pas"/>
