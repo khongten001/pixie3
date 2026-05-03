@@ -74,11 +74,9 @@ begin
   Result := IsAsciiAlpha(C) or ((C >= '0') and (C <= '9'));
 end;
 
-function IsPunctOrSpace(C: Char): Boolean;
+function IsAsciiPunct(C: Char): Boolean;
 begin
-  // Loose definition for emphasis flanking: whitespace or ASCII punctuation.
   case C of
-    #0..' ',
     '!', '"', '#', '$', '%', '&', '''', '(', ')', '*', '+', ',', '-',
     '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\', ']', '^',
     '_', '`', '{', '|', '}', '~':
@@ -86,6 +84,13 @@ begin
   else
     Result := False;
   end;
+end;
+
+// True for ASCII whitespace plus #0, which the inline parser uses as a
+// sentinel for "before/after end of source".
+function IsAsciiSpaceOrEof(C: Char): Boolean;
+begin
+  Result := (C = ' ') or (C = #9) or (C = #10) or (C = #13) or (C = #0);
 end;
 
 function IsValidScheme(const S: string): Boolean;
@@ -519,67 +524,146 @@ end;
 // Emphasis processor
 // ---------------------------------------------------------------------------
 //
-// Greedy approach: scan looking for delimiter runs. When we see a run
-// of *s or _s, we emit a marker node. After the whole pass, we walk the
-// node list and pair up matching markers into emph/strong nodes.
+// CommonMark left/right-flanking delimiter-run algorithm. Each delimiter
+// run is classified at scan time as can-open / can-close based on the
+// characters immediately before and after the run. Emphasis pairing
+// then walks a doubly-linked list of delimiters applying the spec's
+// rules (including the rule-of-3 to avoid mismatched nesting like
+// **bold *em* bold**).
 
 type
   TDelimMarker = class(TPixieMdNode)
   public
     DelimChar: Char;
     DelimLen: Integer;
-    Active: Boolean;
-    constructor CreateMarker(C: Char; Len: Integer);
+    OriginalLen: Integer;
+    CanOpen: Boolean;
+    CanClose: Boolean;
+    PrevDelim, NextDelim: TDelimMarker;
+    constructor CreateMarker(C: Char; Len: Integer;
+      AOpen, AClose: Boolean);
   end;
 
-constructor TDelimMarker.CreateMarker(C: Char; Len: Integer);
+constructor TDelimMarker.CreateMarker(C: Char; Len: Integer;
+  AOpen, AClose: Boolean);
 begin
   inherited Create(mnText);
   Literal := StringOfChar(C, Len);
   DelimChar := C;
   DelimLen := Len;
-  Active := True;
+  OriginalLen := Len;
+  CanOpen := AOpen;
+  CanClose := AClose;
 end;
 
-procedure ResolveDelimiters(List: TPixieMdNodeList);
+procedure ComputeFlanking(C: Char; PrevCh, NextCh: Char;
+  out CanOpen, CanClose: Boolean);
 var
-  Stack: TList<TDelimMarker>;
-  I, J, K, OpenIdx, OpenPos, ClosePos, Take, ContentCount: Integer;
-  M, Open, Close: TDelimMarker;
-  Wrapper: TPixieMdNode;
+  PrevSpace, NextSpace, PrevPunct, NextPunct: Boolean;
+  LeftFlank, RightFlank: Boolean;
 begin
-  Stack := TList<TDelimMarker>.Create;
-  try
-    I := 0;
-    while I < List.Count do
+  PrevSpace := IsAsciiSpaceOrEof(PrevCh);
+  NextSpace := IsAsciiSpaceOrEof(NextCh);
+  PrevPunct := IsAsciiPunct(PrevCh);
+  NextPunct := IsAsciiPunct(NextCh);
+
+  // Left-flanking: not followed by whitespace; and either not followed
+  // by punctuation, or followed by punctuation but preceded by
+  // whitespace or punctuation.
+  LeftFlank := (not NextSpace) and
+    ((not NextPunct) or (PrevSpace or PrevPunct));
+
+  // Right-flanking: not preceded by whitespace; and either not preceded
+  // by punctuation, or preceded by punctuation but followed by
+  // whitespace or punctuation.
+  RightFlank := (not PrevSpace) and
+    ((not PrevPunct) or (NextSpace or NextPunct));
+
+  if C = '_' then
+  begin
+    // Underscore can't open intra-word: opener also requires not
+    // right-flanking unless preceded by punctuation; symmetric for
+    // closer.
+    CanOpen := LeftFlank and ((not RightFlank) or PrevPunct);
+    CanClose := RightFlank and ((not LeftFlank) or NextPunct);
+  end
+  else
+  begin
+    CanOpen := LeftFlank;
+    CanClose := RightFlank;
+  end;
+end;
+
+type
+  // Per-character lower bound on how far back the opener search may
+  // walk, indexed by [DelimChar, OriginalLen mod 3]. Sized to cover
+  // the two emphasis chars '*' (42) and '_' (95).
+  TOpenersBottom = array['*'..'_', 0..2] of TDelimMarker;
+
+procedure UnlinkDelim(var Head: TDelimMarker; D: TDelimMarker);
+begin
+  if D.PrevDelim <> nil then
+    D.PrevDelim.NextDelim := D.NextDelim
+  else
+    Head := D.NextDelim;
+  if D.NextDelim <> nil then
+    D.NextDelim.PrevDelim := D.PrevDelim;
+  D.PrevDelim := nil;
+  D.NextDelim := nil;
+end;
+
+// CommonMark "rule of 3": a pair is allowed if EITHER the simple-case
+// short-circuit applies (neither side both opens and closes), OR the
+// sum of original lengths is not a multiple of 3, OR each individual
+// length is itself a multiple of 3.
+function PairAllowed(Opener, Closer: TDelimMarker): Boolean;
+begin
+  Result := (not (Closer.CanOpen or Opener.CanClose)) or
+            (((Closer.OriginalLen + Opener.OriginalLen) mod 3) <> 0) or
+            ((Closer.OriginalLen mod 3 = 0) and
+             (Opener.OriginalLen mod 3 = 0));
+end;
+
+procedure ResolveDelimiters(List: TPixieMdNodeList; DelimHead: TDelimMarker);
+var
+  Closer, Opener, NextCloser, BottomCutoff, Walker: TDelimMarker;
+  Bottom: TOpenersBottom;
+  Take, OpenPos, ClosePos, ContentCount, J, ModIdx: Integer;
+  Wrapper: TPixieMdNode;
+  FoundOpener: Boolean;
+begin
+  FillChar(Bottom, SizeOf(Bottom), 0);
+
+  Closer := DelimHead;
+  while Closer <> nil do
+  begin
+    if not Closer.CanClose then
     begin
-      if not (List[I] is TDelimMarker) then
+      Closer := Closer.NextDelim;
+      Continue;
+    end;
+
+    // Search backward for a matching opener, but no further than
+    // openers_bottom for this (char, original_length mod 3) combination.
+    ModIdx := Closer.OriginalLen mod 3;
+    BottomCutoff := Bottom[Closer.DelimChar, ModIdx];
+    Opener := Closer.PrevDelim;
+    FoundOpener := False;
+    while (Opener <> nil) and (Opener <> BottomCutoff) do
+    begin
+      if Opener.CanOpen and (Opener.DelimChar = Closer.DelimChar) and
+         PairAllowed(Opener, Closer) then
       begin
-        Inc(I);
-        Continue;
+        FoundOpener := True;
+        Break;
       end;
-      M := TDelimMarker(List[I]);
+      Opener := Opener.PrevDelim;
+    end;
 
-      // Try to pair as closer with most recent matching opener.
-      OpenIdx := -1;
-      for K := Stack.Count - 1 downto 0 do
-        if Stack[K].DelimChar = M.DelimChar then
-        begin
-          OpenIdx := K;
-          Break;
-        end;
-
-      if OpenIdx < 0 then
-      begin
-        // No opener; treat as potential opener.
-        Stack.Add(M);
-        Inc(I);
-        Continue;
-      end;
-
-      Open := Stack[OpenIdx];
-      Close := M;
-      if (Open.DelimLen >= 2) and (Close.DelimLen >= 2) then
+    if FoundOpener then
+    begin
+      // Decide strong (consume 2) vs emph (consume 1).
+      if (Closer.DelimLen >= 2) and (Opener.DelimLen >= 2) then
         Take := 2
       else
         Take := 1;
@@ -589,56 +673,72 @@ begin
       else
         Wrapper := TPixieMdNode.Create(mnEmph);
 
-      // Move nodes between Open and Close into the wrapper.
-      OpenPos := List.IndexOf(Open);
-      ClosePos := List.IndexOf(Close);
+      // Move every node strictly between opener and closer in the node
+      // list into the wrapper. Any delimiter markers in that range are
+      // dropped (their content was unpaired). After the move, Opener's
+      // position in the list is unchanged (we only extracted from after
+      // it), so the cached OpenPos remains valid through the rest of
+      // this branch.
+      OpenPos := List.IndexOf(Opener);
+      ClosePos := List.IndexOf(Closer);
       ContentCount := ClosePos - OpenPos - 1;
       for J := 0 to ContentCount - 1 do
         Wrapper.AddChild(List.Extract(List[OpenPos + 1]));
 
-      // Open marker handling.
-      Open.DelimLen := Open.DelimLen - Take;
-      Close.DelimLen := Close.DelimLen - Take;
-
-      if Open.DelimLen = 0 then
+      // Drop the now-stale delimiters between opener and closer from
+      // the doubly-linked chain.
+      Walker := Opener.NextDelim;
+      while (Walker <> nil) and (Walker <> Closer) do
       begin
-        // Replace Open with Wrapper in-place.
-        OpenPos := List.IndexOf(Open);
+        NextCloser := Walker.NextDelim;
+        UnlinkDelim(DelimHead, Walker);
+        Walker := NextCloser;
+      end;
+
+      Opener.DelimLen := Opener.DelimLen - Take;
+      Closer.DelimLen := Closer.DelimLen - Take;
+
+      if Opener.DelimLen = 0 then
+      begin
         List.Insert(OpenPos, Wrapper);
-        List.Extract(Open);
-        Open.Free;
-        Stack.Delete(OpenIdx);
+        List.Extract(Opener);
+        UnlinkDelim(DelimHead, Opener);
+        Opener.Free;
       end
       else
       begin
-        Open.Literal := StringOfChar(Open.DelimChar, Open.DelimLen);
-        OpenPos := List.IndexOf(Open);
+        Opener.Literal := StringOfChar(Opener.DelimChar, Opener.DelimLen);
         List.Insert(OpenPos + 1, Wrapper);
       end;
 
-      // Close marker handling.
-      if Close.DelimLen = 0 then
+      if Closer.DelimLen = 0 then
       begin
-        I := List.IndexOf(Close);
-        List.Extract(Close);
-        Close.Free;
+        NextCloser := Closer.NextDelim;
+        List.Extract(Closer);
+        UnlinkDelim(DelimHead, Closer);
+        Closer.Free;
+        Closer := NextCloser;
       end
       else
+        Closer.Literal := StringOfChar(Closer.DelimChar, Closer.DelimLen);
+      // If closer still has length, leave Closer pointing at it so the
+      // outer loop tries again with the reduced delimiter.
+    end
+    else
+    begin
+      // No opener found within the cutoff. Lower the bottom mark and
+      // either advance past this closer or, if it can't open either,
+      // discard it as literal.
+      Bottom[Closer.DelimChar, ModIdx] := Closer.PrevDelim;
+      if not Closer.CanOpen then
       begin
-        Close.Literal := StringOfChar(Close.DelimChar, Close.DelimLen);
-        I := List.IndexOf(Close);
-      end;
-
-      // Drop any markers above OpenIdx that are now stale (their
-      // contents got absorbed into the wrapper).
-      while Stack.Count > OpenIdx do
-      begin
-        if Stack[Stack.Count - 1] = Open then Break;
-        Stack.Delete(Stack.Count - 1);
-      end;
+        NextCloser := Closer.NextDelim;
+        UnlinkDelim(DelimHead, Closer);
+        Closer := NextCloser;
+      end
+      else
+        Closer := Closer.NextDelim;
     end;
-  finally
-    Stack.Free;
   end;
 end;
 
@@ -650,19 +750,23 @@ function ParseImpl(const Source: string;
   RefDefs: TPixieMdLinkRefMap;
   Options: TPixieMdOptions): TPixieMdNodeList;
 var
-  I, Len, Start, RunLen: Integer;
+  I, Len, RunLen: Integer;
   C: Char;
   Pending: string;
   CodeContent, Url, Decoded, LabelText, Title: string;
   AfterCode, AfterAuto, AfterEntity, AfterLink, AfterHtml, LabelEnd: Integer;
   IsEmail, IsImage: Boolean;
   Node: TPixieMdNode;
-  Marker: TDelimMarker;
+  Marker, DelimHead, DelimTail: TDelimMarker;
   StrikeStart, StrikeEnd: Integer;
   InlineList: TPixieMdNodeList;
+  PrevCh, NextCh: Char;
+  MOpen, MClose: Boolean;
 begin
   Result := TPixieMdNodeList.Create(True);
   Pending := '';
+  DelimHead := nil;
+  DelimTail := nil;
   Len := Length(Source);
   I := 1;
   while I <= Len do
@@ -681,8 +785,7 @@ begin
               Inc(I, 2);
               Continue;
             end;
-            if IsPunctOrSpace(Source[I + 1]) and (Source[I + 1] <> ' ') and
-               (Source[I + 1] <> #9) then
+            if IsAsciiPunct(Source[I + 1]) then
             begin
               Pending := Pending + Source[I + 1];
               Inc(I, 2);
@@ -820,16 +923,35 @@ begin
         end;
       '*', '_':
         begin
-          // Run of delimiter chars.
-          Start := I;
+          // Run of delimiter chars. Capture preceding and following
+          // characters before measuring the run so flanking can be
+          // computed; characters past the source bounds are treated as
+          // whitespace per CommonMark.
+          if I > 1 then
+            PrevCh := Source[I - 1]
+          else
+            PrevCh := ' ';
           RunLen := 0;
           while (I <= Len) and (Source[I] = C) do
           begin
             Inc(RunLen);
             Inc(I);
           end;
+          if I <= Len then
+            NextCh := Source[I]
+          else
+            NextCh := ' ';
+          ComputeFlanking(C, PrevCh, NextCh, MOpen, MClose);
           FlushText(Pending, Result);
-          Marker := TDelimMarker.CreateMarker(C, RunLen);
+          Marker := TDelimMarker.CreateMarker(C, RunLen, MOpen, MClose);
+          if DelimHead = nil then
+            DelimHead := Marker
+          else
+          begin
+            Marker.PrevDelim := DelimTail;
+            DelimTail.NextDelim := Marker;
+          end;
+          DelimTail := Marker;
           Result.Add(Marker);
         end;
       '~':
@@ -908,7 +1030,7 @@ begin
   FlushText(Pending, Result);
 
   // Resolve emphasis/strong delimiter pairs.
-  ResolveDelimiters(Result);
+  ResolveDelimiters(Result, DelimHead);
 end;
 
 class function TPixieMdInlineParser.Parse(const Source: string;
