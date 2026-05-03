@@ -186,7 +186,7 @@ function PixieGetValidValues(Name: Integer): string;
 implementation
 
 uses
-  Pixie.HtmlTag;
+  Classes, Pixie.HtmlTag;
 
 { Valid values map: maps property string_id -> keyword strings }
 
@@ -1471,9 +1471,9 @@ var
   List: TPixieCssTokenListList;
   I, J: Integer;
   Name: TPixieCssTokenList;
-  S: string;
   Tok: TPixieCssToken;
   SubTokens: TPixieCssTokenList;
+  Families, Words: TStringList;
 begin
   Result := False;
 
@@ -1488,37 +1488,42 @@ begin
       if List.Count = 0 then
         Exit;
 
-      FontFamily := '';
-      for I := 0 to List.Count - 1 do
-      begin
-        Name := List[I];
-        if (Name.Count = 1) and (Name[0].TokenType = cssTokenString) then
+      Families := TStringList.Create;
+      Words := TStringList.Create;
+      try
+        Families.Delimiter := ',';
+        Families.StrictDelimiter := True;
+        Words.Delimiter := ' ';
+        Words.StrictDelimiter := True;
+        for I := 0 to List.Count - 1 do
         begin
-          if FontFamily <> '' then
-            FontFamily := FontFamily + ',';
-          FontFamily := FontFamily + Name[0].Str;
-          Continue;
-        end;
-
-        S := '';
-        for J := 0 to Name.Count - 1 do
-        begin
-          Tok := Name[J];
-          if Tok.TokenType = cssTokenWhitespace then
+          Name := List[I];
+          if (Name.Count = 1) and (Name[0].TokenType = cssTokenString) then
+          begin
+            Families.Add(Name[0].Str);
             Continue;
-          if not IsCustomIdent(Tok) then
+          end;
+
+          Words.Clear;
+          for J := 0 to Name.Count - 1 do
+          begin
+            Tok := Name[J];
+            if Tok.TokenType = cssTokenWhitespace then
+              Continue;
+            if not IsCustomIdent(Tok) then
+              Exit;
+            Words.Add(Tok.Str);
+          end;
+          if Words.Count = 0 then
             Exit;
-          if S <> '' then
-            S := S + ' ';
-          S := S + Tok.Str;
+          Families.Add(Words.DelimitedText);
         end;
-        if S = '' then
-          Exit;
-        if FontFamily <> '' then
-          FontFamily := FontFamily + ',';
-        FontFamily := FontFamily + S;
+        FontFamily := Families.DelimitedText;
+        Result := FontFamily <> '';
+      finally
+        Families.Free;
+        Words.Free;
       end;
-      Result := FontFamily <> '';
     finally
       for I := 0 to List.Count - 1 do
         List[I].Free;
@@ -3013,26 +3018,33 @@ procedure TPixieStyle.ParseTextEmphasis(Tokens: TPixieCssTokenList; Important: B
 var
   I: Integer;
   Tok: TPixieCssToken;
-  S: string;
+  Words: TStringList;
   Clr: TPixieWebColor;
 begin
-  S := '';
-  // Process from back to front
-  for I := Tokens.Count - 1 downto 0 do
-  begin
-    Tok := Tokens[I];
-    if ParseTextDecorationColor(Tok, Clr) then
+  Words := TStringList.Create;
+  try
+    Words.Delimiter := ' ';
+    Words.StrictDelimiter := True;
+    // Walk forward; non-color tokens become style words preserving order.
+    for I := 0 to Tokens.Count - 1 do
     begin
-      AddParsedProperty(Ord(psid_text_emphasis_color),
-        TPixiePropertyValue.FromColor(Clr, Important));
-      Continue;
+      Tok := Tokens[I];
+      if ParseTextDecorationColor(Tok, Clr) then
+      begin
+        AddParsedProperty(Ord(psid_text_emphasis_color),
+          TPixiePropertyValue.FromColor(Clr, Important));
+        Continue;
+      end;
+      if Tok.TokenType = cssTokenWhitespace then
+        Continue;
+      Words.Add(Tok.Str);
     end;
-    S := Tok.Str + ' ' + S;
+    if Words.Count > 0 then
+      AddParsedProperty(Ord(psid_text_emphasis_style),
+        TPixiePropertyValue.FromString(Words.DelimitedText, Important));
+  finally
+    Words.Free;
   end;
-  S := PixieTrim(S);
-  if S <> '' then
-    AddParsedProperty(Ord(psid_text_emphasis_style),
-      TPixiePropertyValue.FromString(S, Important));
 end;
 
 procedure TPixieStyle.ParseTextEmphasisPosition(Tokens: TPixieCssTokenList; Important: Boolean);
