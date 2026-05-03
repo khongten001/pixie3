@@ -298,15 +298,20 @@ end;
 
 procedure WriteCodeBlock(Ctx: PWriterCtx; Node: TPixieMdNode);
 var
-  ClsAttr: string;
+  ClsAttr, Body: string;
 begin
   if Node.CodeLang <> '' then
     ClsAttr := ' class="language-' +
       PixieMdHtmlEscapeAttr(Node.CodeLang) + '"'
   else
     ClsAttr := '';
-  Ctx^.Buf.Append('<pre><code' + ClsAttr + '>' +
-    PixieMdHtmlEscape(Node.Literal) + '</code></pre>' + sLineBreak);
+  // CommonMark requires a trailing LF inside <code>. The block parser
+  // strips the final line break from Literal so we re-emit one here.
+  Body := PixieMdHtmlEscape(Node.Literal);
+  if (Length(Body) = 0) or (Body[Length(Body)] <> #10) then
+    Body := Body + #10;
+  Ctx^.Buf.Append('<pre><code' + ClsAttr + '>' + Body +
+    '</code></pre>' + sLineBreak);
 end;
 
 procedure WriteTable(Ctx: PWriterCtx; Node: TPixieMdNode);
