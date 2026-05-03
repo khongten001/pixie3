@@ -229,6 +229,95 @@ begin
   end;
 end;
 
+function IsGfmUrlChar(C: Char): Boolean;
+begin
+  Result := (C > #32) and (C <> '<') and (C <> '>') and (C <> '"');
+end;
+
+// Non-allocating case-insensitive prefix match: does S match Prefix
+// (which must be lowercase ASCII) starting at Start?
+function MatchPrefixCI(const S: string; Start: Integer;
+  const Prefix: string): Boolean;
+var
+  I, PLen: Integer;
+  C: Char;
+begin
+  PLen := Length(Prefix);
+  if Start + PLen - 1 > Length(S) then Exit(False);
+  for I := 1 to PLen do
+  begin
+    C := S[Start + I - 1];
+    if (C >= 'A') and (C <= 'Z') then
+      C := Chr(Ord(C) + 32);
+    if C <> Prefix[I] then Exit(False);
+  end;
+  Result := True;
+end;
+
+// GFM extended autolink: bare URLs starting with http://, https://,
+// ftp://, or www. — auto-linked when at a word boundary. Returns
+// position after the link or 0. Url is the visible text; IsWww means
+// the caller should prepend http:// when building the href.
+function ScanGfmAutolink(const S: string; Start: Integer;
+  out Url: string; out IsWww: Boolean): Integer;
+var
+  I, Len, EndPos, ParenDepth, MinLen: Integer;
+begin
+  Result := 0;
+  IsWww := False;
+  Len := Length(S);
+  if Start > Len then Exit;
+
+  if MatchPrefixCI(S, Start, 'https://') then
+    MinLen := 8
+  else if MatchPrefixCI(S, Start, 'http://') then
+    MinLen := 7
+  else if MatchPrefixCI(S, Start, 'ftp://') then
+    MinLen := 6
+  else if MatchPrefixCI(S, Start, 'www.') then
+  begin
+    IsWww := True;
+    MinLen := 4;
+  end
+  else
+    Exit;
+
+  I := Start + MinLen;
+  while (I <= Len) and IsGfmUrlChar(S[I]) do Inc(I);
+  EndPos := I - 1;
+
+  // Need at least one character beyond the scheme / www. prefix.
+  if EndPos < Start + MinLen then Exit;
+
+  // Trim trailing punctuation that's never part of a URL in prose.
+  while EndPos >= Start + MinLen do
+  begin
+    case S[EndPos] of
+      '?', '!', '.', ',', ':', '*', '_', '~':
+        Dec(EndPos);
+    else
+      Break;
+    end;
+  end;
+
+  // Trim unbalanced trailing ')' so "see (https://x.com/y)" excludes
+  // the outer paren.
+  ParenDepth := 0;
+  for I := Start to EndPos do
+    if S[I] = '(' then Inc(ParenDepth)
+    else if S[I] = ')' then Dec(ParenDepth);
+  while (ParenDepth < 0) and (EndPos >= Start + MinLen) and
+        (S[EndPos] = ')') do
+  begin
+    Dec(EndPos);
+    Inc(ParenDepth);
+  end;
+
+  if EndPos < Start + MinLen then Exit;
+  Url := Copy(S, Start, EndPos - Start + 1);
+  Result := EndPos + 1;
+end;
+
 // Raw inline HTML tag: <tag ...>, </tag>, <!-- ... -->, etc. Returns
 // position after the tag's closing '>' or 0.
 function ScanRawHtml(const S: string; Start: Integer): Integer;
@@ -905,7 +994,7 @@ var
   Pending: string;
   CodeContent, Url, Decoded, LabelText, Title: string;
   AfterCode, AfterAuto, AfterEntity, AfterLink, AfterHtml, LabelEnd: Integer;
-  IsEmail, IsImage: Boolean;
+  IsEmail, IsImage, IsWww: Boolean;
   Node: TPixieMdNode;
   Marker, DelimHead, DelimTail: TDelimMarker;
   StrikeStart, StrikeEnd: Integer;
@@ -922,6 +1011,31 @@ begin
   while I <= Len do
   begin
     C := Source[I];
+
+    // GFM extended autolink: bare http(s)://, ftp://, www. URLs at a
+    // word boundary become links without the <...> wrapper. The
+    // trigger-char + boundary gate is checked first to keep the
+    // common per-character cost down to two comparisons.
+    if (moGfmAutolinks in Options) and
+       (C in ['h', 'H', 'w', 'W', 'f', 'F']) and
+       ((I = 1) or not IsAsciiAlnum(Source[I - 1])) then
+    begin
+      AfterAuto := ScanGfmAutolink(Source, I, Url, IsWww);
+      if AfterAuto > 0 then
+      begin
+        FlushText(Pending, Result);
+        Node := TPixieMdNode.Create(mnLink);
+        if IsWww then
+          Node.LinkUrl := MdPercentEncodeUrl('http://' + Url)
+        else
+          Node.LinkUrl := MdPercentEncodeUrl(Url);
+        Node.AddChild(NewText(Url));
+        Result.Add(Node);
+        I := AfterAuto;
+        Continue;
+      end;
+    end;
+
     case C of
       '\':
         begin
