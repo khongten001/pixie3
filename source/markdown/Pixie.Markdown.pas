@@ -27,7 +27,8 @@ implementation
 
 uses
   SysUtils,
-  Pixie.Markdown.Parser, Pixie.Markdown.HtmlWriter;
+  Pixie.Markdown.Parser, Pixie.Markdown.InlineParser,
+  Pixie.Markdown.HtmlWriter;
 
 function HtmlEscape(const S: string): string;
 var
@@ -59,6 +60,7 @@ var
 begin
   Doc := TPixieMdParser.ParseBlocks(Md, nil, Options);
   try
+    TPixieMdInlineParser.ParseInlinesIntoBlocks(Doc, Options);
     Result := TPixieMdHtmlWriter.Write(Doc, Options);
   finally
     Doc.Free;

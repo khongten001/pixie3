@@ -1032,13 +1032,14 @@ begin
     Exit;
   end;
 
-  // 9. Paragraph (default).
+  // 9. Paragraph (default). Preserve trailing whitespace — the inline
+  // parser uses two trailing spaces to detect hard breaks.
   TextRem := Copy(Line, Offset, Length(Line));
   SI := 1;
   while (SI <= Length(TextRem)) and (TextRem[SI] = ' ') and (SI <= 3) do
     Inc(SI);
   Delete(TextRem, 1, SI - 1);
-  AppendToParagraph(StripTrailingWhitespace(TextRem));
+  AppendToParagraph(TextRem);
 end;
 
 function TPixieMdParserImpl.Parse: TPixieMdNode;

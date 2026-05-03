@@ -176,6 +176,7 @@
         <DCCReference Include="..\source\htmlview\Pixie.HtmlView.VCL.pas"/>
         <DCCReference Include="..\source\markdown\Pixie.Markdown.Types.pas"/>
         <DCCReference Include="..\source\markdown\Pixie.Markdown.HtmlWriter.pas"/>
+        <DCCReference Include="..\source\markdown\Pixie.Markdown.InlineParser.pas"/>
         <DCCReference Include="..\source\markdown\Pixie.Markdown.Parser.pas"/>
         <DCCReference Include="..\source\markdown\Pixie.Markdown.pas"/>
         <DCCReference Include="..\source\markdown\Pixie.MarkdownView.VCL.pas"/>
