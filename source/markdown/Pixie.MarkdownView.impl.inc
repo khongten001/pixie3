@@ -50,8 +50,8 @@ var
 begin
   FBaseUrl := ABaseUrl;
   Html := PixieMarkdownToHtml(AMd);
-  // TODO: prepend <style>PixieDefaultMarkdownCss</style> when
-  // FUseDefaultStyles is True (pending Phase 6 stylesheet unit).
+  if FUseDefaultStyles then
+    Html := '<style>' + PixieDefaultMarkdownCss + '</style>' + Html;
   CoreLoadFromString(Html, ABaseUrl);
 end;
 

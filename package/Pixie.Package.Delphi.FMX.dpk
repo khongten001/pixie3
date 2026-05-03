@@ -105,6 +105,7 @@ contains
   Pixie.HtmlView.FMX.Base in '..\source\htmlview\Pixie.HtmlView.FMX.Base.pas',
   Pixie.HtmlView.FMX in '..\source\htmlview\Pixie.HtmlView.FMX.pas',
   Pixie.Markdown.Types in '..\source\markdown\Pixie.Markdown.Types.pas',
+  Pixie.Markdown.Css in '..\source\markdown\Pixie.Markdown.Css.pas',
   Pixie.Markdown.HtmlWriter in '..\source\markdown\Pixie.Markdown.HtmlWriter.pas',
   Pixie.Markdown.InlineParser in '..\source\markdown\Pixie.Markdown.InlineParser.pas',
   Pixie.Markdown.Parser in '..\source\markdown\Pixie.Markdown.Parser.pas',

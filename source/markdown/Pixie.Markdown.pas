@@ -22,6 +22,9 @@ function PixieMarkdownToHtmlDocument(const Md: string;
   const Title: string = '';
   Options: TPixieMdOptions = DefaultPixieMdOptions): string;
 
+// GitHub-flavoured default stylesheet for rendered Markdown.
+function PixieDefaultMarkdownCss: string;
+
 // Reads a stream from its current position to end as UTF-8, strips a
 // leading BOM if present.
 function PixieMarkdownReadStream(AStream: TStream): string;
@@ -34,7 +37,7 @@ implementation
 uses
   SysUtils,
   Pixie.Markdown.Parser, Pixie.Markdown.InlineParser,
-  Pixie.Markdown.HtmlWriter;
+  Pixie.Markdown.HtmlWriter, Pixie.Markdown.Css;
 
 type
   TPixieMdLinkRefMap = Pixie.Markdown.Parser.TPixieMdLinkRefMap;
@@ -57,6 +60,11 @@ begin
   finally
     RefDefs.Free;
   end;
+end;
+
+function PixieDefaultMarkdownCss: string;
+begin
+  Result := Pixie.Markdown.Css.PixieDefaultMarkdownCss;
 end;
 
 function PixieMarkdownReadStream(AStream: TStream): string;
@@ -96,7 +104,9 @@ begin
   else
     T := '';
   Result :=
-    '<!DOCTYPE html><html><head>' + T + '</head><body>' +
+    '<!DOCTYPE html><html><head>' + T +
+    '<style>' + PixieDefaultMarkdownCss + '</style>' +
+    '</head><body>' +
     PixieMarkdownToHtml(Md, Options) +
     '</body></html>';
 end;
