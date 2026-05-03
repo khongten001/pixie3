@@ -484,15 +484,26 @@ begin
   // Inline form: ( url "title" )
   if (I > Len) or (S[I] <> '(') then Exit;
   Inc(I);
-  // Skip whitespace
-  while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
+  // Skip whitespace incl. one line ending (CommonMark allows the
+  // destination/title to start on the next line).
+  while (I <= Len) and IsAsciiSpaceOrEof(S[I]) do Inc(I);
   // URL: <...> or non-whitespace, balanced parens
   if (I <= Len) and (S[I] = '<') then
   begin
     Inc(I);
     Url := '';
-    while (I <= Len) and (S[I] <> '>') and (S[I] <> #10) do
+    while (I <= Len) and (S[I] <> '>') and (S[I] <> #10) and
+          (S[I] <> '<') do
     begin
+      // Inside <...>, backslash-escaped punctuation passes through as
+      // \X (decoded later by MdProcessLinkPart). An unescaped '<' is
+      // forbidden by spec.
+      if (S[I] = '\') and (I < Len) and IsAsciiPunct(S[I + 1]) then
+      begin
+        Url := Url + S[I] + S[I + 1];
+        Inc(I, 2);
+        Continue;
+      end;
       Url := Url + S[I];
       Inc(I);
     end;
@@ -524,9 +535,10 @@ begin
       Inc(I);
     end;
   end;
-  // Optional title
+  // Optional title — title can start on next line, hence newlines in
+  // the gap. Title content itself can also span lines.
   Title := '';
-  while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
+  while (I <= Len) and IsAsciiSpaceOrEof(S[I]) do Inc(I);
   if (I <= Len) and ((S[I] = '"') or (S[I] = '''') or (S[I] = '(')) then
   begin
     if S[I] = '(' then Quote := ')' else Quote := S[I];
@@ -545,7 +557,7 @@ begin
     else
       Exit;
   end;
-  while (I <= Len) and ((S[I] = ' ') or (S[I] = #9)) do Inc(I);
+  while (I <= Len) and IsAsciiSpaceOrEof(S[I]) do Inc(I);
   if (I > Len) or (S[I] <> ')') then Exit;
   Url := MdPercentEncodeUrl(MdProcessLinkPart(Url));
   Title := MdProcessLinkPart(Title);
@@ -844,8 +856,7 @@ function ParseImpl(const Source: string;
   Options: TPixieMdOptions): TPixieMdNodeList; forward;
 
 // Build a link or image node and populate it by inline-parsing the
-// label as its children. Used by the four bracket forms (inline link,
-// reference link, inline image, reference image).
+// label as its children.
 function BuildLinkLikeNode(Kind: TPixieMdNodeKind;
   const Url, Title, LabelText: string;
   RefDefs: TPixieMdLinkRefMap;
@@ -863,6 +874,26 @@ begin
   finally
     InlineList.Free;
   end;
+end;
+
+function HasLinkDescendant(Node: TPixieMdNode): Boolean;
+var
+  I: Integer;
+begin
+  if Node.Kind = mnLink then Exit(True);
+  if Node.HasChildren then
+    for I := 0 to Node.ChildCount - 1 do
+      if HasLinkDescendant(Node.Children[I]) then Exit(True);
+  Result := False;
+end;
+
+function ListHasLinkDescendant(List: TPixieMdNodeList): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to List.Count - 1 do
+    if HasLinkDescendant(List[I]) then Exit(True);
+  Result := False;
 end;
 
 function ParseImpl(const Source: string;
@@ -1013,25 +1044,49 @@ begin
           IsImage := False;
           AfterLink := ScanLink(Source, I, IsImage,
             LabelText, Url, Title, LabelEnd);
-          if AfterLink > 0 then
+          if AfterLink = 0 then
           begin
-            FlushText(Pending, Result);
-            Result.Add(BuildLinkLikeNode(mnLink, Url, Title,
-              LabelText, RefDefs, Options));
-            I := AfterLink;
-            Continue;
+            if (RefDefs = nil) or not TryReferenceLink(Source, I, RefDefs,
+                LabelText, Url, Title, AfterLink) then
+            begin
+              Pending := Pending + C;
+              Inc(I);
+              Continue;
+            end;
+            // Reference-link path: ScanLink didn't run, so derive
+            // LabelEnd from the LabelText length.
+            LabelEnd := I + Length(LabelText);
           end;
-          if (RefDefs <> nil) and TryReferenceLink(Source, I, RefDefs,
-            LabelText, Url, Title, AfterLink) then
-          begin
+          // Parse the label so the link's children are ready, and so we
+          // can apply CommonMark's link-in-link veto. When vetoed, only
+          // the bracketed prefix [...] emits literally; the trailing
+          // (...) or [ref] is re-parsed as inline so a following
+          // shortcut reference still forms its own link.
+          InlineList := ParseImpl(LabelText, RefDefs, Options);
+          try
             FlushText(Pending, Result);
-            Result.Add(BuildLinkLikeNode(mnLink, Url, Title,
-              LabelText, RefDefs, Options));
-            I := AfterLink;
-            Continue;
+            if ListHasLinkDescendant(InlineList) then
+            begin
+              Result.Add(NewText('['));
+              while InlineList.Count > 0 do
+                Result.Add(InlineList.Extract(InlineList[0]));
+              Result.Add(NewText(']'));
+              I := LabelEnd + 2;
+            end
+            else
+            begin
+              Node := TPixieMdNode.Create(mnLink);
+              Node.LinkUrl := Url;
+              Node.LinkTitle := Title;
+              while InlineList.Count > 0 do
+                Node.AddChild(InlineList.Extract(InlineList[0]));
+              Result.Add(Node);
+              I := AfterLink;
+            end;
+          finally
+            InlineList.Free;
           end;
-          Pending := Pending + C;
-          Inc(I);
+          Continue;
         end;
       '*', '_':
         begin
