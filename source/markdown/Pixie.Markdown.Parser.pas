@@ -3,17 +3,18 @@ unit Pixie.Markdown.Parser;
 // Markdown block parser. Walks the input line by line, maintaining a
 // stack of open container blocks (document, blockquote, list, list-item)
 // and at most one open leaf block (paragraph, code block, HTML block,
-// heading).
+// heading), and emits an AST of block nodes.
 //
-// Phase 3 scope: block structure only. Inline content is left as the
-// raw source text in TPixieMdNode.Literal, ready for the inline parser
-// (Phase 4) to break up into emph/code/links/etc.
+// Block-level only: leaf blocks contain a single mnText child whose
+// Literal holds the raw inline source. The inline parser
+// (TPixieMdInlineParser.ParseInlinesIntoBlocks) replaces those text
+// children with parsed inline trees.
 //
 // Implements ATX and setext headings, thematic breaks, blockquotes,
 // fenced and indented code blocks, ordered and unordered lists with
 // nesting, basic HTML blocks, paragraphs, lazy continuation, and YAML
 // front-matter stripping. Tables, link reference definitions, and task
-// list items are added in later phases.
+// list items are not yet implemented.
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
@@ -114,14 +115,6 @@ begin
       Break;
     Inc(Offset);
   end;
-end;
-
-function CountIndent(const S: string; Offset, MaxCols: Integer): Integer;
-var
-  Tmp: Integer;
-begin
-  Tmp := Offset;
-  SkipIndent(S, Tmp, MaxCols, Result);
 end;
 
 function StripTrailingWhitespace(const S: string): string;
@@ -613,9 +606,8 @@ begin
   case OB.Kind of
     obParagraph, obHeading:
       begin
-        // Phase 3: store raw inline source as a single mnText child.
-        // Phase 4 inline parser will replace this with parsed inline
-        // tree (emph/strong/code/links/etc).
+        // Raw inline source becomes a single mnText child here; the
+        // inline parser later replaces it with the parsed inline tree.
         S := TrimSpaces(OB.Text);
         if S <> '' then
         begin
@@ -801,7 +793,8 @@ procedure TPixieMdParserImpl.ProcessLine(const Line: string;
 var
   Offset, FailedAt, Indent, Level: Integer;
   ContentStart, ContentEnd: Integer;
-  Heading, CodeNode, HtmlNode, Hr, Bq, NewHeading, Parent: TPixieMdNode;
+  Heading, CodeNode, HtmlNode, Hr, Bq, NewHeading, Parent,
+    TextChild: TPixieMdNode;
   HeadingOB, CodeOB, HtmlOB, BqOB, Leaf, OB: TOpenBlock;
   TmpOff, TmpOffset, FenceLen, InfoStart, InfoEnd: Integer;
   FenceChar: Char;
@@ -959,11 +952,9 @@ begin
       if Parent = nil then Parent := FDoc;
       NewHeading := TPixieMdNode.Create(mnHeading);
       NewHeading.HeadingLevel := Level;
-      // Paragraph text becomes a single mnText child (replaced by Phase
-      // 4 inline parser later).
-      Heading := TPixieMdNode.Create(mnText);
-      Heading.Literal := TrimSpaces(Leaf.Text);
-      NewHeading.AddChild(Heading);
+      TextChild := TPixieMdNode.Create(mnText);
+      TextChild.Literal := TrimSpaces(Leaf.Text);
+      NewHeading.AddChild(TextChild);
       ChildIdx := Parent.Children.IndexOf(Leaf.Node);
       Parent.Children.Extract(Leaf.Node);
       Leaf.Node.Free;

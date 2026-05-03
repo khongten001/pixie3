@@ -143,7 +143,7 @@ end;
 
 type
   TWriterCtx = record
-    Buf: string;
+    Buf: TStringBuilder;
     Slugs: TPixieMdSlugMap;
     Options: TPixieMdOptions;
   end;
@@ -228,25 +228,25 @@ begin
     Id := ResolveSlug(Ctx, PixieMdSlug(PixieMdInlineText(Node)));
 
   if Id <> '' then
-    Ctx^.Buf := Ctx^.Buf + '<' + Tag + ' id="' + PixieMdHtmlEscapeAttr(Id) + '">'
+    Ctx^.Buf.Append('<' + Tag + ' id="' + PixieMdHtmlEscapeAttr(Id) + '">')
   else
-    Ctx^.Buf := Ctx^.Buf + '<' + Tag + '>';
+    Ctx^.Buf.Append('<' + Tag + '>');
   WriteChildren(Ctx, Node);
-  Ctx^.Buf := Ctx^.Buf + '</' + Tag + '>' + sLineBreak;
+  Ctx^.Buf.Append('</' + Tag + '>' + sLineBreak);
 end;
 
 procedure WriteParagraph(Ctx: PWriterCtx; Node: TPixieMdNode);
 begin
-  Ctx^.Buf := Ctx^.Buf + '<p>';
+  Ctx^.Buf.Append('<p>');
   WriteChildren(Ctx, Node);
-  Ctx^.Buf := Ctx^.Buf + '</p>' + sLineBreak;
+  Ctx^.Buf.Append('</p>' + sLineBreak);
 end;
 
 procedure WriteBlockQuote(Ctx: PWriterCtx; Node: TPixieMdNode);
 begin
-  Ctx^.Buf := Ctx^.Buf + '<blockquote>' + sLineBreak;
+  Ctx^.Buf.Append('<blockquote>' + sLineBreak);
   WriteChildren(Ctx, Node);
-  Ctx^.Buf := Ctx^.Buf + '</blockquote>' + sLineBreak;
+  Ctx^.Buf.Append('</blockquote>' + sLineBreak);
 end;
 
 procedure WriteList(Ctx: PWriterCtx; Node: TPixieMdNode);
@@ -259,16 +259,16 @@ begin
   begin
     Tag := 'ol';
     if Node.ListStart <> 1 then
-      Ctx^.Buf := Ctx^.Buf + '<ol start="' + IntToStr(Node.ListStart) + '">'
+      Ctx^.Buf.Append('<ol start="' + IntToStr(Node.ListStart) + '">')
     else
-      Ctx^.Buf := Ctx^.Buf + '<ol>';
+      Ctx^.Buf.Append('<ol>');
   end
   else
   begin
     Tag := 'ul';
-    Ctx^.Buf := Ctx^.Buf + '<ul>';
+    Ctx^.Buf.Append('<ul>');
   end;
-  Ctx^.Buf := Ctx^.Buf + sLineBreak;
+  Ctx^.Buf.Append(sLineBreak);
 
   if Node.HasChildren then
     for I := 0 to Node.ChildCount - 1 do
@@ -281,21 +281,19 @@ begin
       end;
       if Item.IsTaskItem then
       begin
-        Ctx^.Buf := Ctx^.Buf + '<li class="task-list-item">';
+        Ctx^.Buf.Append('<li class="task-list-item">');
         if Item.TaskChecked then
-          Ctx^.Buf := Ctx^.Buf +
-            '<input type="checkbox" disabled checked> '
+          Ctx^.Buf.Append('<input type="checkbox" disabled checked> ')
         else
-          Ctx^.Buf := Ctx^.Buf +
-            '<input type="checkbox" disabled> ';
+          Ctx^.Buf.Append('<input type="checkbox" disabled> ');
       end
       else
-        Ctx^.Buf := Ctx^.Buf + '<li>';
+        Ctx^.Buf.Append('<li>');
       WriteListItemContent(Ctx, Item, Node.ListTight);
-      Ctx^.Buf := Ctx^.Buf + '</li>' + sLineBreak;
+      Ctx^.Buf.Append('</li>' + sLineBreak);
     end;
 
-  Ctx^.Buf := Ctx^.Buf + '</' + Tag + '>' + sLineBreak;
+  Ctx^.Buf.Append('</' + Tag + '>' + sLineBreak);
 end;
 
 procedure WriteCodeBlock(Ctx: PWriterCtx; Node: TPixieMdNode);
@@ -307,8 +305,8 @@ begin
       PixieMdHtmlEscapeAttr(Node.CodeLang) + '"'
   else
     ClsAttr := '';
-  Ctx^.Buf := Ctx^.Buf + '<pre><code' + ClsAttr + '>' +
-    PixieMdHtmlEscape(Node.Literal) + '</code></pre>' + sLineBreak;
+  Ctx^.Buf.Append('<pre><code' + ClsAttr + '>' +
+    PixieMdHtmlEscape(Node.Literal) + '</code></pre>' + sLineBreak);
 end;
 
 procedure WriteTable(Ctx: PWriterCtx; Node: TPixieMdNode);
@@ -330,7 +328,7 @@ begin
       else HasBody := True;
     end;
 
-  Ctx^.Buf := Ctx^.Buf + '<table>' + sLineBreak;
+  Ctx^.Buf.Append('<table>' + sLineBreak);
   InHeaderSection := False;
   InBodySection := False;
 
@@ -344,7 +342,7 @@ begin
       begin
         if not InHeaderSection then
         begin
-          Ctx^.Buf := Ctx^.Buf + '<thead>' + sLineBreak;
+          Ctx^.Buf.Append('<thead>' + sLineBreak);
           InHeaderSection := True;
         end;
         CellTag := 'th';
@@ -353,18 +351,18 @@ begin
       begin
         if InHeaderSection then
         begin
-          Ctx^.Buf := Ctx^.Buf + '</thead>' + sLineBreak;
+          Ctx^.Buf.Append('</thead>' + sLineBreak);
           InHeaderSection := False;
         end;
         if not InBodySection then
         begin
-          Ctx^.Buf := Ctx^.Buf + '<tbody>' + sLineBreak;
+          Ctx^.Buf.Append('<tbody>' + sLineBreak);
           InBodySection := True;
         end;
         CellTag := 'td';
       end;
 
-      Ctx^.Buf := Ctx^.Buf + '<tr>';
+      Ctx^.Buf.Append('<tr>');
       if Row.HasChildren then
         for J := 0 to Row.ChildCount - 1 do
         begin
@@ -377,20 +375,18 @@ begin
           else
             AlignAttr := '';
           end;
-          Ctx^.Buf := Ctx^.Buf + '<' + CellTag + AlignAttr + '>';
+          Ctx^.Buf.Append('<' + CellTag + AlignAttr + '>');
           WriteChildren(Ctx, Cell);
-          Ctx^.Buf := Ctx^.Buf + '</' + CellTag + '>';
+          Ctx^.Buf.Append('</' + CellTag + '>');
         end;
-      Ctx^.Buf := Ctx^.Buf + '</tr>' + sLineBreak;
+      Ctx^.Buf.Append('</tr>' + sLineBreak);
     end;
 
   if InHeaderSection then
-    Ctx^.Buf := Ctx^.Buf + '</thead>' + sLineBreak;
+    Ctx^.Buf.Append('</thead>' + sLineBreak);
   if InBodySection then
-    Ctx^.Buf := Ctx^.Buf + '</tbody>' + sLineBreak;
-  if not (HasHeader or HasBody) then
-    ; // empty table
-  Ctx^.Buf := Ctx^.Buf + '</table>' + sLineBreak;
+    Ctx^.Buf.Append('</tbody>' + sLineBreak);
+  Ctx^.Buf.Append('</table>' + sLineBreak);
 end;
 
 procedure WriteLink(Ctx: PWriterCtx; Node: TPixieMdNode);
@@ -400,10 +396,10 @@ begin
   Tail := '';
   if Node.LinkTitle <> '' then
     Tail := ' title="' + PixieMdHtmlEscapeAttr(Node.LinkTitle) + '"';
-  Ctx^.Buf := Ctx^.Buf + '<a href="' +
-    PixieMdHtmlEscapeAttr(Node.LinkUrl) + '"' + Tail + '>';
+  Ctx^.Buf.Append('<a href="' +
+    PixieMdHtmlEscapeAttr(Node.LinkUrl) + '"' + Tail + '>');
   WriteChildren(Ctx, Node);
-  Ctx^.Buf := Ctx^.Buf + '</a>';
+  Ctx^.Buf.Append('</a>');
 end;
 
 procedure WriteImage(Ctx: PWriterCtx; Node: TPixieMdNode);
@@ -418,9 +414,9 @@ begin
   Tail := '';
   if Node.LinkTitle <> '' then
     Tail := ' title="' + PixieMdHtmlEscapeAttr(Node.LinkTitle) + '"';
-  Ctx^.Buf := Ctx^.Buf + '<img src="' +
+  Ctx^.Buf.Append('<img src="' +
     PixieMdHtmlEscapeAttr(Node.LinkUrl) + '" alt="' +
-    PixieMdHtmlEscapeAttr(Alt) + '"' + Tail + '>';
+    PixieMdHtmlEscapeAttr(Alt) + '"' + Tail + '>');
 end;
 
 procedure WriteNode(Ctx: PWriterCtx; Node: TPixieMdNode);
@@ -440,54 +436,54 @@ begin
       // Normally consumed by WriteList; if encountered standalone, emit
       // as a bare <li> with its content.
       begin
-        Ctx^.Buf := Ctx^.Buf + '<li>';
+        Ctx^.Buf.Append('<li>');
         WriteChildren(Ctx, Node);
-        Ctx^.Buf := Ctx^.Buf + '</li>' + sLineBreak;
+        Ctx^.Buf.Append('</li>' + sLineBreak);
       end;
     mnCodeBlock:
       WriteCodeBlock(Ctx, Node);
     mnHtmlBlock:
-      Ctx^.Buf := Ctx^.Buf + Node.Literal + sLineBreak;
+      Ctx^.Buf.Append(Node.Literal + sLineBreak);
     mnThematicBreak:
-      Ctx^.Buf := Ctx^.Buf + '<hr>' + sLineBreak;
+      Ctx^.Buf.Append('<hr>' + sLineBreak);
     mnTable:
       WriteTable(Ctx, Node);
     mnTableRow, mnTableCell:
       // Only meaningful inside mnTable; emit children as fallback.
       WriteChildren(Ctx, Node);
     mnText:
-      Ctx^.Buf := Ctx^.Buf + PixieMdHtmlEscape(Node.Literal);
+      Ctx^.Buf.Append(PixieMdHtmlEscape(Node.Literal));
     mnEmph:
       begin
-        Ctx^.Buf := Ctx^.Buf + '<em>';
+        Ctx^.Buf.Append('<em>');
         WriteChildren(Ctx, Node);
-        Ctx^.Buf := Ctx^.Buf + '</em>';
+        Ctx^.Buf.Append('</em>');
       end;
     mnStrong:
       begin
-        Ctx^.Buf := Ctx^.Buf + '<strong>';
+        Ctx^.Buf.Append('<strong>');
         WriteChildren(Ctx, Node);
-        Ctx^.Buf := Ctx^.Buf + '</strong>';
+        Ctx^.Buf.Append('</strong>');
       end;
     mnStrikethrough:
       begin
-        Ctx^.Buf := Ctx^.Buf + '<del>';
+        Ctx^.Buf.Append('<del>');
         WriteChildren(Ctx, Node);
-        Ctx^.Buf := Ctx^.Buf + '</del>';
+        Ctx^.Buf.Append('</del>');
       end;
     mnCodeSpan:
-      Ctx^.Buf := Ctx^.Buf + '<code>' +
-        PixieMdHtmlEscape(Node.Literal) + '</code>';
+      Ctx^.Buf.Append('<code>' +
+        PixieMdHtmlEscape(Node.Literal) + '</code>');
     mnLink:
       WriteLink(Ctx, Node);
     mnImage:
       WriteImage(Ctx, Node);
     mnLineBreak:
-      Ctx^.Buf := Ctx^.Buf + '<br>' + sLineBreak;
+      Ctx^.Buf.Append('<br>' + sLineBreak);
     mnSoftBreak:
-      Ctx^.Buf := Ctx^.Buf + sLineBreak;
+      Ctx^.Buf.Append(sLineBreak);
     mnRawHtml:
-      Ctx^.Buf := Ctx^.Buf + Node.Literal;
+      Ctx^.Buf.Append(Node.Literal);
   end;
 end;
 
@@ -501,15 +497,16 @@ var
   Ctx: TWriterCtx;
 begin
   if Doc = nil then Exit('');
-  Ctx.Buf := '';
+  Ctx.Buf := TStringBuilder.Create;
   Ctx.Options := Options;
   Ctx.Slugs := TPixieMdSlugMap.Create;
   try
     WriteNode(@Ctx, Doc);
+    Result := Ctx.Buf.ToString;
   finally
     Ctx.Slugs.Free;
+    Ctx.Buf.Free;
   end;
-  Result := Ctx.Buf;
 end;
 
 end.

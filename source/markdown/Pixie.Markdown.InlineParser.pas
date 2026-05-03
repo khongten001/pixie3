@@ -41,38 +41,7 @@ type
 implementation
 
 uses
-  Pixie.HtmlEntities;
-
-// Forward declarations
-procedure InsertAt(List: TPixieMdNodeList; Index: Integer;
-  Node: TPixieMdNode); forward;
-
-function CodepointToUtf8(CP: UInt32): string;
-begin
-  if CP < $80 then
-    Result := Chr(CP)
-  else if CP < $800 then
-  begin
-    SetLength(Result, 2);
-    Result[1] := Chr($C0 or (CP shr 6));
-    Result[2] := Chr($80 or (CP and $3F));
-  end
-  else if CP < $10000 then
-  begin
-    SetLength(Result, 3);
-    Result[1] := Chr($E0 or (CP shr 12));
-    Result[2] := Chr($80 or ((CP shr 6) and $3F));
-    Result[3] := Chr($80 or (CP and $3F));
-  end
-  else
-  begin
-    SetLength(Result, 4);
-    Result[1] := Chr($F0 or (CP shr 18));
-    Result[2] := Chr($80 or ((CP shr 12) and $3F));
-    Result[3] := Chr($80 or ((CP shr 6) and $3F));
-    Result[4] := Chr($80 or (CP and $3F));
-  end;
-end;
+  Pixie.HtmlEntities, Pixie.Utf8;
 
 function ResolveNamedEntity(const Name: string): string;
 var
@@ -81,9 +50,9 @@ begin
   Result := '';
   if PixieLookupEntity(Name, Data) then
   begin
-    Result := CodepointToUtf8(Data.Codepoint1);
+    AppendUtf8Char(Result, Data.Codepoint1);
     if Data.Codepoint2 <> 0 then
-      Result := Result + CodepointToUtf8(Data.Codepoint2);
+      AppendUtf8Char(Result, Data.Codepoint2);
   end;
 end;
 
@@ -320,7 +289,6 @@ var
   I, Len, NumStart, CodePoint: Integer;
   IsHex: Boolean;
   Name: string;
-  C: Char;
   Resolved: string;
 begin
   Result := 0;
@@ -351,7 +319,8 @@ begin
       CodePoint := StrToIntDef(Copy(S, NumStart, I - NumStart), 0);
     if (CodePoint <= 0) or (CodePoint > $10FFFF) then
       CodePoint := $FFFD;
-    Decoded := CodepointToUtf8(CodePoint);
+    Decoded := '';
+    AppendUtf8Char(Decoded, CodePoint);
     Result := I + 1;
     Exit;
   end;
@@ -365,8 +334,6 @@ begin
   if Resolved = '' then Exit;
   Decoded := Resolved;
   Result := I + 1;
-  // Suppress unused-variable warning
-  C := S[Start];
 end;
 
 // Link or image: [text](url "title") or ![alt](url "title").
@@ -574,7 +541,7 @@ begin
       begin
         // Replace Open with Wrapper in-place.
         OpenPos := List.IndexOf(Open);
-        InsertAt(List, OpenPos, Wrapper);
+        List.Insert(OpenPos, Wrapper);
         List.Extract(Open);
         Open.Free;
         Stack.Delete(OpenIdx);
@@ -583,7 +550,7 @@ begin
       begin
         Open.Literal := StringOfChar(Open.DelimChar, Open.DelimLen);
         OpenPos := List.IndexOf(Open);
-        InsertAt(List, OpenPos + 1, Wrapper);
+        List.Insert(OpenPos + 1, Wrapper);
       end;
 
       // Close marker handling.
@@ -610,13 +577,6 @@ begin
   finally
     Stack.Free;
   end;
-end;
-
-// Inserts a node at position Index in List. Trivial wrapper but kept
-// as a separate symbol for forward-declaration with the resolver.
-procedure InsertAt(List: TPixieMdNodeList; Index: Integer; Node: TPixieMdNode);
-begin
-  List.Insert(Index, Node);
 end;
 
 // ---------------------------------------------------------------------------

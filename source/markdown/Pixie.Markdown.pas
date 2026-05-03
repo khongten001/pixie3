@@ -1,15 +1,14 @@
 unit Pixie.Markdown;
 
-// Public Markdown -> HTML conversion API. Phase 1 stub: HTML-escapes the
-// input and wraps it in <pre>. Real CommonMark/GFM parsing arrives in
-// Phase 3 (block) and Phase 4 (inline).
+// Public Markdown -> HTML conversion API. Runs the full pipeline:
+// block parser, inline parser, then HTML writer.
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
 interface
 
 uses
-  Pixie.Markdown.Types;
+  Classes, Pixie.Markdown.Types;
 
 type
   // Re-export so callers only need Pixie.Markdown.
@@ -23,35 +22,19 @@ function PixieMarkdownToHtmlDocument(const Md: string;
   const Title: string = '';
   Options: TPixieMdOptions = DefaultPixieMdOptions): string;
 
+// Reads a stream from its current position to end as UTF-8, strips a
+// leading BOM if present.
+function PixieMarkdownReadStream(AStream: TStream): string;
+
+// Reads a UTF-8 encoded Markdown file. Strips a leading BOM if present.
+function PixieMarkdownReadFile(const AFileName: string): string;
+
 implementation
 
 uses
   SysUtils,
   Pixie.Markdown.Parser, Pixie.Markdown.InlineParser,
   Pixie.Markdown.HtmlWriter;
-
-function HtmlEscape(const S: string): string;
-var
-  I, Len: Integer;
-  C: Char;
-  SB: string;
-begin
-  Len := Length(S);
-  SB := '';
-  for I := 1 to Len do
-  begin
-    C := S[I];
-    case C of
-      '&': SB := SB + '&amp;';
-      '<': SB := SB + '&lt;';
-      '>': SB := SB + '&gt;';
-      '"': SB := SB + '&quot;';
-    else
-      SB := SB + C;
-    end;
-  end;
-  Result := SB;
-end;
 
 function PixieMarkdownToHtml(const Md: string;
   Options: TPixieMdOptions): string;
@@ -67,6 +50,32 @@ begin
   end;
 end;
 
+function PixieMarkdownReadStream(AStream: TStream): string;
+var
+  Bytes: TBytes;
+  N: Int64;
+begin
+  N := AStream.Size - AStream.Position;
+  SetLength(Bytes, N);
+  if N > 0 then
+    AStream.ReadBuffer(Bytes[0], N);
+  Result := TEncoding.UTF8.GetString(Bytes);
+  if (Length(Result) > 0) and (Result[1] = #$FEFF) then
+    Delete(Result, 1, 1);
+end;
+
+function PixieMarkdownReadFile(const AFileName: string): string;
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  try
+    Result := PixieMarkdownReadStream(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
 function PixieMarkdownToHtmlDocument(const Md: string;
   const Title: string;
   Options: TPixieMdOptions): string;
@@ -74,7 +83,7 @@ var
   T: string;
 begin
   if Title <> '' then
-    T := '<title>' + HtmlEscape(Title) + '</title>'
+    T := '<title>' + PixieMdHtmlEscapeAttr(Title) + '</title>'
   else
     T := '';
   Result :=
