@@ -364,6 +364,15 @@ type
     psid_overflow_wrap,
     psid_word_wrap,
 
+    // SVG presentation properties (raw-string values; consumed by inline-SVG
+    // bridge in Pixie.ElSvg, not by HTML layout/paint)
+    psid_fill,
+    psid_stroke,
+    psid_stroke_width,
+    psid_fill_opacity,
+    psid_stroke_opacity,
+    psid_fill_rule,
+
     psid_counter_reset,
     psid_counter_increment,
 
@@ -419,6 +428,19 @@ var
 
 function PixieId(const S: string): Integer;
 function PixieStr(ID: Integer): string;
+
+const
+  // Inline-SVG-only CSS presentation properties: stored as raw strings by
+  // Pixie.Style and surfaced as XML attributes by Pixie.ElSvg. Used by both
+  // sites so the recognized set stays in lockstep.
+  PixieSvgPresentationPropIds: array[0..5] of TPixieStringId = (
+    psid_fill,
+    psid_stroke,
+    psid_stroke_width,
+    psid_fill_opacity,
+    psid_stroke_opacity,
+    psid_fill_rule
+  );
 
 implementation
 

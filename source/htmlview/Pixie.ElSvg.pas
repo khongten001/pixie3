@@ -42,7 +42,7 @@ type
 implementation
 
 uses
-  Pixie.StringId, Pixie.Canvas,
+  Pixie.StringId, Pixie.Canvas, Pixie.Style,
   Pixie.RenderItem, Pixie.RenderImage,
   Pixie.NativeContainer;
 
@@ -91,7 +91,9 @@ procedure TPixieElSvg.SerializeElement(El: TPixieElement; var S: string);
 var
   Tag: TPixieHtmlTag;
   Pair: TPair<string, string>;
-  TagName: string;
+  TagName, AttrName: string;
+  I: Integer;
+  Prop: TPixiePropertyValue;
 begin
   if not (El is TPixieHtmlTag) then
   begin
@@ -107,6 +109,22 @@ begin
   S := S + '<' + TagName;
   for Pair in Tag.Attrs do
     S := S + ' ' + Pair.Key + '="' + XmlEscape(Pair.Value) + '"';
+
+  // Surface CSS-set SVG presentation properties as XML attributes if the
+  // element doesn't already carry them as presentation attributes (which
+  // win per SVG 1.1 cascade order). Attribute name is derived from the
+  // psid identifier — PixieStr(Ord(psid_stroke_width)) returns
+  // "stroke-width", matching the SVG attribute spelling.
+  for I := Low(PixieSvgPresentationPropIds) to
+           High(PixieSvgPresentationPropIds) do
+  begin
+    AttrName := PixieStr(Ord(PixieSvgPresentationPropIds[I]));
+    if Tag.Attrs.ContainsKey(AttrName) then
+      Continue;
+    Prop := Tag.Style.GetProperty(Ord(PixieSvgPresentationPropIds[I]));
+    if Prop.Kind = pkString then
+      S := S + ' ' + AttrName + '="' + XmlEscape(Prop.StrVal) + '"';
+  end;
 
   if Tag.Children.Count = 0 then
     S := S + '/>'

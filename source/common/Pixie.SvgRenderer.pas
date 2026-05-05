@@ -4808,7 +4808,15 @@ end;
 
 procedure TPixieSvgRendererBase.SetCurrentColor(AColor: TPixieWebColor);
 begin
+  if FInitState.Color = AColor then Exit;
   FInitState.Color := AColor;
+  // Re-resolve the root SVG's inherited state so paint attributes that
+  // reference currentColor (e.g. <svg fill="currentColor">) pick up the
+  // new color. ParseSvg ran InheritState on the root with the default
+  // (black) initial color; without this re-run the cached FillColor stays
+  // at black and propagates to every child.
+  if FSvgRoot <> nil then
+    FInitState := InheritState(FSvgRoot, FInitState);
 end;
 
 procedure TPixieSvgRendererBase.RenderDocument;
