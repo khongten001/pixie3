@@ -197,6 +197,7 @@ begin
       FLineBoxes.Delete(FLineBoxes.Count - 1)
     else
       FMaxLineWidth := Max(FMaxLineWidth,
+        FLineBoxes[FLineBoxes.Count - 1].Left +
         FLineBoxes[FLineBoxes.Count - 1].MinWidth);
   end
   else
