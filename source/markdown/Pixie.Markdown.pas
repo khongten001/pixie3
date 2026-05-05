@@ -76,9 +76,20 @@ begin
   SetLength(Bytes, N);
   if N > 0 then
     AStream.ReadBuffer(Bytes[0], N);
-  Result := TEncoding.UTF8.GetString(Bytes);
-  if (Length(Result) > 0) and (Result[1] = #$FEFF) then
-    Delete(Result, 1, 1);
+  {$IFDEF FPC}
+  // FPC string = UTF-8 AnsiString — use raw bytes directly
+  if (N >= 3) and (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+    SetString(Result, PAnsiChar(@Bytes[3]), N - 3)
+  else if N > 0 then
+    SetString(Result, PAnsiChar(@Bytes[0]), N)
+  else
+    Result := '';
+  {$ELSE}
+  if (N >= 3) and (Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF) then
+    Result := TEncoding.UTF8.GetString(Bytes, 3, N - 3)
+  else
+    Result := TEncoding.UTF8.GetString(Bytes);
+  {$ENDIF}
 end;
 
 function PixieMarkdownReadFile(const AFileName: string): string;
