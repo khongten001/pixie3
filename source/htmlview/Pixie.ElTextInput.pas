@@ -126,8 +126,8 @@ type
 implementation
 
 uses
-  Pixie.Clipboard, Pixie.StringId, Pixie.Background, Pixie.Canvas,
-  Pixie.NativeContainer,
+  Pixie.Clipboard, Pixie.StringId, Pixie.Style, Pixie.Background,
+  Pixie.Canvas, Pixie.NativeContainer,
   Pixie.Document, Pixie.RenderItem, Pixie.RenderInput,
   Pixie.RenderTable, Pixie.Utf8;
 
@@ -1128,7 +1128,7 @@ var
   ShowCaret: Boolean;
   NoRadius: TPixieBorderRadiuses;
   CaretPxX, CaretPxY: TPixiePixel;
-  HasCssBorder: Boolean;
+  HasCssBorder, HasCssBg: Boolean;
   // Multiline vars
   NumLines, L: Integer;
   LineStr: string;
@@ -1149,8 +1149,13 @@ begin
   BW := P.Width + Pad.Left + Pad.Right;
   BH := P.Height + Pad.Top + Pad.Bottom;
 
-  // Check if CSS specifies border styling
-  HasCssBorder := FCss.CssBorders.Left.Style > bsHidden;
+  // Detect explicit CSS border/background — check both computed values and
+  // whether the cascade set the property at all (catches border:0 and
+  // background:transparent which produce initial-like values).
+  HasCssBorder := (FCss.CssBorders.Left.Style > bsHidden) or
+    (Style.GetProperty(Ord(psid_border_left_style)).Kind <> pkInvalid);
+  HasCssBg := (FCss.Bg.Color.Alpha > 0) or
+    (Style.GetProperty(Ord(psid_background_color)).Kind <> pkInvalid);
 
   // Border colour — CSS or default
   if IsDisabled then
@@ -1163,7 +1168,7 @@ begin
   // Background colour — CSS or default
   if IsDisabled then
     BgColor := TPixieWebColor.Create(245, 245, 245)
-  else if FCss.Bg.Color.Alpha > 0 then
+  else if HasCssBg then
     BgColor := FCss.Bg.Color
   else
     BgColor := TPixieWebColor.Create(255, 255, 255);
@@ -1198,7 +1203,7 @@ begin
   FocusColor := TPixieWebColor.Create(0, 112, 201);
 
   // Draw border and background — skip when CSS handles it via DrawBackground
-  if not (HasCssBorder or (FCss.Bg.Color.Alpha > 0)) or IsDisabled then
+  if not (HasCssBorder or HasCssBg) or IsDisabled then
   begin
     if IsFocused and (not IsDisabled) then
     begin
