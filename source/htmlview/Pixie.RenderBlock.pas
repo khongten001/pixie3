@@ -149,6 +149,12 @@ begin
     LineRight := FmtCtx.FindMinRight(LineTop, SelfSize.RenderWidth.Value, SelfSize.ContextIdx);
     Result := SelfSize.RenderWidth.Value - LineRight;
   end;
+
+  // CSS 2.1 § 9.4.3: position:relative offsets are purely visual — the
+  // float still occupies its un-shifted bbox in the formatting context
+  // (already added above), only its rendered position moves.
+  if El.SrcEl.Css.ElPosition = epRelative then
+    El.ApplyRelativeShift(SelfSize);
 end;
 
 // --- _Render ---
