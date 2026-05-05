@@ -164,7 +164,10 @@ type
 implementation
 
 const
-  LineWidthTolerance = 0.25; // subpixel tolerance for line-fit checks
+  LineWidthTolerance = 0.5; // subpixel tolerance for line-fit checks (absorbs
+    // FP rounding accumulated across multiple inline-block items in a single
+    // line, e.g. table cell sized to its max-content where item widths +
+    // cell padding round just over the cell's content width)
 
 // --- Helper types (implementation only) ---
 
