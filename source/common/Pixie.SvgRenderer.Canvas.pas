@@ -276,7 +276,7 @@ procedure TPixieSvgCanvasRenderer.SetupLinearGradientLayer(
 const
   // Cap on cycles to keep stop counts sane when the gradient axis is
   // tiny relative to the path (e.g. a 2px gradient on a 2000px path).
-  SpreadMaxCycles = 64;
+  SpreadMaxCycles = 256;
 var
   DX, DY, LenSq, InvCycles: Single;
   TMin, TMax, BBoxCenter: Single;
