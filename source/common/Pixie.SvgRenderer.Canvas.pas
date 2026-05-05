@@ -44,6 +44,12 @@ type
     procedure PopulateStops(Layer: TPixieGradientBase;
       const Grad: TPixieSvgGradient; Opacity: Single;
       const State: TPixieSvgState);
+    procedure SetupLinearGradientLayer(
+      Layer: TPixieLinearGradientLayer;
+      const Grad: TPixieSvgGradient;
+      const StartPt, EndPt: TPixiePointF;
+      BX, BY, BW, BH: Single;
+      Opacity: Single; const State: TPixieSvgState);
     procedure ReplayPath;
     procedure RebuildAndFill(const State: TPixieSvgState);
     procedure RebuildAndStroke(const State: TPixieSvgState);
@@ -257,6 +263,116 @@ begin
   end;
 end;
 
+// Set up a linear gradient layer's axis and stops, expanding for
+// spreadMethod=repeat|reflect by replicating the stops across enough
+// cycles to cover the path bbox and extending the axis endpoints to
+// match. With smPad (the default), behaves like PopulateStops.
+procedure TPixieSvgCanvasRenderer.SetupLinearGradientLayer(
+  Layer: TPixieLinearGradientLayer;
+  const Grad: TPixieSvgGradient;
+  const StartPt, EndPt: TPixiePointF;
+  BX, BY, BW, BH: Single;
+  Opacity: Single; const State: TPixieSvgState);
+const
+  // Cap on cycles to keep stop counts sane when the gradient axis is
+  // tiny relative to the path (e.g. a 2px gradient on a 2000px path).
+  SpreadMaxCycles = 64;
+var
+  DX, DY, LenSq, InvCycles: Single;
+  TMin, TMax, BBoxCenter: Single;
+  KLow, KHigh, K, I, StopCount, Cycles: Integer;
+  Stop: TPixieSvgGradientStop;
+  CP: TPixieColorPoint;
+  CycleOffset: Single;
+
+  procedure ProjectCorner(CX, CY: Single);
+  var
+    T: Single;
+  begin
+    T := ((CX - StartPt.X) * DX + (CY - StartPt.Y) * DY) / LenSq;
+    if T < TMin then TMin := T;
+    if T > TMax then TMax := T;
+  end;
+
+  procedure UsePadFallback;
+  begin
+    Layer.StartPt := StartPt;
+    Layer.EndPt := EndPt;
+    PopulateStops(Layer, Grad, Opacity, State);
+  end;
+
+begin
+  DX := EndPt.X - StartPt.X;
+  DY := EndPt.Y - StartPt.Y;
+  LenSq := DX * DX + DY * DY;
+
+  if (not Grad.HasSpread) or (Grad.Spread = smPad)
+    or (Grad.Stops.Count < 2) or (LenSq < 1e-9) then
+  begin
+    UsePadFallback;
+    Exit;
+  end;
+
+  TMin := 0; TMax := 1;
+  ProjectCorner(BX,        BY);
+  ProjectCorner(BX + BW,   BY);
+  ProjectCorner(BX,        BY + BH);
+  ProjectCorner(BX + BW,   BY + BH);
+
+  KLow  := Floor(TMin);
+  KHigh := Ceil(TMax);
+  if KHigh <= KLow then KHigh := KLow + 1;
+  Cycles := KHigh - KLow;
+  if Cycles > SpreadMaxCycles then
+  begin
+    // Centre the cycle window on the bbox so the visible region still
+    // gets the gradient — clamping to a fixed -32..32 window would
+    // leave the path entirely outside if the bbox projects far away.
+    BBoxCenter := (TMin + TMax) * 0.5;
+    KLow  := Floor(BBoxCenter) - SpreadMaxCycles div 2;
+    KHigh := KLow + SpreadMaxCycles;
+    Cycles := SpreadMaxCycles;
+  end;
+
+  Layer.StartPt := TPixiePointF.Create(
+    StartPt.X + KLow  * DX, StartPt.Y + KLow  * DY);
+  Layer.EndPt := TPixiePointF.Create(
+    StartPt.X + KHigh * DX, StartPt.Y + KHigh * DY);
+
+  StopCount := Grad.Stops.Count;
+  InvCycles := 1.0 / Cycles;
+  Layer.ColorPoints.Capacity :=
+    Layer.ColorPoints.Count + Cycles * StopCount;
+
+  for K := 0 to Cycles - 1 do
+  begin
+    CycleOffset := K * InvCycles;
+    if (Grad.Spread = smReflect) and (((K + KLow) and 1) <> 0) then
+    begin
+      // Mirrored cycle — walk stops in reverse, mirror offsets
+      for I := StopCount - 1 downto 0 do
+      begin
+        Stop := Grad.Stops[I];
+        CP := TPixieColorPoint.Create(
+          CycleOffset + (1 - Stop.Offset) * InvCycles, Stop.Color);
+        CP.Color.Alpha := Round(CP.Color.Alpha * Opacity);
+        Layer.ColorPoints.Add(CP);
+      end;
+    end
+    else
+    begin
+      for I := 0 to StopCount - 1 do
+      begin
+        Stop := Grad.Stops[I];
+        CP := TPixieColorPoint.Create(
+          CycleOffset + Stop.Offset * InvCycles, Stop.Color);
+        CP.Color.Alpha := Round(CP.Color.Alpha * Opacity);
+        Layer.ColorPoints.Add(CP);
+      end;
+    end;
+  end;
+end;
+
 // ===========================================================================
 // Gradient fill via clip-then-fill
 // ===========================================================================
@@ -332,9 +448,9 @@ begin
         TransformPt(GX2, GY2);
       end;
 
-      GradLayer.StartPt := TPixiePointF.Create(GX1, GY1);
-      GradLayer.EndPt := TPixiePointF.Create(GX2, GY2);
-      PopulateStops(GradLayer, Grad, State.FillOpacity, State);
+      SetupLinearGradientLayer(GradLayer, Grad,
+        TPixiePointF.Create(GX1, GY1), TPixiePointF.Create(GX2, GY2),
+        BX, BY, BW, BH, State.FillOpacity, State);
       FCanvas.FillPathLinearGradient(GradLayer, FillRule);
     finally
       GradLayer.Free;
@@ -440,9 +556,9 @@ begin
         TransformPt(GX1, GY1);
         TransformPt(GX2, GY2);
       end;
-      GradLayer.StartPt := TPixiePointF.Create(GX1, GY1);
-      GradLayer.EndPt := TPixiePointF.Create(GX2, GY2);
-      PopulateStops(GradLayer, Grad, State.StrokeOpacity, State);
+      SetupLinearGradientLayer(GradLayer, Grad,
+        TPixiePointF.Create(GX1, GY1), TPixiePointF.Create(GX2, GY2),
+        BX, BY, BW, BH, State.StrokeOpacity, State);
       FCanvas.StrokePathLinearGradient(GradLayer, State.StrokeWidth);
     finally
       GradLayer.Free;

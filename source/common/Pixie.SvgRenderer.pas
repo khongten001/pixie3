@@ -81,6 +81,8 @@ type
 
   TPixieSvgGradientStopList = TList<TPixieSvgGradientStop>;
 
+  TPixieSvgSpread = (smPad, smRepeat, smReflect);
+
   { TPixieSvgGradient }
 
   TPixieSvgGradient = class
@@ -96,6 +98,8 @@ type
     HasUnits: Boolean;
     HasCoords: Boolean;
     HasTransform: Boolean;
+    Spread: TPixieSvgSpread;
+    HasSpread: Boolean;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -491,6 +495,8 @@ begin
   // Radial defaults
   CX := 0.5; CY := 0.5; R := 0.5; FX := -1; FY := -1;
   UserSpaceUnits := False;
+  Spread := smPad;
+  HasSpread := False;
 end;
 
 destructor TPixieSvgGradient.Destroy;
@@ -2544,6 +2550,16 @@ begin
   Grad.GradientTransform := PixieDomToStr(El.GetAttribute('gradientTransform'));
   Grad.HasTransform := (Grad.GradientTransform <> '');
 
+  // spreadMethod
+  S := LowerCase(PixieDomToStr(El.GetAttribute('spreadMethod')));
+  Grad.HasSpread := (S <> '');
+  if S = 'repeat' then
+    Grad.Spread := smRepeat
+  else if S = 'reflect' then
+    Grad.Spread := smReflect
+  else
+    Grad.Spread := smPad;
+
   if IsRadial then
   begin
     S := GetAttr(Node, 'cx');
@@ -2700,6 +2716,11 @@ begin
       Grad.GradientTransform := RefGrad.GradientTransform;
       Grad.HasTransform := RefGrad.HasTransform;
     end;
+    if not Grad.HasSpread then
+    begin
+      Grad.Spread := RefGrad.Spread;
+      Grad.HasSpread := RefGrad.HasSpread;
+    end;
 
     // Inherit stops
     if (Grad.Stops.Count = 0) and (RefGrad.Stops.Count > 0) then
@@ -2707,7 +2728,7 @@ begin
 
     // Early exit once everything is resolved
     if Grad.HasUnits and Grad.HasCoords and Grad.HasTransform
-      and (Grad.Stops.Count > 0) then
+      and Grad.HasSpread and (Grad.Stops.Count > 0) then
       Break;
 
     Cur := RefGrad;
