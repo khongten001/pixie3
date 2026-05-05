@@ -352,6 +352,7 @@ const
     '}' +
 
     'input, textarea, keygen, select, button, isindex {' +
+    '  font-family: sans-serif;' +
     '  margin: 0em;' +
     '  color: initial;' +
     '  line-height: normal;' +
