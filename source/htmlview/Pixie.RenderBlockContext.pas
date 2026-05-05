@@ -274,7 +274,11 @@ begin
     end;
   end;
 
-  if (SelfSize.Height.ValueType <> cbcAuto) and (SelfSize.Height.Value > 0) then
+  // CSS 2.1 § 17.5.3: declared height on a table cell is a minimum, not
+  // exact — leave FPos.Height at the natural content height here so the
+  // outer _Render pass can apply the declared value as a floor.
+  if (SelfSize.Height.ValueType <> cbcAuto) and (SelfSize.Height.Value > 0) and
+     (SrcEl.Css.Display <> displayTableCell) then
     FPos.Height := SelfSize.Height.Value
   else
   begin

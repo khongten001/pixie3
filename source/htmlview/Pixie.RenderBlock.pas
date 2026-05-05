@@ -254,14 +254,18 @@ begin
   if (SelfSize.Height.ValueType <> cbcAuto) and
      ((CbContext.SizeMode and SizeModeContent) = 0) then
   begin
-    if SelfSize.Height.ValueType = cbcPercentage then
-    begin
-      if SelfSize.Height.Value > 0 then
-        FPos.Height := SelfSize.Height.Value;
-    end
+    if SrcEl.Css.Display = displayTableCell then
+      // CSS 2.1 § 17.5.3: declared height on a table cell is a minimum;
+      // content (already placed via _RenderContent) can grow it taller.
+      FPos.Height := Max(FPos.Height,
+        SelfSize.Height.Value - BoxSizingHeight)
     else
-      FPos.Height := SelfSize.Height.Value;
-    FPos.Height := FPos.Height - BoxSizingHeight;
+    begin
+      if (SelfSize.Height.ValueType <> cbcPercentage) or
+         (SelfSize.Height.Value > 0) then
+        FPos.Height := SelfSize.Height.Value;
+      FPos.Height := FPos.Height - BoxSizingHeight;
+    end;
   end
   else if SrcEl.IsBlockFormattingContext then
   begin
