@@ -573,7 +573,9 @@ const
   FontSizeStrings = 'xx-small;x-small;small;medium;large;x-large;xx-large;smaller;larger';
   LineHeightStrings = 'normal';
   FontStyleStrings = 'normal;italic';
-  FontVariantStrings = 'normal;small-caps';
+  // CSS 2.1 values first (fvNormal, fvSmallCaps), then CSS Fonts L3 caps
+  // keywords that all collapse to fvSmallCaps in the canvas layer.
+  FontVariantStrings = 'normal;small-caps;all-small-caps;petite-caps;all-petite-caps;unicase;titling-caps';
   FontWeightStrings = 'normal;bold;bolder;lighter';
   FontSystemFamilyNameStrings = 'caption;icon;menu;message-box;small-caption;status-bar';
   ListStyleTypeStrings = 'none;circle;disc;square;armenian;cjk-ideographic;decimal;decimal-leading-zero;georgian;hebrew;hiragana;hiragana-iroha;katakana;katakana-iroha;lower-alpha;lower-greek;lower-latin;lower-roman;upper-alpha;upper-latin;upper-roman';

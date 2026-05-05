@@ -282,6 +282,7 @@ type
     psid_font_family,
     psid_font_style,
     psid_font_variant,
+    psid_font_variant_caps,
     psid_font_weight,
     psid_font_size,
     psid_line_height,
@@ -341,6 +342,9 @@ type
     psid_gap,
     psid_row_gap,
     psid_column_gap,
+    psid_grid_gap,
+    psid_grid_row_gap,
+    psid_grid_column_gap,
 
     psid_grid_template_columns,
     psid_grid_template_rows,

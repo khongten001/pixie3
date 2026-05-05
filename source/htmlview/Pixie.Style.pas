@@ -1438,6 +1438,8 @@ begin
     end
     else if (not VariantFound) and PixieParseKeyword(Tok, TempVariant, FontVariantStrings) then
     begin
+      if TempVariant > Ord(fvSmallCaps) then
+        TempVariant := Ord(fvSmallCaps);
       FontVariant := TempVariant;
       VariantFound := True;
       Inc(Index);
@@ -1768,9 +1770,19 @@ begin
     Exit;
   end;
 
-  // word-wrap is a legacy alias for overflow-wrap
+  // Legacy property aliases (word-wrap predates overflow-wrap, grid-*gap
+  // predates *gap from the CSS Grid L1→L2 rename, font-variant-caps is the
+  // CSS Fonts L3 longhand of the original font-variant — all collapse here)
   if Name = Ord(psid_word_wrap) then
-    Name := Ord(psid_overflow_wrap);
+    Name := Ord(psid_overflow_wrap)
+  else if Name = Ord(psid_grid_gap) then
+    Name := Ord(psid_gap)
+  else if Name = Ord(psid_grid_row_gap) then
+    Name := Ord(psid_row_gap)
+  else if Name = Ord(psid_grid_column_gap) then
+    Name := Ord(psid_column_gap)
+  else if Name = Ord(psid_font_variant_caps) then
+    Name := Ord(psid_font_variant);
 
   // overflow-y maps to overflow; overflow-x is ignored (no per-axis support;
   // overflow-x:hidden is cosmetic and must not clip content height)
@@ -1802,6 +1814,10 @@ begin
     if ValidStr <> '' then
     begin
       Idx := PixieValueIndex(Ident, ValidStr);
+      // CSS Fonts L3 caps keywords past index 1 collapse to fvSmallCaps —
+      // TPixieFontVariant has no separate petite/titling/unicase representation.
+      if (Name = Ord(psid_font_variant)) and (Idx > Ord(fvSmallCaps)) then
+        Idx := Ord(fvSmallCaps);
       if Idx >= 0 then
         AddParsedProperty(Name, TPixiePropertyValue.FromInt(Idx, Important));
     end;

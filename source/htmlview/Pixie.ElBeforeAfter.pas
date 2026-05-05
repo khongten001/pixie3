@@ -83,12 +83,12 @@ begin
     FChildren.Clear;
 
     Prop := AStyle.GetProperty(Ord(psid_content));
-    if (Prop.Kind = pkString) and (Prop.StrVal <> '') then
+    if Prop.Kind = pkString then
     begin
       Str := Prop.StrVal;
       Idx := PixieValueIndex(Str, ContentPropertyString);
 
-      if Idx < 0 then
+      if (Idx < 0) and (Str <> '') then
       begin
         // Parse as function/string content list
         Fnc := '';
