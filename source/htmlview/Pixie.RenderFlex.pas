@@ -594,8 +594,17 @@ begin
       Items[I] := nil;
       Continue;
     end;
+    // Allow ~0.5px slack to swallow floating-point rounding when sibling
+    // percentage widths sum to exactly 100% (e.g. 33.3333% + 66.6667%).
+    // Without this, the slightly-over-100% rounded total trips a spurious
+    // wrap that real browsers don't.
+    // 0.01px tolerance to absorb single-precision rounding when sibling
+    // percentages sum to exactly 100% (e.g. 33.3333% + 66.6667% on a 400px
+    // container yields 400.000015 — the wrap below would fire spuriously
+    // and Edge does not wrap that). The threshold is far below any visible
+    // overshoot, so legitimate overflows (e.g. 0.1px+) still wrap.
     if (Line.Items.Count > 0) and (not SingleLine) and
-       (Line.MainSize + MainGap + Item.MainSize > ContainerMainSize) then
+       (Line.MainSize + MainGap + Item.MainSize > ContainerMainSize + 0.01) then
     begin
       Result.Add(Line);
       Line := TPixieFlexLine.Create(ReverseMain, ReverseCross);
