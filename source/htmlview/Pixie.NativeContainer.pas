@@ -214,7 +214,7 @@ implementation
 
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,{$ENDIF}
-  Pixie.WebP, Pixie.Document, Pixie.GifDecode,
+  Pixie.WebP, Pixie.Document, Pixie.GifDecode, Pixie.ApngDecode,
   Pixie.DataUri, Pixie.Utf8, Pixie.Url;
 
 // ---------------------------------------------------------------------------
@@ -410,7 +410,7 @@ begin
     try
       FileStream := TFileStream.Create(Key, fmOpenRead or fmShareDenyNone);
       try
-        if PixieIsGifStream(FileStream) then
+        if PixieIsGifStream(FileStream) or PixieIsApngStream(FileStream) then
           TryDecodeAnimated(FileStream, Key, Result);
       finally
         FileStream.Free;
@@ -554,10 +554,11 @@ begin
     Exit;
   end;
 
-  // Multi-frame GIFs land in FAnimations; single-frame GIFs come back
-  // as a plain static handle. Either way, skip the WIC/Cairo path if we
-  // got a handle. Non-GIF streams skip the peek and fall through.
-  if PixieIsGifStream(Stream) then
+  // Multi-frame GIFs/APNGs land in FAnimations; single-frame ones come
+  // back as a plain static handle. Either way, skip the WIC/Cairo path
+  // if we got a handle. Non-animated streams skip the peek and fall
+  // through.
+  if PixieIsGifStream(Stream) or PixieIsApngStream(Stream) then
   begin
     TryDecodeAnimated(Stream, AKey, Result);
     if Result <> 0 then Exit;

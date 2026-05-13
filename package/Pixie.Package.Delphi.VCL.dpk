@@ -94,6 +94,7 @@ contains
   Pixie.ScrollView in '..\source\htmlview\Pixie.ScrollView.pas',
   Pixie.AnimatedImage in '..\source\common\Pixie.AnimatedImage.pas',
   Pixie.GifDecode in '..\source\common\Pixie.GifDecode.pas',
+  Pixie.ApngDecode in '..\source\common\Pixie.ApngDecode.pas',
   Pixie.Canvas in '..\source\common\Pixie.Canvas.pas',
   Pixie.WebP in '..\source\common\Pixie.WebP.pas',
   Pixie.Clipboard in '..\source\common\Pixie.Clipboard.pas',

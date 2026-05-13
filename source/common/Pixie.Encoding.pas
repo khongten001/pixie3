@@ -71,6 +71,13 @@ function PixieGuessCodePage(const Bytes: TBytes; Len: Integer): Integer;
 function PixieIsValidUtf8(const Bytes: TBytes; Len: Integer;
   out HasMultiByte: Boolean): Boolean;
 
+// Cross-compiler zlib (RFC 1950) inflate. Returns False if the stream
+// is malformed or short. When ExpectedSize > 0, Plain is sized exactly
+// to ExpectedSize and the inflate is required to fill it; otherwise
+// the entire stream is decoded into a dynamically-sized buffer.
+function PixieInflateZlib(const Comp: TBytes;
+  out Plain: TBytes; ExpectedSize: Integer = -1): Boolean;
+
 implementation
 
 uses
@@ -477,38 +484,82 @@ const
 var
   Models: TBytes;
 
-procedure EnsureModelsLoaded;
+function PixieInflateZlib(const Comp: TBytes;
+  out Plain: TBytes; ExpectedSize: Integer = -1): Boolean;
+{$IFDEF FPC}
+const
+  cChunkSize = 64 * 1024;
 var
-  {$IFDEF FPC}
-  InStream: TMemoryStream;
+  InStream: TBytesStream;
   Decompressor: TDecompressionStream;
-  {$ELSE}
-  InBytes: TBytes;
-  {$ENDIF}
+  Read, Total: Integer;
 begin
-  if Length(Models) > 0 then
-    Exit;
-
-  {$IFDEF FPC}
-  InStream := TMemoryStream.Create;
+  Result := False;
+  SetLength(Plain, 0);
+  if Length(Comp) = 0 then Exit;
+  InStream := TBytesStream.Create(Comp);
   try
-    InStream.Write(PixieModelData[0], PixieModelDataSize);
-    InStream.Position := 0;
     Decompressor := TDecompressionStream.Create(InStream);
     try
-      SetLength(Models, PixieModelDataUncompressed);
-      Decompressor.Read(Models[0], PixieModelDataUncompressed);
+      try
+        if ExpectedSize > 0 then
+        begin
+          SetLength(Plain, ExpectedSize);
+          Read := Decompressor.Read(Plain[0], ExpectedSize);
+          Result := Read = ExpectedSize;
+        end
+        else
+        begin
+          Total := 0;
+          repeat
+            SetLength(Plain, Total + cChunkSize);
+            Read := Decompressor.Read(Plain[Total], cChunkSize);
+            Inc(Total, Read);
+          until Read < cChunkSize;
+          SetLength(Plain, Total);
+          Result := Total > 0;
+        end;
+      except
+        Result := False;
+      end;
     finally
       Decompressor.Free;
     end;
   finally
     InStream.Free;
   end;
-  {$ELSE}
+  if not Result then
+    SetLength(Plain, 0);
+end;
+{$ELSE}
+begin
+  Result := False;
+  SetLength(Plain, 0);
+  if Length(Comp) = 0 then Exit;
+  try
+    ZDecompress(Comp, Plain);
+  except
+    SetLength(Plain, 0);
+    Exit;
+  end;
+  if ExpectedSize > 0 then
+    Result := Length(Plain) = ExpectedSize
+  else
+    Result := Length(Plain) > 0;
+  if not Result then
+    SetLength(Plain, 0);
+end;
+{$ENDIF}
+
+procedure EnsureModelsLoaded;
+var
+  InBytes: TBytes;
+begin
+  if Length(Models) > 0 then
+    Exit;
   SetLength(InBytes, PixieModelDataSize);
   Move(PixieModelData[0], InBytes[0], PixieModelDataSize);
-  ZDecompress(InBytes, Models);
-  {$ENDIF}
+  PixieInflateZlib(InBytes, Models, PixieModelDataUncompressed);
 end;
 
 function PixieGuessCodePage(const Bytes: TBytes; Len: Integer): Integer;

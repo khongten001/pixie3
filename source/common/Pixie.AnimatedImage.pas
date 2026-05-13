@@ -19,6 +19,24 @@ uses
   Pixie.Types;
 
 type
+  // Raw decoded frame, prior to platform upload. Producer: a software
+  // decoder (Pixie.GifDecode, Pixie.ApngDecode). Consumer:
+  // TPixieCanvas.LoadAnimatedFromStream, which uploads each frame to a
+  // native image handle and discards the Pixels buffer.
+  TPixieRawAnimFrame = record
+    Pixels: TBytes;      // BGRA, Width * Height * 4 bytes
+    DelayMs: Integer;
+  end;
+
+  TPixieRawAnimFrameArray = array of TPixieRawAnimFrame;
+
+  TPixieRawAnimation = record
+    Width: Integer;
+    Height: Integer;
+    Loops: Integer;      // 0 = infinite; N > 0 = play N times then freeze
+    Frames: TPixieRawAnimFrameArray;
+  end;
+
   TPixieAnimFrame = record
     Handle: PtrUInt;
     DelayMs: Integer;
@@ -84,7 +102,67 @@ type
 
   TPixieAnimationCursorList = TObjectList<TPixieAnimationCursor>;
 
+// Shared frame-bookkeeping helpers used by every animated-raster
+// decoder (currently GIF and APNG). Canvas is a full-size BGRA buffer
+// the decoder mutates as it composites each frame.
+
+procedure PixieSnapshotCanvas(const Canvas: TBytes; var Prev: TBytes);
+
+// Clears a BGRA sub-rectangle to transparent (zero). Used for GIF
+// disposal-2 and APNG dispose_op=BACKGROUND. Off-canvas rows are
+// skipped silently.
+procedure PixieClearCanvasRect(var Canvas: TBytes;
+  CanvasW, CanvasH, Left, Top, W, H: Integer);
+
+// Restores Canvas from a prior snapshot (GIF disposal-3 / APNG
+// dispose_op=PREVIOUS). No-op if sizes don't match.
+procedure PixieRestoreCanvas(var Canvas: TBytes; const Prev: TBytes);
+
+// Appends a frame: full BGRA copy of Canvas plus DelayMs.
+procedure PixieEmitFrame(const Canvas: TBytes; DelayMs: Integer;
+  var Frames: TPixieRawAnimFrameArray);
+
 implementation
+
+procedure PixieSnapshotCanvas(const Canvas: TBytes; var Prev: TBytes);
+begin
+  SetLength(Prev, Length(Canvas));
+  if Length(Canvas) > 0 then
+    Move(Canvas[0], Prev[0], Length(Canvas));
+end;
+
+procedure PixieClearCanvasRect(var Canvas: TBytes;
+  CanvasW, CanvasH, Left, Top, W, H: Integer);
+var
+  Y, DstY, RowStart: Integer;
+begin
+  for Y := 0 to H - 1 do
+  begin
+    DstY := Top + Y;
+    if (DstY < 0) or (DstY >= CanvasH) then Continue;
+    RowStart := (DstY * CanvasW + Left) * 4;
+    FillChar(Canvas[RowStart], W * 4, 0);
+  end;
+end;
+
+procedure PixieRestoreCanvas(var Canvas: TBytes; const Prev: TBytes);
+begin
+  if (Length(Prev) > 0) and (Length(Prev) = Length(Canvas)) then
+    Move(Prev[0], Canvas[0], Length(Canvas));
+end;
+
+procedure PixieEmitFrame(const Canvas: TBytes; DelayMs: Integer;
+  var Frames: TPixieRawAnimFrameArray);
+var
+  Idx: Integer;
+begin
+  Idx := Length(Frames);
+  SetLength(Frames, Idx + 1);
+  SetLength(Frames[Idx].Pixels, Length(Canvas));
+  if Length(Canvas) > 0 then
+    Move(Canvas[0], Frames[Idx].Pixels[0], Length(Canvas));
+  Frames[Idx].DelayMs := DelayMs;
+end;
 
 { TPixieAnimatedImage }
 

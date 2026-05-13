@@ -167,6 +167,7 @@
         <DCCReference Include="..\source\htmlview\Pixie.ScrollView.pas"/>
         <DCCReference Include="..\source\common\Pixie.AnimatedImage.pas"/>
         <DCCReference Include="..\source\common\Pixie.GifDecode.pas"/>
+        <DCCReference Include="..\source\common\Pixie.ApngDecode.pas"/>
         <DCCReference Include="..\source\common\Pixie.Canvas.pas"/>
         <DCCReference Include="..\source\common\Pixie.WebP.pas"/>
         <DCCReference Include="..\source\common\Pixie.Clipboard.pas"/>

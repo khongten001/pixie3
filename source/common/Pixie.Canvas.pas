@@ -249,7 +249,7 @@ type
 implementation
 
 uses
-  SysUtils, Math, Pixie.WebP, Pixie.GifDecode;
+  SysUtils, Math, Pixie.WebP, Pixie.GifDecode, Pixie.ApngDecode;
 
 constructor TPixieCanvas.Create;
 begin
@@ -495,24 +495,32 @@ end;
 function TPixieCanvas.LoadAnimatedFromStream(
   Stream: TStream): TPixieAnimatedImage;
 var
-  Gif: TPixieGifData;
+  Anim: TPixieRawAnimation;
+  Decoded: Boolean;
   I, J: Integer;
   Handle: TPixieImageHandle;
 begin
   Result := nil;
-  if (Stream = nil) or not PixieIsGifStream(Stream) then Exit;
-  if not PixieDecodeGif(Stream, Gif) then Exit;
-  if Length(Gif.Frames) = 0 then Exit;
+  if Stream = nil then Exit;
+
+  Decoded := False;
+  if PixieIsGifStream(Stream) then
+    Decoded := PixieDecodeGif(Stream, Anim)
+  else if PixieIsApngStream(Stream) then
+    Decoded := PixieDecodeApng(Stream, Anim);
+
+  if not Decoded then Exit;
+  if Length(Anim.Frames) = 0 then Exit;
 
   Result := TPixieAnimatedImage.Create;
-  Result.Width := Gif.Width;
-  Result.Height := Gif.Height;
-  Result.Loops := Gif.Loops;
-  for I := 0 to High(Gif.Frames) do
+  Result.Width := Anim.Width;
+  Result.Height := Anim.Height;
+  Result.Loops := Anim.Loops;
+  for I := 0 to High(Anim.Frames) do
   begin
-    Handle := LoadImageFromPixels(Gif.Width, Gif.Height,
-      @Gif.Frames[I].Pixels[0], Gif.Width * 4);
-    SetLength(Gif.Frames[I].Pixels, 0);
+    Handle := LoadImageFromPixels(Anim.Width, Anim.Height,
+      @Anim.Frames[I].Pixels[0], Anim.Width * 4);
+    SetLength(Anim.Frames[I].Pixels, 0);
     if Handle = 0 then
     begin
       for J := 0 to Result.FrameCount - 1 do
@@ -522,7 +530,7 @@ begin
       Result := nil;
       Exit;
     end;
-    Result.AddFrame(Handle, Gif.Frames[I].DelayMs);
+    Result.AddFrame(Handle, Anim.Frames[I].DelayMs);
   end;
 end;
 

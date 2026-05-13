@@ -53,6 +53,10 @@
         <UnitName Value="Pixie.GifDecode"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.ApngDecode.pas"/>
+        <UnitName Value="Pixie.ApngDecode"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.Canvas.pas"/>
         <UnitName Value="Pixie.Canvas"/>
       </Item>

@@ -11,28 +11,14 @@ unit Pixie.GifDecode;
 interface
 
 uses
-  SysUtils, Classes;
-
-type
-  TPixieGifFrame = record
-    Pixels: TBytes;     // BGRA, Width * Height * 4 bytes
-    DelayMs: Integer;
-  end;
-
-  TPixieGifFrameArray = array of TPixieGifFrame;
-
-  TPixieGifData = record
-    Width: Integer;
-    Height: Integer;
-    Loops: Integer;     // 0 = infinite; >0 = play that many times
-    Frames: TPixieGifFrameArray;
-  end;
+  SysUtils, Classes,
+  Pixie.AnimatedImage;
 
 // Decode a GIF stream. Returns False if the stream isn't a valid GIF or
 // decoding fails before any frame is produced. On True, Data.Frames is
 // populated with at least one frame.
 function PixieDecodeGif(Stream: TStream;
-  out Data: TPixieGifData): Boolean;
+  out Data: TPixieRawAnimation): Boolean;
 
 // Cheap 6-byte magic peek. Restores stream position before returning so
 // callers can immediately fall through to other decoders on a miss.
@@ -348,37 +334,16 @@ begin
   end;
 end;
 
-procedure SnapshotCanvas(var Ctx: TPixieGifContext);
-begin
-  SetLength(Ctx.PrevCanvas, Length(Ctx.Canvas));
-  if Length(Ctx.Canvas) > 0 then
-    Move(Ctx.Canvas[0], Ctx.PrevCanvas[0], Length(Ctx.Canvas));
-end;
-
 procedure ApplyDisposal(var Ctx: TPixieGifContext; Disposal: Integer;
   Left, Top, W, H: Integer);
-var
-  Row, DstY, RowStart: Integer;
 begin
+  // Browsers treat GIF disposal-2's "background" as transparent
+  // regardless of bgColorIndex (which is largely a display-list
+  // concept).
   case Disposal of
-    2:
-    begin
-      // Restore-background: clear sub-frame rectangle to transparent.
-      // Browsers treat the GIF "background" as transparent regardless
-      // of bgColorIndex (which is largely a display-list concept).
-      for Row := 0 to H - 1 do
-      begin
-        DstY := Top + Row;
-        if (DstY < 0) or (DstY >= Ctx.Height) then Continue;
-        RowStart := (DstY * Ctx.Width + Left) * 4;
-        FillChar(Ctx.Canvas[RowStart], W * 4, 0);
-      end;
-    end;
-    3:
-    begin
-      if Length(Ctx.PrevCanvas) = Length(Ctx.Canvas) then
-        Move(Ctx.PrevCanvas[0], Ctx.Canvas[0], Length(Ctx.Canvas));
-    end;
+    2: PixieClearCanvasRect(Ctx.Canvas, Ctx.Width, Ctx.Height,
+         Left, Top, W, H);
+    3: PixieRestoreCanvas(Ctx.Canvas, Ctx.PrevCanvas);
   end;
 end;
 
@@ -477,7 +442,7 @@ begin
 end;
 
 function ParseImageDescriptor(var Ctx: TPixieGifContext;
-  var Frames: TPixieGifFrameArray): Boolean;
+  var Frames: TPixieRawAnimFrameArray): Boolean;
 var
   Left, Top, ImgW, ImgH: Word;
   Flags, MinCodeSize: Byte;
@@ -486,7 +451,6 @@ var
   ActivePalette: TPixiePalette;
   CompData, Indices: TBytes;
   Disposal, Transparent: Integer;
-  FrameIdx: Integer;
 begin
   Result := False;
   if not ReadWord(Ctx.Stream, Left) then Exit;
@@ -536,20 +500,15 @@ begin
   end;
 
   if Disposal = 3 then
-    SnapshotCanvas(Ctx);
+    PixieSnapshotCanvas(Ctx.Canvas, Ctx.PrevCanvas);
 
   CompositeFrame(Ctx, Indices, Left, Top, ImgW, ImgH,
     ActivePalette, Transparent, Interlaced);
 
-  FrameIdx := Length(Frames);
-  SetLength(Frames, FrameIdx + 1);
-  SetLength(Frames[FrameIdx].Pixels, Length(Ctx.Canvas));
-  if Length(Ctx.Canvas) > 0 then
-    Move(Ctx.Canvas[0], Frames[FrameIdx].Pixels[0], Length(Ctx.Canvas));
   if Ctx.PendingHasGce then
-    Frames[FrameIdx].DelayMs := Ctx.PendingDelayMs
+    PixieEmitFrame(Ctx.Canvas, Ctx.PendingDelayMs, Frames)
   else
-    Frames[FrameIdx].DelayMs := 0;
+    PixieEmitFrame(Ctx.Canvas, 0, Frames);
 
   ApplyDisposal(Ctx, Disposal, Left, Top, ImgW, ImgH);
 
@@ -587,7 +546,7 @@ begin
 end;
 
 function PixieDecodeGif(Stream: TStream;
-  out Data: TPixieGifData): Boolean;
+  out Data: TPixieRawAnimation): Boolean;
 var
   Ctx: TPixieGifContext;
   Header: array[0..5] of Byte;
@@ -595,7 +554,7 @@ var
   Packed_, BgIdx, AspectRatio: Byte;
   GlobalSize: Integer;
   Block: Byte;
-  Frames: TPixieGifFrameArray;
+  Frames: TPixieRawAnimFrameArray;
   StartPos: Int64;
 begin
   Result := False;
