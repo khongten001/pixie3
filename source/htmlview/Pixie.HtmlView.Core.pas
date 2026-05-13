@@ -10,12 +10,13 @@ unit Pixie.HtmlView.Core;
 interface
 
 uses
-  SysUtils, Classes, Math,
+  SysUtils, Classes, Math, Generics.Collections,
   {$IFDEF FPC}ExtCtrls,{$ENDIF}
   {$IFDEF FRAMEWORK_FMX}FMX.Types,{$ENDIF}
   {$IFDEF FRAMEWORK_VCL}Vcl.ExtCtrls,{$ENDIF}
   Pixie.Types, Pixie.WebColor, Pixie.Borders, Pixie.Document,
-  Pixie.Html, Pixie.Utils, Pixie.MasterCss, Pixie.Canvas, Pixie.NativeContainer,
+  Pixie.Html, Pixie.Utils, Pixie.MasterCss, Pixie.Canvas,
+  Pixie.AnimatedImage, Pixie.NativeContainer,
   Pixie.RenderBlockContext, Pixie.RenderInlineContext,
   Pixie.SvgRenderer, Pixie.SvgRenderer.Canvas;
 
@@ -114,6 +115,8 @@ type
     FScrollbarOpacity: Single;
     FScrollbarHoverZone: Boolean;
     FScrollbarHideTimer: TTimer;
+    FAnimTimer: TTimer;
+    FAnimCursors: TPixieAnimationCursorList;
     FOnBeforeParse: TNotifyEvent;
     FOnAfterParse: TNotifyEvent;
     FOnBeforePaint: TNotifyEvent;
@@ -148,6 +151,13 @@ type
     procedure ShowScrollbar;
     procedure StartScrollbarHide;
     procedure DoScrollbarHideTimer(Sender: TObject);
+    function DoAcquireAnimationCursor(Sender: TObject; Element: TObject;
+      Image: TPixieAnimatedImage): TPixieAnimationCursor;
+    procedure DoReleaseAnimationCursor(Sender: TObject;
+      Cursor: TPixieAnimationCursor);
+    procedure DoAnimationTick(Sender: TObject);
+    function ElementDocBounds(Element: TObject): TPixiePosition;
+    function NowMs: UInt64;
   public
     // Host callbacks — set by concrete class in its constructor
     Owner: TObject;
@@ -573,7 +583,15 @@ begin
   FContainer.OnAnchorClickEvent := DoAnchorClick;
   FContainer.OnElementClickEvent := DoElementClick;
   FContainer.OnFetchUrlEvent := DoFetchUrl;
+  FContainer.OnAcquireAnimationCursorEvent := DoAcquireAnimationCursor;
+  FContainer.OnReleaseAnimationCursorEvent := DoReleaseAnimationCursor;
   FRedrawBoxes := TPixiePositionVector.Create;
+
+  FAnimCursors := TPixieAnimationCursorList.Create(True); // owns
+  FAnimTimer := TTimer.Create(nil);
+  FAnimTimer.Interval := 33; // ~30 Hz; GIF minimum delay is 20 ms
+  FAnimTimer.OnTimer := DoAnimationTick;
+  FAnimTimer.Enabled := False;
 end;
 
 destructor TPixieHtmlViewCore.Destroy;
@@ -581,7 +599,20 @@ begin
   FreeAndNil(FAutoScrollTimer);
   FreeAndNil(FScrollbarHideTimer);
   FreeAndNil(FSvgRenderer);
+  // FDocument must be freed before FAnimTimer/FAnimCursors: element
+  // destructors (TPixieElImage.Destroy -> Cont.ReleaseAnimationCursor
+  // -> DoReleaseAnimationCursor) need both alive to remove their cursors.
   FreeAndNil(FDocument);
+  // Detach the callbacks before tearing down the cursor list so any
+  // late-arriving release (e.g. from an exit-proc-driven element free)
+  // is a safe no-op.
+  if FContainer <> nil then
+  begin
+    FContainer.OnAcquireAnimationCursorEvent := nil;
+    FContainer.OnReleaseAnimationCursorEvent := nil;
+  end;
+  FreeAndNil(FAnimTimer);
+  FreeAndNil(FAnimCursors);
   FreeAndNil(FContainer);
   FCanvas := nil; // not owned — caller manages canvas lifetime
   FreeAndNil(FRedrawBoxes);
@@ -589,6 +620,88 @@ begin
   FreeAndNil(FLines);
   inherited Destroy;
 end;
+
+// ---------------------------------------------------------------------------
+// Animation timer + cursor registry
+// ---------------------------------------------------------------------------
+
+function TPixieHtmlViewCore.NowMs: UInt64;
+begin
+  if Assigned(OnHostGetTickCount) then
+    Result := OnHostGetTickCount
+  else
+    Result := 0;
+end;
+
+function TPixieHtmlViewCore.DoAcquireAnimationCursor(Sender: TObject;
+  Element: TObject;
+  Image: TPixieAnimatedImage): TPixieAnimationCursor;
+begin
+  Result := TPixieAnimationCursor.Create(Image, Element, NowMs);
+  FAnimCursors.Add(Result);
+  if not FAnimTimer.Enabled then
+    FAnimTimer.Enabled := True;
+end;
+
+procedure TPixieHtmlViewCore.DoReleaseAnimationCursor(Sender: TObject;
+  Cursor: TPixieAnimationCursor);
+begin
+  if (Cursor = nil) or (FAnimCursors = nil) then Exit;
+  FAnimCursors.Remove(Cursor);
+  // FAnimTimer may already have been freed when this fires from an
+  // element destructor late in shutdown; guard the disable.
+  if (FAnimCursors.Count = 0) and (FAnimTimer <> nil) then
+    FAnimTimer.Enabled := False;
+end;
+
+procedure TPixieHtmlViewCore.DoAnimationTick(Sender: TObject);
+var
+  I: Integer;
+  Tick: UInt64;
+  Cursor: TPixieAnimationCursor;
+  Bounds: TPixiePosition;
+  AllFinished: Boolean;
+begin
+  if FAnimCursors.Count = 0 then
+  begin
+    FAnimTimer.Enabled := False;
+    Exit;
+  end;
+
+  Tick := NowMs;
+  AllFinished := True;
+  for I := 0 to FAnimCursors.Count - 1 do
+  begin
+    Cursor := FAnimCursors[I];
+    if not Cursor.Finished then
+      AllFinished := False;
+    if Cursor.Tick(Tick) then
+    begin
+      Bounds := ElementDocBounds(Cursor.Element);
+      if (Bounds.Width > 0) and (Bounds.Height > 0) then
+        InvalidateRect(Bounds);
+    end;
+  end;
+
+  if AllFinished then
+    FAnimTimer.Enabled := False;
+end;
+
+function TPixieHtmlViewCore.ElementDocBounds(
+  Element: TObject): TPixiePosition;
+var
+  Ri: TPixieRenderItem;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  Result.Width := 0;
+  Result.Height := 0;
+  if not (Element is TPixieElement) then Exit;
+  Ri := TPixieRenderItem(TPixieElement(Element).GetRenderItem);
+  if Ri <> nil then
+    Result := Ri.AbsolutePos;
+end;
+
 
 // ---------------------------------------------------------------------------
 // Properties
@@ -761,7 +874,7 @@ procedure TPixieHtmlViewCore.DoAnchorClick(Sender: TObject;
   const Url: string);
 var
   El: TPixieElement;
-  Ri, Walk: TPixieRenderItem;
+  Ri: TPixieRenderItem;
   NewScroll, MaxScroll, ViewH, AbsY: TPixiePixel;
 begin
   if (Length(Url) > 1) and (Url[1] = '#') then
@@ -772,13 +885,7 @@ begin
       Ri := TPixieRenderItem(El.GetRenderItem);
       if Ri <> nil then
       begin
-        AbsY := Ri.Pos.Y;
-        Walk := Ri.GetParent;
-        while Walk <> nil do
-        begin
-          AbsY := AbsY + Walk.Pos.Y;
-          Walk := Walk.GetParent;
-        end;
+        AbsY := Ri.AbsolutePos.Y;
         ViewH := OnHostGetViewHeight / GetEffectiveScale;
         MaxScroll := FContentHeight - ViewH;
         if MaxScroll < 0 then MaxScroll := 0;
@@ -786,8 +893,7 @@ begin
         if NewScroll > MaxScroll then NewScroll := MaxScroll;
         if NewScroll < 0 then NewScroll := 0;
         SetScrollY(NewScroll);
-        if Assigned(OnHostGetTickCount) then
-          FAnchorScrollTick := OnHostGetTickCount;
+        FAnchorScrollTick := NowMs;
         Invalidate;
       end;
     end;
@@ -1375,14 +1481,11 @@ begin
   // Suppress wheel inertia after anchor scroll
   if FAnchorScrollTick > 0 then
   begin
-    if Assigned(OnHostGetTickCount) then
+    Tick := NowMs;
+    if (Tick > 0) and (Tick - FAnchorScrollTick < 200) then
     begin
-      Tick := OnHostGetTickCount;
-      if Tick - FAnchorScrollTick < 200 then
-      begin
-        FAnchorScrollTick := Tick;
-        Exit(True);
-      end;
+      FAnchorScrollTick := Tick;
+      Exit(True);
     end;
     FAnchorScrollTick := 0;
   end;

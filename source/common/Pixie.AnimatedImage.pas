@@ -15,7 +15,8 @@ unit Pixie.AnimatedImage;
 interface
 
 uses
-  SysUtils, Classes, Generics.Collections;
+  SysUtils, Classes, Generics.Collections,
+  Pixie.Types;
 
 type
   TPixieAnimFrame = record
@@ -52,6 +53,36 @@ type
   end;
 
   TPixieAnimatedImageMap = TObjectDictionary<string, TPixieAnimatedImage>;
+
+  { TPixieAnimationCursor }
+  // Per-element playback state. Owns no native handles; just iterates the
+  // referenced TPixieAnimatedImage's frame list against wall-clock deadlines.
+  // The view core owns the cursor list and walks it from a 30 Hz timer.
+
+  TPixieAnimationCursor = class
+  private
+    FImage: TPixieAnimatedImage;
+    FElement: TObject;
+    FCurrentFrame: Integer;
+    FNextDeadlineMs: UInt64;
+    FCompletedLoops: Integer;
+    FFinished: Boolean;
+  public
+    constructor Create(AImage: TPixieAnimatedImage; AElement: TObject;
+      NowMs: UInt64);
+
+    // Returns True if the current frame index changed this tick.
+    function Tick(NowMs: UInt64): Boolean;
+
+    function CurrentFrameHandle: PtrUInt;
+
+    property Image: TPixieAnimatedImage read FImage;
+    property Element: TObject read FElement;
+    property CurrentFrame: Integer read FCurrentFrame;
+    property Finished: Boolean read FFinished;
+  end;
+
+  TPixieAnimationCursorList = TObjectList<TPixieAnimationCursor>;
 
 implementation
 
@@ -105,6 +136,53 @@ begin
   Result := 0;
   for I := 0 to FFrames.Count - 1 do
     Inc(Result, FFrames[I].DelayMs);
+end;
+
+{ TPixieAnimationCursor }
+
+constructor TPixieAnimationCursor.Create(AImage: TPixieAnimatedImage;
+  AElement: TObject; NowMs: UInt64);
+begin
+  inherited Create;
+  FImage := AImage;
+  FElement := AElement;
+  if (FImage <> nil) and (FImage.FrameCount > 0) then
+    FNextDeadlineMs := NowMs + UInt64(FImage.Frames[0].DelayMs);
+end;
+
+function TPixieAnimationCursor.Tick(NowMs: UInt64): Boolean;
+var
+  Frame: TPixieAnimFrame;
+begin
+  Result := False;
+  if FFinished or (FImage = nil) or (FImage.FrameCount <= 1) then Exit;
+  if NowMs < FNextDeadlineMs then Exit;
+
+  if FCurrentFrame >= FImage.FrameCount - 1 then
+  begin
+    Inc(FCompletedLoops);
+    // Image.Loops: 0 = infinite; N>0 = play N times then freeze on last frame
+    if (FImage.Loops > 0) and (FCompletedLoops >= FImage.Loops) then
+    begin
+      FFinished := True;
+      Exit;
+    end;
+    FCurrentFrame := 0;
+  end
+  else
+    Inc(FCurrentFrame);
+
+  Frame := FImage.Frames[FCurrentFrame];
+  FNextDeadlineMs := NowMs + UInt64(Frame.DelayMs);
+  Result := True;
+end;
+
+function TPixieAnimationCursor.CurrentFrameHandle: PtrUInt;
+begin
+  Result := 0;
+  if (FImage = nil) or (FImage.FrameCount = 0) then Exit;
+  if (FCurrentFrame < 0) or (FCurrentFrame >= FImage.FrameCount) then Exit;
+  Result := FImage.Frames[FCurrentFrame].Handle;
 end;
 
 end.

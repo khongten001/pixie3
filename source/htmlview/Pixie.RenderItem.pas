@@ -68,6 +68,9 @@ type
     procedure SetSkip(Value: Boolean); inline;
     function GetParent: TPixieRenderItem; inline;
     procedure SetParent(Value: TPixieRenderItem); inline;
+    // Position translated into document coordinates by accumulating
+    // every ancestor's Pos.
+    function AbsolutePos: TPixiePosition;
     function SrcEl: TPixieElement; inline;
     function Css: TPixieCssProperties; inline;
     procedure AddChild(Ri: TPixieRenderItem);
@@ -353,6 +356,20 @@ end;
 procedure TPixieRenderItem.SetParent(Value: TPixieRenderItem);
 begin
   FParent := Value;
+end;
+
+function TPixieRenderItem.AbsolutePos: TPixiePosition;
+var
+  Walk: TPixieRenderItem;
+begin
+  Result := FPos;
+  Walk := FParent;
+  while Walk <> nil do
+  begin
+    Result.X := Result.X + Walk.Pos.X;
+    Result.Y := Result.Y + Walk.Pos.Y;
+    Walk := Walk.GetParent;
+  end;
 end;
 
 function TPixieRenderItem.SrcEl: TPixieElement;

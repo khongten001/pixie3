@@ -56,6 +56,8 @@ type
     FOnElementClick: TPixieElementClickEvent;
     FOnFetchUrl: TPixieFetchUrlEvent;
     FOnAnimatedImageDiscovered: TPixieAnimatedImageDiscoveredEvent;
+    FOnAcquireAnimationCursor: TPixieAnimCursorAcquireEvent;
+    FOnReleaseAnimationCursor: TPixieAnimCursorReleaseEvent;
     FOnSetCaption: TNotifyEvent;
     FCaption: string;
     FCursor: string;
@@ -89,7 +91,14 @@ type
 
     // Animated image lookup for elements that want a playback cursor.
     function GetAnimatedImage(const Src,
-      ABaseUrl: string): TPixieAnimatedImage;
+      ABaseUrl: string): TPixieAnimatedImage; override;
+
+    // Cursor lifecycle bridge — the view core registers acquire/release
+    // callbacks; elements call these to bind/unbind playback state.
+    function AcquireAnimationCursor(Element: TObject;
+      AnimImg: TPixieAnimatedImage): TPixieAnimationCursor; override;
+    procedure ReleaseAnimationCursor(
+      Cursor: TPixieAnimationCursor); override;
 
     property Canvas: TPixieCanvas read FCanvas;
     property Caption: string read FCaption;
@@ -107,6 +116,10 @@ type
     property OnAnimatedImageDiscoveredEvent:
       TPixieAnimatedImageDiscoveredEvent
       read FOnAnimatedImageDiscovered write FOnAnimatedImageDiscovered;
+    property OnAcquireAnimationCursorEvent: TPixieAnimCursorAcquireEvent
+      read FOnAcquireAnimationCursor write FOnAcquireAnimationCursor;
+    property OnReleaseAnimationCursorEvent: TPixieAnimCursorReleaseEvent
+      read FOnReleaseAnimationCursor write FOnReleaseAnimationCursor;
     property OnSetCaptionEvent: TNotifyEvent
       read FOnSetCaption write FOnSetCaption;
     property BaseUrl: string read FBaseUrl write FBaseUrl;
@@ -658,6 +671,21 @@ function TPixieNativeContainer.GetAnimatedImage(const Src,
 begin
   Result := nil;
   FAnimations.TryGetValue(CacheKey(Src, ABaseUrl), Result);
+end;
+
+function TPixieNativeContainer.AcquireAnimationCursor(Element: TObject;
+  AnimImg: TPixieAnimatedImage): TPixieAnimationCursor;
+begin
+  Result := nil;
+  if (AnimImg = nil) or not Assigned(FOnAcquireAnimationCursor) then Exit;
+  Result := FOnAcquireAnimationCursor(Self, Element, AnimImg);
+end;
+
+procedure TPixieNativeContainer.ReleaseAnimationCursor(
+  Cursor: TPixieAnimationCursor);
+begin
+  if (Cursor = nil) or not Assigned(FOnReleaseAnimationCursor) then Exit;
+  FOnReleaseAnimationCursor(Self, Cursor);
 end;
 
 function TPixieNativeContainer.LoadFromResource(

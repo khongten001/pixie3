@@ -30,6 +30,15 @@ type
   TPixieAnimatedImageDiscoveredEvent = procedure(Sender: TObject;
     const Key: string; Image: TPixieAnimatedImage) of object;
 
+  // Acquire/release callbacks let an element ask the view core for a
+  // per-element playback cursor without depending on the view-core unit
+  // (avoids a circular reference; the container is the meeting place).
+  TPixieAnimCursorAcquireEvent = function(Sender: TObject;
+    Element: TObject;
+    Image: TPixieAnimatedImage): TPixieAnimationCursor of object;
+  TPixieAnimCursorReleaseEvent = procedure(Sender: TObject;
+    Cursor: TPixieAnimationCursor) of object;
+
   { TPixieListMarker }
   TPixieListMarker = record
     Image: string;
@@ -78,6 +87,14 @@ type
     procedure DrawImage(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
       const Url, BaseUrl: string;
       FrameOverride: TPixieImageHandle = 0); virtual; abstract;
+    // Animation: nil from the default container; concrete native
+    // containers wire these to a view-core cursor registry.
+    function GetAnimatedImage(const Src,
+      BaseUrl: string): TPixieAnimatedImage; virtual;
+    function AcquireAnimationCursor(Element: TObject;
+      AnimImg: TPixieAnimatedImage): TPixieAnimationCursor; virtual;
+    procedure ReleaseAnimationCursor(
+      Cursor: TPixieAnimationCursor); virtual;
     procedure DrawSolidFill(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
       Color: TPixieWebColor); virtual; abstract;
     procedure DrawLinearGradient(Hdc: PtrUInt;
@@ -161,6 +178,24 @@ begin
   AspectOnly := False;
   AspectRatio := 0;
   GetImageSize(Src, BaseUrl, Sz);
+end;
+
+function TPixieContainer.GetAnimatedImage(const Src,
+  BaseUrl: string): TPixieAnimatedImage;
+begin
+  Result := nil;
+end;
+
+function TPixieContainer.AcquireAnimationCursor(Element: TObject;
+  AnimImg: TPixieAnimatedImage): TPixieAnimationCursor;
+begin
+  Result := nil;
+end;
+
+procedure TPixieContainer.ReleaseAnimationCursor(
+  Cursor: TPixieAnimationCursor);
+begin
+  // no-op default
 end;
 
 procedure TPixieContainer.PushOpacity(AOpacity: Single);

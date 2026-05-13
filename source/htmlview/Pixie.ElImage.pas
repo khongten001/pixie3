@@ -9,7 +9,7 @@ interface
 uses
   SysUtils,
   Pixie.Types, Pixie.CssLength, Pixie.Background,
-  Pixie.Container,
+  Pixie.AnimatedImage, Pixie.Container,
   Pixie.Element, Pixie.HtmlTag;
 
 type
@@ -19,8 +19,13 @@ type
   private
     FSrc: string;
     FAlt: string;
+    FAnimCursor: TPixieAnimationCursor; // weak ref; owned by view core
+    FAnimSrc: string;                   // src the cursor was bound to
+    procedure ReleaseAnimationCursor;
+    procedure EnsureAnimationCursor;
   public
     constructor Create(ADoc: TObject);
+    destructor Destroy; override;
 
     function IsReplaced: Boolean; override;
     procedure ParseAttributes; override;
@@ -44,6 +49,47 @@ constructor TPixieElImage.Create(ADoc: TObject);
 begin
   inherited Create(ADoc);
   FCss.Display := displayInlineBlock;
+  FAnimCursor := nil;
+end;
+
+destructor TPixieElImage.Destroy;
+begin
+  ReleaseAnimationCursor;
+  inherited Destroy;
+end;
+
+procedure TPixieElImage.ReleaseAnimationCursor;
+var
+  Cont: TPixieContainer;
+begin
+  if FAnimCursor = nil then Exit;
+  Cont := GetDocContainer;
+  if Cont <> nil then
+    Cont.ReleaseAnimationCursor(FAnimCursor);
+  FAnimCursor := nil;
+  FAnimSrc := '';
+end;
+
+procedure TPixieElImage.EnsureAnimationCursor;
+var
+  Cont: TPixieContainer;
+  AnimImg: TPixieAnimatedImage;
+begin
+  if FSrc = '' then
+  begin
+    ReleaseAnimationCursor;
+    Exit;
+  end;
+  if (FAnimCursor <> nil) and (FAnimSrc = FSrc) then Exit;
+  if FAnimCursor <> nil then
+    ReleaseAnimationCursor;
+  Cont := GetDocContainer;
+  if Cont = nil then Exit;
+  AnimImg := Cont.GetAnimatedImage(FSrc, '');
+  if AnimImg = nil then Exit;
+  FAnimCursor := Cont.AcquireAnimationCursor(Self, AnimImg);
+  if FAnimCursor <> nil then
+    FAnimSrc := FSrc;
 end;
 
 function TPixieElImage.IsReplaced: Boolean;
@@ -99,7 +145,10 @@ begin
                    (not FCss.CssHeight.IsPredefined);
       Cont.LoadImage(FSrc, '', ForceLoad);
     end;
-  end;
+    EnsureAnimationCursor;
+  end
+  else
+    ReleaseAnimationCursor;
 end;
 
 procedure TPixieElImage.GetContentSize(var Sz: TPixieSize;
@@ -130,6 +179,7 @@ var
   Layer: TPixieBackgroundLayer;
   Cont: TPixieContainer;
   Sz: TPixieSize;
+  FrameHandle: PtrUInt;
 begin
   inherited Draw(Hdc, X, Y, Clip, Ri);
 
@@ -167,7 +217,10 @@ begin
     Layer.Repeat_ := brNoRepeat;
     Layer.BorderRadius := FCss.CssBorders.Radius.CalcPercents(
       Layer.BorderBox.Width, Layer.BorderBox.Height);
-    Cont.DrawImage(Hdc, Layer, FSrc, '');
+    FrameHandle := 0;
+    if FAnimCursor <> nil then
+      FrameHandle := FAnimCursor.CurrentFrameHandle;
+    Cont.DrawImage(Hdc, Layer, FSrc, '', FrameHandle);
   end
   else if (FAlt <> '') and (FCss.Font <> 0) then
   begin

@@ -512,8 +512,6 @@ begin
   begin
     Handle := LoadImageFromPixels(Gif.Width, Gif.Height,
       @Gif.Frames[I].Pixels[0], Gif.Width * 4);
-    // Source buffer is no longer needed once uploaded; release it now
-    // to halve peak memory for large animations.
     SetLength(Gif.Frames[I].Pixels, 0);
     if Handle = 0 then
     begin
