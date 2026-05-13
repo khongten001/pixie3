@@ -10,7 +10,8 @@ interface
 uses
   Classes, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
-  Pixie.GradientLayer, Pixie.FontDescription;
+  Pixie.GradientLayer, Pixie.FontDescription,
+  Pixie.AnimatedImage;
 
 type
   TPixieFontHandle = PtrUInt;
@@ -173,6 +174,13 @@ type
     function LoadWebPFile(const Path: string): TPixieImageHandle; virtual;
     function LoadSvgFromData(Data: Pointer;
       Size: Integer): TPixieImageHandle; virtual;
+    // Animated image decoding. Returns nil for static or unsupported
+    // formats; the caller falls back to LoadImageFromStream. Default
+    // impl handles GIF via the software decoder + LoadImageFromPixels.
+    // Backends with native multi-frame APIs (WIC, ImageIO, QImageReader)
+    // should override.
+    function LoadAnimatedFromStream(
+      Stream: TStream): TPixieAnimatedImage; virtual;
 
     // Off-screen tile rendering (pattern optimisation)
     function BeginTileRender(Width, Height: Integer): Boolean; virtual;
@@ -241,7 +249,7 @@ type
 implementation
 
 uses
-  SysUtils, Math, Pixie.WebP;
+  SysUtils, Math, Pixie.WebP, Pixie.GifDecode;
 
 constructor TPixieCanvas.Create;
 begin
@@ -482,6 +490,41 @@ function TPixieCanvas.LoadSvgFromData(Data: Pointer;
   Size: Integer): TPixieImageHandle;
 begin
   Result := 0;
+end;
+
+function TPixieCanvas.LoadAnimatedFromStream(
+  Stream: TStream): TPixieAnimatedImage;
+var
+  Gif: TPixieGifData;
+  I, J: Integer;
+  Handle: TPixieImageHandle;
+begin
+  Result := nil;
+  if (Stream = nil) or not PixieDecodeGif(Stream, Gif) then Exit;
+  if Length(Gif.Frames) = 0 then Exit;
+
+  Result := TPixieAnimatedImage.Create;
+  Result.Width := Gif.Width;
+  Result.Height := Gif.Height;
+  Result.Loops := Gif.Loops;
+  for I := 0 to High(Gif.Frames) do
+  begin
+    Handle := LoadImageFromPixels(Gif.Width, Gif.Height,
+      @Gif.Frames[I].Pixels[0], Gif.Width * 4);
+    // Source buffer is no longer needed once uploaded; release it now
+    // to halve peak memory for large animations.
+    SetLength(Gif.Frames[I].Pixels, 0);
+    if Handle = 0 then
+    begin
+      for J := 0 to Result.FrameCount - 1 do
+        FreeImage(Result.Frames[J].Handle);
+      Result.ClearFrames;
+      Result.Free;
+      Result := nil;
+      Exit;
+    end;
+    Result.AddFrame(Handle, Gif.Frames[I].DelayMs);
+  end;
 end;
 
 procedure TPixieCanvas.FillTiledImage(Handle: TPixieImageHandle;
