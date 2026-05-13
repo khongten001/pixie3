@@ -92,6 +92,8 @@ contains
   Pixie.FormattingContext in '..\source\htmlview\Pixie.FormattingContext.pas',
   Pixie.Iterators in '..\source\htmlview\Pixie.Iterators.pas',
   Pixie.ScrollView in '..\source\htmlview\Pixie.ScrollView.pas',
+  Pixie.AnimatedImage in '..\source\common\Pixie.AnimatedImage.pas',
+  Pixie.GifDecode in '..\source\common\Pixie.GifDecode.pas',
   Pixie.Canvas in '..\source\common\Pixie.Canvas.pas',
   Pixie.WebP in '..\source\common\Pixie.WebP.pas',
   Pixie.FontMetrics in '..\source\common\Pixie.FontMetrics.pas',

@@ -45,6 +45,14 @@
         <UnitName Value="Pixie.ImageUtils"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.AnimatedImage.pas"/>
+        <UnitName Value="Pixie.AnimatedImage"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/common/Pixie.GifDecode.pas"/>
+        <UnitName Value="Pixie.GifDecode"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.Canvas.pas"/>
         <UnitName Value="Pixie.Canvas"/>
       </Item>
