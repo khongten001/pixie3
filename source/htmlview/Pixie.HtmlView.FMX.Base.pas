@@ -97,6 +97,7 @@ type
     procedure DoPaint; override;
     procedure DoMouseLeave; override;
     procedure Resize; override;
+    procedure VisibleChanged; override;
     procedure DialogKey(var Key: Word; Shift: TShiftState); override;
     procedure DoEnter; override;
     procedure DoExit; override;
@@ -694,6 +695,16 @@ end;
 procedure TPixieHtmlViewBase.DoCaretTimer(Sender: TObject);
 begin
   FCore.HandleCaretTimer;
+end;
+
+procedure TPixieHtmlViewBase.VisibleChanged;
+begin
+  inherited VisibleChanged;
+  if FCore = nil then Exit;
+  if Visible then
+    FCore.ResumeAnimations
+  else
+    FCore.PauseAnimations;
 end;
 
 // ---------------------------------------------------------------------------

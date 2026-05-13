@@ -27,6 +27,7 @@ type
 
     procedure DoCaretTimer(Sender: TObject);
     procedure SetBorderStyle(Value: TBorderStyle);
+    procedure CMShowingChanged(var Msg: TMessage); message CM_SHOWINGCHANGED;
     procedure WMGetDlgCode(var Msg: TWMGetDlgCode); message WM_GETDLGCODE;
     procedure WMIMEStartComposition(var Msg: TMessage); message WM_IME_STARTCOMPOSITION;
     procedure UpdateIMEPosition;
@@ -616,6 +617,19 @@ end;
 procedure TPixieHtmlViewBase.DoCaretTimer(Sender: TObject);
 begin
   FCore.HandleCaretTimer;
+end;
+
+procedure TPixieHtmlViewBase.CMShowingChanged(var Msg: TMessage);
+begin
+  inherited;
+  if FCore = nil then Exit;
+  // Showing is the composite (Visible AND parent-showing AND form-
+  // showing), which catches tab-switch, form-minimise, and explicit
+  // `.Visible := False` in one event — no need for CMVisibleChanged.
+  if Showing then
+    FCore.ResumeAnimations
+  else
+    FCore.PauseAnimations;
 end;
 
 // ---------------------------------------------------------------------------

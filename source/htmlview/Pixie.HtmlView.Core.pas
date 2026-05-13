@@ -194,6 +194,12 @@ type
       const AUpdateRect: TPixiePosition);
     procedure HandleResize;
     procedure HandleCaretTimer;
+
+    // Pause/resume the animation timer when the host control becomes
+    // hidden/visible. Cursors keep their pause snapshot so resuming
+    // doesn't burst-replay missed time.
+    procedure PauseAnimations;
+    procedure ResumeAnimations;
     procedure HandleMouseDown(IsLeft, IsDouble: Boolean; X, Y: Integer);
     procedure HandleMouseMove(X, Y: Integer);
     procedure HandleMouseUp(IsLeft: Boolean; X, Y: Integer);
@@ -659,7 +665,8 @@ var
   I: Integer;
   Tick: UInt64;
   Cursor: TPixieAnimationCursor;
-  Bounds: TPixiePosition;
+  Bounds, ViewRect: TPixiePosition;
+  Scale: Single;
   AllFinished: Boolean;
 begin
   if FAnimCursors.Count = 0 then
@@ -667,6 +674,13 @@ begin
     FAnimTimer.Enabled := False;
     Exit;
   end;
+
+  // Viewport in doc coords. Off-screen cursors still advance their
+  // frame index (browser convention) but skip the kernel invalidation.
+  Scale := GetEffectiveScale;
+  ViewRect := TPixiePosition.Create(0, FScrollY,
+    Round(OnHostGetViewWidth  / Scale),
+    Round(OnHostGetViewHeight / Scale));
 
   Tick := NowMs;
   AllFinished := True;
@@ -678,13 +692,47 @@ begin
     if Cursor.Tick(Tick) then
     begin
       Bounds := ElementDocBounds(Cursor.Element);
-      if (Bounds.Width > 0) and (Bounds.Height > 0) then
+      if (Bounds.Width > 0) and (Bounds.Height > 0)
+        and Bounds.DoesIntersect(ViewRect) then
         InvalidateRect(Bounds);
     end;
   end;
 
   if AllFinished then
     FAnimTimer.Enabled := False;
+end;
+
+procedure TPixieHtmlViewCore.PauseAnimations;
+var
+  I: Integer;
+  Tick: UInt64;
+begin
+  if (FAnimTimer = nil) or (FAnimCursors = nil) then Exit;
+  if not FAnimTimer.Enabled then Exit;
+  Tick := NowMs;
+  for I := 0 to FAnimCursors.Count - 1 do
+    FAnimCursors[I].Pause(Tick);
+  FAnimTimer.Enabled := False;
+end;
+
+procedure TPixieHtmlViewCore.ResumeAnimations;
+var
+  I: Integer;
+  Tick: UInt64;
+  HasUnfinished: Boolean;
+begin
+  if (FAnimTimer = nil) or (FAnimCursors = nil) then Exit;
+  if FAnimCursors.Count = 0 then Exit;
+  Tick := NowMs;
+  HasUnfinished := False;
+  for I := 0 to FAnimCursors.Count - 1 do
+  begin
+    FAnimCursors[I].Resume(Tick);
+    if not FAnimCursors[I].Finished then
+      HasUnfinished := True;
+  end;
+  if HasUnfinished then
+    FAnimTimer.Enabled := True;
 end;
 
 function TPixieHtmlViewCore.ElementDocBounds(

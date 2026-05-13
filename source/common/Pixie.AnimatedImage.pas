@@ -85,12 +85,19 @@ type
     FNextDeadlineMs: UInt64;
     FCompletedLoops: Integer;
     FFinished: Boolean;
+    FPausedAtMs: UInt64;     // 0 = not paused
   public
     constructor Create(AImage: TPixieAnimatedImage; AElement: TObject;
       NowMs: UInt64);
 
     // Returns True if the current frame index changed this tick.
     function Tick(NowMs: UInt64): Boolean;
+
+    // Pause snapshots wall-clock; Resume shifts FNextDeadlineMs by the
+    // elapsed paused duration so animations don't burst-replay missed
+    // time when the host becomes visible again. Both are idempotent.
+    procedure Pause(NowMs: UInt64);
+    procedure Resume(NowMs: UInt64);
 
     function CurrentFrameHandle: PtrUInt;
 
@@ -253,6 +260,20 @@ begin
   Frame := FImage.Frames[FCurrentFrame];
   FNextDeadlineMs := NowMs + UInt64(Frame.DelayMs);
   Result := True;
+end;
+
+procedure TPixieAnimationCursor.Pause(NowMs: UInt64);
+begin
+  if FPausedAtMs = 0 then
+    FPausedAtMs := NowMs;
+end;
+
+procedure TPixieAnimationCursor.Resume(NowMs: UInt64);
+begin
+  if FPausedAtMs = 0 then Exit;
+  if NowMs > FPausedAtMs then
+    FNextDeadlineMs := FNextDeadlineMs + (NowMs - FPausedAtMs);
+  FPausedAtMs := 0;
 end;
 
 function TPixieAnimationCursor.CurrentFrameHandle: PtrUInt;
