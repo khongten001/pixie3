@@ -34,6 +34,10 @@ type
 function PixieDecodeGif(Stream: TStream;
   out Data: TPixieGifData): Boolean;
 
+// Cheap 6-byte magic peek. Restores stream position before returning so
+// callers can immediately fall through to other decoders on a miss.
+function PixieIsGifStream(Stream: TStream): Boolean;
+
 implementation
 
 const
@@ -558,8 +562,29 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Public entry point
+// Public entry points
 // ---------------------------------------------------------------------------
+
+function PixieIsGifStream(Stream: TStream): Boolean;
+var
+  Header: array[0..5] of Byte;
+  StartPos: Int64;
+begin
+  Result := False;
+  if Stream = nil then Exit;
+  StartPos := Stream.Position;
+  FillChar(Header, SizeOf(Header), 0);
+  try
+    if Stream.Read(Header, 6) <> 6 then Exit;
+    Result :=
+      (Header[0] = Ord('G')) and (Header[1] = Ord('I')) and
+      (Header[2] = Ord('F')) and (Header[3] = Ord('8')) and
+      ((Header[4] = Ord('7')) or (Header[4] = Ord('9'))) and
+      (Header[5] = Ord('a'));
+  finally
+    Stream.Position := StartPos;
+  end;
+end;
 
 function PixieDecodeGif(Stream: TStream;
   out Data: TPixieGifData): Boolean;

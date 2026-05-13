@@ -15,6 +15,7 @@ uses
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.GradientLayer, Pixie.Background,
   Pixie.FontDescription, Pixie.CssLength,
+  Pixie.AnimatedImage,
   Pixie.Container, Pixie.Canvas, Pixie.FontFace;
 
 type
@@ -43,6 +44,7 @@ type
   private
     FCanvas: TPixieCanvas;
     FImages: TPixieImageCacheMap;
+    FAnimations: TPixieAnimatedImageMap;
     FPendingImages: TPixiePendingImageMap;
     FCssCache: TPixieCssCache;
     FBaseUrl: string;
@@ -53,6 +55,7 @@ type
     FOnAnchorClick: TPixieAnchorClickEvent;
     FOnElementClick: TPixieElementClickEvent;
     FOnFetchUrl: TPixieFetchUrlEvent;
+    FOnAnimatedImageDiscovered: TPixieAnimatedImageDiscoveredEvent;
     FOnSetCaption: TNotifyEvent;
     FCaption: string;
     FCursor: string;
@@ -60,8 +63,19 @@ type
     FMediaType: TPixieMediaType;
 
     function ResolveUrl(const Src, ABaseUrl: string): string;
+    function CacheKey(const Src, ABaseUrl: string): string;
+    function TryGetCachedHandle(const Key: string;
+      out Handle: TPixieImageHandle): Boolean;
     function GetCachedImage(const Src, ABaseUrl: string): TPixieImageHandle;
-    function DecodeStreamToHandle(Stream: TStream): TPixieImageHandle;
+    function DecodeStreamToHandle(Stream: TStream;
+      const AKey: string = ''): TPixieImageHandle;
+    // Decodes Stream as a multi-frame animated image and stores it in
+    // FAnimations[AKey]. Returns True only on multi-frame success (Handle
+    // is the first-frame handle); the static fallback path is unchanged
+    // and runs only when this returns False.
+    function TryDecodeAnimated(Stream: TStream; const AKey: string;
+      out Handle: TPixieImageHandle): Boolean;
+    procedure FreeAnimation(AnimImg: TPixieAnimatedImage);
     function LoadFromResource(const ResName: string): TPixieImageHandle;
     function ResolvePendingImage(const Key: string): TPixieImageHandle;
     procedure FetchAndInstallFontFace(Entry: TPixieFontFaceEntry);
@@ -72,6 +86,10 @@ type
     procedure RegisterImage(const Name: string; Stream: TStream);
     procedure UnregisterImage(const Name: string);
     procedure ClearCssCache;
+
+    // Animated image lookup for elements that want a playback cursor.
+    function GetAnimatedImage(const Src,
+      ABaseUrl: string): TPixieAnimatedImage;
 
     property Canvas: TPixieCanvas read FCanvas;
     property Caption: string read FCaption;
@@ -86,6 +104,9 @@ type
       read FOnElementClick write FOnElementClick;
     property OnFetchUrlEvent: TPixieFetchUrlEvent
       read FOnFetchUrl write FOnFetchUrl;
+    property OnAnimatedImageDiscoveredEvent:
+      TPixieAnimatedImageDiscoveredEvent
+      read FOnAnimatedImageDiscovered write FOnAnimatedImageDiscovered;
     property OnSetCaptionEvent: TNotifyEvent
       read FOnSetCaption write FOnSetCaption;
     property BaseUrl: string read FBaseUrl write FBaseUrl;
@@ -117,7 +138,8 @@ type
     procedure GetImageSize(const Src, ABaseUrl: string;
       out Sz: TPixieSize); override;
     procedure DrawImage(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
-      const Url, ABaseUrl: string); override;
+      const Url, ABaseUrl: string;
+      FrameOverride: TPixieImageHandle = 0); override;
     procedure DrawSolidFill(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
       Color: TPixieWebColor); override;
     procedure DrawLinearGradient(Hdc: PtrUInt;
@@ -179,7 +201,7 @@ implementation
 
 uses
   {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,{$ENDIF}
-  Pixie.WebP, Pixie.Document,
+  Pixie.WebP, Pixie.Document, Pixie.GifDecode,
   Pixie.DataUri, Pixie.Utf8, Pixie.Url;
 
 // ---------------------------------------------------------------------------
@@ -300,59 +322,57 @@ begin
     Result := IncludeTrailingPathDelimiter(Base) + PercentDecode(Src);
 end;
 
+function TPixieNativeContainer.CacheKey(const Src,
+  ABaseUrl: string): string;
+begin
+  if (Length(Src) > 1) and ((Src[1] = '#') or (Src[1] = '@')) then
+    Exit(Src);
+  if (Length(Src) > 5) and (Copy(Src, 1, 5) = 'data:') then
+    Exit(Src);
+  Result := ResolveUrl(Src, ABaseUrl);
+end;
+
+function TPixieNativeContainer.TryGetCachedHandle(const Key: string;
+  out Handle: TPixieImageHandle): Boolean;
+var
+  AnimImg: TPixieAnimatedImage;
+begin
+  if FAnimations.TryGetValue(Key, AnimImg) and (AnimImg.FrameCount > 0) then
+  begin
+    Handle := AnimImg.Frames[0].Handle;
+    Exit(True);
+  end;
+  Result := FImages.TryGetValue(Key, Handle);
+end;
+
 function TPixieNativeContainer.GetCachedImage(
   const Src, ABaseUrl: string): TPixieImageHandle;
 var
   Key: string;
   FetchStream: TMemoryStream;
   DataStream: TMemoryStream;
+  FileStream: TFileStream;
   Success: Boolean;
 begin
-  // #name — pre-registered image
+  Key := CacheKey(Src, ABaseUrl);
+  if TryGetCachedHandle(Key, Result) then Exit;
+  Result := 0;
+
   if (Length(Src) > 1) and (Src[1] = '#') then
+    Result := ResolvePendingImage(Src)
+  else if (Length(Src) > 1) and (Src[1] = '@') then
+    Result := LoadFromResource(Copy(Src, 2, MaxInt))
+  else if (Length(Src) > 5) and (Copy(Src, 1, 5) = 'data:') then
   begin
-    if FImages.TryGetValue(Src, Result) then
-      Exit;
-    Result := ResolvePendingImage(Src);
-    Exit;
-  end;
-
-  // @resname — load from Lazarus resource
-  if (Length(Src) > 1) and (Src[1] = '@') then
-  begin
-    if FImages.TryGetValue(Src, Result) then
-      Exit;
-    Result := LoadFromResource(Copy(Src, 2, MaxInt));
-    if Result <> 0 then
-      FImages.Add(Src, Result);
-    Exit;
-  end;
-
-  // data: URI — inline base64 image
-  if (Length(Src) > 5) and (Copy(Src, 1, 5) = 'data:') then
-  begin
-    if FImages.TryGetValue(Src, Result) then Exit;
-    Result := 0;
     if DecodeDataUri(Src, DataStream) then
     try
-      Result := DecodeStreamToHandle(DataStream);
+      Result := DecodeStreamToHandle(DataStream, Key);
     finally
       DataStream.Free;
     end;
-    if Result <> 0 then
-      FImages.Add(Src, Result);
-    Exit;
-  end;
-
-  // Normal URL or file path
-  Key := ResolveUrl(Src, ABaseUrl);
-  if FImages.TryGetValue(Key, Result) then
-    Exit;
-
-  // HTTP URL — fetch via event callback
-  if IsHttpUrl(Key) then
+  end
+  else if IsHttpUrl(Key) then
   begin
-    Result := 0;
     if Assigned(FOnFetchUrl) then
     begin
       FetchStream := TMemoryStream.Create;
@@ -362,20 +382,35 @@ begin
         if Success and (FetchStream.Size > 0) then
         begin
           FetchStream.Position := 0;
-          Result := DecodeStreamToHandle(FetchStream);
+          Result := DecodeStreamToHandle(FetchStream, Key);
         end;
       finally
         FetchStream.Free;
       end;
     end;
-    if Result <> 0 then
-      FImages.Add(Key, Result);
-    Exit;
+  end
+  else
+  begin
+    // Local file. Peek for the GIF magic so static formats avoid a
+    // second open via the canvas's path-based LoadImage (which still
+    // handles SVG + native WIC/Cairo/CG/Qt decoders).
+    try
+      FileStream := TFileStream.Create(Key, fmOpenRead or fmShareDenyNone);
+      try
+        if PixieIsGifStream(FileStream) then
+          TryDecodeAnimated(FileStream, Key, Result);
+      finally
+        FileStream.Free;
+      end;
+    except
+      Result := 0;
+    end;
+    if Result = 0 then
+      Result := FCanvas.LoadImage(Key);
   end;
 
-  // Local file
-  Result := FCanvas.LoadImage(Key);
-  FImages.Add(Key, Result);
+  if (Result <> 0) and not FAnimations.ContainsKey(Key) then
+    FImages.Add(Key, Result);
 end;
 
 // ---------------------------------------------------------------------------
@@ -471,7 +506,7 @@ begin
 end;
 
 function TPixieNativeContainer.DecodeStreamToHandle(
-  Stream: TStream): TPixieImageHandle;
+  Stream: TStream; const AKey: string): TPixieImageHandle;
 var
   SvgBuf: TMemoryStream;
   WebPBuf: TMemoryStream;
@@ -504,6 +539,15 @@ begin
       end;
     end;
     Exit;
+  end;
+
+  // Multi-frame GIFs land in FAnimations; single-frame GIFs come back
+  // as a plain static handle. Either way, skip the WIC/Cairo path if we
+  // got a handle. Non-GIF streams skip the peek and fall through.
+  if PixieIsGifStream(Stream) then
+  begin
+    TryDecodeAnimated(Stream, AKey, Result);
+    if Result <> 0 then Exit;
   end;
 
   // Try canvas-native stream loading (D2D/WIC, FMX)
@@ -560,6 +604,62 @@ begin
 {$ENDIF}
 end;
 
+function TPixieNativeContainer.TryDecodeAnimated(Stream: TStream;
+  const AKey: string; out Handle: TPixieImageHandle): Boolean;
+var
+  AnimImg: TPixieAnimatedImage;
+  StartPos: Int64;
+  I: Integer;
+begin
+  Result := False;
+  Handle := 0;
+  if (FCanvas = nil) or (Stream = nil) then Exit;
+
+  StartPos := Stream.Position;
+  AnimImg := FCanvas.LoadAnimatedFromStream(Stream);
+  if AnimImg = nil then
+  begin
+    Stream.Position := StartPos;
+    Exit;
+  end;
+
+  if (AnimImg.FrameCount > 1) and (AKey <> '') then
+  begin
+    FAnimations.Add(AKey, AnimImg);
+    Handle := AnimImg.Frames[0].Handle;
+    if Assigned(FOnAnimatedImageDiscovered) then
+      FOnAnimatedImageDiscovered(Self, AKey, AnimImg);
+    Exit(True);
+  end;
+
+  // Degenerate cases: no key, or single-frame GIF. Keep frame 0 as a
+  // plain static handle, release any surplus, dispose the wrapper.
+  if AnimImg.FrameCount > 0 then
+    Handle := AnimImg.Frames[0].Handle;
+  for I := 1 to AnimImg.FrameCount - 1 do
+    FCanvas.FreeImage(AnimImg.Frames[I].Handle);
+  AnimImg.ClearFrames;
+  AnimImg.Free;
+end;
+
+procedure TPixieNativeContainer.FreeAnimation(
+  AnimImg: TPixieAnimatedImage);
+var
+  I: Integer;
+begin
+  if AnimImg = nil then Exit;
+  for I := 0 to AnimImg.FrameCount - 1 do
+    FCanvas.FreeImage(AnimImg.Frames[I].Handle);
+  AnimImg.ClearFrames;
+end;
+
+function TPixieNativeContainer.GetAnimatedImage(const Src,
+  ABaseUrl: string): TPixieAnimatedImage;
+begin
+  Result := nil;
+  FAnimations.TryGetValue(CacheKey(Src, ABaseUrl), Result);
+end;
+
 function TPixieNativeContainer.LoadFromResource(
   const ResName: string): TPixieImageHandle;
 {$IF DEFINED(FPC) OR DEFINED(MSWINDOWS)}
@@ -592,11 +692,9 @@ begin
   if FPendingImages.TryGetValue(Key, Pending) then
   begin
     Pending.Data.Position := 0;
-    Result := DecodeStreamToHandle(Pending.Data);
+    Result := DecodeStreamToHandle(Pending.Data, Key);
     Pending.Data.Free;
     FPendingImages.Remove(Key);
-    if Result <> 0 then
-      FImages.Add(Key, Result);
   end;
 end;
 
@@ -622,9 +720,16 @@ procedure TPixieNativeContainer.UnregisterImage(const Name: string);
 var
   Key: string;
   Handle: TPixieImageHandle;
+  AnimImg: TPixieAnimatedImage;
   Pending: TPixiePendingImage;
 begin
   Key := '#' + Name;
+
+  if FAnimations.TryGetValue(Key, AnimImg) then
+  begin
+    FreeAnimation(AnimImg);
+    FAnimations.Remove(Key); // owns values — wrapper freed here
+  end;
 
   if FImages.TryGetValue(Key, Handle) then
   begin
@@ -648,6 +753,7 @@ begin
   inherited Create;
   FCanvas := ACanvas;
   FImages := TPixieImageCacheMap.Create;
+  FAnimations := TPixieAnimatedImageMap.Create([doOwnsValues]);
   FPendingImages := TPixiePendingImageMap.Create;
   FCssCache := TPixieCssCache.Create;
   FDefaultFontSize := 16;
@@ -660,8 +766,12 @@ end;
 destructor TPixieNativeContainer.Destroy;
 var
   Pair: TPair<string, TPixieImageHandle>;
+  AnimPair: TPair<string, TPixieAnimatedImage>;
   PendingPair: TPair<string, TPixiePendingImage>;
 begin
+  for AnimPair in FAnimations do
+    FreeAnimation(AnimPair.Value);
+  FAnimations.Free; // doOwnsValues frees the wrapper objects
   for Pair in FImages do
     FCanvas.FreeImage(Pair.Value);
   FImages.Free;
@@ -889,7 +999,8 @@ begin
 end;
 
 procedure TPixieNativeContainer.DrawImage(Hdc: PtrUInt;
-  const Layer: TPixieBackgroundLayer; const Url, ABaseUrl: string);
+  const Layer: TPixieBackgroundLayer; const Url, ABaseUrl: string;
+  FrameOverride: TPixieImageHandle);
 var
   Handle: TPixieImageHandle;
   R: TPixieBorderRadiuses;
@@ -898,7 +1009,10 @@ var
   FillX, FillY, FillW, FillH: Single;
   CX, CY, CW, CH, K: Single;
 begin
-  Handle := GetCachedImage(Url, ABaseUrl);
+  if FrameOverride <> 0 then
+    Handle := FrameOverride
+  else
+    Handle := GetCachedImage(Url, ABaseUrl);
   if Handle = 0 then Exit;
 
   TileW := Layer.OriginBox.Width;

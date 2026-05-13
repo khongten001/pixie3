@@ -14,7 +14,8 @@ uses
   SysUtils,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.GradientLayer, Pixie.Background,
-  Pixie.FontDescription, Pixie.CssLength;
+  Pixie.FontDescription, Pixie.CssLength,
+  Pixie.AnimatedImage, Pixie.Canvas;
 
 type
   TPixieTextPieceKind = (tpWord, tpSpace);
@@ -22,6 +23,12 @@ type
     Kind: TPixieTextPieceKind; UserData: Pointer);
 
   TPixieMouseEvent = (meEnter, meLeave);
+
+  // Fired by the container the first time an animated image is decoded
+  // and cached. The view core uses this to attach a playback cursor and
+  // start the per-view animation timer.
+  TPixieAnimatedImageDiscoveredEvent = procedure(Sender: TObject;
+    const Key: string; Image: TPixieAnimatedImage) of object;
 
   { TPixieListMarker }
   TPixieListMarker = record
@@ -64,8 +71,13 @@ type
     procedure GetImageInfo(const Src, BaseUrl: string;
       out Sz: TPixieSize; out AspectOnly: Boolean;
       out AspectRatio: Single); virtual;
+    // FrameOverride: when non-zero, the container should draw this image
+    // handle instead of resolving Url through its cache. Used by animated
+    // <img> elements to substitute the current cursor frame without
+    // mutating the shared cache.
     procedure DrawImage(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
-      const Url, BaseUrl: string); virtual; abstract;
+      const Url, BaseUrl: string;
+      FrameOverride: TPixieImageHandle = 0); virtual; abstract;
     procedure DrawSolidFill(Hdc: PtrUInt; const Layer: TPixieBackgroundLayer;
       Color: TPixieWebColor); virtual; abstract;
     procedure DrawLinearGradient(Hdc: PtrUInt;

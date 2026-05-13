@@ -500,7 +500,8 @@ var
   Handle: TPixieImageHandle;
 begin
   Result := nil;
-  if (Stream = nil) or not PixieDecodeGif(Stream, Gif) then Exit;
+  if (Stream = nil) or not PixieIsGifStream(Stream) then Exit;
+  if not PixieDecodeGif(Stream, Gif) then Exit;
   if Length(Gif.Frames) = 0 then Exit;
 
   Result := TPixieAnimatedImage.Create;
