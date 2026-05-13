@@ -325,6 +325,7 @@ type
     psid_cursor,
     psid_content,
     psid_border_collapse,
+    psid_table_layout,
     psid_text_transform,
 
     psid_flex,

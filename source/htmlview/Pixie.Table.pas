@@ -124,6 +124,7 @@ type
     procedure DistributeWidth(AWidth: TPixiePixel; Start, End_: Integer);
     procedure DistributeBeyondMax(AWidth: TPixiePixel; Start, End_: Integer);
     function CalcTableWidth(BlockWidth: TPixiePixel; IsAuto: Boolean;
+      IsFixedLayout: Boolean;
       out MinTableWidth, MaxTableWidth: TPixiePixel): TPixiePixel;
     procedure CalcHorizontalPositions(const TableBorders: TPixieMargins;
       Bc: TPixieBorderCollapse; BdrSpaceX: TPixiePixel);
@@ -662,16 +663,56 @@ begin
 end;
 
 function TPixieTableGrid.CalcTableWidth(BlockWidth: TPixiePixel; IsAuto: Boolean;
+  IsFixedLayout: Boolean;
   out MinTableWidth, MaxTableWidth: TPixiePixel): TPixiePixel;
 var
   CurWidth, MaxW, MinW, FixedWidth, Percent, Scale: TPixiePixel;
-  Col: Integer;
+  Col, ColsNoWidth: Integer;
   ColP: PPixieTableColumn;
   Excess, ScaledPct, NeededBase: TPixiePixel;
+  RemainingWidth: TPixiePixel;
 begin
   MinTableWidth := 0;
   MaxTableWidth := 0;
   FHasPercentColumns := False;
+
+  if IsFixedLayout then
+  begin
+    FixedWidth := 0;
+    ColsNoWidth := 0;
+    for Col := 0 to FColsCount - 1 do
+    begin
+      ColP := FColumns.Ptr(Col);
+      if not ColP^.CssWidth.IsPredefined then
+      begin
+        if ColP^.CssWidth.Units = cssUnitsPercentage then
+        begin
+          FHasPercentColumns := True;
+          ColP^.Width := ColP^.CssWidth.CalcPercent(BlockWidth);
+        end else
+          ColP^.Width := ColP^.CssWidth.Val;
+        FixedWidth := FixedWidth + ColP^.Width;
+      end else
+      begin
+        ColP^.Width := 0;
+        Inc(ColsNoWidth);
+      end;
+    end;
+    if (ColsNoWidth > 0) and (FixedWidth < BlockWidth) then
+    begin
+      RemainingWidth := (BlockWidth - FixedWidth) / ColsNoWidth;
+      for Col := 0 to FColsCount - 1 do
+      begin
+        ColP := FColumns.Ptr(Col);
+        if ColP^.CssWidth.IsPredefined then
+          ColP^.Width := RemainingWidth;
+      end;
+    end;
+    MinTableWidth := BlockWidth;
+    MaxTableWidth := BlockWidth;
+    Result := BlockWidth;
+    Exit;
+  end;
 
   CurWidth := 0;
   MaxW := 0;

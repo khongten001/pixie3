@@ -415,11 +415,13 @@ begin
   if SelfSize.Width.ValueType = cbcAbsolute then
     TableWidth := FGrid.CalcTableWidth(
       SelfSize.RenderWidth.Value - TableWidthSpacing, False,
+      SrcEl.Css.TableLayout = tlFixed,
       MinTableWidth, MaxTableWidth)
   else
     TableWidth := FGrid.CalcTableWidth(
       SelfSize.RenderWidth.Value - TableWidthSpacing,
       SelfSize.Width.ValueType = cbcAuto,
+      SrcEl.Css.TableLayout = tlFixed,
       MinTableWidth, MaxTableWidth);
 
   MinTableWidth := MinTableWidth + TableWidthSpacing;

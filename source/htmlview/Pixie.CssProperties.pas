@@ -53,6 +53,7 @@ type
     FTextTransform: TPixieTextTransform;
     FOverflowWrap: TPixieOverflowWrap;
     FBorderCollapse: TPixieBorderCollapse;
+    FTableLayout: TPixieTableLayout;
     FCaptionSide: TPixieCaptionSide;
     FListStyleType: TPixieListStyleType;
     FListStylePosition: TPixieListStylePosition;
@@ -184,6 +185,7 @@ type
     property TextTransform: TPixieTextTransform read FTextTransform write FTextTransform;
     property OverflowWrap: TPixieOverflowWrap read FOverflowWrap write FOverflowWrap;
     property BorderCollapse: TPixieBorderCollapse read FBorderCollapse write FBorderCollapse;
+    property TableLayout: TPixieTableLayout read FTableLayout write FTableLayout;
     property CaptionSide: TPixieCaptionSide read FCaptionSide write FCaptionSide;
     property ListStyleType: TPixieListStyleType read FListStyleType write FListStyleType;
     property ListStylePosition: TPixieListStylePosition read FListStylePosition write FListStylePosition;
@@ -1406,6 +1408,10 @@ begin
   FBorderCollapse := TPixieBorderCollapse(Tag.GetPropertyInt(
     Ord(psid_border_collapse), True, Ord(bcSeparate),
     PtrUInt(@FBorderCollapse) - PtrUInt(Self)));
+
+  FTableLayout := TPixieTableLayout(Tag.GetPropertyInt(
+    Ord(psid_table_layout), False, Ord(tlAuto),
+    PtrUInt(@FTableLayout) - PtrUInt(Self)));
 
   FCssBorderSpacingX := Tag.GetPropertyLength(
     Ord(psid__pixie_border_spacing_x), True, ZeroLen,

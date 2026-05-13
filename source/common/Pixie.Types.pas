@@ -355,6 +355,13 @@ type
     bcSeparate
   );
 
+  // Table layout
+  // 'auto;fixed'
+  TPixieTableLayout = (
+    tlAuto,
+    tlFixed
+  );
+
   // Content property
   // 'none;normal;open-quote;close-quote;no-open-quote;no-close-quote'
   TPixieContentProperty = (
@@ -603,6 +610,7 @@ const
   BackgroundSizeStrings = 'auto;cover;contain';
   VisibilityStrings = 'visible;hidden;collapse';
   BorderCollapseStrings = 'collapse;separate';
+  TableLayoutStrings = 'auto;fixed';
   ContentPropertyStrings = 'none;normal;open-quote;close-quote;no-open-quote;no-close-quote';
   AppearanceStrings = 'none;auto;menulist-button;textfield;button;checkbox;listbox;menulist;meter;progress-bar;push-button;radio;searchfield;slider-horizontal;square-button;textarea';
   BoxSizingStrings = 'content-box;border-box';

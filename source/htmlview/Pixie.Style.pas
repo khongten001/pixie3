@@ -229,6 +229,7 @@ begin
   ValidValues.Add(Ord(psid_border_top_style), BorderStyleStrings);
   ValidValues.Add(Ord(psid_border_bottom_style), BorderStyleStrings);
   ValidValues.Add(Ord(psid_border_collapse), BorderCollapseStrings);
+  ValidValues.Add(Ord(psid_table_layout), TableLayoutStrings);
 
   ValidValues.Add(Ord(psid_background_attachment), BackgroundAttachmentStrings);
   ValidValues.Add(Ord(psid_background_repeat), BackgroundRepeatStrings);
@@ -1805,6 +1806,7 @@ begin
      (Name = Ord(psid_border_top_style)) or (Name = Ord(psid_border_bottom_style)) or
      (Name = Ord(psid_border_left_style)) or (Name = Ord(psid_border_right_style)) or
      (Name = Ord(psid_border_collapse)) or
+     (Name = Ord(psid_table_layout)) or
      (Name = Ord(psid_flex_direction)) or (Name = Ord(psid_flex_wrap)) or
      (Name = Ord(psid_justify_content)) or (Name = Ord(psid_align_content)) or
      (Name = Ord(psid_caption_side)) or
