@@ -251,14 +251,12 @@ end;
 procedure TPixieHtmlViewBase.HostInvalidateRect(const R: TPixiePosition);
 var
   WinR: TRect;
-  Scale: Single;
 begin
   if not HandleAllocated then Exit;
-  Scale := GetCanvasScaleFactor;
-  WinR.Left := Floor(R.X * Scale);
-  WinR.Top := Floor(R.Y * Scale);
-  WinR.Right := Ceil((R.X + R.Width) * Scale);
-  WinR.Bottom := Ceil((R.Y + R.Height) * Scale);
+  WinR.Left := Floor(R.X);
+  WinR.Top := Floor(R.Y);
+  WinR.Right := Ceil(R.X + R.Width);
+  WinR.Bottom := Ceil(R.Y + R.Height);
   Windows.InvalidateRect(Handle, @WinR, False);
 end;
 

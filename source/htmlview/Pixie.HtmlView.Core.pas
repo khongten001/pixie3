@@ -137,6 +137,9 @@ type
     procedure ResetCaret;
     procedure Invalidate;
     procedure InvalidateRect(const R: TPixiePosition);
+    procedure InvalidateScreenRect(const R: TPixiePosition);
+    procedure InvalidateScrollbar;
+    function GetScrollbarStripRect(ViewW, ViewH: Single): TPixiePosition;
     procedure DoAutoScrollTimer(Sender: TObject);
     procedure UpdateAutoScroll(Vy: Integer; ViewH: TPixiePixel;
       DeltaX: Integer);
@@ -149,6 +152,9 @@ type
     // Host callbacks — set by concrete class in its constructor
     Owner: TObject;
     OnHostInvalidate: TPixieHostNotify;
+    // R is in physical pixels relative to the host control; host is
+    // expected to forward to its OS InvalidateRect with appropriate
+    // sub-pixel rounding.
     OnHostInvalidateRect: TPixieHostInvalidateRect;
     OnHostSetCursor: TPixieHostSetCursor;
     OnHostSetFocus: TPixieHostNotify;
@@ -305,11 +311,26 @@ procedure TPixieHtmlViewCore.InvalidateRect(const R: TPixiePosition);
 var
   ScreenR: TPixiePosition;
 begin
+  // R is in document CSS coordinates; translate to screen, then forward.
+  ScreenR := R;
+  ScreenR.Y := ScreenR.Y - FScrollY;
+  InvalidateScreenRect(ScreenR);
+end;
+
+procedure TPixieHtmlViewCore.InvalidateScreenRect(const R: TPixiePosition);
+var
+  PhysR: TPixiePosition;
+  Scale: Double;
+begin
+  // R is in screen CSS coordinates; scale to physical pixels for the host.
   if Assigned(OnHostInvalidateRect) then
   begin
-    ScreenR := R;
-    ScreenR.Y := ScreenR.Y - FScrollY;
-    OnHostInvalidateRect(ScreenR);
+    Scale := GetEffectiveScale;
+    PhysR.X := R.X * Scale;
+    PhysR.Y := R.Y * Scale;
+    PhysR.Width := R.Width * Scale;
+    PhysR.Height := R.Height * Scale;
+    OnHostInvalidateRect(PhysR);
   end
   else if Assigned(OnHostInvalidate) then
     OnHostInvalidate;
@@ -403,13 +424,34 @@ begin
   end;
 end;
 
+function TPixieHtmlViewCore.GetScrollbarStripRect(
+  ViewW, ViewH: Single): TPixiePosition;
+var
+  BarW, BarMargin: TPixiePixel;
+begin
+  BarW := FScrollbar.Width;
+  BarMargin := FScrollbar.Margin;
+  Result := TPixiePosition.Create(
+    ViewW - BarW - BarMargin * 2, 0,
+    BarW + BarMargin * 2, ViewH);
+end;
+
+procedure TPixieHtmlViewCore.InvalidateScrollbar;
+var
+  Scale: Double;
+begin
+  Scale := GetEffectiveScale;
+  InvalidateScreenRect(GetScrollbarStripRect(
+    OnHostGetViewWidth / Scale, OnHostGetViewHeight / Scale));
+end;
+
 procedure TPixieHtmlViewCore.ShowScrollbar;
 begin
   FScrollbarHideTimer.Enabled := False;
   if FScrollbarOpacity < 1 then
   begin
     FScrollbarOpacity := 1;
-    Invalidate;
+    InvalidateScrollbar;
   end;
 end;
 
@@ -437,7 +479,7 @@ begin
     FScrollbarOpacity := 0;
     FScrollbarHideTimer.Enabled := False;
   end;
-  Invalidate;
+  InvalidateScrollbar;
 end;
 
 procedure TPixieHtmlViewCore.DoAutoScrollTimer(Sender: TObject);
@@ -868,13 +910,11 @@ begin
 
         if (FContentHeight > ViewH) and ShouldDrawScrollbar then
         begin
-          BarW := FScrollbar.Width;
-          BarMargin := FScrollbar.Margin;
-          ScrollbarStrip := TPixiePosition.Create(
-            ViewW - BarW - BarMargin * 2, 0,
-            BarW + BarMargin * 2, ViewH);
+          ScrollbarStrip := GetScrollbarStripRect(ViewW, ViewH);
           if ScrollbarStrip.DoesIntersect(UpdCss) then
           begin
+            BarW := FScrollbar.Width;
+            BarMargin := FScrollbar.Margin;
             TrackH := ViewH - BarMargin * 2;
             ThumbH := TrackH * (ViewH / FContentHeight);
             if ThumbH < FScrollbar.MinThumbHeight then
