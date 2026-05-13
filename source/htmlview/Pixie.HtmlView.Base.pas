@@ -12,7 +12,7 @@ interface
 
 uses
   SysUtils, Classes, Math, Controls, Graphics, Forms, ExtCtrls,
-  LMessages, LCLType,
+  LMessages, LCLType, LCLIntf,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
   Pixie.CustomControl, Pixie.HtmlView.Core
@@ -257,21 +257,15 @@ begin
 end;
 
 procedure TPixieHtmlViewBase.HostInvalidateRect(const R: TPixiePosition);
-{$IFDEF MSWINDOWS}
 var
   WinR: TRect;
-{$ENDIF}
 begin
-  {$IFDEF MSWINDOWS}
   if not HandleAllocated then Exit;
   WinR.Left := Floor(R.X);
   WinR.Top := Floor(R.Y);
   WinR.Right := Ceil(R.X + R.Width);
   WinR.Bottom := Ceil(R.Y + R.Height);
-  Windows.InvalidateRect(Handle, @WinR, False);
-  {$ELSE}
-  Invalidate;
-  {$ENDIF}
+  LCLIntf.InvalidateRect(Handle, @WinR, False);
 end;
 
 procedure TPixieHtmlViewBase.HostSetCursor(ACursor: TPixieCursorKind);
