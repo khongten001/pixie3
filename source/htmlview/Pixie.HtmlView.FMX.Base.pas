@@ -46,6 +46,7 @@ type
 
     // Host callbacks
     procedure HostInvalidate;
+    procedure HostInvalidateRect(const R: TPixiePosition);
     procedure HostSetCursor(ACursor: TPixieCursorKind);
     procedure HostSetFocus;
     function HostGetViewWidth: TPixiePixel;
@@ -237,6 +238,7 @@ begin
   FCore := TPixieHtmlViewCore.Create(PixieCanvas);
   FCore.Owner := Self;
   FCore.OnHostInvalidate := HostInvalidate;
+  FCore.OnHostInvalidateRect := HostInvalidateRect;
   FCore.OnHostSetCursor := HostSetCursor;
   FCore.OnHostSetFocus := HostSetFocus;
   FCore.OnHostGetViewWidth := HostGetViewWidth;
@@ -267,6 +269,17 @@ end;
 procedure TPixieHtmlViewBase.HostInvalidate;
 begin
   InvalidateRect(LocalRect);
+end;
+
+procedure TPixieHtmlViewBase.HostInvalidateRect(const R: TPixiePosition);
+var
+  Rf: TRectF;
+begin
+  Rf.Left := R.X;
+  Rf.Top := R.Y;
+  Rf.Right := R.X + R.Width;
+  Rf.Bottom := R.Y + R.Height;
+  inherited InvalidateRect(Rf);
 end;
 
 procedure TPixieHtmlViewBase.HostSetCursor(ACursor: TPixieCursorKind);

@@ -43,6 +43,7 @@ type
   TPixieHostGetColor  = function: TPixieWebColor of object;
   TPixieHostCopyText  = procedure(const Text: string) of object;
   TPixieHostGetTick   = function: UInt64 of object;
+  TPixieHostInvalidateRect = procedure(const R: TPixiePosition) of object;
 
   TPixieScrollbarVisibility = (svShow, svHide, svAuto);
 
@@ -135,6 +136,7 @@ type
     procedure UpdateCursorFromCss;
     procedure ResetCaret;
     procedure Invalidate;
+    procedure InvalidateRect(const R: TPixiePosition);
     procedure DoAutoScrollTimer(Sender: TObject);
     procedure UpdateAutoScroll(Vy: Integer; ViewH: TPixiePixel;
       DeltaX: Integer);
@@ -147,6 +149,7 @@ type
     // Host callbacks — set by concrete class in its constructor
     Owner: TObject;
     OnHostInvalidate: TPixieHostNotify;
+    OnHostInvalidateRect: TPixieHostInvalidateRect;
     OnHostSetCursor: TPixieHostSetCursor;
     OnHostSetFocus: TPixieHostNotify;
     OnHostGetViewWidth: TPixieHostGetPixel;
@@ -294,6 +297,20 @@ end;
 procedure TPixieHtmlViewCore.Invalidate;
 begin
   if Assigned(OnHostInvalidate) then
+    OnHostInvalidate;
+end;
+
+procedure TPixieHtmlViewCore.InvalidateRect(const R: TPixiePosition);
+var
+  ScreenR: TPixiePosition;
+begin
+  if Assigned(OnHostInvalidateRect) then
+  begin
+    ScreenR := R;
+    ScreenR.Y := ScreenR.Y - FScrollY;
+    OnHostInvalidateRect(ScreenR);
+  end
+  else if Assigned(OnHostInvalidate) then
     OnHostInvalidate;
 end;
 

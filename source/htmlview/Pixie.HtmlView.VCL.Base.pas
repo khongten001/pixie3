@@ -9,7 +9,7 @@ unit Pixie.HtmlView.VCL.Base;
 interface
 
 uses
-  SysUtils, Classes, Windows, Messages,
+  SysUtils, Classes, Math, Windows, Messages,
   Vcl.Controls, Vcl.Graphics, Vcl.Forms, Vcl.ExtCtrls,
   Pixie.Types, Pixie.WebColor, Pixie.Document,
   Pixie.Canvas, Pixie.NativeContainer,
@@ -33,6 +33,7 @@ type
 
     // Host callbacks
     procedure HostInvalidate;
+    procedure HostInvalidateRect(const R: TPixiePosition);
     procedure HostSetCursor(ACursor: TPixieCursorKind);
     procedure HostSetFocus;
     function HostGetViewWidth: TPixiePixel;
@@ -193,6 +194,7 @@ begin
   FCore := TPixieHtmlViewCore.Create(PixieCanvas);
   FCore.Owner := Self;
   FCore.OnHostInvalidate := HostInvalidate;
+  FCore.OnHostInvalidateRect := HostInvalidateRect;
   FCore.OnHostSetCursor := HostSetCursor;
   FCore.OnHostSetFocus := HostSetFocus;
   FCore.OnHostGetViewWidth := HostGetViewWidth;
@@ -244,6 +246,20 @@ end;
 procedure TPixieHtmlViewBase.HostInvalidate;
 begin
   Invalidate;
+end;
+
+procedure TPixieHtmlViewBase.HostInvalidateRect(const R: TPixiePosition);
+var
+  WinR: TRect;
+  Scale: Single;
+begin
+  if not HandleAllocated then Exit;
+  Scale := GetCanvasScaleFactor;
+  WinR.Left := Floor(R.X * Scale);
+  WinR.Top := Floor(R.Y * Scale);
+  WinR.Right := Ceil((R.X + R.Width) * Scale);
+  WinR.Bottom := Ceil((R.Y + R.Height) * Scale);
+  Windows.InvalidateRect(Handle, @WinR, False);
 end;
 
 procedure TPixieHtmlViewBase.HostSetCursor(ACursor: TPixieCursorKind);
