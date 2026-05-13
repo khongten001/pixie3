@@ -737,10 +737,16 @@ begin
 end;
 
 procedure TPixieHtmlViewBase.DoPaint;
+var
+  Cr: TRect;
+  Upd: TPixiePosition;
 begin
   if FCore = nil then Exit;
   FCore.Canvas.SetViewSize(ClientWidth, ClientHeight, GetCanvasScaleFactor);
-  FCore.HandlePaint(GetPaintHandle);
+  Cr := Canvas.ClipRect;
+  Upd := TPixiePosition.Create(Cr.Left, Cr.Top,
+    Cr.Right - Cr.Left, Cr.Bottom - Cr.Top);
+  FCore.HandlePaint(GetPaintHandle, Upd);
 end;
 
 procedure TPixieHtmlViewBase.Resize;

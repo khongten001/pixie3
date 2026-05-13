@@ -174,7 +174,8 @@ type
     procedure UnregisterImage(const Name: string);
 
     procedure HandleLoaded;
-    procedure HandlePaint(ACanvasHandle: PtrUInt);
+    procedure HandlePaint(ACanvasHandle: PtrUInt;
+      const AUpdateRect: TPixiePosition);
     procedure HandleResize;
     procedure HandleCaretTimer;
     procedure HandleMouseDown(IsLeft, IsDouble: Boolean; X, Y: Integer);
@@ -806,9 +807,11 @@ end;
 // Painting
 // ---------------------------------------------------------------------------
 
-procedure TPixieHtmlViewCore.HandlePaint(ACanvasHandle: PtrUInt);
+procedure TPixieHtmlViewCore.HandlePaint(ACanvasHandle: PtrUInt;
+  const AUpdateRect: TPixiePosition);
 var
-  ClipPos: TPixiePosition;
+  UpdCss: TPixiePosition;
+  ScrollbarStrip: TPixiePosition;
   BgColor: TPixieWebColor;
   LayoutWidth: Integer;
   Scale: Double;
@@ -829,76 +832,85 @@ begin
     ViewH := OnHostGetViewHeight / Scale;
     LayoutWidth := Round(ViewW);
 
-    BgColor := OnHostGetBackgroundColor();
-    FCanvas.FillRect(0, 0, ViewW, ViewH, BgColor);
+    // AUpdateRect arrives in host pixel units; convert to CSS pixels.
+    UpdCss.X := AUpdateRect.X / Scale;
+    UpdCss.Y := AUpdateRect.Y / Scale;
+    UpdCss.Width := AUpdateRect.Width / Scale;
+    UpdCss.Height := AUpdateRect.Height / Scale;
 
-    // Standalone SVG mode — render SVG and skip HTML pipeline
+    BgColor := OnHostGetBackgroundColor();
+
     if FSvgRenderer <> nil then
     begin
+      // Standalone SVG: always full-viewport paint
+      FCanvas.FillRect(0, 0, ViewW, ViewH, BgColor);
       FSvgRenderer.RenderToRect(0, 0, ViewW, ViewH);
     end
     else
     begin
+      FCanvas.FillRect(UpdCss.X, UpdCss.Y, UpdCss.Width, UpdCss.Height, BgColor);
 
-    if FNeedsLayout and (FDocument <> nil) then
-    begin
-      FContainer.ViewportWidth := LayoutWidth;
-      FContainer.ViewportHeight := Round(ViewH);
-      OldContentHeight := FContentHeight;
-      FDocument.Render(LayoutWidth);
-      FContentHeight := FDocument.Height;
-      if FContentHeight <> OldContentHeight then
-        DoScrollChanged;
-      FNeedsLayout := False;
-    end;
-
-    if FDocument <> nil then
-    begin
-      ClipPos := TPixiePosition.Create(0, 0, ViewW, ViewH);
-      FDocument.Draw(0, 0, -FScrollY, @ClipPos);
-
-      if (FContentHeight > ViewH) and ShouldDrawScrollbar then
+      if FNeedsLayout and (FDocument <> nil) then
       begin
-        BarW := FScrollbar.Width;
-        BarMargin := FScrollbar.Margin;
-        TrackH := ViewH - BarMargin * 2;
-        ThumbH := TrackH * (ViewH / FContentHeight);
-        if ThumbH < FScrollbar.MinThumbHeight then
-          ThumbH := FScrollbar.MinThumbHeight;
-        MaxScroll := FContentHeight - ViewH;
-        if MaxScroll > 0 then
-          ThumbY := BarMargin + (FScrollY / MaxScroll) * (TrackH - ThumbH)
-        else
-          ThumbY := BarMargin;
-        ThumbX := ViewW - BarW - BarMargin;
+        FContainer.ViewportWidth := LayoutWidth;
+        FContainer.ViewportHeight := Round(ViewH);
+        OldContentHeight := FContentHeight;
+        FDocument.Render(LayoutWidth);
+        FContentHeight := FDocument.Height;
+        if FContentHeight <> OldContentHeight then
+          DoScrollChanged;
+        FNeedsLayout := False;
+      end;
 
-        // Draw track background
-        if FScrollbar.TrackColor.Alpha > 0 then
+      if FDocument <> nil then
+      begin
+        FDocument.Draw(0, 0, -FScrollY, @UpdCss);
+
+        if (FContentHeight > ViewH) and ShouldDrawScrollbar then
         begin
-          FadedColor := FScrollbar.TrackColor;
-          if FScrollbar.Visibility = svAuto then
-            FadedColor.Alpha := Round(FadedColor.Alpha * FScrollbarOpacity);
-          FCanvas.FillRect(ThumbX, BarMargin, BarW, TrackH, FadedColor);
-        end;
+          BarW := FScrollbar.Width;
+          BarMargin := FScrollbar.Margin;
+          ScrollbarStrip := TPixiePosition.Create(
+            ViewW - BarW - BarMargin * 2, 0,
+            BarW + BarMargin * 2, ViewH);
+          if ScrollbarStrip.DoesIntersect(UpdCss) then
+          begin
+            TrackH := ViewH - BarMargin * 2;
+            ThumbH := TrackH * (ViewH / FContentHeight);
+            if ThumbH < FScrollbar.MinThumbHeight then
+              ThumbH := FScrollbar.MinThumbHeight;
+            MaxScroll := FContentHeight - ViewH;
+            if MaxScroll > 0 then
+              ThumbY := BarMargin + (FScrollY / MaxScroll) * (TrackH - ThumbH)
+            else
+              ThumbY := BarMargin;
+            ThumbX := ViewW - BarW - BarMargin;
 
-        // Draw thumb
-        FadedColor := FScrollbar.ThumbColor;
-        if FScrollbar.Visibility = svAuto then
-          FadedColor.Alpha := Round(FadedColor.Alpha * FScrollbarOpacity);
-        IndicatorRadius.TopLeftX := BarW / 2;
-        IndicatorRadius.TopLeftY := BarW / 2;
-        IndicatorRadius.TopRightX := BarW / 2;
-        IndicatorRadius.TopRightY := BarW / 2;
-        IndicatorRadius.BottomRightX := BarW / 2;
-        IndicatorRadius.BottomRightY := BarW / 2;
-        IndicatorRadius.BottomLeftX := BarW / 2;
-        IndicatorRadius.BottomLeftY := BarW / 2;
-        FCanvas.FillRoundedRect(ThumbX, ThumbY, BarW, ThumbH,
-          IndicatorRadius, FadedColor);
+            if FScrollbar.TrackColor.Alpha > 0 then
+            begin
+              FadedColor := FScrollbar.TrackColor;
+              if FScrollbar.Visibility = svAuto then
+                FadedColor.Alpha := Round(FadedColor.Alpha * FScrollbarOpacity);
+              FCanvas.FillRect(ThumbX, BarMargin, BarW, TrackH, FadedColor);
+            end;
+
+            FadedColor := FScrollbar.ThumbColor;
+            if FScrollbar.Visibility = svAuto then
+              FadedColor.Alpha := Round(FadedColor.Alpha * FScrollbarOpacity);
+            IndicatorRadius.TopLeftX := BarW / 2;
+            IndicatorRadius.TopLeftY := BarW / 2;
+            IndicatorRadius.TopRightX := BarW / 2;
+            IndicatorRadius.TopRightY := BarW / 2;
+            IndicatorRadius.BottomRightX := BarW / 2;
+            IndicatorRadius.BottomRightY := BarW / 2;
+            IndicatorRadius.BottomLeftX := BarW / 2;
+            IndicatorRadius.BottomLeftY := BarW / 2;
+            FCanvas.FillRoundedRect(ThumbX, ThumbY, BarW, ThumbH,
+              IndicatorRadius, FadedColor);
+          end;
+        end;
       end;
     end;
-
-    end; // else (HTML mode)
   finally
     FCanvas.EndPaint;
   end;

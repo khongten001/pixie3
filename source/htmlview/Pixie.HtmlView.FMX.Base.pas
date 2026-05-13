@@ -662,9 +662,15 @@ begin
 end;
 
 procedure TPixieHtmlViewBase.DoPaint;
+var
+  Upd: TPixiePosition;
 begin
   if FCore = nil then Exit;
-  FCore.HandlePaint(GetPaintHandle);
+  // FMX always paints the full viewport; partial-repaint dirty-rect
+  // plumbing is deferred (FMX Canvas.ClipRect coord-space mismatches
+  // logical Width/Height and needs separate handling).
+  Upd := TPixiePosition.Create(0, 0, Width, Height);
+  FCore.HandlePaint(GetPaintHandle, Upd);
 end;
 
 procedure TPixieHtmlViewBase.DoMouseLeave;
