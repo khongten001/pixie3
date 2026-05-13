@@ -276,20 +276,23 @@ end;
 // Interlace de-interleaver
 // ---------------------------------------------------------------------------
 
-procedure DeinterlaceRowMap(H: Integer; out Map: TBytes);
+type
+  TPixieGifRowMap = array of Integer;
+
+procedure DeinterlaceRowMap(H: Integer; out Map: TPixieGifRowMap);
 var
   Y, Dst: Integer;
 begin
   SetLength(Map, H);
   Dst := 0;
   Y := 0;
-  while Y < H do begin Map[Dst] := Byte(Y); Inc(Dst); Inc(Y, 8); end;
+  while Y < H do begin Map[Dst] := Y; Inc(Dst); Inc(Y, 8); end;
   Y := 4;
-  while Y < H do begin Map[Dst] := Byte(Y); Inc(Dst); Inc(Y, 8); end;
+  while Y < H do begin Map[Dst] := Y; Inc(Dst); Inc(Y, 8); end;
   Y := 2;
-  while Y < H do begin Map[Dst] := Byte(Y); Inc(Dst); Inc(Y, 4); end;
+  while Y < H do begin Map[Dst] := Y; Inc(Dst); Inc(Y, 4); end;
   Y := 1;
-  while Y < H do begin Map[Dst] := Byte(Y); Inc(Dst); Inc(Y, 2); end;
+  while Y < H do begin Map[Dst] := Y; Inc(Dst); Inc(Y, 2); end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -300,7 +303,7 @@ procedure CompositeFrame(var Ctx: TPixieGifContext;
   const Indices: TBytes; Left, Top, W, H: Integer;
   const Palette: TPixiePalette; Transparent: Integer; Interlaced: Boolean);
 var
-  RowMap: TBytes;
+  RowMap: TPixieGifRowMap;
   Row, Col, SrcRow, DstRow, DstX, DstY, Idx: Integer;
   PalIdx: Byte;
   Entry: TPixiePaletteEntry;
@@ -310,7 +313,7 @@ begin
   else
   begin
     SetLength(RowMap, H);
-    for Row := 0 to H - 1 do RowMap[Row] := Byte(Row);
+    for Row := 0 to H - 1 do RowMap[Row] := Row;
   end;
 
   for SrcRow := 0 to H - 1 do
