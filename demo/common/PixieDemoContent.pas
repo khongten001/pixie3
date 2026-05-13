@@ -239,6 +239,17 @@ begin
       'Inline PNG (20x20 orange circle embedded as base64 in the HTML source)' +
     '</p>' +
 
+    // ---- Animated images ----
+    '<h2 style="color: #994422;">Animated Images</h2>' +
+    '<p>' +
+      '<img src="' + ImgPath + 'banner.gif" style="vertical-align: middle;"> ' +
+      'Animated GIF (200&times;60, 4 frames)' +
+    '</p>' +
+    '<p>' +
+      '<img src="' + ImgPath + 'banner.apng" style="vertical-align: middle;"> ' +
+      'Animated PNG / APNG (200&times;50, 4 frames)' +
+    '</p>' +
+
     // ---- Table ----
     '<h2 style="color: #994422;">Table</h2>' +
     '<table style="border-collapse: collapse; width: 100%; margin-bottom: 12px;">' +
