@@ -34,6 +34,10 @@ type
       Clip: PPixiePosition; Ri: Pointer); override;
     function CreateRenderItem(ParentRi: Pointer): Pointer; override;
     function DumpGetName: string; override;
+    // Forward mouse events to the containing tag so a click on text
+    // inside <p>Hello</p> fires OnElementClick for the <p>.
+    function OnLButtonDown: Boolean; override;
+    function OnLButtonUp(IsClick: Boolean = True): Boolean; override;
   end;
 
   { TPixieElSpace }
@@ -92,6 +96,22 @@ end;
 function TPixieElText.IsText: Boolean;
 begin
   Result := True;
+end;
+
+function TPixieElText.OnLButtonDown: Boolean;
+begin
+  if FParent <> nil then
+    Result := FParent.OnLButtonDown
+  else
+    Result := False;
+end;
+
+function TPixieElText.OnLButtonUp(IsClick: Boolean): Boolean;
+begin
+  if FParent <> nil then
+    Result := FParent.OnLButtonUp(IsClick)
+  else
+    Result := False;
 end;
 
 procedure TPixieElText.ComputeStyles(Recursive: Boolean);
