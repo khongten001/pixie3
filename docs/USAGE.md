@@ -85,7 +85,7 @@ Fired when the user clicks an `<a href="...">` element. The `Url` is resolved ag
 function(Sender: TObject; El: TObject): Boolean of object;
 ```
 
-Fired once for the element under the cursor. `El` is a `TPixieHtmlTag` (cast from `TObject`); clicks on text content report the containing tag. The event does not bubble — walk `El.Parent` yourself to react to ancestors. Anchor (`<a>`) clicks fire `OnAnchorClick` instead and do not trigger `OnElementClick`. The return value is currently ignored.
+Fired once for the element under the cursor. `El` is a `TPixieHtmlTag` (cast from `TObject`); clicks on text content report the containing tag. The event does not bubble — walk `El.Parent` yourself to react to ancestors. Anchor (`<a>`) clicks fire `OnAnchorClick` first (for `href`-bearing anchors) and then `OnElementClick`. The return value is currently ignored.
 
 ### OnFetchUrl
 

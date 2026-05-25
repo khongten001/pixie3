@@ -47,6 +47,7 @@ begin
     if Cont <> nil then
       Cont.OnAnchorClick(Href, Self);
   end;
+  inherited OnClick;
 end;
 
 procedure TPixieElAnchor.ApplyStylesheet(Stylesheet: TPixieStylesheet);
