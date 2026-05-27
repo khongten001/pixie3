@@ -59,6 +59,8 @@ type
     FTileSavedCG: CGContextRef;
     FTileSavedStateTop: Integer;
     FTileSavedViewW, FTileSavedViewH: Integer;
+    FOffscreenCtx: CGContextRef;
+    FOffscreenWidth, FOffscreenHeight: Integer;
 
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -180,6 +182,13 @@ type
     procedure EndOffscreenPaint;
     procedure SaveContextToPng(Ctx: CGContextRef; Width, Height: Integer;
       const FileName: string);
+
+    // Public off-screen + image export API
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); override;
+    procedure EndOffscreen; override;
+    procedure SaveAsPng(Stream: TStream); override;
+    procedure SaveAsBmp(Stream: TStream); override;
   end;
 
 implementation
@@ -2086,6 +2095,61 @@ begin
   finally
     Img.Free;
   end;
+end;
+
+procedure TPixieCGCanvas.BeginOffscreen(Width, Height: Integer;
+  ClearColor: TPixieWebColor);
+begin
+  if FOffscreenCtx <> nil then
+    EndOffscreen;
+  FOffscreenCtx := CGBitmapContextCreate(nil, Width, Height, 8, Width * 4,
+    FColorSpace,
+    kCGImageAlphaPremultipliedFirst or kCGBitmapByteOrder32Little);
+  if FOffscreenCtx = nil then Exit;
+  FCG := FOffscreenCtx;
+  FOffscreenWidth := Width;
+  FOffscreenHeight := Height;
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+  CGContextTranslateCTM(FCG, 0, Height);
+  CGContextScaleCTM(FCG, 1, -1);
+  CGContextSetRGBFillColor(FCG,
+    ClearColor.Red / 255, ClearColor.Green / 255,
+    ClearColor.Blue / 255, ClearColor.Alpha / 255);
+  CGContextFillRect(FCG, CGRectMake(0, 0, Width, Height));
+end;
+
+procedure TPixieCGCanvas.EndOffscreen;
+begin
+  FCG := nil;
+  if FOffscreenCtx <> nil then
+  begin
+    CGContextRelease(FOffscreenCtx);
+    FOffscreenCtx := nil;
+  end;
+end;
+
+procedure TPixieCGCanvas.SaveAsPng(Stream: TStream);
+var
+  Pixels: Pointer;
+begin
+  if FOffscreenCtx = nil then Exit;
+  Pixels := CGBitmapContextGetData(FOffscreenCtx);
+  if Pixels = nil then Exit;
+  WritePngStream(Stream, Pixels, FOffscreenWidth, FOffscreenHeight,
+    FOffscreenWidth * 4);
+end;
+
+procedure TPixieCGCanvas.SaveAsBmp(Stream: TStream);
+var
+  Pixels: Pointer;
+begin
+  if FOffscreenCtx = nil then Exit;
+  Pixels := CGBitmapContextGetData(FOffscreenCtx);
+  if Pixels = nil then Exit;
+  WriteBmpStream(Stream, Pixels, FOffscreenWidth, FOffscreenHeight,
+    FOffscreenWidth * 4);
 end;
 
 

@@ -22,6 +22,15 @@
     procedure LoadMarkdownFromFile(const AFileName: string);
     procedure LoadMarkdownFromStream(AStream: TStream;
       const ABaseUrl: string = '');
+
+    procedure SaveAsPng(const FileName: string;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure SaveAsPng(Stream: TStream;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure SaveAsBmp(const FileName: string;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure SaveAsBmp(Stream: TStream;
+      Width: Integer; Height: Integer = 0); overload;
   published
     property Markdown: TStrings read GetMarkdown write SetMarkdown;
     property UseDefaultStyles: Boolean read FUseDefaultStyles

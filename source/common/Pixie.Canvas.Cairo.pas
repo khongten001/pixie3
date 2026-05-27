@@ -72,6 +72,7 @@ type
     FTileSavedPangoCtx: PPangoContext;
     FTileSavedStateTop: Integer;
     FTileSavedViewW, FTileSavedViewH: Integer;
+    FOffscreenSurface: Pcairo_surface_t;
 
     procedure RoundedRectPath(X, Y, W, H: Single;
       const R: TPixieBorderRadiuses);
@@ -193,6 +194,14 @@ type
     procedure EndOffscreenPaint;
     procedure SaveSurfaceToPng(Surface: Pcairo_surface_t;
       const FileName: string);
+
+    // Public off-screen + image export API
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); override;
+    procedure EndOffscreen; override;
+    procedure SaveAsPng(Stream: TStream); override;
+    procedure SaveAsPng(const FileName: string); override;
+    procedure SaveAsBmp(Stream: TStream); override;
   end;
 
 implementation
@@ -1904,6 +1913,80 @@ procedure TPixieCairoCanvas.SaveSurfaceToPng(Surface: Pcairo_surface_t;
 begin
   if Surface <> nil then
     cairo_surface_write_to_png(Surface, PAnsiChar(AnsiString(FileName)));
+end;
+
+procedure TPixieCairoCanvas.BeginOffscreen(Width, Height: Integer;
+  ClearColor: TPixieWebColor);
+begin
+  if FOffscreenSurface <> nil then
+    EndOffscreen;
+  FOffscreenSurface := cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+    Width, Height);
+  if FOffscreenSurface = nil then Exit;
+  FCairo := cairo_create(FOffscreenSurface);
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+  if FPersistentContext <> nil then
+    pango_cairo_update_context(FCairo, FPersistentContext);
+  FPangoContext := FPersistentContext;
+  cairo_set_source_rgba(FCairo,
+    ClearColor.Red / 255, ClearColor.Green / 255,
+    ClearColor.Blue / 255, ClearColor.Alpha / 255);
+  cairo_set_operator(FCairo, CAIRO_OPERATOR_SOURCE);
+  cairo_paint(FCairo);
+  cairo_set_operator(FCairo, CAIRO_OPERATOR_OVER);
+end;
+
+procedure TPixieCairoCanvas.EndOffscreen;
+begin
+  if FCairo <> nil then
+  begin
+    cairo_destroy(FCairo);
+    FCairo := nil;
+  end;
+  if FOffscreenSurface <> nil then
+  begin
+    cairo_surface_destroy(FOffscreenSurface);
+    FOffscreenSurface := nil;
+  end;
+end;
+
+procedure TPixieCairoCanvas.SaveAsPng(Stream: TStream);
+var
+  W, H, Stride: Integer;
+  Pixels: Pointer;
+begin
+  if FOffscreenSurface = nil then Exit;
+  cairo_surface_flush(FOffscreenSurface);
+  W := cairo_image_surface_get_width(FOffscreenSurface);
+  H := cairo_image_surface_get_height(FOffscreenSurface);
+  Stride := cairo_image_surface_get_stride(FOffscreenSurface);
+  Pixels := cairo_image_surface_get_data(FOffscreenSurface);
+  if Pixels = nil then Exit;
+  WritePngStream(Stream, Pixels, W, H, Stride);
+end;
+
+procedure TPixieCairoCanvas.SaveAsPng(const FileName: string);
+begin
+  if FOffscreenSurface <> nil then
+    cairo_surface_write_to_png(FOffscreenSurface,
+      PAnsiChar(AnsiString(FileName)));
+end;
+
+procedure TPixieCairoCanvas.SaveAsBmp(Stream: TStream);
+var
+  W, H, Stride: Integer;
+  Pixels: Pointer;
+begin
+  if FOffscreenSurface = nil then Exit;
+  cairo_surface_flush(FOffscreenSurface);
+  W := cairo_image_surface_get_width(FOffscreenSurface);
+  H := cairo_image_surface_get_height(FOffscreenSurface);
+  Stride := cairo_image_surface_get_stride(FOffscreenSurface);
+  Pixels := cairo_image_surface_get_data(FOffscreenSurface);
+  if Pixels = nil then Exit;
+  WriteBmpStream(Stream, Pixels, W, H, Stride);
 end;
 
 

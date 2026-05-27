@@ -131,6 +131,7 @@ type
     procedure DoScrollChanged;
     function GetEffectiveScale: Double;
     procedure RebuildDocument;
+    procedure RenderForExport(Width, Height: Integer; out EffH: Integer);
     procedure DoAnchorClick(Sender: TObject; const Url: string);
     function DoElementClick(Sender: TObject; El: TObject): Boolean;
     procedure DoFetchUrl(Sender: TObject; const Url: string;
@@ -188,6 +189,17 @@ type
       const ABaseUrl: string = '');
     procedure RegisterImage(const Name: string; Stream: TStream);
     procedure UnregisterImage(const Name: string);
+
+    // Width is the layout viewport. Height=0 uses computed content
+    // height after layout. Transparent background.
+    procedure SaveAsPng(const FileName: string;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure SaveAsPng(Stream: TStream;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure SaveAsBmp(const FileName: string;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure SaveAsBmp(Stream: TStream;
+      Width: Integer; Height: Integer = 0); overload;
 
     procedure HandleLoaded;
     procedure HandlePaint(ACanvasHandle: PtrUInt;
@@ -916,6 +928,98 @@ begin
   if Size > 0 then
     AStream.ReadBuffer(Bytes[0], Size);
   LoadFromString(PixieDecodeHtmlBytes(Bytes), ABaseUrl);
+end;
+
+procedure TPixieHtmlViewCore.SaveAsPng(const FileName: string;
+  Width, Height: Integer);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveAsPng(Stream, Width, Height);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPixieHtmlViewCore.RenderForExport(Width, Height: Integer;
+  out EffH: Integer);
+begin
+  // Caller saved viewport state and is responsible for restoring it.
+  FContainer.ViewportWidth := Width;
+  FContainer.ViewportHeight := Height;
+  FDocument.Render(Width);
+  EffH := Height;
+  if EffH <= 0 then EffH := Round(FDocument.Height);
+  if EffH <= 0 then EffH := 1;
+end;
+
+procedure TPixieHtmlViewCore.SaveAsPng(Stream: TStream;
+  Width, Height: Integer);
+var
+  EffH: Integer;
+  Clip: TPixiePosition;
+  SavedVw, SavedVh: TPixiePixel;
+begin
+  if (FDocument = nil) or (FCanvas = nil) or (Width <= 0) then Exit;
+  SavedVw := FContainer.ViewportWidth;
+  SavedVh := FContainer.ViewportHeight;
+  try
+    RenderForExport(Width, Height, EffH);
+    FCanvas.BeginOffscreen(Width, EffH, TPixieWebColor.Transparent);
+    try
+      Clip := TPixiePosition.Create(0, 0, Width, EffH);
+      FDocument.Draw(0, 0, 0, @Clip);
+      FCanvas.SaveAsPng(Stream);
+    finally
+      FCanvas.EndOffscreen;
+    end;
+  finally
+    FContainer.ViewportWidth := SavedVw;
+    FContainer.ViewportHeight := SavedVh;
+    FNeedsLayout := True;
+  end;
+end;
+
+procedure TPixieHtmlViewCore.SaveAsBmp(const FileName: string;
+  Width, Height: Integer);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveAsBmp(Stream, Width, Height);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPixieHtmlViewCore.SaveAsBmp(Stream: TStream;
+  Width, Height: Integer);
+var
+  EffH: Integer;
+  Clip: TPixiePosition;
+  SavedVw, SavedVh: TPixiePixel;
+begin
+  if (FDocument = nil) or (FCanvas = nil) or (Width <= 0) then Exit;
+  SavedVw := FContainer.ViewportWidth;
+  SavedVh := FContainer.ViewportHeight;
+  try
+    RenderForExport(Width, Height, EffH);
+    FCanvas.BeginOffscreen(Width, EffH, TPixieWebColor.Transparent);
+    try
+      Clip := TPixiePosition.Create(0, 0, Width, EffH);
+      FDocument.Draw(0, 0, 0, @Clip);
+      FCanvas.SaveAsBmp(Stream);
+    finally
+      FCanvas.EndOffscreen;
+    end;
+  finally
+    FContainer.ViewportWidth := SavedVw;
+    FContainer.ViewportHeight := SavedVh;
+    FNeedsLayout := True;
+  end;
 end;
 
 procedure TPixieHtmlViewCore.DoAnchorClick(Sender: TObject;

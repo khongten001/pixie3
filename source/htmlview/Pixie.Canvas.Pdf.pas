@@ -199,6 +199,15 @@ type
     procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
 
+    // Off-screen + image export — not meaningful for the PDF canvas
+    // (PDF is itself a destination format). Stubs satisfy the abstract
+    // contract on TPixieCanvas.
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); override;
+    procedure EndOffscreen; override;
+    procedure SaveAsPng(Stream: TStream); override;
+    procedure SaveAsBmp(Stream: TStream); override;
+
     property Writer: TPixiePdfWriter read FWriter;
   end;
 
@@ -2078,6 +2087,23 @@ begin
   EmitLn(PdfFloat(A) + ' ' + PdfFloat(B) + ' ' +
          PdfFloat(C) + ' ' + PdfFloat(D) + ' ' +
          PdfFloat(PxToPt(E)) + ' ' + PdfFloat(PxToY(F)) + ' cm');
+end;
+
+procedure TPixiePdfCanvas.BeginOffscreen(Width, Height: Integer;
+  ClearColor: TPixieWebColor);
+begin
+end;
+
+procedure TPixiePdfCanvas.EndOffscreen;
+begin
+end;
+
+procedure TPixiePdfCanvas.SaveAsPng(Stream: TStream);
+begin
+end;
+
+procedure TPixiePdfCanvas.SaveAsBmp(Stream: TStream);
+begin
 end;
 
 end.

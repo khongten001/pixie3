@@ -187,6 +187,37 @@ type
     function EndTileRender: TPixieImageHandle; virtual;
     procedure GetTransformScale(out ScaleX, ScaleY: Single); virtual;
 
+    // ---- Off-screen rendering and image export ----
+    // Bind the canvas to an off-screen pixel buffer of the given size,
+    // cleared to ClearColor (use 0 alpha for transparent background).
+    // After BeginOffscreen the caller draws as usual, then calls
+    // SaveAsPng/SaveAsBmp and finally EndOffscreen to release resources.
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); virtual; abstract;
+    procedure EndOffscreen; virtual; abstract;
+
+    // Save the current off-screen surface as a PNG.
+    // Must be called between BeginOffscreen and EndOffscreen.
+    procedure SaveAsPng(Stream: TStream); overload; virtual; abstract;
+    procedure SaveAsPng(const FileName: string); overload; virtual;
+
+    // Save the current off-screen surface as a 32bpp BGRA BMP with
+    // alpha preserved. Must be called between BeginOffscreen and
+    // EndOffscreen.
+    procedure SaveAsBmp(Stream: TStream); overload; virtual; abstract;
+    procedure SaveAsBmp(const FileName: string); overload; virtual;
+
+    // Shared 32bpp BGRA BMP writer (top-down pixels in, bottom-up BMP out).
+    class procedure WriteBmpStream(Stream: TStream;
+      PixelsBGRA: Pointer; Width, Height, Stride: Integer);
+
+    // Shared PNG writer for 32bpp top-down BGRA pixels (FPC-only — Delphi
+    // uses Vcl.Imaging.pngimage directly).
+    {$IFDEF FPC}
+    class procedure WritePngStream(Stream: TStream;
+      PixelsBGRA: Pointer; Width, Height, Stride: Integer);
+    {$ENDIF}
+
     // Simple shapes (for list markers and form controls)
     procedure FillEllipse(X, Y, W, H: Single;
       Color: TPixieWebColor); virtual; abstract;
@@ -249,7 +280,9 @@ type
 implementation
 
 uses
-  SysUtils, Math, Pixie.WebP, Pixie.GifDecode, Pixie.ApngDecode;
+  SysUtils, Math,
+  {$IFDEF FPC}FPImage, FPWritePNG,{$ENDIF}
+  Pixie.WebP, Pixie.GifDecode, Pixie.ApngDecode;
 
 constructor TPixieCanvas.Create;
 begin
@@ -566,6 +599,125 @@ begin
   ScaleX := 1;
   ScaleY := 1;
 end;
+
+procedure TPixieCanvas.SaveAsPng(const FileName: string);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveAsPng(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPixieCanvas.SaveAsBmp(const FileName: string);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveAsBmp(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+class procedure TPixieCanvas.WriteBmpStream(Stream: TStream;
+  PixelsBGRA: Pointer; Width, Height, Stride: Integer);
+const
+  BMP_SIGNATURE = $4D42; // 'BM' little-endian
+  BMP_BI_RGB    = 0;     // uncompressed
+type
+  TBmpFileHeader = packed record
+    bfType: Word;
+    bfSize: LongWord;
+    bfReserved1: Word;
+    bfReserved2: Word;
+    bfOffBits: LongWord;
+  end;
+  TBmpInfoHeader = packed record
+    biSize: LongWord;
+    biWidth: LongInt;
+    biHeight: LongInt;
+    biPlanes: Word;
+    biBitCount: Word;
+    biCompression: LongWord;
+    biSizeImage: LongWord;
+    biXPelsPerMeter: LongInt;
+    biYPelsPerMeter: LongInt;
+    biClrUsed: LongWord;
+    biClrImportant: LongWord;
+  end;
+var
+  Fh: TBmpFileHeader;
+  Ih: TBmpInfoHeader;
+  PixelBytes: LongWord;
+  Y: Integer;
+  Src: PByte;
+begin
+  if (PixelsBGRA = nil) or (Width <= 0) or (Height <= 0) then Exit;
+  PixelBytes := LongWord(Width) * LongWord(Height) * 4;
+  FillChar(Fh, SizeOf(Fh), 0);
+  Fh.bfType := BMP_SIGNATURE;
+  Fh.bfSize := SizeOf(Fh) + SizeOf(Ih) + PixelBytes;
+  Fh.bfOffBits := SizeOf(Fh) + SizeOf(Ih);
+  FillChar(Ih, SizeOf(Ih), 0);
+  Ih.biSize := SizeOf(Ih);
+  Ih.biWidth := Width;
+  Ih.biHeight := Height;
+  Ih.biPlanes := 1;
+  Ih.biBitCount := 32;
+  Ih.biCompression := BMP_BI_RGB;
+  Ih.biSizeImage := PixelBytes;
+  Stream.WriteBuffer(Fh, SizeOf(Fh));
+  Stream.WriteBuffer(Ih, SizeOf(Ih));
+  for Y := Height - 1 downto 0 do
+  begin
+    Src := PByte(PixelsBGRA) + Y * Stride;
+    Stream.WriteBuffer(Src^, Width * 4);
+  end;
+end;
+
+{$IFDEF FPC}
+class procedure TPixieCanvas.WritePngStream(Stream: TStream;
+  PixelsBGRA: Pointer; Width, Height, Stride: Integer);
+var
+  Img: TFPMemoryImage;
+  Writer: TFPWriterPNG;
+  X, Y: Integer;
+  Row: PByte;
+  C: TFPColor;
+begin
+  if (PixelsBGRA = nil) or (Width <= 0) or (Height <= 0) then Exit;
+  Img := TFPMemoryImage.Create(Width, Height);
+  try
+    Writer := TFPWriterPNG.Create;
+    try
+      Writer.UseAlpha := True;
+      for Y := 0 to Height - 1 do
+      begin
+        Row := PByte(PixelsBGRA) + Y * Stride;
+        for X := 0 to Width - 1 do
+        begin
+          C.Blue := Row[0] or (Row[0] shl 8);
+          C.Green := Row[1] or (Row[1] shl 8);
+          C.Red := Row[2] or (Row[2] shl 8);
+          C.Alpha := Row[3] or (Row[3] shl 8);
+          Img.Colors[X, Y] := C;
+          Inc(Row, 4);
+        end;
+      end;
+      Img.SaveToStream(Stream, Writer);
+    finally
+      Writer.Free;
+    end;
+  finally
+    Img.Free;
+  end;
+end;
+{$ENDIF}
 
 procedure TPixieCanvas.BeginPath;
 begin

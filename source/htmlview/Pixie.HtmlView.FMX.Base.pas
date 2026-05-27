@@ -119,6 +119,16 @@ type
     procedure CoreLoadFromStream(AStream: TStream;
       const ABaseUrl: string = '');
 
+    // Image export — protected so leaves expose the appropriate names
+    procedure CoreSaveAsPng(const FileName: string;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure CoreSaveAsPng(Stream: TStream;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure CoreSaveAsBmp(const FileName: string;
+      Width: Integer; Height: Integer = 0); overload;
+    procedure CoreSaveAsBmp(Stream: TStream;
+      Width: Integer; Height: Integer = 0); overload;
+
     // Lines accessor — protected so leaves can publish the property
     function GetLines: TStrings;
     procedure SetLines(const Value: TStrings);
@@ -533,6 +543,30 @@ procedure TPixieHtmlViewBase.CoreLoadFromStream(AStream: TStream;
   const ABaseUrl: string);
 begin
   FCore.LoadFromStream(AStream, ABaseUrl);
+end;
+
+procedure TPixieHtmlViewBase.CoreSaveAsPng(const FileName: string;
+  Width, Height: Integer);
+begin
+  FCore.SaveAsPng(FileName, Width, Height);
+end;
+
+procedure TPixieHtmlViewBase.CoreSaveAsPng(Stream: TStream;
+  Width, Height: Integer);
+begin
+  FCore.SaveAsPng(Stream, Width, Height);
+end;
+
+procedure TPixieHtmlViewBase.CoreSaveAsBmp(const FileName: string;
+  Width, Height: Integer);
+begin
+  FCore.SaveAsBmp(FileName, Width, Height);
+end;
+
+procedure TPixieHtmlViewBase.CoreSaveAsBmp(Stream: TStream;
+  Width, Height: Integer);
+begin
+  FCore.SaveAsBmp(Stream, Width, Height);
 end;
 
 procedure TPixieHtmlViewBase.RegisterImage(const Name: string; Stream: TStream);

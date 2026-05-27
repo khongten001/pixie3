@@ -65,9 +65,12 @@ type
     FTileSavedBrush: ID2D1SolidColorBrush;
     FTileSavedStateTop: Integer;
     FTileSavedViewW, FTileSavedViewH: Integer;
+    FOffscreenBitmap: IWICBitmap;
+    FOffscreenDrawing: Boolean;
     FImages: TPixieD2DImageList;
 
     procedure RecreateTarget;
+    procedure FlushOffscreenDrawing;
     function RegisterImage(Info: PPixieD2DImage): TPixieImageHandle;
     function ToColorF(const C: TPixieWebColor): TD2d1ColorF;
     function MakeRectF(X, Y, W, H: Single): TD2d1RectF;
@@ -210,12 +213,19 @@ type
     procedure SaveWicBitmapToPng(const Bitmap: IWICBitmap;
       const FileName: string);
     {$ENDIF}
+
+    // Public off-screen + image export API (TPixieCanvas overrides)
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); override;
+    procedure EndOffscreen; override;
+    procedure SaveAsPng(Stream: TStream); override;
+    procedure SaveAsBmp(Stream: TStream); override;
   end;
 
 implementation
 
 uses
-  {$IFDEF FPC}FPImage, FPWritePNG,{$ENDIF}
+  {$IFDEF FPC}FPImage, FPWritePNG,{$ELSE}Vcl.Graphics, Vcl.Imaging.pngimage,{$ENDIF}
   Pixie.WebP, Pixie.SvgRenderer.Canvas;
 
 function AddFontMemResourceEx(pFileView: Pointer; cjSize: DWORD;
@@ -2510,6 +2520,154 @@ begin
   end;
 end;
 {$ENDIF}
+
+procedure TPixieD2DCanvas.FlushOffscreenDrawing;
+begin
+  if FOffscreenDrawing and (FTarget <> nil) then
+  begin
+    FTarget.EndDraw(nil, nil);
+    FOffscreenDrawing := False;
+  end;
+end;
+
+procedure TPixieD2DCanvas.BeginOffscreen(Width, Height: Integer;
+  ClearColor: TPixieWebColor);
+var
+  Props: TD2d1RenderTargetProperties;
+  C: TD2d1ColorF;
+  M: TD2d1Matrix3x2F;
+begin
+  if FOffscreenBitmap <> nil then
+    EndOffscreen;
+  if (FWicFactory = nil) or (FFactory = nil) then Exit;
+  if Failed(FWicFactory.CreateBitmap(Width, Height,
+    @GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad,
+    FOffscreenBitmap)) then Exit;
+
+  FillChar(Props, SizeOf(Props), 0);
+  Props._type := D2D1_RENDER_TARGET_TYPE_DEFAULT;
+  Props.pixelFormat.format := DXGI_FORMAT_B8G8R8A8_UNORM;
+  Props.pixelFormat.alphaMode := D2D1_ALPHA_MODE_PREMULTIPLIED;
+  Props.dpiX := 96;
+  Props.dpiY := 96;
+  if Failed(FFactory.CreateWicBitmapRenderTarget(
+    FOffscreenBitmap, Props, FTarget)) then
+  begin
+    FOffscreenBitmap := nil;
+    FTarget := FDCTarget;
+    Exit;
+  end;
+
+  C.r := 0; C.g := 0; C.b := 0; C.a := 1;
+  FTarget.CreateSolidColorBrush(C, nil, FBrush);
+
+  FViewWidth := Width;
+  FViewHeight := Height;
+  FStateTop := 0;
+  FTarget.BeginDraw;
+  FOffscreenDrawing := True;
+  FTarget.SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+  FTarget.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+
+  FillChar(M, SizeOf(M), 0);
+  M.m11 := 1;
+  M.m22 := 1;
+  FTarget.SetTransform(@M);
+
+  C.r := ClearColor.Red / 255;
+  C.g := ClearColor.Green / 255;
+  C.b := ClearColor.Blue / 255;
+  C.a := ClearColor.Alpha / 255;
+  FTarget.Clear(C);
+end;
+
+procedure TPixieD2DCanvas.EndOffscreen;
+var
+  C: TD2d1ColorF;
+begin
+  FlushOffscreenDrawing;
+  FTarget := FDCTarget;
+  if FDCTarget <> nil then
+  begin
+    C.r := 0; C.g := 0; C.b := 0; C.a := 1;
+    FDCTarget.CreateSolidColorBrush(C, nil, FBrush);
+  end;
+  FOffscreenBitmap := nil;
+end;
+
+procedure TPixieD2DCanvas.SaveAsPng(Stream: TStream);
+var
+  W, H, Stride: UINT;
+  Pixels: PByte;
+  BufSize: Integer;
+  {$IFNDEF FPC}
+  Png: TPngImage;
+  X, Y: Integer;
+  Src: PByte;
+  DstRgb: PByte;
+  DstAlpha: PByte;
+  {$ENDIF}
+begin
+  if FOffscreenBitmap = nil then Exit;
+  FlushOffscreenDrawing;
+  FOffscreenBitmap.GetSize(W, H);
+  Stride := W * 4;
+  BufSize := Stride * H;
+  GetMem(Pixels, BufSize);
+  try
+    if Failed(FOffscreenBitmap.CopyPixels(nil, Stride, BufSize, Pixels)) then
+      Exit;
+    {$IFDEF FPC}
+    WritePngStream(Stream, Pixels, W, H, Stride);
+    {$ELSE}
+    Png := TPngImage.CreateBlank(COLOR_RGBALPHA, 8, W, H);
+    try
+      for Y := 0 to H - 1 do
+      begin
+        Src := Pixels + Y * Stride;
+        DstRgb := Png.Scanline[Y];
+        DstAlpha := PByte(Png.AlphaScanline[Y]);
+        for X := 0 to W - 1 do
+        begin
+          // Src is premultiplied BGRA; TPngImage Scanline is BGR.
+          DstRgb[0] := Src[0];
+          DstRgb[1] := Src[1];
+          DstRgb[2] := Src[2];
+          DstAlpha[X] := Src[3];
+          Inc(Src, 4);
+          Inc(DstRgb, 3);
+        end;
+      end;
+      Png.SaveToStream(Stream);
+    finally
+      Png.Free;
+    end;
+    {$ENDIF}
+  finally
+    FreeMem(Pixels);
+  end;
+end;
+
+procedure TPixieD2DCanvas.SaveAsBmp(Stream: TStream);
+var
+  W, H, Stride: UINT;
+  Pixels: PByte;
+  BufSize: Integer;
+begin
+  if FOffscreenBitmap = nil then Exit;
+  FlushOffscreenDrawing;
+  FOffscreenBitmap.GetSize(W, H);
+  Stride := W * 4;
+  BufSize := Stride * H;
+  GetMem(Pixels, BufSize);
+  try
+    if Failed(FOffscreenBitmap.CopyPixels(nil, Stride, BufSize, Pixels)) then
+      Exit;
+    WriteBmpStream(Stream, Pixels, W, H, Stride);
+  finally
+    FreeMem(Pixels);
+  end;
+end;
 
 
 end.

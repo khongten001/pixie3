@@ -62,6 +62,17 @@ type
     procedure LoadFromStream(Stream: TStream);
     procedure LoadFromResource(const ResName: string); overload;
     procedure LoadFromResource(Instance: THandle; const ResName: string); overload;
+
+    // Width/Height of 0 mean "use intrinsic SVG size". Transparent bg.
+    procedure SaveAsPng(const FileName: string;
+      Width: Integer = 0; Height: Integer = 0); overload;
+    procedure SaveAsPng(Stream: TStream;
+      Width: Integer = 0; Height: Integer = 0); overload;
+    procedure SaveAsBmp(const FileName: string;
+      Width: Integer = 0; Height: Integer = 0); overload;
+    procedure SaveAsBmp(Stream: TStream;
+      Width: Integer = 0; Height: Integer = 0); overload;
+
     property ImageWidth: Single read GetImageWidth;
     property ImageHeight: Single read GetImageHeight;
   published
@@ -385,6 +396,70 @@ begin
     FRenderer.RenderToRect(OffX, OffY, DstW, DstH);
   finally
     PixieCanvas.EndPaint;
+  end;
+end;
+
+procedure TPixieSvgView.SaveAsPng(const FileName: string;
+  Width, Height: Integer);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveAsPng(Stream, Width, Height);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPixieSvgView.SaveAsPng(Stream: TStream; Width, Height: Integer);
+var
+  EffW, EffH: Integer;
+begin
+  EnsureParsed;
+  if (FSvgW < 0.01) or (FSvgH < 0.01) then Exit;
+  EffW := Width;
+  EffH := Height;
+  if EffW <= 0 then EffW := Round(FSvgW);
+  if EffH <= 0 then EffH := Round(FSvgH);
+  PixieCanvas.BeginOffscreen(EffW, EffH, TPixieWebColor.Transparent);
+  try
+    FRenderer.RenderToRect(0, 0, EffW, EffH);
+    PixieCanvas.SaveAsPng(Stream);
+  finally
+    PixieCanvas.EndOffscreen;
+  end;
+end;
+
+procedure TPixieSvgView.SaveAsBmp(const FileName: string;
+  Width, Height: Integer);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    SaveAsBmp(Stream, Width, Height);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPixieSvgView.SaveAsBmp(Stream: TStream; Width, Height: Integer);
+var
+  EffW, EffH: Integer;
+begin
+  EnsureParsed;
+  if (FSvgW < 0.01) or (FSvgH < 0.01) then Exit;
+  EffW := Width;
+  EffH := Height;
+  if EffW <= 0 then EffW := Round(FSvgW);
+  if EffH <= 0 then EffH := Round(FSvgH);
+  PixieCanvas.BeginOffscreen(EffW, EffH, TPixieWebColor.Transparent);
+  try
+    FRenderer.RenderToRect(0, 0, EffW, EffH);
+    PixieCanvas.SaveAsBmp(Stream);
+  finally
+    PixieCanvas.EndOffscreen;
   end;
 end;
 

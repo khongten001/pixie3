@@ -71,6 +71,7 @@ type
     FTileSavedOpacityTop: Integer;
     FTileSavedOpacity: Single;
     FTileSavedViewW, FTileSavedViewH: Integer;
+    FOffscreenImage: QImageH;
 
     procedure MakeColor(const C: TPixieWebColor; out QC: TQColor);
     procedure ApplyDashPattern(Pen: QPenH; Width: Single);
@@ -190,6 +191,13 @@ type
     function BeginOffscreenPaint(Width, Height: Integer): QImageH;
     procedure EndOffscreenPaint;
     procedure SaveImageToPng(Image: QImageH; const FileName: string);
+
+    // Public off-screen + image export API
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); override;
+    procedure EndOffscreen; override;
+    procedure SaveAsPng(Stream: TStream); override;
+    procedure SaveAsBmp(Stream: TStream); override;
   end;
 
 implementation
@@ -2063,6 +2071,94 @@ begin
   if Image = nil then Exit;
   WPath := UTF8Decode(FileName);
   QImage_save(Image, @WPath, 'PNG');
+end;
+
+procedure TPixieQtCanvas.BeginOffscreen(Width, Height: Integer;
+  ClearColor: TPixieWebColor);
+{$IFNDEF LCLqt}
+var
+  QC: TQColor;
+{$ENDIF}
+begin
+  if FOffscreenImage <> nil then
+    EndOffscreen;
+  FOffscreenImage := QImage_Create(Width, Height,
+    QImageFormat_ARGB32_Premultiplied);
+  if FOffscreenImage = nil then Exit;
+  {$IFDEF LCLqt}
+  QImage_fill(FOffscreenImage,
+    (LongWord(ClearColor.Alpha) shl 24) or
+    (LongWord(ClearColor.Red) shl 16) or
+    (LongWord(ClearColor.Green) shl 8) or
+    LongWord(ClearColor.Blue));
+  {$ELSE}
+  QC.ColorSpec := 1;
+  QC.Alpha := ClearColor.Alpha or (ClearColor.Alpha shl 8);
+  QC.r := ClearColor.Red or (ClearColor.Red shl 8);
+  QC.g := ClearColor.Green or (ClearColor.Green shl 8);
+  QC.b := ClearColor.Blue or (ClearColor.Blue shl 8);
+  QC.Pad := 0;
+  QImage_fill(FOffscreenImage, @QC);
+  {$ENDIF}
+  FPainter := QPainter_Create(QPaintDeviceH(FOffscreenImage));
+  if FPainter = nil then
+  begin
+    QImage_Destroy(FOffscreenImage);
+    FOffscreenImage := nil;
+    Exit;
+  end;
+  FStateTop := 0;
+  FOpacityTop := 0;
+  FCurrentOpacity := 1.0;
+  FViewWidth := Width;
+  FViewHeight := Height;
+  QPainter_setRenderHint(FPainter, QPainterAntialiasing, True);
+  QPainter_setRenderHint(FPainter, QPainterTextAntialiasing, True);
+  QPainter_setRenderHint(FPainter, QPainterSmoothPixmapTransform, True);
+  QPainter_setBackgroundMode(FPainter, QtTransparentMode);
+end;
+
+procedure TPixieQtCanvas.EndOffscreen;
+begin
+  if FPainter <> nil then
+  begin
+    QPainter_end(FPainter);
+    QPainter_Destroy(FPainter);
+    FPainter := nil;
+  end;
+  if FOffscreenImage <> nil then
+  begin
+    QImage_Destroy(FOffscreenImage);
+    FOffscreenImage := nil;
+  end;
+end;
+
+procedure TPixieQtCanvas.SaveAsPng(Stream: TStream);
+var
+  W, H, Stride: Integer;
+  Pixels: PByte;
+begin
+  if FOffscreenImage = nil then Exit;
+  W := QImage_width(FOffscreenImage);
+  H := QImage_height(FOffscreenImage);
+  Stride := QImage_bytesPerLine(FOffscreenImage);
+  Pixels := QImage_bits(FOffscreenImage);
+  if Pixels = nil then Exit;
+  WritePngStream(Stream, Pixels, W, H, Stride);
+end;
+
+procedure TPixieQtCanvas.SaveAsBmp(Stream: TStream);
+var
+  W, H, Stride: Integer;
+  Pixels: PByte;
+begin
+  if FOffscreenImage = nil then Exit;
+  W := QImage_width(FOffscreenImage);
+  H := QImage_height(FOffscreenImage);
+  Stride := QImage_bytesPerLine(FOffscreenImage);
+  Pixels := QImage_bits(FOffscreenImage);
+  if Pixels = nil then Exit;
+  WriteBmpStream(Stream, Pixels, W, H, Stride);
 end;
 
 

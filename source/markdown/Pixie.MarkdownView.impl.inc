@@ -66,3 +66,27 @@ procedure TPixieMarkdownView.LoadMarkdownFromStream(AStream: TStream;
 begin
   LoadMarkdownFromString(PixieMarkdownReadStream(AStream), ABaseUrl);
 end;
+
+procedure TPixieMarkdownView.SaveAsPng(const FileName: string;
+  Width, Height: Integer);
+begin
+  CoreSaveAsPng(FileName, Width, Height);
+end;
+
+procedure TPixieMarkdownView.SaveAsPng(Stream: TStream;
+  Width, Height: Integer);
+begin
+  CoreSaveAsPng(Stream, Width, Height);
+end;
+
+procedure TPixieMarkdownView.SaveAsBmp(const FileName: string;
+  Width, Height: Integer);
+begin
+  CoreSaveAsBmp(FileName, Width, Height);
+end;
+
+procedure TPixieMarkdownView.SaveAsBmp(Stream: TStream;
+  Width, Height: Integer);
+begin
+  CoreSaveAsBmp(Stream, Width, Height);
+end;

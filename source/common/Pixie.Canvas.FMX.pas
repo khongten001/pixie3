@@ -60,6 +60,10 @@ type
     FStateStack: array[0..63] of TCanvasSaveState;
     FStateTop: Integer;
     FBaseState: TCanvasSaveState;
+    FOffscreenBitmap: TBitmap;
+    FOffscreenSavedCanvas: TCanvas;
+    FOffscreenWidth, FOffscreenHeight: Integer;
+    FOffscreenScene: Boolean;
 
     function ToAlphaColor(const C: TPixieWebColor): TAlphaColor;
     procedure ApplyDashPattern(Width: Single);
@@ -69,6 +73,7 @@ type
       ABrush: TBrush = nil);
     procedure DrawBorderSide(const Border: TPixieBorder;
       X1, Y1, X2, Y2: Single);
+    procedure FlushOffscreen;
   public
     constructor Create;
     destructor Destroy; override;
@@ -178,6 +183,14 @@ type
       const Gradient: TPixieRadialGradientLayer;
       Width: Single); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+
+    // Off-screen + image export API
+    procedure BeginOffscreen(Width, Height: Integer;
+      ClearColor: TPixieWebColor); override;
+    procedure EndOffscreen; override;
+    procedure SaveAsPng(Stream: TStream); override;
+    procedure SaveAsPng(const FileName: string); override;
+    procedure SaveAsBmp(Stream: TStream); override;
 
     // View / scale
   end;
@@ -1611,6 +1624,78 @@ begin
   M.m21 := C; M.m22 := D; M.m23 := 0;
   M.m31 := E; M.m32 := F; M.m33 := 1;
   FCanvas.MultiplyMatrix(M);
+end;
+
+procedure TPixieFmxCanvas.BeginOffscreen(Width, Height: Integer;
+  ClearColor: TPixieWebColor);
+begin
+  if FOffscreenBitmap <> nil then
+    EndOffscreen;
+  FOffscreenSavedCanvas := FCanvas;
+  FOffscreenWidth := Width;
+  FOffscreenHeight := Height;
+  FOffscreenBitmap := TBitmap.Create(Width, Height);
+  FOffscreenBitmap.Clear(ToAlphaColor(ClearColor));
+  FCanvas := FOffscreenBitmap.Canvas;
+  FOpacity := 1.0;
+  FOpacityTop := 0;
+  FStateTop := 0;
+  FCanvas.BeginScene;
+  FOffscreenScene := True;
+end;
+
+procedure TPixieFmxCanvas.EndOffscreen;
+begin
+  if FOffscreenScene and (FCanvas <> nil) then
+  begin
+    FCanvas.EndScene;
+    FOffscreenScene := False;
+  end;
+  FCanvas := FOffscreenSavedCanvas;
+  FOffscreenSavedCanvas := nil;
+  if FOffscreenBitmap <> nil then
+  begin
+    FOffscreenBitmap.Free;
+    FOffscreenBitmap := nil;
+  end;
+end;
+
+procedure TPixieFmxCanvas.FlushOffscreen;
+begin
+  if FOffscreenScene and (FCanvas <> nil) then
+  begin
+    FCanvas.EndScene;
+    FOffscreenScene := False;
+  end;
+end;
+
+procedure TPixieFmxCanvas.SaveAsPng(Stream: TStream);
+begin
+  if FOffscreenBitmap = nil then Exit;
+  FlushOffscreen;
+  FOffscreenBitmap.SaveToStream(Stream);
+end;
+
+procedure TPixieFmxCanvas.SaveAsPng(const FileName: string);
+begin
+  if FOffscreenBitmap = nil then Exit;
+  FlushOffscreen;
+  FOffscreenBitmap.SaveToFile(FileName);
+end;
+
+procedure TPixieFmxCanvas.SaveAsBmp(Stream: TStream);
+var
+  Data: TBitmapData;
+begin
+  if FOffscreenBitmap = nil then Exit;
+  FlushOffscreen;
+  if FOffscreenBitmap.Map(TMapAccess.Read, Data) then
+  try
+    WriteBmpStream(Stream, Data.Data, FOffscreenWidth, FOffscreenHeight,
+      Data.Pitch);
+  finally
+    FOffscreenBitmap.Unmap(Data);
+  end;
 end;
 
 end.
