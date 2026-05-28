@@ -129,6 +129,13 @@ procedure PixieRestoreCanvas(var Canvas: TBytes; const Prev: TBytes);
 procedure PixieEmitFrame(const Canvas: TBytes; DelayMs: Integer;
   var Frames: TPixieRawAnimFrameArray);
 
+// Composite a W*H sub-image (straight-alpha BGRA) onto a full-size BGRA canvas
+// at (OffsetX, OffsetY). BlendOver = True does Porter-Duff source-over;
+// BlendOver = False overwrites the destination (source). Shared by the APNG and
+// animated-WebP compositors. The caller must ensure the rect fits the canvas.
+procedure PixieBlendFrameBgra(var Canvas: TBytes; CanvasW: Integer;
+  const SubBgra: TBytes; OffsetX, OffsetY, W, H: Integer; BlendOver: Boolean);
+
 implementation
 
 procedure PixieSnapshotCanvas(const Canvas: TBytes; var Prev: TBytes);
@@ -169,6 +176,72 @@ begin
   if Length(Canvas) > 0 then
     Move(Canvas[0], Frames[Idx].Pixels[0], Length(Canvas));
   Frames[Idx].DelayMs := DelayMs;
+end;
+
+procedure PixieBlendFrameBgra(var Canvas: TBytes; CanvasW: Integer;
+  const SubBgra: TBytes; OffsetX, OffsetY, W, H: Integer; BlendOver: Boolean);
+var
+  Y, X, SrcRowBase, DstRowBase, SrcIdx, DstIdx: Integer;
+  Sr, Sg, Sb, Sa, Dr, Dg, Db, Da: Integer;
+  OutA, OutR, OutG, OutB, InvSrcA: Integer;
+begin
+  for Y := 0 to H - 1 do
+  begin
+    SrcRowBase := Y * W * 4;
+    DstRowBase := ((OffsetY + Y) * CanvasW + OffsetX) * 4;
+    for X := 0 to W - 1 do
+    begin
+      SrcIdx := SrcRowBase + X * 4;
+      DstIdx := DstRowBase + X * 4;
+      Sb := SubBgra[SrcIdx];
+      Sg := SubBgra[SrcIdx + 1];
+      Sr := SubBgra[SrcIdx + 2];
+      Sa := SubBgra[SrcIdx + 3];
+
+      if not BlendOver then
+      begin
+        Canvas[DstIdx]     := Byte(Sb);
+        Canvas[DstIdx + 1] := Byte(Sg);
+        Canvas[DstIdx + 2] := Byte(Sr);
+        Canvas[DstIdx + 3] := Byte(Sa);
+      end
+      else if Sa = $FF then
+      begin
+        Canvas[DstIdx]     := Byte(Sb);
+        Canvas[DstIdx + 1] := Byte(Sg);
+        Canvas[DstIdx + 2] := Byte(Sr);
+        Canvas[DstIdx + 3] := $FF;
+      end
+      else if Sa > 0 then
+      begin
+        // Porter-Duff source-over, straight-alpha.
+        Db := Canvas[DstIdx];
+        Dg := Canvas[DstIdx + 1];
+        Dr := Canvas[DstIdx + 2];
+        Da := Canvas[DstIdx + 3];
+        InvSrcA := $FF - Sa;
+        OutA := Sa + (Da * InvSrcA + 127) div 255;
+        if OutA = 0 then
+        begin
+          Canvas[DstIdx]     := 0;
+          Canvas[DstIdx + 1] := 0;
+          Canvas[DstIdx + 2] := 0;
+          Canvas[DstIdx + 3] := 0;
+        end
+        else
+        begin
+          OutR := (Sr * Sa + Dr * Da * InvSrcA div 255 + OutA div 2) div OutA;
+          OutG := (Sg * Sa + Dg * Da * InvSrcA div 255 + OutA div 2) div OutA;
+          OutB := (Sb * Sa + Db * Da * InvSrcA div 255 + OutA div 2) div OutA;
+          Canvas[DstIdx]     := Byte(OutB);
+          Canvas[DstIdx + 1] := Byte(OutG);
+          Canvas[DstIdx + 2] := Byte(OutR);
+          Canvas[DstIdx + 3] := Byte(OutA);
+        end;
+      end;
+      // Sa = 0 with BlendOver: leave destination untouched.
+    end;
+  end;
 end;
 
 { TPixieAnimatedImage }

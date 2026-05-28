@@ -63,6 +63,12 @@ All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration 
 - Owner-drawn form controls: text input, password, textarea, checkbox, radio, button
 - Caret, selection, clipboard, undo, Tab/Shift+Tab focus cycling
 
+**Images**
+- Raster formats through each platform's native decoder (PNG, JPEG, GIF, BMP, and more)
+- **WebP decoded by a built-in pure-Pascal decoder with no external dependency** &mdash; no `libwebp`, no DLL/`.so`/`.dylib` to ship. Covers lossy (VP8), lossless (VP8L), alpha, and animation, and renders identically on every backend
+- Animated GIF, APNG, and animated WebP playback
+- Load from file, stream, embedded resource (`@RESNAME` prefix), or `data:` URI
+
 **Markdown**
 - CommonMark 0.31.2 with GFM extensions (tables, strikethrough, task lists, autolinks)
 - ~88% conformance against the official CommonMark spec test suite

@@ -282,7 +282,7 @@ implementation
 uses
   SysUtils, Math,
   {$IFDEF FPC}FPImage, FPWritePNG,{$ENDIF}
-  Pixie.WebP, Pixie.GifDecode, Pixie.ApngDecode;
+  Pixie.WebP, Pixie.GifDecode, Pixie.ApngDecode, Pixie.WebPAnim;
 
 constructor TPixieCanvas.Create;
 begin
@@ -540,7 +540,9 @@ begin
   if PixieIsGifStream(Stream) then
     Decoded := PixieDecodeGif(Stream, Anim)
   else if PixieIsApngStream(Stream) then
-    Decoded := PixieDecodeApng(Stream, Anim);
+    Decoded := PixieDecodeApng(Stream, Anim)
+  else if PixieIsWebPAnimStream(Stream) then
+    Decoded := PixieDecodeWebPAnim(Stream, Anim);
 
   if not Decoded then Exit;
   if Length(Anim.Frames) = 0 then Exit;

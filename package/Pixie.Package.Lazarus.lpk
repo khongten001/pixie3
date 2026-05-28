@@ -65,6 +65,14 @@
         <UnitName Value="Pixie.WebP"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.WebP.Decoder.pas"/>
+        <UnitName Value="Pixie.WebP.Decoder"/>
+      </Item>
+      <Item>
+        <Filename Value="../source/common/Pixie.WebPAnim.pas"/>
+        <UnitName Value="Pixie.WebPAnim"/>
+      </Item>
+      <Item>
         <Filename Value="../source/common/Pixie.Clipboard.pas"/>
         <UnitName Value="Pixie.Clipboard"/>
       </Item>

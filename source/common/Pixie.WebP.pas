@@ -1,7 +1,7 @@
 unit Pixie.WebP;
 
-// Minimal WebP decoding via dynamically loaded libwebp.
-// Decode-only: no encoding, no incremental, no animation.
+// WebP decoding via the self-contained pure-Pascal decoder (Pixie.WebP.Decoder).
+// Decode-only: no encoding, no incremental. No external runtime dependency.
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
@@ -19,103 +19,34 @@ procedure PixieWebPFreePixels(Pixels: Pointer);
 implementation
 
 uses
-  {$IFDEF FPC}DynLibs,{$ELSE}Winapi.Windows,{$ENDIF}
-  SysUtils;
-
-type
-  TWebPGetInfo = function(Data: Pointer; DataSize: NativeUInt;
-    Width, Height: PInteger): Integer; cdecl;
-  TWebPDecodeBGRA = function(Data: Pointer; DataSize: NativeUInt;
-    Width, Height: PInteger): Pointer; cdecl;
-  TWebPFree = procedure(Ptr: Pointer); cdecl;
-
-var
-  Loaded: Boolean = False;
-  Tried: Boolean = False;
-  LibHandle: {$IFDEF FPC}TLibHandle{$ELSE}THandle{$ENDIF};
-  ProcGetInfo: TWebPGetInfo = nil;
-  ProcDecodeBGRA: TWebPDecodeBGRA = nil;
-  ProcFree: TWebPFree = nil;
-
-procedure TryLoad;
-
-  function TryLib(const Name: string): Boolean;
-  begin
-    LibHandle := {$IFDEF FPC}DynLibs.SafeLoadLibrary(Name)
-      {$ELSE}LoadLibrary(PChar(Name)){$ENDIF};
-    Result := LibHandle <> {$IFDEF FPC}DynLibs.NilHandle{$ELSE}0{$ENDIF};
-  end;
-
-  function GetProc(const Name: string): Pointer;
-  begin
-    Result := {$IFDEF FPC}DynLibs.GetProcedureAddress(LibHandle, PChar(Name))
-      {$ELSE}GetProcAddress(LibHandle, PChar(Name)){$ENDIF};
-  end;
-
-var
-  ExeDir: string;
-begin
-  Tried := True;
-  ExeDir := ExtractFilePath(ParamStr(0));
-
-  // Try next to executable first, then system paths
-  {$IFDEF CPUX86}
-  if not TryLib(ExeDir + 'libwebp32.dll') then
-  {$ENDIF}
-  {$IFDEF CPUX86_64}
-  if not TryLib(ExeDir + 'libwebp64.dll') then
-  {$ENDIF}
-  if not TryLib(ExeDir + 'libwebp.dll') then
-  {$IFDEF UNIX}
-  if not TryLib('libwebp.so.7') then
-  if not TryLib('libwebp.so.6') then
-  if not TryLib('libwebp.so') then
-  {$ENDIF}
-  {$IFDEF DARWIN}
-  if not TryLib('libwebp.7.dylib') then
-  if not TryLib('libwebp.6.dylib') then
-  if not TryLib('libwebp.dylib') then
-  {$ENDIF}
-    Exit;
-
-  ProcGetInfo := TWebPGetInfo(GetProc('WebPGetInfo'));
-  ProcDecodeBGRA := TWebPDecodeBGRA(GetProc('WebPDecodeBGRA'));
-  ProcFree := TWebPFree(GetProc('WebPFree'));
-
-  Loaded := Assigned(ProcGetInfo) and Assigned(ProcDecodeBGRA) and
-            Assigned(ProcFree);
-end;
+  SysUtils, Pixie.WebP.Decoder;
 
 function PixieWebPAvailable: Boolean;
 begin
-  if not Tried then
-    TryLoad;
-  Result := Loaded;
+  Result := True;
 end;
 
 function PixieWebPDecode(Data: Pointer; DataSize: Integer;
   out Width, Height: Integer; out Pixels: Pointer): Boolean;
 var
-  Raw: Pointer;
+  Raw: PByte;
   I, Count: Integer;
   P: PByte;
-  A, R, B: Byte;
+  A: Byte;
 begin
   Result := False;
   Pixels := nil;
   Width := 0;
   Height := 0;
+  if (Data = nil) or (DataSize <= 0) then Exit;
 
-  if not PixieWebPAvailable then Exit;
-  if ProcGetInfo(Data, DataSize, @Width, @Height) = 0 then Exit;
-
-  // Decode to BGRA (straight alpha)
-  Raw := ProcDecodeBGRA(Data, DataSize, @Width, @Height);
+  // Decode to straight-alpha BGRA (decoder allocates with GetMem).
+  Raw := WebPDecodeBGRA(PByte(Data), NativeUInt(DataSize), Width, Height);
   if Raw = nil then Exit;
 
-  // Premultiply alpha in-place
+  // Premultiply alpha in-place; backends consume premultiplied BGRA.
   Count := Width * Height;
-  P := PByte(Raw);
+  P := Raw;
   for I := 0 to Count - 1 do
   begin
     A := P[3];
@@ -140,8 +71,8 @@ end;
 
 procedure PixieWebPFreePixels(Pixels: Pointer);
 begin
-  if Loaded and (Pixels <> nil) then
-    ProcFree(Pixels);
+  if Pixels <> nil then
+    FreeMem(Pixels);
 end;
 
 end.

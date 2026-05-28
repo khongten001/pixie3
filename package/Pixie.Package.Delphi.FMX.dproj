@@ -180,6 +180,8 @@
         <DCCReference Include="..\source\common\Pixie.ApngDecode.pas"/>
         <DCCReference Include="..\source\common\Pixie.Canvas.pas"/>
         <DCCReference Include="..\source\common\Pixie.WebP.pas"/>
+        <DCCReference Include="..\source\common\Pixie.WebP.Decoder.pas"/>
+        <DCCReference Include="..\source\common\Pixie.WebPAnim.pas"/>
         <DCCReference Include="..\source\common\Pixie.FontMetrics.pas"/>
         <DCCReference Include="..\source\common\Pixie.Clipboard.pas"/>
         <DCCReference Include="..\source\common\Pixie.SimpleXml.pas"/>

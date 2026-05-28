@@ -464,71 +464,9 @@ end;
 // the canvas, so no per-pixel bounds check.
 procedure CompositeFrame(var Ctx: TPixieApngContext;
   const SubBgra: TBytes; OffsetX, OffsetY, W, H: Integer; BlendOp: Byte);
-var
-  Y, X, SrcRowBase, DstRowBase, SrcIdx, DstIdx: Integer;
-  Sr, Sg, Sb, Sa: Integer;
-  Dr, Dg, Db, Da: Integer;
-  OutA, OutR, OutG, OutB: Integer;
-  InvSrcA: Integer;
 begin
-  for Y := 0 to H - 1 do
-  begin
-    SrcRowBase := Y * W * 4;
-    DstRowBase := ((OffsetY + Y) * Ctx.Width + OffsetX) * 4;
-    for X := 0 to W - 1 do
-    begin
-      SrcIdx := SrcRowBase + X * 4;
-      DstIdx := DstRowBase + X * 4;
-
-      Sb := SubBgra[SrcIdx];
-      Sg := SubBgra[SrcIdx + 1];
-      Sr := SubBgra[SrcIdx + 2];
-      Sa := SubBgra[SrcIdx + 3];
-
-      if BlendOp = cApngBlendSource then
-      begin
-        Ctx.Canvas[DstIdx]     := Byte(Sb);
-        Ctx.Canvas[DstIdx + 1] := Byte(Sg);
-        Ctx.Canvas[DstIdx + 2] := Byte(Sr);
-        Ctx.Canvas[DstIdx + 3] := Byte(Sa);
-      end
-      else if Sa = $FF then
-      begin
-        Ctx.Canvas[DstIdx]     := Byte(Sb);
-        Ctx.Canvas[DstIdx + 1] := Byte(Sg);
-        Ctx.Canvas[DstIdx + 2] := Byte(Sr);
-        Ctx.Canvas[DstIdx + 3] := $FF;
-      end
-      else if Sa > 0 then
-      begin
-        // Porter-Duff source-over, straight-alpha
-        Db := Ctx.Canvas[DstIdx];
-        Dg := Ctx.Canvas[DstIdx + 1];
-        Dr := Ctx.Canvas[DstIdx + 2];
-        Da := Ctx.Canvas[DstIdx + 3];
-        InvSrcA := $FF - Sa;
-        OutA := Sa + (Da * InvSrcA + 127) div 255;
-        if OutA = 0 then
-        begin
-          Ctx.Canvas[DstIdx]     := 0;
-          Ctx.Canvas[DstIdx + 1] := 0;
-          Ctx.Canvas[DstIdx + 2] := 0;
-          Ctx.Canvas[DstIdx + 3] := 0;
-        end
-        else
-        begin
-          OutR := (Sr * Sa + Dr * Da * InvSrcA div 255 + OutA div 2) div OutA;
-          OutG := (Sg * Sa + Dg * Da * InvSrcA div 255 + OutA div 2) div OutA;
-          OutB := (Sb * Sa + Db * Da * InvSrcA div 255 + OutA div 2) div OutA;
-          Ctx.Canvas[DstIdx]     := Byte(OutB);
-          Ctx.Canvas[DstIdx + 1] := Byte(OutG);
-          Ctx.Canvas[DstIdx + 2] := Byte(OutR);
-          Ctx.Canvas[DstIdx + 3] := Byte(OutA);
-        end;
-      end;
-      // Sa = 0 with BlendOp = OVER: leave destination untouched
-    end;
-  end;
+  PixieBlendFrameBgra(Ctx.Canvas, Ctx.Width, SubBgra, OffsetX, OffsetY, W, H,
+    BlendOp = cApngBlendOver);
 end;
 
 procedure ApplyDispose(var Ctx: TPixieApngContext;

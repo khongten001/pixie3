@@ -97,6 +97,8 @@ contains
   Pixie.ApngDecode in '..\source\common\Pixie.ApngDecode.pas',
   Pixie.Canvas in '..\source\common\Pixie.Canvas.pas',
   Pixie.WebP in '..\source\common\Pixie.WebP.pas',
+  Pixie.WebP.Decoder in '..\source\common\Pixie.WebP.Decoder.pas',
+  Pixie.WebPAnim in '..\source\common\Pixie.WebPAnim.pas',
   Pixie.Clipboard in '..\source\common\Pixie.Clipboard.pas',
   Pixie.D2DHeaders in '..\source\common\Pixie.D2DHeaders.pas',
   Pixie.Canvas.D2D in '..\source\common\Pixie.Canvas.D2D.pas',
