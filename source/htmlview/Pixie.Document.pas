@@ -67,6 +67,7 @@ type
     FUpdateCount: Integer;
     FUpdateDirty: Boolean;
     FRebuilding: Boolean;
+    FRenderTreeDirty: Boolean;
 
     // Selection state
     FSelAnchor: TPixieElement;
@@ -86,6 +87,8 @@ type
     function AddFont(const Descr: TPixieFontDescription;
       out Metrics: TPixieFontMetrics): PtrUInt;
     procedure BuildSelectedElements;
+    procedure RebuildRenderItems;
+    procedure RebuildRenderTree;
 
   public
     constructor Create(AContainer: TPixieContainer);
@@ -131,6 +134,7 @@ type
     function RootRender: Pointer;
     procedure AddFixedBox(const Box: TPixiePosition);
     procedure AddTabular(Ri: TObject);
+    procedure MarkRenderTreeDirty;
 
     // Rendering (Phase 5 stubs)
     function Render(MaxWidth: TPixiePixel): TPixiePixel;
@@ -468,7 +472,6 @@ var
   MqList: TPixieMediaQueryList;
   MqLL: TPixieMediaQueryListList;
   ActualMaster: string;
-  Ri: TPixieRenderItem;
 begin
   Doc := TPixieDocument.Create(AContainer);
   try
@@ -575,20 +578,8 @@ begin
       // Compute styles
       Doc.FRoot.ComputeStyles;
 
-      // Render tree creation — Phase 5
-      Doc.FRootRender := Doc.FRoot.CreateRenderItem(nil);
-
-      // Table fix-up — Phase 5
-      Doc.FixTablesLayout;
-
-      // Initialize render tree (convert blocks to contexts)
-      if Doc.FRootRender <> nil then
-      begin
-        Ri := TPixieRenderItem(Doc.FRootRender);
-        Doc.FRootRender := Ri.Init;
-        if TPixieRenderItem(Doc.FRootRender) <> Ri then
-          Ri.Free;
-      end;
+      // Render tree creation, table fix-up, context init
+      Doc.RebuildRenderItems;
     end;
 
     Result := Doc;
@@ -923,6 +914,73 @@ end;
 
 // --- Rendering (Phase 5 stubs) ---
 
+procedure TPixieDocument.MarkRenderTreeDirty;
+begin
+  if FRebuilding or FRenderTreeDirty then
+    Exit;
+  FRenderTreeDirty := True;
+  // Ask the host to relayout (sets NeedsLayout) and repaint. The render
+  // tree itself is rebuilt lazily at the start of the next Render so the
+  // current tree stays valid for the remainder of style recomputation.
+  if Assigned(FOnChange) then
+    FOnChange(Self);
+end;
+
+procedure TPixieDocument.RebuildRenderItems;
+var
+  Ri: TPixieRenderItem;
+begin
+  FRootRender := FRoot.CreateRenderItem(nil);
+  FixTablesLayout;
+  if FRootRender <> nil then
+  begin
+    Ri := TPixieRenderItem(FRootRender);
+    FRootRender := Ri.Init;
+    if TPixieRenderItem(FRootRender) <> Ri then
+      Ri.Free;
+  end;
+end;
+
+procedure TPixieDocument.RebuildRenderTree;
+var
+  I: Integer;
+  El: TPixieElement;
+begin
+  FRenderTreeDirty := False;
+  if FRoot = nil then
+    Exit;
+
+  FRebuilding := True;
+  try
+    for I := 0 to FAllElements.Count - 1 do
+      FAllElements[I].ClearRenders;
+
+    if FRootRender <> nil then
+    begin
+      TObject(FRootRender).Free;
+      FRootRender := nil;
+    end;
+
+    FFixedBoxes.Clear;
+    FTabularElements.Clear;
+
+    // Remove anonymous table wrappers from the previous render tree;
+    // FixTablesLayout re-creates them. DOM nodes and ::before/::after
+    // pseudo-elements are left untouched — their computed styles are
+    // already current, so we must not strip them here.
+    for I := FAllElements.Count - 1 downto 0 do
+    begin
+      El := FAllElements[I];
+      if (El is TPixieHtmlTag) and (El.GetTag = -1) then
+        FAllElements.Delete(I);
+    end;
+
+    RebuildRenderItems;
+  finally
+    FRebuilding := False;
+  end;
+end;
+
 function TPixieDocument.Render(MaxWidth: TPixiePixel): TPixiePixel;
 var
   Viewport: TPixiePosition;
@@ -930,7 +988,15 @@ var
   Ri: TPixieRenderItem;
 begin
   Result := 0;
-  if (FRoot = nil) or (FRootRender = nil) then
+  if FRoot = nil then
+    Exit;
+
+  // A dynamic style change (e.g. :hover toggling display) may have altered
+  // the render-tree structure; rebuild it before laying out.
+  if FRenderTreeDirty then
+    RebuildRenderTree;
+
+  if FRootRender = nil then
     Exit;
 
   FContainer.GetViewport(Viewport);
@@ -2159,7 +2225,6 @@ procedure TPixieDocument.Rebuild;
 var
   I, J: Integer;
   El: TPixieElement;
-  Ri: TPixieRenderItem;
   CssEntry: TPixieCssText;
   MqList: TPixieMediaQueryList;
   MqLL: TPixieMediaQueryListList;
@@ -2280,20 +2345,8 @@ begin
   // 13. Compute styles
   FRoot.ComputeStyles;
 
-  // 14. Create render tree
-  FRootRender := FRoot.CreateRenderItem(nil);
-
-  // 15. Fix tables
-  FixTablesLayout;
-
-  // 16. Init render tree (block context transforms)
-  if FRootRender <> nil then
-  begin
-    Ri := TPixieRenderItem(FRootRender);
-    FRootRender := Ri.Init;
-    if TPixieRenderItem(FRootRender) <> Ri then
-      Ri.Free;
-  end;
+  // 14-16. Create render tree, fix tables, init block contexts
+  RebuildRenderItems;
 
   // 17. Notify view
   if Assigned(FOnChange) then

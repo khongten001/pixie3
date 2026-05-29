@@ -1150,13 +1150,22 @@ procedure TPixieHtmlTag.ComputeStyles(Recursive: Boolean);
 var
   StyleAttr: string;
   I: Integer;
+  OldDisplay: TPixieDisplay;
 begin
+  OldDisplay := FCss.Display;
+
   StyleAttr := GetAttr('style');
   if StyleAttr <> '' then
     FStyle.Add(StyleAttr);
 
   FStyle.SubstVars(Self);
   FCss.Compute(Self, FDoc);
+
+  // A change in display (e.g. :hover toggling display:none/block) alters the
+  // render-tree structure, so a repaint alone is not enough — flag the
+  // document for a render-tree rebuild before the next layout.
+  if (FCss.Display <> OldDisplay) and (FDoc <> nil) then
+    TPixieDocument(FDoc).MarkRenderTreeDirty;
 
   if Recursive then
     for I := 0 to FChildren.Count - 1 do
