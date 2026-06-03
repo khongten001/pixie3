@@ -228,6 +228,18 @@ begin
      (StrLComp(PChar(Url), 'https://', 8) = 0));
 end;
 
+// True when the URL carries a real scheme that OnFetchUrl should handle.
+// A single-letter scheme is a Windows drive (C:\...) and data: is
+// self-contained, so neither is treated as fetchable.
+function HasFetchableScheme(const Url: string): Boolean;
+var
+  Parsed: TPixieUrl;
+begin
+  Parsed := TPixieUrl.Create(Url);
+  Result := Parsed.HasScheme and (Length(Parsed.Scheme) > 1) and
+    (not SameText(Parsed.Scheme, 'data'));
+end;
+
 function PercentDecode(const S: string): string;
 var
   I, Len, Ch: Integer;
@@ -384,7 +396,7 @@ begin
       DataStream.Free;
     end;
   end
-  else if IsHttpUrl(Key) then
+  else if HasFetchableScheme(Key) then
   begin
     if Assigned(FOnFetchUrl) then
     begin
@@ -897,7 +909,7 @@ begin
     Stream := TMemoryStream.Create;
     try
       Success := False;
-      if IsHttpUrl(FullPath) and Assigned(FOnFetchUrl) then
+      if HasFetchableScheme(FullPath) and Assigned(FOnFetchUrl) then
         FOnFetchUrl(Self, FullPath, Stream, Success)
       else
       try
@@ -1304,8 +1316,8 @@ begin
     Exit;
   end;
 
-  // HTTP URL — fetch via event callback
-  if IsHttpUrl(FullPath) and Assigned(FOnFetchUrl) then
+  // Schemed URL — fetch via event callback
+  if HasFetchableScheme(FullPath) and Assigned(FOnFetchUrl) then
   begin
     FetchStream := TMemoryStream.Create;
     try
