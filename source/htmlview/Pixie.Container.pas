@@ -135,6 +135,10 @@ type
       const BdrRadius: TPixieBorderRadiuses); virtual; abstract;
     procedure DelClip; virtual; abstract;
 
+    // Solid rounded-rectangle fill (overflow scrollbar thumbs)
+    procedure FillSolidRoundedRect(const R: TPixiePosition;
+      Radius: TPixiePixel; const Color: TPixieWebColor); virtual; abstract;
+
     // Viewport & media
     procedure GetViewport(out Viewport: TPixiePosition); virtual; abstract;
     procedure GetMediaFeatures(

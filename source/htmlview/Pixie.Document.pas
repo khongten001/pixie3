@@ -1632,14 +1632,42 @@ function TPixieDocument.DispatchMouseWheel(
   X, Y: TPixiePixel; Delta: Integer): Boolean;
 var
   El: TPixieElement;
+  Ri: TPixieRenderItem;
+  Dy: TPixiePixel;
 begin
   Result := False;
   if (FRoot = nil) or (FRootRender = nil) then
     Exit;
   El := TPixieRenderItem(FRootRender).GetElementByPoint(
     X, Y, X, Y, nil);
-  if El <> nil then
-    Result := El.OnMouseWheel(Delta);
+  if El = nil then
+    Exit;
+
+  // Element-level handler first (e.g. textarea owns its own scrolling)
+  if El.OnMouseWheel(Delta) then
+    Exit(True);
+
+  // Otherwise scroll the nearest overflow ancestor that can still move.
+  // Wheel up (Delta > 0) moves content toward the top, i.e. decreases the
+  // scroll offset. Stops at the limit so the page can take over (chaining).
+  Dy := -(Delta / 120) * 40;
+  Ri := TPixieRenderItem(El.GetRenderItem);
+  while Ri <> nil do
+  begin
+    if Ri.IsVScrollable(Dy) then
+    begin
+      Ri.VScroll(Dy);
+      Exit(True);
+    end;
+    // Horizontal-only container (no vertical overflow): the plain wheel
+    // scrolls it sideways, as browsers do.
+    if (not Ri.IsVScrollable(-Dy)) and Ri.IsHScrollable(Dy) then
+    begin
+      Ri.HScroll(Dy);
+      Exit(True);
+    end;
+    Ri := Ri.GetParent;
+  end;
 end;
 
 // --- Text selection ---
