@@ -39,6 +39,9 @@ type
     FWordSelEnd: Integer;     // anchor word end byte pos
     procedure SaveUndo;
 
+    // Per-line advance = CSS line-height; glyphs sit centred within it.
+    function LineAdvance: TPixiePixel;
+
     function DisplayText: string;
     function IsDisabled: Boolean;
     procedure InsertText(const S: string);
@@ -393,6 +396,13 @@ begin
   Result := True;
 end;
 
+function TPixieElTextBase.LineAdvance: TPixiePixel;
+begin
+  Result := FCss.LineHeight.ComputedValue;
+  if Result <= 0 then
+    Result := FCss.FontMetrics.Height;
+end;
+
 function TPixieElTextBase.CaretToPixelXY(
   out PxX, PxY: TPixiePixel): Boolean;
 var
@@ -410,7 +420,7 @@ begin
     Exit(False);
   end;
 
-  LineH := FCss.FontMetrics.Height;
+  LineH := LineAdvance;
 
   if FMultiLine then
   begin
@@ -480,7 +490,7 @@ begin
   if Cv = nil then
     Exit(0);
 
-  LineH := FCss.FontMetrics.Height;
+  LineH := LineAdvance;
 
   if FMultiLine then
   begin
@@ -540,7 +550,7 @@ begin
   if not CaretToPixelXY(PxX, PxY) then
     Exit;
 
-  LineH := FCss.FontMetrics.Height;
+  LineH := LineAdvance;
   Margin := 4;
 
   // Horizontal scroll
@@ -1119,7 +1129,7 @@ var
   Cont: TPixieNativeContainer;
   BX, BY, BW, BH: TPixiePixel;
   BorderW: TPixiePixel;
-  LineH: TPixiePixel;
+  LineH, TextDY: TPixiePixel;
   BorderColor, BgColor, TextColor, PlaceholderColor: TPixieWebColor;
   FocusColor: TPixieWebColor;
   SelColor, SelTextColor: TPixieWebColor;
@@ -1141,7 +1151,8 @@ var
 begin
   Canvas := TPixieCanvas(Cv);
   Cont := GetNativeContainer(Self);
-  LineH := FCss.FontMetrics.Height;
+  LineH := LineAdvance;
+  TextDY := (LineH - FCss.FontMetrics.Height) / 2;
 
   // Calculate padding box
   BX := P.X - Pad.Left;
@@ -1240,7 +1251,7 @@ begin
 
     if (FValue = '') and (FPlaceholder <> '') then
       Canvas.DrawText(FPlaceholder, FCss.Font, PlaceholderColor,
-        P.X, P.Y, P.Width, LineH)
+        P.X, P.Y + TextDY, P.Width, LineH)
     else
     begin
       if HasSelection and IsFocused then
@@ -1269,7 +1280,7 @@ begin
 
         // Draw line text (normal colour)
         Canvas.DrawText(LineStr, FCss.Font, TextColor,
-          P.X - FScrollX, LineY, P.Width + FScrollX + 100, LineH);
+          P.X - FScrollX, LineY + TextDY, P.Width + FScrollX + 100, LineH);
 
         // Draw selection highlight and white text on top
         if (SelLo >= 0) and (SelLo < LE) and (SelHi > LS) then
@@ -1289,7 +1300,7 @@ begin
           Canvas.DrawText(
             Copy(LineStr, SelLineStart + 1, SelLineEnd - SelLineStart),
             FCss.Font, SelTextColor,
-            P.X + SelStartPx - FScrollX, LineY,
+            P.X + SelStartPx - FScrollX, LineY + TextDY,
             SelEndPx - SelStartPx + 100, LineH);
         end;
       end;
@@ -1301,12 +1312,12 @@ begin
     Disp := DisplayText;
     if (Disp = '') and (FPlaceholder <> '') then
       Canvas.DrawText(FPlaceholder, FCss.Font, PlaceholderColor,
-        P.X, P.Y, P.Width, LineH)
+        P.X, P.Y + TextDY, P.Width, LineH)
     else if Disp <> '' then
     begin
       // Draw full text in normal colour
       Canvas.DrawText(Disp, FCss.Font, TextColor,
-        P.X - FScrollX, P.Y, P.Width + FScrollX + 100, LineH);
+        P.X - FScrollX, P.Y + TextDY, P.Width + FScrollX + 100, LineH);
 
       // Selection highlight + white text on top
       if HasSelection and IsFocused then
@@ -1340,13 +1351,13 @@ begin
               (UTF8CharCount(Copy(FValue, 1, SelHi)) -
                UTF8CharCount(Copy(FValue, 1, SelLo))) * 3),
             FCss.Font, SelTextColor,
-            P.X + SelStartPx - FScrollX, P.Y,
+            P.X + SelStartPx - FScrollX, P.Y + TextDY,
             SelEndPx - SelStartPx + 100, LineH)
         else
           Canvas.DrawText(
             Copy(Disp, SelLo + 1, SelHi - SelLo),
             FCss.Font, SelTextColor,
-            P.X + SelStartPx - FScrollX, P.Y,
+            P.X + SelStartPx - FScrollX, P.Y + TextDY,
             SelEndPx - SelStartPx + 100, LineH);
       end;
     end;
@@ -1359,8 +1370,8 @@ begin
   begin
     CaretToPixelXY(CaretPxX, CaretPxY);
     Canvas.DrawLine(
-      P.X + CaretPxX, P.Y + CaretPxY + 1,
-      P.X + CaretPxX, P.Y + CaretPxY + LineH - 1,
+      P.X + CaretPxX, P.Y + CaretPxY + TextDY + 1,
+      P.X + CaretPxX, P.Y + CaretPxY + TextDY + FCss.FontMetrics.Height - 1,
       TextColor, 1);
   end;
 
@@ -1518,7 +1529,7 @@ begin
     Sz.Width := Cv.MeasureText(StringOfChar('0', FCols), FCss.Font)
   else
     Sz.Width := FCols * FCss.FontMetrics.ChWidth;
-  Sz.Height := FRows * FCss.FontMetrics.Height;
+  Sz.Height := FRows * LineAdvance;
 end;
 
 function TPixieElTextArea.OnKeyDown(Key: Word;
@@ -1664,7 +1675,7 @@ begin
   if GetLineCount <= 1 then
     Exit;
 
-  LineH := FCss.FontMetrics.Height;
+  LineH := LineAdvance;
   ContentH := GetLineCount * LineH;
 
   Ri := TPixieRenderItem(GetRenderItem);
