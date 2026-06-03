@@ -50,8 +50,6 @@ type
     Font: PtrUInt;
   end;
 
-  PPixiePosition = ^TPixiePosition;
-
   { TPixieContainer }
   TPixieContainer = class
   public

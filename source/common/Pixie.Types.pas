@@ -681,6 +681,8 @@ type
     procedure SubMargins(const Mg: TPixieMargins);
   end;
 
+  PPixiePosition = ^TPixiePosition;
+
   { TPixieScrollValues }
   TPixieScrollValues = record
     Dx: TPixiePixel;

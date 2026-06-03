@@ -88,7 +88,8 @@ type
       const Layer: TPixieBackgroundLayer;
       const ACurrentColor: TPixieWebColor): TPixieConicGradientLayer;
     function GetLayer(Idx: Integer; Pos: TPixiePosition;
-      El: TObject; Ri: TObject; out Layer: TPixieBackgroundLayer): Boolean;
+      El: TObject; Ri: TObject; out Layer: TPixieBackgroundLayer;
+      FixedBox: PPixiePosition = nil): Boolean;
     procedure DrawLayer(Hdc: PtrUInt; Idx: Integer;
       const Layer: TPixieBackgroundLayer; Container: TObject;
       const ACurrentColor: TPixieWebColor);
@@ -890,7 +891,8 @@ begin
 end;
 
 function TPixieBackground.GetLayer(Idx: Integer; Pos: TPixiePosition;
-  El: TObject; Ri: TObject; out Layer: TPixieBackgroundLayer): Boolean;
+  El: TObject; Ri: TObject; out Layer: TPixieBackgroundLayer;
+  FixedBox: PPixiePosition = nil): Boolean;
 var
   ContentBox, PaddingBox, BorderBox: TPixiePosition;
   ClipVal, OriginVal: Integer;
@@ -996,6 +998,10 @@ begin
     else
       Layer.OriginBox := PaddingBox;
     end;
+
+    // fixed attachment resolves size and position against the viewport
+    if (Layer.Attachment = baFixed) and Layer.IsRoot and (FixedBox <> nil) then
+      Layer.OriginBox := FixedBox^;
   end;
 
   case ClipVal of

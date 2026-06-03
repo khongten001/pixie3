@@ -1606,33 +1606,31 @@ begin
         NumLayers := Bg.GetLayersNumber;
         for I := NumLayers - 1 downto 0 do
         begin
-          if not Bg.GetLayer(I, Pos, Self, RiObj, Layer) then
+          if not Bg.GetLayer(I, Pos, Self, RiObj, Layer, Clip) then
             Continue;
 
           if IsRoot and (Clip <> nil) then
           begin
             Layer.ClipBox := Clip^;
             Layer.BorderBox := Clip^;
-            if Layer.Attachment = baFixed then
-              Layer.OriginBox := Clip^;
-            // baScroll: keep OriginBox at element position so background
-            // scrolls with content rather than staying fixed to viewport
+            // OriginBox already set by GetLayer (incl. fixed attachment)
           end;
 
           Layer.BorderBox.DoRound;
           Layer.ClipBox.DoRound;
           Layer.OriginBox.DoRound;
 
-          // Clamp origin box so rounding doesn't push it outside the clip.
-          // Round(A+B) <> Round(A)+Round(B), so the origin's right/bottom
-          // edge can end up 1 px past the clip boundary after independent
-          // rounding of position and size.
-          if Layer.OriginBox.X + Layer.OriginBox.Width >
-             Layer.ClipBox.X + Layer.ClipBox.Width then
+          // Nudge back a sub-pixel rounding overflow, but only for images
+          // that fit the clip — oversized ones (background-size: cover) are
+          // meant to overflow and be clipped per their position.
+          if (Layer.OriginBox.Width <= Layer.ClipBox.Width) and
+             (Layer.OriginBox.X + Layer.OriginBox.Width >
+              Layer.ClipBox.X + Layer.ClipBox.Width) then
             Layer.OriginBox.X :=
               Layer.ClipBox.X + Layer.ClipBox.Width - Layer.OriginBox.Width;
-          if Layer.OriginBox.Y + Layer.OriginBox.Height >
-             Layer.ClipBox.Y + Layer.ClipBox.Height then
+          if (Layer.OriginBox.Height <= Layer.ClipBox.Height) and
+             (Layer.OriginBox.Y + Layer.OriginBox.Height >
+              Layer.ClipBox.Y + Layer.ClipBox.Height) then
             Layer.OriginBox.Y :=
               Layer.ClipBox.Y + Layer.ClipBox.Height - Layer.OriginBox.Height;
 
