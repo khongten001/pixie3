@@ -1115,7 +1115,7 @@ begin
   end;
 
   if OverEl <> nil then
-    FContainer.SetCursor(OverEl.Css.Cursor)
+    FContainer.SetCursor(OverEl.CursorForPoint(X, Y))
   else
     FContainer.SetCursor('auto');
 

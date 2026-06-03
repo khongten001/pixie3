@@ -1627,7 +1627,7 @@ function TPixieHtmlViewCore.HandleMouseWheel(WheelDelta: Integer;
   CtrlDown: Boolean; MouseX, MouseY: Integer): Boolean;
 var
   NewScroll, MaxScroll: TPixiePixel;
-  NewZoom: Double;
+  NewZoom, Scale: Double;
   Tick: UInt64;
 begin
   // Suppress wheel inertia after anchor scroll
@@ -1653,11 +1653,14 @@ begin
     Exit(True);
   end;
 
-  // Dispatch to element under mouse (textarea scrolling)
+  // Dispatch to element under mouse (textarea scrolling). Convert host
+  // pixels to document coordinates (divide by scale, add page scroll),
+  // matching HandleMouseDown.
+  Scale := GetEffectiveScale;
   if FDocument <> nil then
   begin
-    if FDocument.DispatchMouseWheel(MouseX,
-      MouseY + Round(FScrollY), WheelDelta) then
+    if FDocument.DispatchMouseWheel(MouseX / Scale,
+      MouseY / Scale + FScrollY, WheelDelta) then
     begin
       Invalidate;
       Exit(True);

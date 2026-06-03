@@ -138,6 +138,8 @@ type
     function IsFocusable: Boolean; virtual;
     function OnMouseDrag(X, Y: TPixiePixel): Boolean; virtual;
     function OnMouseWheel(Delta: Integer): Boolean; virtual;
+    // CSS cursor for a document point; overridable for sub-element regions.
+    function CursorForPoint(DocX, DocY: TPixiePixel): string; virtual;
 
     procedure GetText(var Text: string); virtual;
     function GetDisplayText: string; virtual;
@@ -587,6 +589,11 @@ end;
 function TPixieElement.OnMouseWheel(Delta: Integer): Boolean;
 begin
   Result := False;
+end;
+
+function TPixieElement.CursorForPoint(DocX, DocY: TPixiePixel): string;
+begin
+  Result := Css.Cursor;
 end;
 
 procedure TPixieElement.GetText(var Text: string);

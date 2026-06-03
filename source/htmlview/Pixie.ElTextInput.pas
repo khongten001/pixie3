@@ -37,10 +37,18 @@ type
     FWordSelecting: Boolean;  // drag extends by whole words
     FWordSelStart: Integer;   // anchor word start byte pos
     FWordSelEnd: Integer;     // anchor word end byte pos
+    FSbDragging: Boolean;     // dragging the textarea scrollbar thumb
+    FSbDragOffset: TPixiePixel; // cursor offset within thumb at grab
     procedure SaveUndo;
 
     // Per-line advance = CSS line-height; glyphs sit centred within it.
     function LineAdvance: TPixiePixel;
+
+    // Vertical scrollbar (multiline overflow). Metrics returns False when
+    // no scrollbar is needed; all coordinates are local to the content box.
+    function ScrollbarMetrics(VisibleW, VisibleH: TPixiePixel;
+      out SbX, SbW, ThumbY, ThumbH, MaxScrollY: TPixiePixel): Boolean;
+    procedure ScrollToThumbTop(ThumbTop, VisibleW, VisibleH: TPixiePixel);
 
     function DisplayText: string;
     function IsDisabled: Boolean;
@@ -87,6 +95,7 @@ type
     function OnLButtonDown: Boolean; override;
     function OnLButtonDblClick: Boolean; override;
     function OnMouseDrag(X, Y: TPixiePixel): Boolean; override;
+    function CursorForPoint(DocX, DocY: TPixiePixel): string; override;
 
     // Focus and keyboard
     procedure OnFocus; override;
@@ -147,6 +156,10 @@ const
   VK_RIGHT  = $27;
   VK_DOWN   = $28;
   VK_DELETE = $2E;
+
+  // Textarea vertical scrollbar geometry
+  PixieTextScrollbarWidth = 10;
+  PixieTextScrollbarMinThumb = 24;
 
 function GetCanvas(Tag: TPixieHtmlTag): TPixieCanvas;
 var
@@ -401,6 +414,53 @@ begin
   Result := FCss.LineHeight.ComputedValue;
   if Result <= 0 then
     Result := FCss.FontMetrics.Height;
+end;
+
+function TPixieElTextBase.ScrollbarMetrics(VisibleW, VisibleH: TPixiePixel;
+  out SbX, SbW, ThumbY, ThumbH, MaxScrollY: TPixiePixel): Boolean;
+var
+  ContentH, Range: TPixiePixel;
+begin
+  Result := False;
+  if not FMultiLine then
+    Exit;
+  ContentH := GetLineCount * LineAdvance;
+  MaxScrollY := ContentH - VisibleH;
+  if MaxScrollY <= 0 then
+    Exit;
+
+  SbW := PixieTextScrollbarWidth;
+  SbX := VisibleW - SbW;
+  ThumbH := VisibleH * VisibleH / ContentH;
+  if ThumbH < PixieTextScrollbarMinThumb then
+    ThumbH := PixieTextScrollbarMinThumb;
+  if ThumbH > VisibleH then
+    ThumbH := VisibleH;
+  Range := VisibleH - ThumbH;
+  if Range > 0 then
+    ThumbY := (FScrollY / MaxScrollY) * Range
+  else
+    ThumbY := 0;
+  Result := True;
+end;
+
+procedure TPixieElTextBase.ScrollToThumbTop(
+  ThumbTop, VisibleW, VisibleH: TPixiePixel);
+var
+  SbX, SbW, ThumbY, ThumbH, MaxScrollY, Range: TPixiePixel;
+begin
+  if not ScrollbarMetrics(VisibleW, VisibleH,
+    SbX, SbW, ThumbY, ThumbH, MaxScrollY) then
+    Exit;
+  Range := VisibleH - ThumbH;
+  if Range <= 0 then
+    FScrollY := 0
+  else
+    FScrollY := (ThumbTop / Range) * MaxScrollY;
+  if FScrollY < 0 then
+    FScrollY := 0;
+  if FScrollY > MaxScrollY then
+    FScrollY := MaxScrollY;
 end;
 
 function TPixieElTextBase.CaretToPixelXY(
@@ -1024,15 +1084,35 @@ function TPixieElTextBase.OnLButtonDown: Boolean;
 var
   Doc: TPixieDocument;
   LocalX, LocalY: TPixiePixel;
+  Ri: TPixieRenderItem;
+  SbX, SbW, ThumbY, ThumbH, MaxScrollY: TPixiePixel;
 begin
   Result := inherited OnLButtonDown;
   if IsDisabled then
     Exit;
 
   FWordSelecting := False;
+  FSbDragging := False;
   Doc := TPixieDocument(FDoc);
   Doc.SetFocus(Self);
   DocToLocal(Doc.LastMouseX, Doc.LastMouseY, LocalX, LocalY);
+
+  // Clicking the scrollbar grabs the thumb (or jumps to the click) instead
+  // of moving the text caret.
+  Ri := TPixieRenderItem(GetRenderItem);
+  if (Ri <> nil) and
+     ScrollbarMetrics(Ri.Pos.Width, Ri.Pos.Height,
+       SbX, SbW, ThumbY, ThumbH, MaxScrollY) and (LocalX >= SbX) then
+  begin
+    FSbDragging := True;
+    if (LocalY >= ThumbY) and (LocalY < ThumbY + ThumbH) then
+      FSbDragOffset := LocalY - ThumbY
+    else
+      FSbDragOffset := ThumbH / 2;
+    ScrollToThumbTop(LocalY - FSbDragOffset, Ri.Pos.Width, Ri.Pos.Height);
+    Exit(True);
+  end;
+
   FCaretPos := ClickToCaret(LocalX, LocalY);
   FCaretMoved := True;
   ClearSelection;
@@ -1058,12 +1138,22 @@ function TPixieElTextBase.OnMouseDrag(X, Y: TPixiePixel): Boolean;
 var
   LocalX, LocalY: TPixiePixel;
   NewPos, WS, WE: Integer;
+  Ri: TPixieRenderItem;
 begin
   Result := False;
   if IsDisabled then
     Exit;
 
   DocToLocal(X, Y, LocalX, LocalY);
+
+  if FSbDragging then
+  begin
+    Ri := TPixieRenderItem(GetRenderItem);
+    if Ri <> nil then
+      ScrollToThumbTop(LocalY - FSbDragOffset, Ri.Pos.Width, Ri.Pos.Height);
+    Exit(True);
+  end;
+
   NewPos := ClickToCaret(LocalX, LocalY);
 
   if FWordSelecting then
@@ -1112,6 +1202,21 @@ begin
   end;
 end;
 
+function TPixieElTextBase.CursorForPoint(DocX, DocY: TPixiePixel): string;
+var
+  LocalX, LocalY: TPixiePixel;
+  Ri: TPixieRenderItem;
+  SbX, SbW, ThumbY, ThumbH, MaxScrollY: TPixiePixel;
+begin
+  Ri := TPixieRenderItem(GetRenderItem);
+  if (Ri <> nil) and DocToLocal(DocX, DocY, LocalX, LocalY) and
+     ScrollbarMetrics(Ri.Pos.Width, Ri.Pos.Height,
+       SbX, SbW, ThumbY, ThumbH, MaxScrollY) and (LocalX >= SbX) then
+    Result := 'default'
+  else
+    Result := inherited CursorForPoint(DocX, DocY);
+end;
+
 procedure TPixieElTextBase.OnClick;
 begin
   inherited OnClick;
@@ -1130,6 +1235,9 @@ var
   BX, BY, BW, BH: TPixiePixel;
   BorderW: TPixiePixel;
   LineH, TextDY: TPixiePixel;
+  SbX, SbW, ThumbY, ThumbH, MaxScrollY, ThumbRad: TPixiePixel;
+  SbRad: TPixieBorderRadiuses;
+  SbColor: TPixieWebColor;
   BorderColor, BgColor, TextColor, PlaceholderColor: TPixieWebColor;
   FocusColor: TPixieWebColor;
   SelColor, SelTextColor: TPixieWebColor;
@@ -1373,6 +1481,21 @@ begin
       P.X + CaretPxX, P.Y + CaretPxY + TextDY + 1,
       P.X + CaretPxX, P.Y + CaretPxY + TextDY + FCss.FontMetrics.Height - 1,
       TextColor, 1);
+  end;
+
+  // Vertical scrollbar thumb when the content overflows
+  if ScrollbarMetrics(P.Width, P.Height, SbX, SbW, ThumbY, ThumbH,
+    MaxScrollY) then
+  begin
+    ThumbRad := (SbW - 4) / 2;
+    SbRad.Init;
+    SbRad.TopLeftX := ThumbRad;     SbRad.TopLeftY := ThumbRad;
+    SbRad.TopRightX := ThumbRad;    SbRad.TopRightY := ThumbRad;
+    SbRad.BottomRightX := ThumbRad; SbRad.BottomRightY := ThumbRad;
+    SbRad.BottomLeftX := ThumbRad;  SbRad.BottomLeftY := ThumbRad;
+    SbColor := TPixieWebColor.Create(160, 160, 160);
+    Canvas.FillRoundedRect(P.X + SbX + 2, P.Y + ThumbY,
+      SbW - 4, ThumbH, SbRad, SbColor);
   end;
 
   Canvas.RestoreState;
@@ -1668,36 +1791,23 @@ end;
 function TPixieElTextArea.OnMouseWheel(Delta: Integer): Boolean;
 var
   Ri: TPixieRenderItem;
-  LineH, ContentH, VisibleH, MaxScroll: TPixiePixel;
-  Steps: Integer;
+  SbX, SbW, ThumbY, ThumbH, MaxScrollY: TPixiePixel;
 begin
   Result := False;
-  if GetLineCount <= 1 then
-    Exit;
-
-  LineH := LineAdvance;
-  ContentH := GetLineCount * LineH;
-
   Ri := TPixieRenderItem(GetRenderItem);
-  if Ri <> nil then
-    VisibleH := Ri.Pos.Height
-  else
-    VisibleH := FRows * LineH;
-
-  MaxScroll := ContentH - VisibleH;
-  if MaxScroll <= 0 then
+  if (Ri = nil) or not ScrollbarMetrics(Ri.Pos.Width, Ri.Pos.Height,
+    SbX, SbW, ThumbY, ThumbH, MaxScrollY) then
     Exit;
 
-  Steps := 3;
   if Delta > 0 then
-    FScrollY := FScrollY - Steps * LineH
+    FScrollY := FScrollY - 3 * LineAdvance
   else
-    FScrollY := FScrollY + Steps * LineH;
+    FScrollY := FScrollY + 3 * LineAdvance;
 
   if FScrollY < 0 then
     FScrollY := 0;
-  if FScrollY > MaxScroll then
-    FScrollY := MaxScroll;
+  if FScrollY > MaxScrollY then
+    FScrollY := MaxScrollY;
 
   Result := True;
 end;
