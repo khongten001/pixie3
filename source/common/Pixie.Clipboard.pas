@@ -1,13 +1,7 @@
 unit Pixie.Clipboard;
 
-// Platform clipboard abstraction for text copy/paste.
-//
-// - FPC/Lazarus: uses the Clipbrd unit directly
-// - Delphi VCL: uses Vcl.Clipbrd
-// - Delphi FMX: uses IFMXClipboardService
-//
-// For FMX, the initialization section auto-registers the FMX clipboard
-// service. No manual setup is needed.
+// Text clipboard, picked by platform define rather than FRAMEWORK_VCL/FMX
+// (which only exist in RAD Studio 11.1+) so it works on all Delphi. (#254)
 
 {$IFDEF FPC}{$MODE DELPHI}{$ENDIF}
 
@@ -19,30 +13,48 @@ procedure PixieClipboardSetText(const Text: string);
 implementation
 
 uses
-{$IFDEF FPC}
+{$IF DEFINED(FPC)}
   Clipbrd;
+{$ELSEIF DEFINED(MSWINDOWS)}
+  Winapi.Windows;
 {$ELSE}
-  {$IFDEF FRAMEWORK_VCL}Vcl.Clipbrd{$ENDIF}
-  {$IFDEF FRAMEWORK_FMX}System.Rtti, FMX.Platform{$ENDIF}
-  {$IF NOT DEFINED(FRAMEWORK_VCL) AND NOT DEFINED(FRAMEWORK_FMX)}SysUtils{$ENDIF}
-  ;
-{$ENDIF}
+  System.Rtti, FMX.Platform;
+{$IFEND}
 
 function PixieClipboardGetText: string;
-{$IFDEF FRAMEWORK_FMX}
+{$IF DEFINED(FPC)}
+begin
+  Result := Clipboard.AsText;
+end;
+{$ELSEIF DEFINED(MSWINDOWS)}
+var
+  H: THandle;
+  P: PWideChar;
+begin
+  Result := '';
+  if OpenClipboard(0) then
+  try
+    H := GetClipboardData(CF_UNICODETEXT);
+    if H <> 0 then
+    begin
+      P := GlobalLock(H);
+      if P <> nil then
+      try
+        Result := P;
+      finally
+        GlobalUnlock(H);
+      end;
+    end;
+  finally
+    CloseClipboard;
+  end;
+end;
+{$ELSE}
 var
   Svc: IFMXClipboardService;
   V: TValue;
-{$ENDIF}
 begin
-{$IFDEF FPC}
-  Result := Clipboard.AsText;
-{$ELSE}
   Result := '';
-  {$IFDEF FRAMEWORK_VCL}
-  Result := Clipboard.AsText;
-  {$ENDIF}
-  {$IFDEF FRAMEWORK_FMX}
   if TPlatformServices.Current.SupportsPlatformService(
     IFMXClipboardService, Svc) then
   begin
@@ -50,28 +62,50 @@ begin
     if not V.IsEmpty and V.IsType<string> then
       Result := V.AsString;
   end;
-  {$ENDIF}
-{$ENDIF}
 end;
+{$IFEND}
 
 procedure PixieClipboardSetText(const Text: string);
-{$IFDEF FRAMEWORK_FMX}
+{$IF DEFINED(FPC)}
+begin
+  Clipboard.AsText := Text;
+end;
+{$ELSEIF DEFINED(MSWINDOWS)}
+var
+  H: THandle;
+  P: PWideChar;
+  ByteCount: Integer;
+begin
+  if OpenClipboard(0) then
+  try
+    EmptyClipboard;
+    ByteCount := (Length(Text) + 1) * SizeOf(WideChar);
+    H := GlobalAlloc(GMEM_MOVEABLE, ByteCount);
+    if H <> 0 then
+    begin
+      P := GlobalLock(H);
+      if P <> nil then
+      begin
+        Move(PWideChar(Text)^, P^, ByteCount);
+        GlobalUnlock(H);
+        if SetClipboardData(CF_UNICODETEXT, H) = 0 then
+          GlobalFree(H);
+      end
+      else
+        GlobalFree(H);
+    end;
+  finally
+    CloseClipboard;
+  end;
+end;
+{$ELSE}
 var
   Svc: IFMXClipboardService;
-{$ENDIF}
 begin
-{$IFDEF FPC}
-  Clipboard.AsText := Text;
-{$ELSE}
-  {$IFDEF FRAMEWORK_VCL}
-  Clipboard.AsText := Text;
-  {$ENDIF}
-  {$IFDEF FRAMEWORK_FMX}
   if TPlatformServices.Current.SupportsPlatformService(
     IFMXClipboardService, Svc) then
     Svc.SetClipboard(TValue.From<string>(Text));
-  {$ENDIF}
-{$ENDIF}
 end;
+{$IFEND}
 
 end.
