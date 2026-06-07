@@ -801,8 +801,8 @@ procedure TPixieHtmlViewBase.MouseDown(Button: TMouseButton;
   Shift: TShiftState; X, Y: Single);
 begin
   inherited MouseDown(Button, Shift, X, Y);
-  FLastMouseX := Round(X / FCore.Zoom);
-  FLastMouseY := Round(Y / FCore.Zoom);
+  FLastMouseX := X;
+  FLastMouseY := Y;
   FCore.HandleMouseDown(Button = TMouseButton.mbLeft, ssDouble in Shift,
     Round(X), Round(Y));
 end;
@@ -810,6 +810,10 @@ end;
 procedure TPixieHtmlViewBase.MouseMove(Shift: TShiftState; X, Y: Single);
 begin
   inherited MouseMove(Shift, X, Y);
+  // Track the cursor in client pixels so the wheel can target the element
+  // under it; HandleMouseWheel converts to document coordinates itself.
+  FLastMouseX := X;
+  FLastMouseY := Y;
   FCore.HandleMouseMove(Round(X), Round(Y));
 end;
 

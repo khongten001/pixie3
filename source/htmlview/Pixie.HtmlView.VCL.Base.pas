@@ -716,11 +716,16 @@ end;
 
 function TPixieHtmlViewBase.DoMouseWheel(Shift: TShiftState;
   WheelDelta: Integer; MousePos: TPoint): Boolean;
+var
+  ClientPos: TPoint;
 begin
   Result := inherited DoMouseWheel(Shift, WheelDelta, MousePos);
   if Result then Exit;
+  // VCL delivers MousePos in screen coordinates; convert to client pixels.
+  // HandleMouseWheel maps to document coordinates (divides by the scale).
+  ClientPos := ScreenToClient(MousePos);
   Result := FCore.HandleMouseWheel(WheelDelta, ssCtrl in Shift,
-    Round(MousePos.X / FCore.Zoom), Round(MousePos.Y / FCore.Zoom));
+    ClientPos.X, ClientPos.Y);
 end;
 
 end.

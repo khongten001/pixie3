@@ -199,8 +199,6 @@ type
     procedure SetClip(const Pos: TPixiePosition;
       const BdrRadius: TPixieBorderRadiuses); override;
     procedure DelClip; override;
-    procedure FillSolidRoundedRect(const R: TPixiePosition;
-      Radius: TPixiePixel; const Color: TPixieWebColor); override;
 
     // Viewport & media
     procedure GetViewport(out Viewport: TPixiePosition); override;
@@ -1413,19 +1411,6 @@ end;
 procedure TPixieNativeContainer.DelClip;
 begin
   FCanvas.RestoreState;
-end;
-
-procedure TPixieNativeContainer.FillSolidRoundedRect(const R: TPixiePosition;
-  Radius: TPixiePixel; const Color: TPixieWebColor);
-var
-  Rad: TPixieBorderRadiuses;
-begin
-  Rad.Init;
-  Rad.TopLeftX := Radius;     Rad.TopLeftY := Radius;
-  Rad.TopRightX := Radius;    Rad.TopRightY := Radius;
-  Rad.BottomRightX := Radius; Rad.BottomRightY := Radius;
-  Rad.BottomLeftX := Radius;  Rad.BottomLeftY := Radius;
-  FCanvas.FillRoundedRect(R.X, R.Y, R.Width, R.Height, Rad, Color);
 end;
 
 // ---------------------------------------------------------------------------

@@ -173,7 +173,7 @@ type
       Clip: PPixiePosition; Flag: TPixieDrawFlag;
       ZIndex: Integer); virtual;
     // Overflow scrollbar thumbs; Box is the content box in screen coords.
-    procedure DrawScrollbars(Cont: TPixieContainer;
+    procedure DrawScrollbars(Hdc: PtrUInt; Cont: TPixieContainer;
       const Box: TPixiePosition);
 
     // Hit testing
@@ -213,7 +213,7 @@ type
 implementation
 
 uses
-  Pixie.Document, Pixie.Borders;
+  Pixie.Document, Pixie.Borders, Pixie.Background;
 
 { TPixieRenderItem }
 
@@ -1785,19 +1785,18 @@ begin
     ClipBox := FPos;
     ClipBox.X := ClipBox.X + X;
     ClipBox.Y := ClipBox.Y + Y;
-    DrawScrollbars(Cont, ClipBox);
+    DrawScrollbars(Hdc, Cont, ClipBox);
   end;
 end;
 
-procedure TPixieRenderItem.DrawScrollbars(Cont: TPixieContainer;
-  const Box: TPixiePosition);
+procedure TPixieRenderItem.DrawScrollbars(Hdc: PtrUInt;
+  Cont: TPixieContainer; const Box: TPixiePosition);
 const
   SbW = 10;
   MinThumb = 24;
 var
-  MaxV, MaxH, ThumbStart, ThumbSize: TPixiePixel;
+  MaxV, MaxH, ThumbStart, ThumbSize, Rad: TPixiePixel;
   ThumbColor: TPixieWebColor;
-  R: TPixiePosition;
 
   // Thumb size and offset (0-based) along one axis of the given extent.
   procedure ThumbMetrics(Extent, MaxScroll, Offset: TPixiePixel;
@@ -1815,27 +1814,41 @@ var
       AStart := 0;
   end;
 
+  // Fill a rounded thumb rect through the existing solid-fill path.
+  procedure FillThumb(const R: TPixiePosition);
+  var
+    Layer: TPixieBackgroundLayer;
+  begin
+    Layer.Init;
+    Layer.BorderBox := R;
+    Layer.ClipBox := R;
+    Layer.BorderRadius.TopLeftX := Rad;     Layer.BorderRadius.TopLeftY := Rad;
+    Layer.BorderRadius.TopRightX := Rad;    Layer.BorderRadius.TopRightY := Rad;
+    Layer.BorderRadius.BottomRightX := Rad; Layer.BorderRadius.BottomRightY := Rad;
+    Layer.BorderRadius.BottomLeftX := Rad;  Layer.BorderRadius.BottomLeftY := Rad;
+    Cont.DrawSolidFill(Hdc, Layer, ThumbColor);
+  end;
+
 begin
   if FScrollView = nil then
     Exit;
+  Rad := (SbW - 4) / 2;
   ThumbColor := TPixieWebColor.Create(128, 128, 128, 160);
 
   MaxV := FScrollView.GetMaxVScroll;
   if MaxV > 0 then
   begin
     ThumbMetrics(Box.Height, MaxV, FScrollView.GetTop, ThumbStart, ThumbSize);
-    R := TPixiePosition.Create(Box.X + Box.Width - SbW + 2,
-      Box.Y + ThumbStart, SbW - 4, ThumbSize);
-    Cont.FillSolidRoundedRect(R, (SbW - 4) / 2, ThumbColor);
+    FillThumb(TPixiePosition.Create(Box.X + Box.Width - SbW + 2,
+      Box.Y + ThumbStart, SbW - 4, ThumbSize));
   end;
 
   MaxH := FScrollView.GetMaxHScroll;
   if MaxH > 0 then
   begin
     ThumbMetrics(Box.Width, MaxH, FScrollView.GetLeft, ThumbStart, ThumbSize);
-    R := TPixiePosition.Create(Box.X + ThumbStart,
-      Box.Y + Box.Height - SbW + 2, ThumbSize, SbW - 4);
-    Cont.FillSolidRoundedRect(R, (SbW - 4) / 2, ThumbColor);
+    FillThumb(TPixiePosition.Create(Box.X + ThumbStart,
+      Box.Y + Box.Height - SbW + 2, ThumbSize, SbW - 4));
   end;
 end;
 
