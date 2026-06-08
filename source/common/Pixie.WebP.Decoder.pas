@@ -2435,9 +2435,18 @@ begin
         FillChar(mb^.Coeffs[0], SizeOf(mb^.Coeffs), 0);
         mb^.NonZeroY  := 0;
         mb^.NonZeroUV := 0;
-        // clear NZ context
-        info^.NZ := 0; info^.NZDC := 0;
-        D.MBInfo^.NZ := 0;
+        // Clear NZ context for both left and current-column slots (mirrors C's
+        // VP8DecodeMB skip path). The DC (Y2) context must only be cleared for
+        // I16x16 blocks — I4x4 blocks have no Y2, so their nz_dc context is left
+        // untouched. Failing to clear left->nz_dc on an I16x16 skip leaves a
+        // stale value that corrupts the Y2 context of a later I16x16 MB.
+        D.MBInfo^.NZ := 0;   // left->nz_
+        info^.NZ := 0;       // mb->nz_
+        if not mb^.IsI4x4 then
+        begin
+          D.MBInfo^.NZDC := 0;  // left->nz_dc_
+          info^.NZDC := 0;      // mb->nz_dc_
+        end;
       end;
 
       // --- Reconstruct YUV ---
