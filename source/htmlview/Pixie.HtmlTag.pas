@@ -100,6 +100,12 @@ type
     function SelectAttribute(
       const Sel: TPixieAttrSelector): Integer;
 
+    // Form-control disabled state (drives :disabled/:enabled and the owner
+    // drawn controls). A control is disabled by its own disabled attribute
+    // or by an ancestor <fieldset disabled> (except inside its first legend).
+    function IsDisableableType: Boolean;
+    function IsEffectivelyDisabled: Boolean;
+
     function FindAncestor(const Selector: TPixieCssSelector;
       ApplyPseudo: Boolean = True;
       IsPseudo: PBoolean = nil): TPixieElement; override;
@@ -849,12 +855,67 @@ begin
     Ord(psid_lang):
       if not MatchDocLang(Sel.Value) then
         Exit(SelectNoMatch);
+    Ord(psid_disabled):
+      if not IsEffectivelyDisabled then
+        Exit(SelectNoMatch);
+    Ord(psid_enabled):
+      if (not IsDisableableType) or IsEffectivelyDisabled then
+        Exit(SelectNoMatch);
   else
     // Simple pseudo-classes: :hover, :active, :focus, etc.
     if not ListContainsInt(FPseudoClasses, Sel.Name) then
       Exit(SelectNoMatch);
   end;
   Result := SelectMatch;
+end;
+
+function TPixieHtmlTag.IsDisableableType: Boolean;
+begin
+  case FTag of
+    Ord(psid_button), Ord(psid_input), Ord(psid_select),
+    Ord(psid_textarea), Ord(psid_option), Ord(psid_optgroup),
+    Ord(psid_fieldset):
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function TPixieHtmlTag.IsEffectivelyDisabled: Boolean;
+var
+  Node, Prev, Legend: TPixieElement;
+  I: Integer;
+begin
+  Result := False;
+  if not IsDisableableType then
+    Exit;
+
+  // Own disabled attribute.
+  if GetAttr('disabled', #1) <> #1 then
+    Exit(True);
+
+  // Disabled by an ancestor <fieldset disabled>, unless this element sits
+  // inside that fieldset's first <legend>.
+  Prev := Self;
+  Node := Parent;
+  while Node <> nil do
+  begin
+    if (Node.GetTag = Ord(psid_fieldset)) and (Node is TPixieHtmlTag) and
+       (TPixieHtmlTag(Node).GetAttr('disabled', #1) <> #1) then
+    begin
+      Legend := nil;
+      for I := 0 to Node.Children.Count - 1 do
+        if Node.Children[I].GetTag = Ord(psid_legend) then
+        begin
+          Legend := Node.Children[I];
+          Break;
+        end;
+      if Prev <> Legend then
+        Exit(True);
+    end;
+    Prev := Node;
+    Node := Node.Parent;
+  end;
 end;
 
 function TPixieHtmlTag.SelectAttribute(

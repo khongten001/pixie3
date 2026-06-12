@@ -194,7 +194,7 @@ begin
   H := P.Height;
   S := W / 24; // scale factor from 24x24 viewBox
 
-  IsDisabled := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  IsDisabled := IsEffectivelyDisabled;
 
   if FChecked then
   begin
@@ -252,7 +252,7 @@ procedure TPixieElCheckbox.Toggle;
 var
   IsDisabled: Boolean;
 begin
-  IsDisabled := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  IsDisabled := IsEffectivelyDisabled;
   if not IsDisabled then
   begin
     FChecked := not FChecked;
@@ -375,7 +375,7 @@ begin
   H := P.Height;
   S := W / 24; // scale factor from 24x24 viewBox
 
-  IsDisabled := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  IsDisabled := IsEffectivelyDisabled;
 
   if FChecked then
   begin
@@ -461,7 +461,7 @@ procedure TPixieElRadio.Toggle;
 var
   IsDisabled: Boolean;
 begin
-  IsDisabled := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  IsDisabled := IsEffectivelyDisabled;
   if (not IsDisabled) and (not FChecked) then
   begin
     UncheckSiblings;
@@ -582,7 +582,7 @@ begin
   BW := P.Width + Pad.Left + Pad.Right;
   BH := P.Height + Pad.Top + Pad.Bottom;
 
-  IsDisabled := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  IsDisabled := IsEffectivelyDisabled;
   IsActive := FPseudoClasses.IndexOf(Ord(psid_active)) >= 0;
   IsHover := FPseudoClasses.IndexOf(Ord(psid_hover)) >= 0;
 
@@ -715,7 +715,7 @@ procedure TPixieElButton.OnClick;
 var
   IsDisabled: Boolean;
 begin
-  IsDisabled := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  IsDisabled := IsEffectivelyDisabled;
   if not IsDisabled then
     inherited OnClick;
 end;

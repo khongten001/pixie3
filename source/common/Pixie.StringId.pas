@@ -190,6 +190,7 @@ type
     psid_hover,
     psid_checked,
     psid_disabled,
+    psid_enabled,
     psid_focus,
 
     // CSS property names

@@ -142,7 +142,7 @@ const
   SupportedSimplePseudoClasses =
     'any-link;link;visited;local-link;target;target-within;scope;' +
     'hover;active;focus;focus-visible;focus-within;' +
-    'checked;disabled;' +
+    'checked;disabled;enabled;' +
     'root;empty;first-child;last-child;only-child;' +
     'first-of-type;last-of-type;only-of-type';
 

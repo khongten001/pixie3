@@ -269,7 +269,7 @@ end;
 
 function TPixieElTextBase.IsDisabled: Boolean;
 begin
-  Result := FPseudoClasses.IndexOf(Ord(psid_disabled)) >= 0;
+  Result := IsEffectivelyDisabled;
 end;
 
 function TPixieElTextBase.DisplayText: string;
@@ -1308,19 +1308,19 @@ begin
   HasCssBg := (FCss.Bg.Color.Alpha > 0) or
     (Style.GetProperty(Ord(psid_background_color)).Kind <> pkInvalid);
 
-  // Border colour — CSS or default
-  if IsDisabled then
-    BorderColor := TPixieWebColor.Create(204, 204, 204)
-  else if HasCssBorder then
+  // Border colour — author CSS wins, else disabled/enabled defaults
+  if HasCssBorder then
     BorderColor := FCss.CssBorders.Left.Color
+  else if IsDisabled then
+    BorderColor := TPixieWebColor.Create(204, 204, 204)
   else
     BorderColor := TPixieWebColor.Create(153, 153, 153);
 
-  // Background colour — CSS or default
-  if IsDisabled then
-    BgColor := TPixieWebColor.Create(245, 245, 245)
-  else if HasCssBg then
+  // Background colour — author CSS wins, else disabled/enabled defaults
+  if HasCssBg then
     BgColor := FCss.Bg.Color
+  else if IsDisabled then
+    BgColor := TPixieWebColor.Create(245, 245, 245)
   else
     BgColor := TPixieWebColor.Create(255, 255, 255);
 
