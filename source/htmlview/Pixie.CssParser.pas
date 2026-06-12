@@ -476,6 +476,7 @@ function TPixieCssParser.ConsumeDeclaration: TPixieCssRawDeclaration;
 var
   Token: TPixieCssToken;
   Tok2: TPixieCssToken;
+  BangIndex: Integer;
 begin
   Token := NextToken;
   Result.Name := PixieLowerCase(GetTokenStr(Token));
@@ -503,19 +504,25 @@ begin
   while GetTokenType(PeekToken) <> cssTokenEof do
     Result.Value.Add(ConsumeComponentValue);
 
-  // 5. Check for !important
+  // 5. Check for !important (whitespace allowed between '!' and 'important')
   TrimWhitespace(Result.Value);
 
   if (Result.Value.Count >= 2) then
   begin
     Tok2 := TokenAt(Result.Value, -1);
-    Token := TokenAt(Result.Value, -2);
-    if (Tok2 <> nil) and (Token <> nil) and
-       (Tok2.TokenType = cssTokenIdent) and SameText(Tok2.Str, 'important') and
-       (Token.TokenType = cssTokenBang) then
+    if (Tok2 <> nil) and
+       (Tok2.TokenType = cssTokenIdent) and SameText(Tok2.Str, 'important') then
     begin
-      TokensRemove(Result.Value, -2, 2);
-      Result.Important := True;
+      BangIndex := Result.Value.Count - 2;
+      while (BangIndex >= 0) and
+            (Result.Value[BangIndex].TokenType = cssTokenWhitespace) do
+        Dec(BangIndex);
+      if (BangIndex >= 0) and
+         (Result.Value[BangIndex].TokenType = cssTokenBang) then
+      begin
+        TokensRemove(Result.Value, BangIndex, Result.Value.Count - BangIndex);
+        Result.Important := True;
+      end;
     end;
   end;
 

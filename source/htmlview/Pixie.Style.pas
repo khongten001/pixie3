@@ -1437,6 +1437,14 @@ begin
       Inc(Index);
       Result := True;
     end
+    // 'oblique' has no separate representation — render it as italic.
+    else if (not StyleFound) and (TokenIdent(Tok) = 'oblique') then
+    begin
+      FontStyle := Ord(fstItalic);
+      StyleFound := True;
+      Inc(Index);
+      Result := True;
+    end
     else if (not VariantFound) and PixieParseKeyword(Tok, TempVariant, FontVariantStrings) then
     begin
       if TempVariant > Ord(fvSmallCaps) then
@@ -1816,6 +1824,9 @@ begin
     if ValidStr <> '' then
     begin
       Idx := PixieValueIndex(Ident, ValidStr);
+      // 'oblique' has no separate representation — render it as italic.
+      if (Name = Ord(psid_font_style)) and (Idx < 0) and (Ident = 'oblique') then
+        Idx := Ord(fstItalic);
       // CSS Fonts L3 caps keywords past index 1 collapse to fvSmallCaps —
       // TPixieFontVariant has no separate petite/titling/unicase representation.
       if (Name = Ord(psid_font_variant)) and (Idx > Ord(fvSmallCaps)) then

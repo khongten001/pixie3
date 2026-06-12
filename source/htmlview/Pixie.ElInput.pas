@@ -639,6 +639,12 @@ begin
     TextColor := TPixieWebColor.Create(0, 0, 0);
   end;
 
+  // Author `color` wins for the text even without an explicit background or
+  // border (browsers honour it on the native button chrome). Disabled buttons
+  // keep the greyed-out system colour set above.
+  if not IsDisabled then
+    TextColor := FCss.Color;
+
   // Border radius — CSS or default 4px
   if not FCss.CssBorders.Radius.TopLeftX.IsPredefined then
     Rad := FCss.CssBorders.Radius.CalcPercents(BW, BH)
