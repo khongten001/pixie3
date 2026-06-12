@@ -81,7 +81,7 @@ type
     procedure DoFillAndStroke(const State: TPixieSvgState); override;
     procedure DoBeginOpacity(Opacity: Single); override;
     procedure DoEndOpacity; override;
-    procedure DoClipPath; override;
+    procedure DoClipPath(EvenOdd: Boolean); override;
     procedure DoBeginMask(const MaskImageHref: string;
       MaskX, MaskY, MaskW, MaskH: Single); override;
     procedure DoEndMask; override;
@@ -786,9 +786,12 @@ begin
   FCanvas.PopMask;
 end;
 
-procedure TPixieSvgCanvasRenderer.DoClipPath;
+procedure TPixieSvgCanvasRenderer.DoClipPath(EvenOdd: Boolean);
 begin
-  FCanvas.ClipPath;
+  if EvenOdd then
+    FCanvas.ClipPath(frEvenOdd)
+  else
+    FCanvas.ClipPath(frNonZero);
   // The clip path's geometry belonged to the clip, not to the shape that
   // will emit its own path next. Reset so the subsequent stroke rebuild
   // (for pattern/gradient fills) sees only the shape's own geometry.

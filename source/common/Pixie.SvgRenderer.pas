@@ -191,7 +191,7 @@ type
     procedure DoFillAndStroke(const State: TPixieSvgState); virtual; abstract;
     procedure DoBeginOpacity(Opacity: Single); virtual; abstract;
     procedure DoEndOpacity; virtual; abstract;
-    procedure DoClipPath; virtual; abstract;
+    procedure DoClipPath(EvenOdd: Boolean); virtual; abstract;
     procedure DoBeginMask(const MaskImageHref: string;
       MaskX, MaskY, MaskW, MaskH: Single); virtual; abstract;
     procedure DoEndMask; virtual; abstract;
@@ -2121,7 +2121,7 @@ begin
     Child := Child.NextSibling;
   end;
 
-  DoClipPath;
+  DoClipPath(False);
 end;
 
 procedure TPixieSvgRendererBase.ApplyMask(Node: Pointer;
@@ -2198,7 +2198,10 @@ begin
       end;
       Child := Child.NextSibling;
     end;
-    DoClipPath;
+    // Even-odd clip so inner shapes (the common white-rect + black-hole
+    // luminance-mask pattern) subtract rather than union — nonzero winding
+    // would keep same-wound holes filled and they'd never appear.
+    DoClipPath(True);
     Exit;
   end;
 
@@ -4590,7 +4593,7 @@ begin
     DoLineTo(W, H);
     DoLineTo(0, H);
     DoClosePath;
-    DoClipPath;
+    DoClipPath(False);
   end;
 
   // preserveAspectRatio is not honoured — always stretch per-axis, matching

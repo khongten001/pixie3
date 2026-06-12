@@ -183,6 +183,13 @@ function PixieParseCssColor(Token: TPixieCssToken; out Color: TPixieWebColor): B
 function PixieTokenAt(Tokens: TPixieCssTokenList; Index: Integer): TPixieCssToken;
 function PixieGetValidValues(Name: Integer): string;
 
+// Resolve var() references inside an arbitrary value string (e.g. an SVG
+// presentation attribute) against the custom properties cascaded onto El.
+// El is TPixieHtmlTag (passed as TObject to avoid a circular dependency).
+// Returns the value with every var() substituted; the original string is
+// returned unchanged when it contains no var() or cannot be resolved.
+function PixieResolveCssVars(const Value: string; El: TObject): string;
+
 implementation
 
 uses
@@ -3401,6 +3408,50 @@ begin
       { keep substituting until no more var() found };
   finally
     UsedVars.Free;
+  end;
+end;
+
+function ContainsVarFunc(const S: string): Boolean;
+var
+  P, Len: Integer;
+begin
+  Len := Length(S);
+  P := 1;
+  while P <= Len - 3 do
+  begin
+    if ((S[P] = 'v') or (S[P] = 'V')) and
+       ((S[P + 1] = 'a') or (S[P + 1] = 'A')) and
+       ((S[P + 2] = 'r') or (S[P + 2] = 'R')) and
+       (S[P + 3] = '(') then
+      Exit(True);
+    Inc(P);
+  end;
+  Result := False;
+end;
+
+function PixieResolveCssVars(const Value: string; El: TObject): string;
+var
+  Tag: TPixieHtmlTag;
+  Tokens: TPixieCssTokenList;
+  UsedVars: TPixieIntVector;
+begin
+  Result := Value;
+  if not (El is TPixieHtmlTag) then Exit;
+  if not ContainsVarFunc(Value) then Exit;
+  Tag := TPixieHtmlTag(El);
+
+  Tokens := PixieCssNormalizeStr(Value, cssCssNormComponentize);
+  try
+    UsedVars := TPixieIntVector.Create;
+    try
+      while SubstOneVar(Tokens, Tag, UsedVars) do
+        { keep substituting until no more var() found };
+    finally
+      UsedVars.Free;
+    end;
+    Result := PixieCssGetRepr(Tokens, 0, -1, False);
+  finally
+    Tokens.Free;
   end;
 end;
 

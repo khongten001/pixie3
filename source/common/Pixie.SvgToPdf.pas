@@ -89,7 +89,7 @@ type
     procedure DoFillAndStroke(const State: TPixieSvgState); override;
     procedure DoBeginOpacity(Opacity: Single); override;
     procedure DoEndOpacity; override;
-    procedure DoClipPath; override;
+    procedure DoClipPath(EvenOdd: Boolean); override;
     procedure DoBeginMask(const MaskImageHref: string;
       MaskX, MaskY, MaskW, MaskH: Single); override;
     procedure DoEndMask; override;
@@ -692,11 +692,14 @@ begin
   // No-op for PDF — restore handled by q/Q
 end;
 
-procedure TPixieSvgRenderer.DoClipPath;
+procedure TPixieSvgRenderer.DoClipPath(EvenOdd: Boolean);
 begin
   // W n — clip to current path (non-zero winding), then clear path
   // W* n — even-odd clip rule
-  EmitLn('W n');
+  if EvenOdd then
+    EmitLn('W* n')
+  else
+    EmitLn('W n');
 end;
 
 procedure TPixieSvgRenderer.DoBeginMask(const MaskImageHref: string;

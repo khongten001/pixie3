@@ -108,7 +108,8 @@ begin
 
   S := S + '<' + TagName;
   for Pair in Tag.Attrs do
-    S := S + ' ' + Pair.Key + '="' + XmlEscape(Pair.Value) + '"';
+    S := S + ' ' + Pair.Key + '="' +
+      XmlEscape(PixieResolveCssVars(Pair.Value, Tag)) + '"';
 
   // Surface CSS-set SVG presentation properties as XML attributes if the
   // element doesn't already carry them as presentation attributes (which
@@ -123,7 +124,8 @@ begin
       Continue;
     Prop := Tag.Style.GetProperty(Ord(PixieSvgPresentationPropIds[I]));
     if Prop.Kind = pkString then
-      S := S + ' ' + AttrName + '="' + XmlEscape(Prop.StrVal) + '"';
+      S := S + ' ' + AttrName + '="' +
+        XmlEscape(PixieResolveCssVars(Prop.StrVal, Tag)) + '"';
   end;
 
   if Tag.Children.Count = 0 then
