@@ -218,7 +218,7 @@ uses
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.CssSelector,
   Pixie.HtmlTag,
   Pixie.ElText, Pixie.ElImage, Pixie.ElSvg,
-  Pixie.ElInput, Pixie.ElTextInput, Pixie.ElProgress,
+  Pixie.ElInput, Pixie.ElTextInput, Pixie.ElProgress, Pixie.ElRange,
   Pixie.ElTable, Pixie.ElAnchor, Pixie.ElMisc, Pixie.ElDetails,
   Pixie.ElBeforeAfter,
   Pixie.RenderItem, Pixie.RenderBlock,
@@ -833,6 +833,8 @@ begin
         El := TPixieElCheckbox.Create(Self)
       else if InputType = 'radio' then
         El := TPixieElRadio.Create(Self)
+      else if InputType = 'range' then
+        El := TPixieElRange.Create(Self)
       else if (InputType = '') or PixieValueInList(InputType,
               'text;password;search;email;url;tel;number') then
         El := TPixieElTextInput.Create(Self)

@@ -73,6 +73,7 @@ contains
   Pixie.ElBeforeAfter in '..\source\htmlview\Pixie.ElBeforeAfter.pas',
   Pixie.ElInput in '..\source\htmlview\Pixie.ElInput.pas',
   Pixie.ElProgress in '..\source\htmlview\Pixie.ElProgress.pas',
+  Pixie.ElRange in '..\source\htmlview\Pixie.ElRange.pas',
   Pixie.ElTextInput in '..\source\htmlview\Pixie.ElTextInput.pas',
   Pixie.Document in '..\source\htmlview\Pixie.Document.pas',
   Pixie.Container in '..\source\htmlview\Pixie.Container.pas',

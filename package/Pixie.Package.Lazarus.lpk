@@ -137,6 +137,10 @@
         <UnitName Value="Pixie.ElProgress"/>
       </Item>
       <Item>
+        <Filename Value="../source/htmlview/Pixie.ElRange.pas"/>
+        <UnitName Value="Pixie.ElRange"/>
+      </Item>
+      <Item>
         <Filename Value="../source/htmlview/Pixie.ElMisc.pas"/>
         <UnitName Value="Pixie.ElMisc"/>
       </Item>
