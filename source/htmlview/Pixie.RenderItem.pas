@@ -218,6 +218,12 @@ implementation
 uses
   Pixie.Document, Pixie.Borders, Pixie.Background;
 
+const
+  // Half-extent used to leave one axis effectively unbounded when only the
+  // other axis has a non-visible overflow (e.g. overflow-x:auto clips X but
+  // must not clip content height).
+  ClipUnboundedExtent = 1000000;
+
 { TPixieRenderItem }
 
 constructor TPixieRenderItem.Create(ASrcEl: TPixieElement);
@@ -1652,13 +1658,17 @@ begin
   Doc := TPixieDocument(FElement.GetDocument);
   Cont := Doc.Container;
 
-  if FElement.Css.Overflow > ovVisible then
+  if ((FElement.Css.Overflow > ovVisible) or
+      (FElement.Css.OverflowX > ovVisible)) and
+     (FElement.Css.Display <> displayInline) then
   begin
-    if FElement.Css.Display <> displayInline then
+    ClipBox := FPos;
+    ClipBox.X := ClipBox.X + X;
+    ClipBox.Y := ClipBox.Y + Y;
+
+    if FElement.Css.Overflow > ovVisible then
     begin
-      ClipBox := FPos;
-      ClipBox.X := ClipBox.X + X;
-      ClipBox.Y := ClipBox.Y + Y;
+      // overflow / overflow-y clips both axes (rounded to border-radius)
       BorderBox := ClipBox;
       BorderBox.AddMargins(FPadding);
       BorderBox.AddMargins(FBorders);
@@ -1667,9 +1677,17 @@ begin
         BorderBox.Width, BorderBox.Height);
       BdrRadius.SubMargins(FBorders);
       BdrRadius.SubMargins(FPadding);
-
-      Cont.SetClip(ClipBox, BdrRadius);
+    end
+    else
+    begin
+      // overflow-x only: clip the horizontal axis, leave the vertical axis
+      // effectively unbounded so taller content is not clipped.
+      ClipBox.Y := ClipBox.Y - ClipUnboundedExtent;
+      ClipBox.Height := ClipBox.Height + 2 * ClipUnboundedExtent;
+      BdrRadius.Init;
     end;
+
+    Cont.SetClip(ClipBox, BdrRadius);
   end;
 
   for I := 0 to FChildren.Count - 1 do
@@ -1792,7 +1810,9 @@ begin
     end;
   end;
 
-  if FElement.Css.Overflow > ovVisible then
+  if ((FElement.Css.Overflow > ovVisible) or
+      (FElement.Css.OverflowX > ovVisible)) and
+     (FElement.Css.Display <> displayInline) then
     Cont.DelClip;
 
   // Draw scrollbar thumbs once per element, after content and outside the

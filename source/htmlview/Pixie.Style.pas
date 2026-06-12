@@ -216,6 +216,7 @@ begin
   ValidValues.Add(Ord(psid_float), ElementFloatStrings);
   ValidValues.Add(Ord(psid_clear), ElementClearStrings);
   ValidValues.Add(Ord(psid_overflow), OverflowStrings);
+  ValidValues.Add(Ord(psid_overflow_x), OverflowStrings);
   ValidValues.Add(Ord(psid_appearance), AppearanceStrings);
   ValidValues.Add(Ord(psid_box_sizing), BoxSizingStrings);
 
@@ -1800,10 +1801,8 @@ begin
   else if Name = Ord(psid_font_variant_caps) then
     Name := Ord(psid_font_variant);
 
-  // overflow-y maps to overflow; overflow-x is ignored (no per-axis support;
-  // overflow-x:hidden is cosmetic and must not clip content height)
-  if Name = Ord(psid_overflow_x) then
-    Exit;
+  // overflow-y maps to the single overflow (vertical/shorthand) value;
+  // overflow-x is kept as its own property and clips the horizontal axis only.
   if Name = Ord(psid_overflow_y) then
     Name := Ord(psid_overflow);
 
@@ -1813,6 +1812,7 @@ begin
      (Name = Ord(psid_position)) or (Name = Ord(psid_float)) or
      (Name = Ord(psid_clear)) or (Name = Ord(psid_appearance)) or
      (Name = Ord(psid_box_sizing)) or (Name = Ord(psid_overflow)) or
+     (Name = Ord(psid_overflow_x)) or
      (Name = Ord(psid_text_align)) or (Name = Ord(psid_vertical_align)) or
      (Name = Ord(psid_text_transform)) or (Name = Ord(psid_white_space)) or
      (Name = Ord(psid_font_style)) or (Name = Ord(psid_font_variant)) or

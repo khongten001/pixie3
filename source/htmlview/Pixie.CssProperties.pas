@@ -44,6 +44,7 @@ type
     FVisibility: TPixieVisibility;
     FTextAlign: TPixieTextAlign;
     FOverflow: TPixieOverflow;
+    FOverflowX: TPixieOverflow;
     FWhiteSpace: TPixieWhiteSpace;
     FAppearance: TPixieAppearance;
     FBoxSizing: TPixieBoxSizing;
@@ -176,6 +177,7 @@ type
     property Visibility: TPixieVisibility read FVisibility write FVisibility;
     property TextAlign: TPixieTextAlign read FTextAlign write FTextAlign;
     property Overflow: TPixieOverflow read FOverflow write FOverflow;
+    property OverflowX: TPixieOverflow read FOverflowX write FOverflowX;
     property WhiteSpace: TPixieWhiteSpace read FWhiteSpace write FWhiteSpace;
     property Appearance: TPixieAppearance read FAppearance write FAppearance;
     property BoxSizing: TPixieBoxSizing read FBoxSizing write FBoxSizing;
@@ -426,6 +428,7 @@ begin
   FVisibility := visVisible;
   FTextAlign := taLeft;
   FOverflow := ovVisible;
+  FOverflowX := ovVisible;
   FWhiteSpace := wsNormal;
   FAppearance := appNone;
   FBoxSizing := bxContentBox;
@@ -1164,6 +1167,11 @@ begin
   FOverflow := TPixieOverflow(Tag.GetPropertyInt(
     Ord(psid_overflow), False, Ord(ovVisible),
     PtrUInt(@FOverflow) - PtrUInt(Self)));
+  // overflow-x defaults to the shorthand value (overflow:auto sets both axes);
+  // an explicit overflow-x overrides it for the horizontal axis only.
+  FOverflowX := TPixieOverflow(Tag.GetPropertyInt(
+    Ord(psid_overflow_x), False, Ord(FOverflow),
+    PtrUInt(@FOverflowX) - PtrUInt(Self)));
   FTextAlign := TPixieTextAlign(Tag.GetPropertyInt(
     Ord(psid_text_align), True, Ord(taLeft),
     PtrUInt(@FTextAlign) - PtrUInt(Self)));
