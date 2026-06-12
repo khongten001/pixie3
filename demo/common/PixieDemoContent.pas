@@ -566,12 +566,6 @@ begin
       '<tr><td style="padding: 4px 8px 4px 0;">:focus CSS:</td>' +
         '<td style="padding: 4px 0;"><input type="text" class="focus-input" size="30" ' +
           'value="Click me - border turns purple" placeholder="Focus to change style"></td></tr>' +
-      '<tr><td style="padding: 4px 8px 4px 0;">Right-aligned:</td>' +
-        '<td style="padding: 4px 0;"><input type="text" size="30" value="Aligned right" ' +
-          'style="text-align: right;"></td></tr>' +
-      '<tr><td style="padding: 4px 8px 4px 0;">Centred:</td>' +
-        '<td style="padding: 4px 0;"><input type="text" size="30" value="Aligned centre" ' +
-          'style="text-align: center;"></td></tr>' +
     '</table>' +
 
     '<h2 style="color: #994422;">Textarea</h2>' +
@@ -586,11 +580,6 @@ begin
       '<div>' +
         '<div style="margin-bottom: 4px; font-weight: bold; font-size: 13px; color: #555;">With placeholder</div>' +
         '<textarea rows="4" cols="35" placeholder="Write a comment..."></textarea>' +
-      '</div>' +
-      '<div>' +
-        '<div style="margin-bottom: 4px; font-weight: bold; font-size: 13px; color: #555;">Right-aligned</div>' +
-        '<textarea rows="4" cols="35" style="text-align: right;">Aligned to' + #10 +
-        'the right edge.</textarea>' +
       '</div>' +
     '</div>' +
 
