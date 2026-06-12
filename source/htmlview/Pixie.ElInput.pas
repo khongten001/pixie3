@@ -689,8 +689,21 @@ begin
   if Label_ <> '' then
   begin
     TextW := Cv.MeasureText(Label_, FCss.Font);
+    // Buttons centre their label by default, but honour an explicit
+    // text-align set on the element (within the content box).
+    if Style.GetProperty(Ord(psid_text_align)).Kind <> pkInvalid then
+    begin
+      case FCss.TextAlign of
+        taRight, taBlockRight: TextX := P.X + P.Width - TextW;
+        taLeft, taBlockLeft, taJustify: TextX := P.X;
+      else
+        TextX := BX + (BW - TextW) / 2;
+      end;
+    end
+    else
+      TextX := BX + (BW - TextW) / 2;
     // Honour text-indent — used as the a11y hack for icon-only buttons.
-    TextX := BX + (BW - TextW) / 2 + FCss.CssTextIndent.CalcPercent(BW);
+    TextX := TextX + FCss.CssTextIndent.CalcPercent(BW);
     TextY := BY + (BH - FCss.FontMetrics.Height) / 2;
 
     Cv.DrawText(Label_, FCss.Font, TextColor,

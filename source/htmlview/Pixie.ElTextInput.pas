@@ -80,6 +80,10 @@ type
     function CaretToPixelXY(out PxX, PxY: TPixiePixel): Boolean;
     procedure AdjustScroll(ContentW, ContentH: TPixiePixel);
 
+    // Horizontal shift for text-align (right/centre). Zero for left/justify
+    // and when the line overflows the content box (left origin + scroll).
+    function AlignDX(const LineStr: string): TPixiePixel;
+
     // Drawing
     procedure DrawContent(Cv: TObject; P: TPixiePosition;
       Pad: TPixieMargins; IsFocused: Boolean; Ri: Pointer);
@@ -564,13 +568,13 @@ begin
 
     LineStr := GetLineText(TargetLine);
     LS := GetLineStart(TargetLine);
-    AdjX := RelX + FScrollX;
+    AdjX := RelX + FScrollX - AlignDX(LineStr);
   end
   else
   begin
     LineStr := DisplayText;
     LS := 0;
-    AdjX := RelX + FScrollX;
+    AdjX := RelX + FScrollX - AlignDX(LineStr);
   end;
 
   // Find closest character boundary within the line
@@ -1226,6 +1230,31 @@ end;
 // Drawing
 // ---------------------------------------------------------------------------
 
+function TPixieElTextBase.AlignDX(const LineStr: string): TPixiePixel;
+var
+  Cv: TPixieCanvas;
+  Ri: TPixieRenderItem;
+  ContentW, LineW: TPixiePixel;
+begin
+  Result := 0;
+  if not (FCss.TextAlign in
+     [taRight, taCenter, taBlockRight, taBlockCenter]) then
+    Exit;
+  Cv := GetCanvas(Self);
+  Ri := TPixieRenderItem(GetRenderItem);
+  if (Cv = nil) or (Ri = nil) then
+    Exit;
+  ContentW := Ri.Pos.Width;
+  LineW := Cv.MeasureText(LineStr, FCss.Font);
+  // Overflowing text keeps the left origin so horizontal scroll can work.
+  if LineW >= ContentW then
+    Exit;
+  case FCss.TextAlign of
+    taRight, taBlockRight: Result := ContentW - LineW;
+    taCenter, taBlockCenter: Result := (ContentW - LineW) / 2;
+  end;
+end;
+
 procedure TPixieElTextBase.DrawContent(Cv: TObject;
   P: TPixiePosition; Pad: TPixieMargins;
   IsFocused: Boolean; Ri: Pointer);
@@ -1256,6 +1285,9 @@ var
   SelLineStart, SelLineEnd: Integer;
   // Single-line vars
   Disp: string;
+  // Caret alignment
+  CaretLine, CaretCol: Integer;
+  CaretDX: TPixiePixel;
 begin
   Canvas := TPixieCanvas(Cv);
   Cont := GetNativeContainer(Self);
@@ -1359,7 +1391,7 @@ begin
 
     if (FValue = '') and (FPlaceholder <> '') then
       Canvas.DrawText(FPlaceholder, FCss.Font, PlaceholderColor,
-        P.X, P.Y + TextDY, P.Width, LineH)
+        P.X + AlignDX(FPlaceholder), P.Y + TextDY, P.Width, LineH)
     else
     begin
       if HasSelection and IsFocused then
@@ -1388,7 +1420,8 @@ begin
 
         // Draw line text (normal colour)
         Canvas.DrawText(LineStr, FCss.Font, TextColor,
-          P.X - FScrollX, LineY + TextDY, P.Width + FScrollX + 100, LineH);
+          P.X - FScrollX + AlignDX(LineStr), LineY + TextDY,
+          P.Width + FScrollX + 100, LineH);
 
         // Draw selection highlight and white text on top
         if (SelLo >= 0) and (SelLo < LE) and (SelHi > LS) then
@@ -1402,13 +1435,13 @@ begin
           if SelHi > LE then
             SelEndPx := SelEndPx + FCss.FontMetrics.ChWidth * 0.5;
           Canvas.FillRect(
-            P.X + SelStartPx - FScrollX, LineY,
+            P.X + SelStartPx - FScrollX + AlignDX(LineStr), LineY,
             SelEndPx - SelStartPx, LineH, SelColor);
           // Redraw selected portion in white
           Canvas.DrawText(
             Copy(LineStr, SelLineStart + 1, SelLineEnd - SelLineStart),
             FCss.Font, SelTextColor,
-            P.X + SelStartPx - FScrollX, LineY + TextDY,
+            P.X + SelStartPx - FScrollX + AlignDX(LineStr), LineY + TextDY,
             SelEndPx - SelStartPx + 100, LineH);
         end;
       end;
@@ -1420,12 +1453,13 @@ begin
     Disp := DisplayText;
     if (Disp = '') and (FPlaceholder <> '') then
       Canvas.DrawText(FPlaceholder, FCss.Font, PlaceholderColor,
-        P.X, P.Y + TextDY, P.Width, LineH)
+        P.X + AlignDX(FPlaceholder), P.Y + TextDY, P.Width, LineH)
     else if Disp <> '' then
     begin
       // Draw full text in normal colour
       Canvas.DrawText(Disp, FCss.Font, TextColor,
-        P.X - FScrollX, P.Y + TextDY, P.Width + FScrollX + 100, LineH);
+        P.X - FScrollX + AlignDX(Disp), P.Y + TextDY,
+        P.Width + FScrollX + 100, LineH);
 
       // Selection highlight + white text on top
       if HasSelection and IsFocused then
@@ -1449,7 +1483,7 @@ begin
             Copy(Disp, 1, SelHi), FCss.Font);
         end;
         Canvas.FillRect(
-          P.X + SelStartPx - FScrollX, P.Y,
+          P.X + SelStartPx - FScrollX + AlignDX(Disp), P.Y,
           SelEndPx - SelStartPx, LineH, SelColor);
         // Redraw selected portion in white
         if FPassword then
@@ -1459,13 +1493,13 @@ begin
               (UTF8CharCount(Copy(FValue, 1, SelHi)) -
                UTF8CharCount(Copy(FValue, 1, SelLo))) * 3),
             FCss.Font, SelTextColor,
-            P.X + SelStartPx - FScrollX, P.Y + TextDY,
+            P.X + SelStartPx - FScrollX + AlignDX(Disp), P.Y + TextDY,
             SelEndPx - SelStartPx + 100, LineH)
         else
           Canvas.DrawText(
             Copy(Disp, SelLo + 1, SelHi - SelLo),
             FCss.Font, SelTextColor,
-            P.X + SelStartPx - FScrollX, P.Y + TextDY,
+            P.X + SelStartPx - FScrollX + AlignDX(Disp), P.Y + TextDY,
             SelEndPx - SelStartPx + 100, LineH);
       end;
     end;
@@ -1477,9 +1511,16 @@ begin
   if ShowCaret then
   begin
     CaretToPixelXY(CaretPxX, CaretPxY);
+    if FMultiLine then
+    begin
+      CaretToLineCol(CaretLine, CaretCol);
+      CaretDX := AlignDX(GetLineText(CaretLine));
+    end
+    else
+      CaretDX := AlignDX(DisplayText);
     Canvas.DrawLine(
-      P.X + CaretPxX, P.Y + CaretPxY + TextDY + 1,
-      P.X + CaretPxX, P.Y + CaretPxY + TextDY + FCss.FontMetrics.Height - 1,
+      P.X + CaretPxX + CaretDX, P.Y + CaretPxY + TextDY + 1,
+      P.X + CaretPxX + CaretDX, P.Y + CaretPxY + TextDY + FCss.FontMetrics.Height - 1,
       TextColor, 1);
   end;
 
