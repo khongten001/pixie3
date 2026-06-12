@@ -155,6 +155,7 @@
         <DCCReference Include="..\source\htmlview\Pixie.ElDetails.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElBeforeAfter.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElInput.pas"/>
+        <DCCReference Include="..\source\htmlview\Pixie.ElProgress.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.ElTextInput.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.Document.pas"/>
         <DCCReference Include="..\source\htmlview\Pixie.Container.pas"/>

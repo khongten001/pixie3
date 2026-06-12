@@ -218,7 +218,7 @@ uses
   Pixie.CssTokenizer, Pixie.CssParser, Pixie.CssSelector,
   Pixie.HtmlTag,
   Pixie.ElText, Pixie.ElImage, Pixie.ElSvg,
-  Pixie.ElInput, Pixie.ElTextInput,
+  Pixie.ElInput, Pixie.ElTextInput, Pixie.ElProgress,
   Pixie.ElTable, Pixie.ElAnchor, Pixie.ElMisc, Pixie.ElDetails,
   Pixie.ElBeforeAfter,
   Pixie.RenderItem, Pixie.RenderBlock,
@@ -818,6 +818,10 @@ begin
       El := TPixieElButton.Create(Self)
     else if TagName = 'textarea' then
       El := TPixieElTextArea.Create(Self)
+    else if TagName = 'progress' then
+      El := TPixieElProgress.Create(Self)
+    else if TagName = 'meter' then
+      El := TPixieElMeter.Create(Self)
     else if TagName = 'input' then
     begin
       if Attrs <> nil then

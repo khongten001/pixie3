@@ -133,6 +133,10 @@
         <UnitName Value="Pixie.ElInput"/>
       </Item>
       <Item>
+        <Filename Value="../source/htmlview/Pixie.ElProgress.pas"/>
+        <UnitName Value="Pixie.ElProgress"/>
+      </Item>
+      <Item>
         <Filename Value="../source/htmlview/Pixie.ElMisc.pas"/>
         <UnitName Value="Pixie.ElMisc"/>
       </Item>

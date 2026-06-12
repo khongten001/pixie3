@@ -371,6 +371,11 @@ const
     '  vertical-align: middle;' +
     '}' +
 
+    'progress, meter {' +
+    '  display: inline-block;' +
+    '  vertical-align: -0.2em;' +
+    '}' +
+
     'button, input[type="submit"], input[type="button"], input[type="reset"] {' +
     '  font-size: 13.333px;' +
     '  padding: 4px 14px;' +
