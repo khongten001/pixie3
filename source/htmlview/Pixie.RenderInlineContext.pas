@@ -314,7 +314,16 @@ begin
   begin
     LineTop := 0;
     if FLineBoxes.Count > 0 then
-      LineTop := FLineBoxes[FLineBoxes.Count - 1].Top;
+    begin
+      // A float that follows a <br> belongs on the new line the break opened,
+      // not back up on the line the break closed; otherwise it floats up to
+      // the top of the block and the inline content meant to sit beside it
+      // drops below instead.
+      if FLineBoxes[FLineBoxes.Count - 1].EndsWithBreak then
+        LineTop := FLineBoxes[FLineBoxes.Count - 1].Bottom
+      else
+        LineTop := FLineBoxes[FLineBoxes.Count - 1].Top;
+    end;
     Ret := PlaceFloat(Item.GetEl, LineTop, SelfSize, FmtCtx);
     if Ret > FMaxLineWidth then
       FMaxLineWidth := Ret;

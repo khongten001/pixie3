@@ -157,6 +157,7 @@ type
     function NewWidth(ALeft, ARight: TPixiePixel): TPixieLineBoxItemList;
     function GetLastTextPart: TPixieRenderItem;
     function GetFirstTextPart: TPixieRenderItem;
+    function EndsWithBreak: Boolean;
 
     property Items: TPixieLineBoxItemList read FItems;
   end;
@@ -783,6 +784,19 @@ begin
     if FItems[I].GetItemType = lbiTextPart then
       Exit(FItems[I].GetEl);
   Result := nil;
+end;
+
+// True when this line ends with a non-clearing line break — i.e. a normal
+// inline item placed next would start a fresh line (mirrors the break check
+// in CanHold). Used to place a float that follows a <br> on the new line
+// rather than back up on the line the <br> closed.
+function TPixieLineBox.EndsWithBreak: Boolean;
+var
+  LastEl: TPixieRenderItem;
+begin
+  LastEl := GetLastTextPart;
+  Result := (LastEl <> nil) and LastEl.SrcEl.IsBreak and
+            (LastEl.SrcEl.Css.Clear_ = ecNone);
 end;
 
 // --- NewWidth ---
