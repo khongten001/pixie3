@@ -855,6 +855,7 @@ var
   TopDownHeight: TPixiePixel;
   Diff1, Diff2: TPixiePixel;
   TopShiftCorrection: TPixiePixel;
+  RelDX, RelDY: TPixiePixel;
   Inlines: TInlineItemBoxList;
   InlBox: TInlineItemBox;
   Lbi: TPixieLineBoxItem;
@@ -1313,6 +1314,19 @@ begin
     end;
 
     Lbi.GetEl.ApplyRelativeShift(CbContext);
+
+    // The inline start/continue marker carries its own FPos, which is what the
+    // inline background/border boxes are built from below. ApplyRelativeShift
+    // only moves the element's FPos (used by the text fragments), so for a
+    // position:relative inline the text shifts but the pill stays put. Shift
+    // the marker by the same offset so the box follows its text.
+    if (Lbi.GetItemType = lbiInlineStart) or
+       (Lbi.GetItemType = lbiInlineContinue) then
+    begin
+      Lbi.GetEl.GetRelativeOffset(CbContext, RelDX, RelDY);
+      Lbi.Pos^.X := Lbi.Pos^.X + RelDX;
+      Lbi.Pos^.Y := Lbi.Pos^.Y + RelDY;
+    end;
 
     // Build inline box positions
     if (Lbi.GetItemType = lbiInlineStart) or (Lbi.GetItemType = lbiInlineContinue) then

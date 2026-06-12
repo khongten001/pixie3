@@ -155,6 +155,9 @@ type
     function CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
     procedure ApplyRelativeShift(
       const CbContext: TPixieContainingBlockContext);
+    procedure GetRelativeOffset(
+      const CbContext: TPixieContainingBlockContext;
+      out DX, DY: TPixiePixel);
 
     // Split inlines
     function SplitInlines: TPixieSplitResult;
@@ -871,25 +874,39 @@ begin
   end;
 end;
 
+procedure TPixieRenderItem.GetRelativeOffset(
+  const CbContext: TPixieContainingBlockContext;
+  out DX, DY: TPixiePixel);
+var
+  Offsets: TPixieCssOffsets;
+begin
+  DX := 0;
+  DY := 0;
+  if FElement.Css.ElPosition <> epRelative then Exit;
+
+  Offsets := FElement.Css.CssOffsets;
+  if not Offsets.Left.IsPredefined then
+    DX := Offsets.Left.CalcPercent(CbContext.Width.Value)
+  else if not Offsets.Right.IsPredefined then
+    DX := -Offsets.Right.CalcPercent(CbContext.Width.Value);
+
+  if not Offsets.Top.IsPredefined then
+    DY := Offsets.Top.CalcPercent(CbContext.Height.Value)
+  else if not Offsets.Bottom.IsPredefined then
+    DY := -Offsets.Bottom.CalcPercent(CbContext.Height.Value);
+end;
+
 procedure TPixieRenderItem.ApplyRelativeShift(
   const CbContext: TPixieContainingBlockContext);
 var
-  Offsets: TPixieCssOffsets;
+  DX, DY: TPixiePixel;
 begin
   if FRelShiftDone then Exit;
   if FElement.Css.ElPosition = epRelative then
   begin
-    Offsets := FElement.Css.CssOffsets;
-    if not Offsets.Left.IsPredefined then
-      FPos.X := FPos.X + Offsets.Left.CalcPercent(CbContext.Width.Value)
-    else if not Offsets.Right.IsPredefined then
-      FPos.X := FPos.X - Offsets.Right.CalcPercent(CbContext.Width.Value);
-
-    if not Offsets.Top.IsPredefined then
-      FPos.Y := FPos.Y + Offsets.Top.CalcPercent(CbContext.Height.Value)
-    else if not Offsets.Bottom.IsPredefined then
-      FPos.Y := FPos.Y - Offsets.Bottom.CalcPercent(CbContext.Height.Value);
-
+    GetRelativeOffset(CbContext, DX, DY);
+    FPos.X := FPos.X + DX;
+    FPos.Y := FPos.Y + DY;
     FRelShiftDone := True;
   end;
 end;
