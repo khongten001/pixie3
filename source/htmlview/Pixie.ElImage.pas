@@ -23,6 +23,7 @@ type
     FAnimSrc: string;                   // src the cursor was bound to
     procedure ReleaseAnimationCursor;
     procedure EnsureAnimationCursor;
+    procedure MapImageAlign(const AttrValue: string);
   public
     constructor Create(ADoc: TObject);
     destructor Destroy; override;
@@ -97,6 +98,30 @@ begin
   Result := True;
 end;
 
+// Map the legacy presentational <img align="..."> attribute. The left
+// and right values float the image; the remaining values set the
+// vertical alignment relative to the surrounding inline content. The
+// non-standard Netscape values (texttop, absmiddle, absbottom) are
+// honoured the way browsers do for backwards compatibility.
+procedure TPixieElImage.MapImageAlign(const AttrValue: string);
+begin
+  if SameText(AttrValue, 'left') then
+    Style.AddProperty(Ord(psid_float), 'left')
+  else if SameText(AttrValue, 'right') then
+    Style.AddProperty(Ord(psid_float), 'right')
+  else if SameText(AttrValue, 'top') then
+    Style.AddProperty(Ord(psid_vertical_align), 'top')
+  else if SameText(AttrValue, 'texttop') then
+    Style.AddProperty(Ord(psid_vertical_align), 'text-top')
+  else if SameText(AttrValue, 'middle') or SameText(AttrValue, 'absmiddle') or
+          SameText(AttrValue, 'center') then
+    Style.AddProperty(Ord(psid_vertical_align), 'middle')
+  else if SameText(AttrValue, 'bottom') or SameText(AttrValue, 'absbottom') then
+    Style.AddProperty(Ord(psid_vertical_align), 'bottom')
+  else if SameText(AttrValue, 'baseline') then
+    Style.AddProperty(Ord(psid_vertical_align), 'baseline');
+end;
+
 procedure TPixieElImage.ParseAttributes;
 var
   Val: string;
@@ -125,6 +150,10 @@ begin
     MapToPixelLengthProperty(Ord(psid_margin_top), Val);
     MapToPixelLengthProperty(Ord(psid_margin_bottom), Val);
   end;
+
+  Val := GetAttr('align');
+  if Val <> '' then
+    MapImageAlign(Val);
 
   inherited ParseAttributes;
 end;
