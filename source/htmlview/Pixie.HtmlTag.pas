@@ -1375,12 +1375,19 @@ end;
 procedure TPixieHtmlTag.OnClick;
 var
   Container: TPixieContainer;
+  Par: TPixieElement;
 begin
-  if IsRoot then
-    Exit;
-  Container := GetDocContainer;
-  if Container <> nil then
-    Container.OnElementClick(Self);
+  if not IsRoot then
+  begin
+    Container := GetDocContainer;
+    if (Container = nil) or
+       not Container.OnElementClick(Self) then
+    begin
+      Par := Parent;
+      if Par <> nil then
+        Par.OnClick;
+    end;
+  end;
 end;
 
 // Pseudo-class handling
