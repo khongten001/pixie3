@@ -20,6 +20,10 @@ uses
     , JwaWinUser
   {$ENDIF};
 
+{$IF NOT DECLARED(LM_IM_QUERY)}
+const
+  LM_IM_QUERY = LM_IM_COMPOSITION + 1;
+{$ENDIF}
 
 type
   { TPixieHtmlViewBase }
