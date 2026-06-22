@@ -1662,21 +1662,24 @@ begin
       (FElement.Css.OverflowX > ovVisible)) and
      (FElement.Css.Display <> displayInline) then
   begin
+    // The overflow clip edge is the padding box (CSS 2.1 §11.1.1), not the
+    // content box. Include padding so content legitimately laid out in the
+    // padding band is not clipped away — e.g. an absolutely positioned
+    // descendant whose padding-box containing block places it at bottom/right.
     ClipBox := FPos;
     ClipBox.X := ClipBox.X + X;
     ClipBox.Y := ClipBox.Y + Y;
+    ClipBox.AddMargins(FPadding);
 
     if FElement.Css.Overflow > ovVisible then
     begin
       // overflow / overflow-y clips both axes (rounded to border-radius)
       BorderBox := ClipBox;
-      BorderBox.AddMargins(FPadding);
       BorderBox.AddMargins(FBorders);
 
       BdrRadius := FElement.Css.CssBorders.Radius.CalcPercents(
         BorderBox.Width, BorderBox.Height);
       BdrRadius.SubMargins(FBorders);
-      BdrRadius.SubMargins(FPadding);
     end
     else
     begin
