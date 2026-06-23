@@ -136,6 +136,14 @@ type
     FContent: string;
     FCursor: string;
 
+    // CSS transform (Phase 1: translate only). FTransform holds the raw value
+    // so transform:inherit can copy it from the parent (GetPropertyString reads
+    // the parent field at this offset); it is then parsed into the translate.
+    FTransform: string;
+    FHasTransformTranslate: Boolean;
+    FTransformTranslateX: TPixieCssLength;
+    FTransformTranslateY: TPixieCssLength;
+
     // Line height
     FLineHeight: TPixieCssLineHeight;
 
@@ -269,6 +277,15 @@ type
     property Content: string read FContent write FContent;
     property Cursor: string read FCursor write FCursor;
 
+    // CSS transform (Phase 1: translate only)
+    property HasTransformTranslate: Boolean read FHasTransformTranslate;
+    property TransformTranslateX: TPixieCssLength read FTransformTranslateX;
+    property TransformTranslateY: TPixieCssLength read FTransformTranslateY;
+    // True when the element needs a purely visual post-layout shift of its
+    // final position — position:relative offsets or a transform:translate().
+    // The single trigger both ApplyRelativeShift call sites test.
+    function HasVisualShift: Boolean;
+
     // Line height
     property LineHeight: TPixieCssLineHeight read FLineHeight write FLineHeight;
     property CssLineHeight: TPixieCssLength read GetCssLineHeight write SetCssLineHeight;
@@ -296,6 +313,90 @@ type
     Media: TPixieMediaFeatures;
   end;
   PComputeContext = ^TComputeContext;
+
+// Parse a single transform-function argument ("-50%", "10px", "0") into a
+// length. A bare number is treated as pixels.
+function ParseTransformLen(const S: string): TPixieCssLength;
+var
+  T, NumStr, UnitStr: string;
+  I, L, Code, UIdx: Integer;
+  V: Single;
+begin
+  Result := TPixieCssLength.Create(0, cssUnitsPx);
+  T := Trim(S);
+  L := Length(T);
+  if L = 0 then Exit;
+  I := 1;
+  if (T[I] = '-') or (T[I] = '+') then Inc(I);
+  while (I <= L) and (((T[I] >= '0') and (T[I] <= '9')) or (T[I] = '.')) do
+    Inc(I);
+  NumStr := Copy(T, 1, I - 1);
+  UnitStr := Trim(Copy(T, I, L - I + 1));
+  Val(NumStr, V, Code);
+  if Code <> 0 then Exit;
+  if UnitStr = '' then
+    Result := TPixieCssLength.Create(V, cssUnitsPx)
+  else if UnitStr = '%' then
+    Result := TPixieCssLength.Create(V, cssUnitsPercentage)
+  else
+  begin
+    UIdx := PixieValueIndex(UnitStr, CssUnitsStrings);
+    if UIdx > 0 then
+      Result := TPixieCssLength.Create(V, TPixieCssUnits(UIdx))
+    else
+      Result := TPixieCssLength.Create(V, cssUnitsPx);
+  end;
+end;
+
+// Phase 1 transform parser: extract the first translate()/translateX()/
+// translateY() function from the value. Other functions (scale/rotate/...) are
+// ignored until later phases. Returns True when a translate was found.
+function ParseTransformTranslate(const S: string;
+  out TX, TY: TPixieCssLength): Boolean;
+var
+  Lower, FuncName, ArgsStr, A0, A1: string;
+  P, Q, CommaPos: Integer;
+begin
+  Result := False;
+  TX := TPixieCssLength.Create(0, cssUnitsPx);
+  TY := TPixieCssLength.Create(0, cssUnitsPx);
+  Lower := Trim(LowerCase(S));
+  if Lower = '' then Exit;
+  P := Pos('(', Lower);
+  if P = 0 then Exit;
+  FuncName := Trim(Copy(Lower, 1, P - 1));
+  Q := Pos(')', Lower);
+  if Q = 0 then Q := Length(Lower) + 1;
+  ArgsStr := Copy(Lower, P + 1, Q - P - 1);
+  CommaPos := Pos(',', ArgsStr);
+  if CommaPos > 0 then
+  begin
+    A0 := Copy(ArgsStr, 1, CommaPos - 1);
+    A1 := Copy(ArgsStr, CommaPos + 1, Length(ArgsStr));
+  end
+  else
+  begin
+    A0 := ArgsStr;
+    A1 := '';
+  end;
+  if FuncName = 'translate' then
+  begin
+    TX := ParseTransformLen(A0);
+    if Trim(A1) <> '' then
+      TY := ParseTransformLen(A1);
+    Result := True;
+  end
+  else if FuncName = 'translatex' then
+  begin
+    TX := ParseTransformLen(A0);
+    Result := True;
+  end
+  else if FuncName = 'translatey' then
+  begin
+    TY := ParseTransformLen(A0);
+    Result := True;
+  end;
+end;
 
 // Local CSS unit conversion — converts length to pixels using context
 function CtxToPixels(const Val: TPixieCssLength;
@@ -484,6 +585,11 @@ begin
   FGridTemplateRows.Free;
   FBg.Free;
   inherited Destroy;
+end;
+
+function TPixieCssProperties.HasVisualShift: Boolean;
+begin
+  Result := (FElPosition = epRelative) or FHasTransformTranslate;
 end;
 
 function TPixieCssProperties.GetZIndex: Integer;
@@ -1453,6 +1559,13 @@ begin
     PtrUInt(@FContent) - PtrUInt(Self));
   FCursor := Tag.GetPropertyString(Ord(psid_cursor), True, 'auto',
     PtrUInt(@FCursor) - PtrUInt(Self));
+
+  // CSS transform (Phase 1: translate only). Stored unresolved; percentages
+  // resolve against the element's own border box at layout time.
+  FTransform := Tag.GetPropertyString(Ord(psid_transform), False, '',
+    PtrUInt(@FTransform) - PtrUInt(Self));
+  FHasTransformTranslate := ParseTransformTranslate(
+    FTransform, FTransformTranslateX, FTransformTranslateY);
 
   // 15. Text indent
   FCssTextIndent := Tag.GetPropertyLength(Ord(psid_text_indent), True,

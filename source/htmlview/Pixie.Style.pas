@@ -2334,6 +2334,13 @@ begin
     Exit;
   end;
 
+  if Name = Ord(psid_transform) then
+  begin
+    S := PixieCssGetRepr(Tokens, 0, -1, True);
+    AddParsedProperty(Name, TPixiePropertyValue.FromString(S, Important));
+    Exit;
+  end;
+
   // SVG presentation properties — stored as raw strings and surfaced by
   // Pixie.ElSvg.SerializeElement as XML attributes on inline SVG.
   for I := Low(PixieSvgPresentationPropIds) to High(PixieSvgPresentationPropIds) do

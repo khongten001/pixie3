@@ -268,7 +268,7 @@ begin
           IsFirst := False;
         end;
 
-        if ElCss.ElPosition = epRelative then
+        if ElCss.HasVisualShift then
           El.ApplyRelativeShift(SelfSize);
       end;
     end;

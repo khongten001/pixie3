@@ -328,6 +328,7 @@ type
     psid_border_collapse,
     psid_table_layout,
     psid_text_transform,
+    psid_transform,
 
     psid_flex,
     psid_flex_flow,

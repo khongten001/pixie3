@@ -41,6 +41,7 @@ type
     FSkip: Boolean;
     FLayoutPositioned: Boolean;          // True if positioned during layout
     FRelShiftDone: Boolean;              // True after ApplyRelativeShift ran
+    FTransformShiftDone: Boolean;        // True after ApplyTransformShift ran
     FPositioned: TPixieRenderItemVector; // non-owning
     FScrollView: TPixieScrollView;       // owned, can be nil
     FIntrinsicMinWidth: TPixiePixel;     // CSS min-content width; 0 = unknown
@@ -155,6 +156,7 @@ type
     function CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
     procedure ApplyRelativeShift(
       const CbContext: TPixieContainingBlockContext);
+    procedure ApplyTransformShift;
     procedure GetRelativeOffset(
       const CbContext: TPixieContainingBlockContext;
       out DX, DY: TPixiePixel);
@@ -238,6 +240,7 @@ begin
   FSkip := False;
   FLayoutPositioned := False;
   FRelShiftDone := False;
+  FTransformShiftDone := False;
   FPositioned := nil;
   FScrollView := nil;
   FIntrinsicMinWidth := 0;
@@ -744,6 +747,7 @@ begin
   FPos.Clear;
   FPos.MoveTo(X, Y);
   FRelShiftDone := False;
+  FTransformShiftDone := False;
 
   CLeft := ContentOffsetLeft;
   CTop := ContentOffsetTop;
@@ -907,14 +911,44 @@ procedure TPixieRenderItem.ApplyRelativeShift(
 var
   DX, DY: TPixiePixel;
 begin
-  if FRelShiftDone then Exit;
-  if FElement.Css.ElPosition = epRelative then
+  if not FRelShiftDone then
   begin
-    GetRelativeOffset(CbContext, DX, DY);
-    FPos.X := FPos.X + DX;
-    FPos.Y := FPos.Y + DY;
+    if FElement.Css.ElPosition = epRelative then
+    begin
+      GetRelativeOffset(CbContext, DX, DY);
+      FPos.X := FPos.X + DX;
+      FPos.Y := FPos.Y + DY;
+    end;
     FRelShiftDone := True;
   end;
+  ApplyTransformShift;
+end;
+
+// Apply a CSS transform:translate() as a purely visual shift of the final
+// position (siblings are already laid out, so they are unaffected). Percentages
+// resolve against the element's own border box. Runs once per layout; the
+// positioned path calls this directly since it bypasses ApplyRelativeShift.
+procedure TPixieRenderItem.ApplyTransformShift;
+var
+  Doc: TPixieDocument;
+  BorderW, BorderH, TX, TY: TPixiePixel;
+begin
+  if FTransformShiftDone then Exit;
+  FTransformShiftDone := True;
+  if not FElement.Css.HasTransformTranslate then Exit;
+
+  Assert(FElement.GetDocument is TPixieDocument);
+  Doc := TPixieDocument(FElement.GetDocument);
+  BorderW := FPos.Width + FPadding.Left + FPadding.Right +
+    FBorders.Left + FBorders.Right;
+  BorderH := FPos.Height + FPadding.Top + FPadding.Bottom +
+    FBorders.Top + FBorders.Bottom;
+  TX := Doc.ToPixels(FElement.Css.TransformTranslateX, FElement.Css.FontMetrics,
+    BorderW);
+  TY := Doc.ToPixels(FElement.Css.TransformTranslateY, FElement.Css.FontMetrics,
+    BorderH);
+  FPos.X := FPos.X + TX;
+  FPos.Y := FPos.Y + TY;
 end;
 
 // --- Split inlines ---
@@ -1542,6 +1576,10 @@ begin
             SizeModeExactWidth or SizeModeExactHeight), nil, True);
         El.FPos := SavedPos;
       end;
+
+      // Visual transform:translate() shift, applied after the final position is
+      // known so the redraw box and any descendants follow the element.
+      El.ApplyTransformShift;
 
       if ElPosition = epFixed then
       begin
