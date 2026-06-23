@@ -279,7 +279,8 @@ type
     epStatic,
     epRelative,
     epAbsolute,
-    epFixed
+    epFixed,
+    epSticky
   );
 
   // Text align
@@ -597,7 +598,7 @@ const
   BackgroundRepeatStrings = 'repeat;repeat-x;repeat-y;no-repeat';
   BackgroundBoxStrings = 'border-box;padding-box;content-box';
   BackgroundPositionStrings = 'left;right;top;bottom;center';
-  ElementPositionStrings = 'static;relative;absolute;fixed';
+  ElementPositionStrings = 'static;relative;absolute;fixed;sticky';
   SPixieBlockCenter = '-webkit-center';
   SPixieBlockLeft = '-webkit-left';
   SPixieBlockRight = '-webkit-right';

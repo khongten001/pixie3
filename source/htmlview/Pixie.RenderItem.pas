@@ -40,6 +40,8 @@ type
     FPos: TPixiePosition;
     FSkip: Boolean;
     FLayoutPositioned: Boolean;          // True if positioned during layout
+    FStickyShiftX: TPixiePixel;          // last position:sticky paint shift
+    FStickyShiftY: TPixiePixel;          // (kept current for hit-testing)
     FRelShiftDone: Boolean;              // True after ApplyRelativeShift ran
     FPositioned: TPixieRenderItemVector; // non-owning
     FScrollView: TPixieScrollView;       // owned, can be nil
@@ -188,6 +190,12 @@ type
     // Overflow scrollbar thumbs; Box is the content box in screen coords.
     procedure DrawScrollbars(Hdc: PtrUInt; Cont: TPixieContainer;
       const Box: TPixiePosition);
+    // position:sticky paint offset. Origin is this item's parent content box
+    // origin in screen coords (the same origin children are drawn at). Returns
+    // the clamped shift (DX,DY) that keeps the item pinned to its inset while
+    // staying within its containing block.
+    procedure ComputeStickyShift(Cont: TPixieContainer;
+      OriginX, OriginY: TPixiePixel; out DX, DY: TPixiePixel);
 
     // Hit testing
     function GetChildByPoint(X, Y, ClientX, ClientY: TPixiePixel;
@@ -247,6 +255,8 @@ begin
   FChildren := TPixieRenderItemList.Create(True);
   FSkip := False;
   FLayoutPositioned := False;
+  FStickyShiftX := 0;
+  FStickyShiftY := 0;
   FRelShiftDone := False;
   FPositioned := nil;
   FScrollView := nil;
@@ -1807,6 +1817,19 @@ begin
           PseudoShiftY := -Offsets.Bottom.Val;
         El.FPos.X := El.FPos.X + PseudoShiftX;
         El.FPos.Y := El.FPos.Y + PseudoShiftY;
+      end
+      else if (El.SrcEl.Css.ElPosition = epSticky) and (Flag = dfPositioned) then
+      begin
+        // position:sticky — clamp the item against its inset and containing
+        // block for the current scroll. ElPos is the parent content origin in
+        // screen coords. Sticky items paint only on the positioned pass, so the
+        // shift is computed there. Reuses the relative PseudoShift restore.
+        El.ComputeStickyShift(Cont, ElPos.X, ElPos.Y,
+          PseudoShiftX, PseudoShiftY);
+        El.FStickyShiftX := PseudoShiftX;   // remember for hit-testing
+        El.FStickyShiftY := PseudoShiftY;
+        El.FPos.X := El.FPos.X + PseudoShiftX;
+        El.FPos.Y := El.FPos.Y + PseudoShiftY;
       end;
 
       // CSS transform: wrap this element and its subtree in its matrix. Fixed
@@ -1948,6 +1971,90 @@ begin
   end;
 end;
 
+procedure TPixieRenderItem.ComputeStickyShift(Cont: TPixieContainer;
+  OriginX, OriginY: TPixiePixel; out DX, DY: TPixiePixel);
+var
+  Offsets: TPixieCssOffsets;
+  MbTop, MbBottom, MbLeft, MbRight: TPixiePixel;   // element margin box, screen
+  CbTop, CbBottom, CbLeft, CbRight: TPixiePixel;   // containing block, screen
+  Inset, Lo, Hi: TPixiePixel;
+  Viewport: TPixiePosition;
+  HaveViewport: Boolean;
+begin
+  DX := 0;
+  DY := 0;
+  if FParent = nil then Exit;
+  Offsets := FElement.Css.CssOffsets;
+
+  // Element margin box in screen coords (FPos is the content box; the inset is
+  // measured to the margin edge and the item is constrained by its full box).
+  MbTop    := OriginY + FPos.Y - (FMargins.Top + FBorders.Top + FPadding.Top);
+  MbBottom := OriginY + FPos.Y + FPos.Height +
+              FMargins.Bottom + FBorders.Bottom + FPadding.Bottom;
+  MbLeft   := OriginX + FPos.X - (FMargins.Left + FBorders.Left + FPadding.Left);
+  MbRight  := OriginX + FPos.X + FPos.Width +
+              FMargins.Right + FBorders.Right + FPadding.Right;
+
+  // Containing block = parent content box, in screen coords. OriginX/Y is the
+  // parent content origin this item's FPos is measured from.
+  CbTop    := OriginY;
+  CbBottom := OriginY + FParent.FPos.Height;
+  CbLeft   := OriginX;
+  CbRight  := OriginX + FParent.FPos.Width;
+  HaveViewport := False;
+
+  // Vertical — top wins over bottom when both are set (CSS).
+  if not Offsets.Top.IsPredefined then
+  begin
+    Inset := Offsets.Top.Val;
+    if MbTop < Inset then
+    begin
+      DY := Inset - MbTop;                      // pin down to the inset
+      Hi := CbBottom - MbBottom;                // but stay inside the parent
+      if DY > Hi then DY := Hi;
+      if DY < 0 then DY := 0;
+    end;
+  end
+  else if (not Offsets.Bottom.IsPredefined) and (Cont <> nil) then
+  begin
+    Cont.GetViewport(Viewport);
+    HaveViewport := True;
+    Inset := Viewport.Height - Offsets.Bottom.Val;
+    if MbBottom > Inset then
+    begin
+      DY := Inset - MbBottom;                   // pin up (negative)
+      Lo := CbTop - MbTop;
+      if DY < Lo then DY := Lo;
+      if DY > 0 then DY := 0;
+    end;
+  end;
+
+  // Horizontal — left wins over right.
+  if not Offsets.Left.IsPredefined then
+  begin
+    Inset := Offsets.Left.Val;
+    if MbLeft < Inset then
+    begin
+      DX := Inset - MbLeft;
+      Hi := CbRight - MbRight;
+      if DX > Hi then DX := Hi;
+      if DX < 0 then DX := 0;
+    end;
+  end
+  else if (not Offsets.Right.IsPredefined) and (Cont <> nil) then
+  begin
+    if not HaveViewport then Cont.GetViewport(Viewport);
+    Inset := Viewport.Width - Offsets.Right.Val;
+    if MbRight > Inset then
+    begin
+      DX := Inset - MbRight;
+      Lo := CbLeft - MbLeft;
+      if DX < Lo then DX := Lo;
+      if DX > 0 then DX := 0;
+    end;
+  end;
+end;
+
 procedure TPixieRenderItem.DrawScrollbars(Hdc: PtrUInt;
   Cont: TPixieContainer; const Box: TPixiePosition);
 const
@@ -2047,6 +2154,13 @@ begin
       // edge.
       ChildX := ElPos.X;
       ChildY := ElPos.Y;
+      // position:sticky moved the item by its paint shift; map the query back
+      // into the item's unshifted frame so the hit region follows it.
+      if El.SrcEl.Css.ElPosition = epSticky then
+      begin
+        ChildX := ChildX - El.FStickyShiftX;
+        ChildY := ChildY - El.FStickyShiftY;
+      end;
       if El.SrcEl.Css.HasTransform and
          (El.SrcEl.Css.ElPosition <> epFixed) then
         El.MapPointInverse(ChildX, ChildY);
