@@ -9,6 +9,7 @@ uses
 
 function PixieDecodeHtmlBytes(const Bytes: TBytes): string;
 function PixieIsLikelySvg(const Content: string): Boolean;
+function PixieDataLooksLikeSvg(Data: Pointer; Size: Integer): Boolean;
 
 implementation
 
@@ -458,6 +459,22 @@ begin
     else
       Exit;
   until I > Len;
+end;
+
+// Sniff a decoded image buffer (e.g. a data: URI payload) for SVG content.
+// Only the leading bytes matter, so the scan is capped — enough to skip any
+// XML declaration, comment or DOCTYPE and reach the <svg root element.
+function PixieDataLooksLikeSvg(Data: Pointer; Size: Integer): Boolean;
+var
+  Head: string;
+  HeadLen: Integer;
+begin
+  Result := False;
+  if (Data = nil) or (Size <= 0) then Exit;
+  HeadLen := Size;
+  if HeadLen > 512 then HeadLen := 512;
+  SetString(Head, PAnsiChar(Data), HeadLen);
+  Result := PixieIsLikelySvg(Head);
 end;
 
 end.

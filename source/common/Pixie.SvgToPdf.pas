@@ -71,6 +71,8 @@ type
     // Image helpers
     function EmbedImageFromHref(const Href: string;
       out PdfName: AnsiString): Integer;
+    function EmbedSvgFormFromData(DataStream: TMemoryStream;
+      const CacheKey: string; out PdfName: AnsiString): Integer;
     procedure FillWithPattern(const State: TPixieSvgState);
 
     // Font helpers
@@ -113,7 +115,7 @@ type
 implementation
 
 uses
-  Math, Pixie.SimpleXml, Pixie.Utf8, Pixie.DataUri
+  Math, Pixie.SimpleXml, Pixie.Utf8, Pixie.DataUri, Pixie.Html
   {$IFDEF FPC}, FPImage, FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,
   Pixie.ImageUtils{$ENDIF};
 
@@ -985,6 +987,17 @@ begin
   end;
   if not DecodeDataUri(Href, DataStream) then Exit;
   try
+    // An SVG embedded as a data: URI (e.g. shields.io badge logos carry the
+    // brand mark as `data:image/svg+xml;base64,...`) is rendered as vector
+    // content via a child renderer into a Form XObject. Feeding the XML to the
+    // raster decoders below would drop the image (and raise a handled
+    // FPImageException on FPC). Sniff the decoded bytes rather than trusting
+    // the media type, which is sometimes missing or wrong.
+    if PixieDataLooksLikeSvg(DataStream.Memory, DataStream.Size) then
+    begin
+      Result := EmbedSvgFormFromData(DataStream, CacheKey, PdfName);
+      Exit;
+    end;
   {$IFDEF FPC}
     Img := TFPMemoryImage.Create(0, 0);
     try
@@ -1068,6 +1081,38 @@ begin
   finally
     DataStream.Free;
   end;
+end;
+
+// Render an SVG carried in a data: URI into a Form XObject, using a child
+// renderer that shares this renderer's PDF writer and font cache so the form
+// and its sub-resources land in the same document. A separate instance is
+// required because RenderToFormXObject resets the renderer's content stream
+// and viewBox, which must not disturb the in-progress outer render.
+function TPixieSvgRenderer.EmbedSvgFormFromData(DataStream: TMemoryStream;
+  const CacheKey: string; out PdfName: AnsiString): Integer;
+var
+  Child: TPixieSvgRenderer;
+  FormId: Integer;
+  OutW, OutH: Single;
+begin
+  Result := 0;
+  PdfName := '';
+
+  Child := TPixieSvgRenderer.Create(FWriter, FFontCache);
+  try
+    FormId := Child.RenderToFormXObject(DataStream.Memory, DataStream.Size,
+      OutW, OutH);
+  finally
+    Child.Free;
+  end;
+  if FormId = 0 then Exit;
+
+  Inc(FImageCounter);
+  PdfName := 'SvgIm' + AnsiString(IntToStr(FImageCounter));
+  FResourceXObject := FResourceXObject + '/' + PdfName + ' ' +
+    PdfRef(FormId) + ' ';
+  FImageCache.Add(CacheKey, PdfName);
+  Result := FormId;
 end;
 
 procedure TPixieSvgRenderer.FillWithPattern(const State: TPixieSvgState);

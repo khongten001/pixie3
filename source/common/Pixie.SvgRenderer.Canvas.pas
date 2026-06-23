@@ -993,8 +993,6 @@ function TPixieSvgCanvasRenderer.LoadImageFromHref(
 var
   CacheKey: string;
   DataStream: TMemoryStream;
-  SvgHead: string;
-  HeadLen: Integer;
 {$IFDEF FPC}
   Img: TFPMemoryImage;
   Pixels: PByte;
@@ -1026,10 +1024,7 @@ begin
       // particular raises an exception on the markup bytes. Sniff the decoded
       // content rather than trusting the media type, which is sometimes
       // missing or wrong.
-      HeadLen := DataStream.Size;
-      if HeadLen > 512 then HeadLen := 512;
-      SetString(SvgHead, PAnsiChar(DataStream.Memory), HeadLen);
-      if PixieIsLikelySvg(SvgHead) then
+      if PixieDataLooksLikeSvg(DataStream.Memory, DataStream.Size) then
         Result := FCanvas.LoadSvgFromData(DataStream.Memory, DataStream.Size)
       else
       begin
