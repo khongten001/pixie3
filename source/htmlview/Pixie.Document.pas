@@ -776,6 +776,8 @@ begin
       El := TPixieElPara.Create(Self)
     else if TagName = 'img' then
       El := TPixieElImage.Create(Self)
+    else if (TagName = 'video') or (TagName = 'audio') then
+      El := TPixieElVideo.Create(Self)
     else if TagName = 'table' then
       El := TPixieElTable.Create(Self)
     else if (TagName = 'td') or (TagName = 'th') then

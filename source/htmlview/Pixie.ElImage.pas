@@ -39,6 +39,20 @@ type
     function DumpGetName: string; override;
   end;
 
+  { TPixieElVideo — <video>/<audio>. Pixie cannot play media, so the element is
+    treated as a replaced box (reserving its width/height and showing the
+    poster, if any). Its fallback content (<source>/<img>/<track>/text) is NOT
+    rendered — browsers only show that when the media element is unsupported, so
+    rendering it produces a spurious image. Reusing TPixieElImage gives the
+    replaced behaviour, the width/height presentation hints, and — crucially —
+    no recursion into children (TPixieElImage.CreateRenderItem builds no child
+    render items). }
+  TPixieElVideo = class(TPixieElImage)
+  public
+    procedure ParseAttributes; override;
+    function DumpGetName: string; override;
+  end;
+
 implementation
 
 uses
@@ -270,6 +284,24 @@ end;
 function TPixieElImage.DumpGetName: string;
 begin
   Result := 'img src="' + FSrc + '"';
+end;
+
+{ TPixieElVideo }
+
+procedure TPixieElVideo.ParseAttributes;
+begin
+  inherited ParseAttributes;
+  // <video>/<audio> carry no src attribute (sources live in <source> children);
+  // use the poster image, when present, as the placeholder.
+  if FSrc = '' then
+    FSrc := GetAttr('poster');
+end;
+
+function TPixieElVideo.DumpGetName: string;
+begin
+  Result := GetTagName;
+  if FSrc <> '' then
+    Result := Result + ' poster="' + FSrc + '"';
 end;
 
 end.
