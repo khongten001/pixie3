@@ -66,6 +66,8 @@ var
   Doc: TPixieDocument;
   Sz: TPixieSize;
   MaxWidth, MaxHeight: TPixiePixel;
+  MinWidth, MinHeight: TPixiePixel;
+  OldSize: TPixiePixel;
   Lh: TPixieCssLineHeight;
 begin
   ParentWidth := CbContext.Width.Value;
@@ -199,6 +201,37 @@ begin
       MaxWidth := Doc.ToPixels(Css.CssMaxWidth, Css.FontMetrics, ParentWidth);
       if FPos.Width > MaxWidth then
         FPos.Width := MaxWidth;
+    end;
+  end;
+
+  // Apply min-width / min-height floors. SelfSize already holds the resolved
+  // values (from CalculateContainingBlockContext above) with box-sizing, the
+  // flex/grid exact-size skip, and percentage-against-auto-parent handling all
+  // applied — reuse them rather than re-resolving against ParentWidth. When the
+  // cross dimension is auto the intrinsic aspect ratio is preserved as the
+  // image grows to meet its minimum, so e.g. min-width:100vw / min-height:100vh
+  // scales a background image up to cover the viewport.
+  if SelfSize.MinWidth.ValueType <> cbcNone then
+  begin
+    MinWidth := SelfSize.MinWidth.Value;
+    if FPos.Width < MinWidth then
+    begin
+      OldSize := FPos.Width;
+      if SrcEl.Css.CssHeight.IsPredefined and (OldSize > 0) then
+        FPos.Height := FPos.Height * MinWidth / OldSize;
+      FPos.Width := MinWidth;
+    end;
+  end;
+
+  if SelfSize.MinHeight.ValueType <> cbcNone then
+  begin
+    MinHeight := SelfSize.MinHeight.Value;
+    if FPos.Height < MinHeight then
+    begin
+      OldSize := FPos.Height;
+      if SrcEl.Css.CssWidth.IsPredefined and (OldSize > 0) then
+        FPos.Width := FPos.Width * MinHeight / OldSize;
+      FPos.Height := MinHeight;
     end;
   end;
 
