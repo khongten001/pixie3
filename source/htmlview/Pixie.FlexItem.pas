@@ -943,7 +943,14 @@ begin
       SelfSize.NewWidth(Ri.ContentOffsetWidth, SizeModeContent),
       TPixieFormattingContext(FmtCtx));
     ContentSizeSet := True;
-    MinSize := ContentSize + Ri.RenderOffsetWidth;
+    // The automatic minimum size of a flex item is its min-content size
+    // (CSS Flexbox §4.5), stored here as the outer margin-box main size.
+    // GetIntrinsicMinWidth is the content-box min-content: for most items the
+    // rendered width, but a wrapping nested flex container reports its widest
+    // item (the render itself returns the SUM of items — max-content — even
+    // after wrapping). Add the full box offset (Width - FPos.Width =
+    // margins+padding+borders, box-sizing independent) to reach the margin box.
+    MinSize := Ri.GetIntrinsicMinWidth + (Ri.Width - Ri.FPos.Width);
   end
   else
     MinSize := Ri.Css.CssMinWidth.CalcPercent(SelfSize.RenderWidth.Value) +
