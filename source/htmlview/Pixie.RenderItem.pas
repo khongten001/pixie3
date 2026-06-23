@@ -160,6 +160,11 @@ type
     // transform. Composed about transform-origin.
     function BuildTransformMatrix(BaseX, BaseY: TPixiePixel;
       out M: TPixieMatrix): Boolean;
+    // Maps a hit-test point (in this element's parent-content frame, i.e.
+    // Base=0) back through the inverse of this element's transform, so the
+    // point can be tested against the untransformed layout. No-op when the
+    // element has no transform or the matrix is singular.
+    procedure MapPointInverse(var X, Y: TPixiePixel);
     procedure GetRelativeOffset(
       const CbContext: TPixieContainingBlockContext;
       out DX, DY: TPixiePixel);
@@ -979,6 +984,25 @@ begin
   M := TPixieMatrix.CreateTranslate(OriginX, OriginY).Multiply(Cur).Multiply(
     TPixieMatrix.CreateTranslate(-OriginX, -OriginY));
   Result := True;
+end;
+
+procedure TPixieRenderItem.MapPointInverse(var X, Y: TPixiePixel);
+var
+  M, Inv: TPixieMatrix;
+  OX, OY: Single;
+begin
+  if not BuildTransformMatrix(0, 0, M) then Exit;
+  if not M.Invert(Inv) then
+  begin
+    // Non-invertible (e.g. scale(0)): the element collapses to zero area, so
+    // move the point far out of range — nothing in its subtree is hittable.
+    X := -1e20;
+    Y := -1e20;
+    Exit;
+  end;
+  Inv.Apply(X, Y, OX, OY);
+  X := OX;
+  Y := OY;
 end;
 
 // --- Split inlines ---
@@ -1998,6 +2022,7 @@ var
   El: TPixieRenderItem;
   Ret: TPixieElement;
   Process: Boolean;
+  ChildX, ChildY: TPixiePixel;
 begin
   if FElement.Css.Overflow > ovVisible then
   begin
@@ -2017,6 +2042,14 @@ begin
     if El.IsVisible and (El.SrcEl.Css.Display <> displayInlineText) then
     begin
       Process := True;
+      // Undo the child's CSS transform (Base=0 frame) for the non-fixed paths.
+      // Fixed elements use ClientX/ClientY and are left as a stacking-context
+      // edge.
+      ChildX := ElPos.X;
+      ChildY := ElPos.Y;
+      if El.SrcEl.Css.HasTransform and
+         (El.SrcEl.Css.ElPosition <> epFixed) then
+        El.MapPointInverse(ChildX, ChildY);
       case Flag of
         dfPositioned:
         begin
@@ -2035,9 +2068,9 @@ begin
             end
             else
             begin
-              Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+              Ret := El.GetElementByPoint(ChildX, ChildY,
                 ClientX, ClientY, Check);
-              if (Ret = nil) and El.IsPointInside(ElPos.X, ElPos.Y) then
+              if (Ret = nil) and El.IsPointInside(ChildX, ChildY) then
               begin
                 if (not Assigned(Check)) or Check(El) then
                   Ret := El.SrcEl;
@@ -2053,9 +2086,9 @@ begin
              (El.SrcEl.Css.Float_ = efNone) and
              (not El.FLayoutPositioned) then
           begin
-            Ret := El.GetChildByPoint(ElPos.X, ElPos.Y,
+            Ret := El.GetChildByPoint(ChildX, ChildY,
               ClientX, ClientY, Flag, ZIndex, Check);
-            if (Ret = nil) and El.IsPointInside(ElPos.X, ElPos.Y) then
+            if (Ret = nil) and El.IsPointInside(ChildX, ChildY) then
             begin
               if (not Assigned(Check)) or Check(El) then
                 Ret := El.SrcEl;
@@ -2069,9 +2102,9 @@ begin
           if (El.SrcEl.Css.Float_ <> efNone) and
              (not El.FLayoutPositioned) then
           begin
-            Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+            Ret := El.GetElementByPoint(ChildX, ChildY,
               ClientX, ClientY, Check);
-            if (Ret = nil) and El.IsPointInside(ElPos.X, ElPos.Y) then
+            if (Ret = nil) and El.IsPointInside(ChildX, ChildY) then
               Ret := El.SrcEl;
             Process := False;
             if Ret <> nil then Exit(Ret);
@@ -2088,7 +2121,7 @@ begin
                (El.SrcEl.Css.Display = displayInlineFlex) or
                (El.SrcEl.Css.Display = displayInlineGrid) then
             begin
-              Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+              Ret := El.GetElementByPoint(ChildX, ChildY,
                 ClientX, ClientY, Check);
               Process := False;
               if Ret <> nil then Exit(Ret);
@@ -2096,12 +2129,12 @@ begin
             else if El.SrcEl.Css.Display = displayInline then
             begin
               // Check children first (e.g. inline-block inside inline)
-              Ret := El.GetElementByPoint(ElPos.X, ElPos.Y,
+              Ret := El.GetElementByPoint(ChildX, ChildY,
                 ClientX, ClientY, Check);
               Process := False;
               if Ret <> nil then Exit(Ret);
             end;
-            if El.IsPointInside(ElPos.X, ElPos.Y) then
+            if El.IsPointInside(ChildX, ChildY) then
             begin
               if (not Assigned(Check)) or Check(El) then
                 Exit(El.SrcEl);
@@ -2114,7 +2147,7 @@ begin
       begin
         if Flag = dfPositioned then
         begin
-          Ret := El.GetChildByPoint(ElPos.X, ElPos.Y,
+          Ret := El.GetChildByPoint(ChildX, ChildY,
             ClientX, ClientY, Flag, ZIndex, Check);
           if Ret <> nil then
           begin
@@ -2131,7 +2164,7 @@ begin
              (El.SrcEl.Css.Display <> displayInlineFlex) and
              (El.SrcEl.Css.Display <> displayInlineGrid) then
           begin
-            Ret := El.GetChildByPoint(ElPos.X, ElPos.Y,
+            Ret := El.GetChildByPoint(ChildX, ChildY,
               ClientX, ClientY, Flag, ZIndex, Check);
             if Ret <> nil then
             begin
@@ -2243,7 +2276,7 @@ end;
 
 function TPixieRenderItem.GetTextByPoint(X, Y: TPixiePixel): TPixieElement;
 var
-  LocalX, LocalY: TPixiePixel;
+  LocalX, LocalY, ChildX, ChildY: TPixiePixel;
   I: Integer;
   El: TPixieRenderItem;
   Ret: TPixieElement;
@@ -2267,14 +2300,21 @@ begin
     El := FChildren[I];
     if not El.IsVisible then Continue;
 
+    // Undo the child's CSS transform so it is tested against its untransformed
+    // layout (the point is in this element's content frame, i.e. Base=0).
+    ChildX := LocalX;
+    ChildY := LocalY;
+    if El.SrcEl.Css.HasTransform then
+      El.MapPointInverse(ChildX, ChildY);
+
     if El.SrcEl.Css.Display = displayInlineText then
     begin
-      if El.IsPointInside(LocalX, LocalY) then
+      if El.IsPointInside(ChildX, ChildY) then
         Exit(El.SrcEl);
     end
     else
     begin
-      Ret := El.GetTextByPoint(LocalX, LocalY);
+      Ret := El.GetTextByPoint(ChildX, ChildY);
       if Ret <> nil then
         Exit(Ret);
     end;
@@ -2289,7 +2329,7 @@ var
 
   procedure Search(Ri: TPixieRenderItem; PX, PY: TPixiePixel);
   var
-    LocalX, LocalY, DX, DY, Dist: TPixiePixel;
+    LocalX, LocalY, ChildX, ChildY, DX, DY, Dist: TPixiePixel;
     I: Integer;
     El: TPixieRenderItem;
     P: TPixiePosition;
@@ -2310,21 +2350,26 @@ var
       El := Ri.FChildren[I];
       if not El.IsVisible then Continue;
 
+      ChildX := LocalX;
+      ChildY := LocalY;
+      if El.SrcEl.Css.HasTransform then
+        El.MapPointInverse(ChildX, ChildY);
+
       if El.SrcEl.Css.Display = displayInlineText then
       begin
         P := El.FPos;
         // Compute gap from point to bounding box
-        if LocalX < P.X then
-          DX := P.X - LocalX
-        else if LocalX > P.X + P.Width then
-          DX := LocalX - (P.X + P.Width)
+        if ChildX < P.X then
+          DX := P.X - ChildX
+        else if ChildX > P.X + P.Width then
+          DX := ChildX - (P.X + P.Width)
         else
           DX := 0;
 
-        if LocalY < P.Y then
-          DY := P.Y - LocalY
-        else if LocalY > P.Y + P.Height then
-          DY := LocalY - (P.Y + P.Height)
+        if ChildY < P.Y then
+          DY := P.Y - ChildY
+        else if ChildY > P.Y + P.Height then
+          DY := ChildY - (P.Y + P.Height)
         else
           DY := 0;
 
@@ -2336,7 +2381,7 @@ var
         end;
       end
       else
-        Search(El, LocalX, LocalY);
+        Search(El, ChildX, ChildY);
     end;
   end;
 
@@ -2464,26 +2509,75 @@ procedure TPixieRenderItem.GetRedrawBox(var APos: TPixiePosition;
 var
   PLeft, PRight, PTop, PBottom: TPixiePixel;
   I: Integer;
-begin
-  if IsVisible then
-  begin
-    PLeft   := Min(APos.X, X + FPos.X - FPadding.Left - FBorders.Left);
-    PRight  := Max(APos.Right, X + FPos.Right + FPadding.Left + FBorders.Left);
-    PTop    := Min(APos.Y, Y + FPos.Y - FPadding.Top - FBorders.Top);
-    PBottom := Max(APos.Bottom, Y + FPos.Bottom + FPadding.Bottom + FBorders.Bottom);
+  Sub: TPixiePosition;
+  M: TPixieMatrix;
+  CX, CY, MinX, MinY, MaxX, MaxY: Single;
 
+  procedure FoldCorner(BX, BY: Single);
+  begin
+    M.Apply(BX, BY, CX, CY);
+    if CX < MinX then MinX := CX;
+    if CX > MaxX then MaxX := CX;
+    if CY < MinY then MinY := CY;
+    if CY > MaxY then MaxY := CY;
+  end;
+
+begin
+  if not IsVisible then Exit;
+
+  if FElement.Css.HasTransform and BuildTransformMatrix(X, Y, M) then
+  begin
+    // Build the untransformed subtree border box, then union the AABB of its
+    // four transformed corners so partial repaints cover the transformed pixels.
+    // A nested transformed child folds its own AABB into Sub, which this matrix
+    // then re-folds — AABB-of-AABB over-estimates but only ever over-paints, so
+    // it stays correct (never leaves trails); do not tighten it to child-local
+    // geometry, which would risk under-covering rotated nested content.
+    Sub.X := X + FPos.X - FPadding.Left - FBorders.Left;
+    Sub.Y := Y + FPos.Y - FPadding.Top - FBorders.Top;
+    Sub.Width := FPos.Width + FPadding.Left + FPadding.Right +
+      FBorders.Left + FBorders.Right;
+    Sub.Height := FPos.Height + FPadding.Top + FPadding.Bottom +
+      FBorders.Top + FBorders.Bottom;
+
+    if FElement.Css.Overflow = ovVisible then
+      for I := 0 to FChildren.Count - 1 do
+        if FChildren[I].SrcEl.Css.ElPosition <> epFixed then
+          FChildren[I].GetRedrawBox(Sub, X + FPos.X, Y + FPos.Y);
+
+    M.Apply(Sub.X, Sub.Y, CX, CY);
+    MinX := CX; MaxX := CX; MinY := CY; MaxY := CY;
+    FoldCorner(Sub.Right, Sub.Y);
+    FoldCorner(Sub.X, Sub.Bottom);
+    FoldCorner(Sub.Right, Sub.Bottom);
+
+    PLeft   := Min(APos.X, MinX);
+    PRight  := Max(APos.Right, MaxX);
+    PTop    := Min(APos.Y, MinY);
+    PBottom := Max(APos.Bottom, MaxY);
     APos.X := PLeft;
     APos.Y := PTop;
     APos.Width := PRight - PLeft;
     APos.Height := PBottom - PTop;
+    Exit;
+  end;
 
-    if FElement.Css.Overflow = ovVisible then
+  PLeft   := Min(APos.X, X + FPos.X - FPadding.Left - FBorders.Left);
+  PRight  := Max(APos.Right, X + FPos.Right + FPadding.Left + FBorders.Left);
+  PTop    := Min(APos.Y, Y + FPos.Y - FPadding.Top - FBorders.Top);
+  PBottom := Max(APos.Bottom, Y + FPos.Bottom + FPadding.Bottom + FBorders.Bottom);
+
+  APos.X := PLeft;
+  APos.Y := PTop;
+  APos.Width := PRight - PLeft;
+  APos.Height := PBottom - PTop;
+
+  if FElement.Css.Overflow = ovVisible then
+  begin
+    for I := 0 to FChildren.Count - 1 do
     begin
-      for I := 0 to FChildren.Count - 1 do
-      begin
-        if FChildren[I].SrcEl.Css.ElPosition <> epFixed then
-          FChildren[I].GetRedrawBox(APos, X + FPos.X, Y + FPos.Y);
-      end;
+      if FChildren[I].SrcEl.Css.ElPosition <> epFixed then
+        FChildren[I].GetRedrawBox(APos, X + FPos.X, Y + FPos.Y);
     end;
   end;
 end;

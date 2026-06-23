@@ -792,7 +792,7 @@ function TPixieRenderTable.GetChildByPoint(X, Y, ClientX, ClientY: TPixiePixel;
   Flag: TPixieDrawFlag; ZIndex: Integer;
   Check: TPixieRenderItemCheckFunc): TPixieElement;
 var
-  LocalX, LocalY: TPixiePixel;
+  LocalX, LocalY, ChildX, ChildY: TPixiePixel;
   Row, Col, I: Integer;
   Cell: PPixieTableCell;
   Caption: TPixieRenderItem;
@@ -814,7 +814,11 @@ begin
   for I := FGrid.GetCaptions.Count - 1 downto 0 do
   begin
     Caption := TPixieRenderItem(FGrid.GetCaptions[I]);
-    Ret := Caption.GetElementByPoint(LocalX, LocalY,
+    ChildX := LocalX;
+    ChildY := LocalY;
+    if Caption.SrcEl.Css.HasTransform then
+      Caption.MapPointInverse(ChildX, ChildY);
+    Ret := Caption.GetElementByPoint(ChildX, ChildY,
       ClientX, ClientY, Check);
     if Ret <> nil then Exit(Ret);
   end;
@@ -828,10 +832,14 @@ begin
       if (Cell <> nil) and (Cell^.El <> nil) then
       begin
         CellRi := TPixieRenderItem(Cell^.El);
-        Ret := CellRi.GetElementByPoint(LocalX, LocalY,
+        ChildX := LocalX;
+        ChildY := LocalY;
+        if CellRi.SrcEl.Css.HasTransform then
+          CellRi.MapPointInverse(ChildX, ChildY);
+        Ret := CellRi.GetElementByPoint(ChildX, ChildY,
           ClientX, ClientY, Check);
         if Ret <> nil then Exit(Ret);
-        if CellRi.IsPointInside(LocalX, LocalY) then
+        if CellRi.IsPointInside(ChildX, ChildY) then
         begin
           if (not Assigned(Check)) or Check(CellRi) then
             Exit(CellRi.SrcEl);
@@ -849,10 +857,10 @@ end;
 
 function TPixieRenderTable.GetTextByPoint(X, Y: TPixiePixel): TPixieElement;
 var
-  LocalX, LocalY: TPixiePixel;
+  LocalX, LocalY, ChildX, ChildY: TPixiePixel;
   Row, Col, I: Integer;
   Cell: PPixieTableCell;
-  Caption: TPixieRenderItem;
+  Caption, CellRi: TPixieRenderItem;
   Ret: TPixieElement;
 begin
   Result := nil;
@@ -871,7 +879,11 @@ begin
   for I := FGrid.GetCaptions.Count - 1 downto 0 do
   begin
     Caption := TPixieRenderItem(FGrid.GetCaptions[I]);
-    Ret := Caption.GetTextByPoint(LocalX, LocalY);
+    ChildX := LocalX;
+    ChildY := LocalY;
+    if Caption.SrcEl.Css.HasTransform then
+      Caption.MapPointInverse(ChildX, ChildY);
+    Ret := Caption.GetTextByPoint(ChildX, ChildY);
     if Ret <> nil then
       Exit(Ret);
   end;
@@ -884,7 +896,12 @@ begin
       Cell := FGrid.GetCell(Col, Row);
       if (Cell <> nil) and (Cell^.El <> nil) then
       begin
-        Ret := TPixieRenderItem(Cell^.El).GetTextByPoint(LocalX, LocalY);
+        CellRi := TPixieRenderItem(Cell^.El);
+        ChildX := LocalX;
+        ChildY := LocalY;
+        if CellRi.SrcEl.Css.HasTransform then
+          CellRi.MapPointInverse(ChildX, ChildY);
+        Ret := CellRi.GetTextByPoint(ChildX, ChildY);
         if Ret <> nil then
           Exit(Ret);
       end;
@@ -904,7 +921,7 @@ var
 
   procedure Search(Ri: TPixieRenderItem; PX, PY: TPixiePixel);
   var
-    LocalX, LocalY, DX, DY, Dist: TPixiePixel;
+    LocalX, LocalY, ChildX, ChildY, DX, DY, Dist: TPixiePixel;
     I: Integer;
     El: TPixieRenderItem;
     P: TPixiePosition;
@@ -923,14 +940,19 @@ var
       El := Ri.FChildren[I];
       if not El.IsVisible then Continue;
 
+      ChildX := LocalX;
+      ChildY := LocalY;
+      if El.SrcEl.Css.HasTransform then
+        El.MapPointInverse(ChildX, ChildY);
+
       if El.SrcEl.Css.Display = displayInlineText then
       begin
         P := El.FPos;
-        if LocalX < P.X then DX := P.X - LocalX
-        else if LocalX > P.X + P.Width then DX := LocalX - (P.X + P.Width)
+        if ChildX < P.X then DX := P.X - ChildX
+        else if ChildX > P.X + P.Width then DX := ChildX - (P.X + P.Width)
         else DX := 0;
-        if LocalY < P.Y then DY := P.Y - LocalY
-        else if LocalY > P.Y + P.Height then DY := LocalY - (P.Y + P.Height)
+        if ChildY < P.Y then DY := P.Y - ChildY
+        else if ChildY > P.Y + P.Height then DY := ChildY - (P.Y + P.Height)
         else DY := 0;
         Dist := DY * 10000 + DX;
         if (Best = nil) or (Dist < BestDist) then
@@ -940,15 +962,15 @@ var
         end;
       end
       else
-        Search(El, LocalX, LocalY);
+        Search(El, ChildX, ChildY);
     end;
   end;
 
 var
-  LocalX, LocalY: TPixiePixel;
+  LocalX, LocalY, ChildX, ChildY: TPixiePixel;
   Row, Col, I: Integer;
   Cell: PPixieTableCell;
-  Caption: TPixieRenderItem;
+  Caption, CellRi: TPixieRenderItem;
 begin
   Result := nil;
   if not IsVisible then Exit;
@@ -968,7 +990,11 @@ begin
   for I := 0 to FGrid.GetCaptions.Count - 1 do
   begin
     Caption := TPixieRenderItem(FGrid.GetCaptions[I]);
-    Search(Caption, LocalX, LocalY);
+    ChildX := LocalX;
+    ChildY := LocalY;
+    if Caption.SrcEl.Css.HasTransform then
+      Caption.MapPointInverse(ChildX, ChildY);
+    Search(Caption, ChildX, ChildY);
   end;
 
   // Search cells directly (bypassing tbody/tr hierarchy)
@@ -978,7 +1004,14 @@ begin
     begin
       Cell := FGrid.GetCell(Col, Row);
       if (Cell <> nil) and (Cell^.El <> nil) then
-        Search(TPixieRenderItem(Cell^.El), LocalX, LocalY);
+      begin
+        CellRi := TPixieRenderItem(Cell^.El);
+        ChildX := LocalX;
+        ChildY := LocalY;
+        if CellRi.SrcEl.Css.HasTransform then
+          CellRi.MapPointInverse(ChildX, ChildY);
+        Search(CellRi, ChildX, ChildY);
+      end;
     end;
   end;
 
