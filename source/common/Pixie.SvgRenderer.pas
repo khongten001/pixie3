@@ -4661,16 +4661,20 @@ begin
     else
       FOverflowVisible := True;
 
-    // Fall back to viewBox dimensions when width/height couldn't be parsed
-    // (e.g. malformed values like width="px" with no numeric part)
-    if (W <= 0) and (FViewBoxW > 0) then W := FViewBoxW;
-    if (H <= 0) and (FViewBoxH > 0) then H := FViewBoxH;
-
-    // If only one dimension given, derive the other from viewBox aspect ratio
+    // If only one dimension given, derive the other from the viewBox aspect
+    // ratio. This must run before the plain viewBox fallback below, otherwise
+    // a width-only (or height-only) <svg> would take the missing dimension
+    // verbatim from the viewBox (e.g. width="36" viewBox="0 0 512 512" would
+    // become 36x512 instead of the correct 36x36).
     if (W <= 0) and (H > 0) and (FViewBoxW > 0) and (FViewBoxH > 0) then
       W := H * FViewBoxW / FViewBoxH;
     if (H <= 0) and (W > 0) and (FViewBoxW > 0) and (FViewBoxH > 0) then
       H := W * FViewBoxH / FViewBoxW;
+
+    // Fall back to viewBox dimensions when neither width nor height could be
+    // parsed (e.g. malformed values like width="px" with no numeric part)
+    if (W <= 0) and (FViewBoxW > 0) then W := FViewBoxW;
+    if (H <= 0) and (FViewBoxH > 0) then H := FViewBoxH;
 
     // If still missing one dimension and no viewBox, match the other
     if (W <= 0) and (H > 0) then W := H;
