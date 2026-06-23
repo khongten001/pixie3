@@ -1831,6 +1831,18 @@ begin
     if ValidStr <> '' then
     begin
       Idx := PixieValueIndex(Ident, ValidStr);
+      // CSS-wide keyword 'initial' resets a property to its initial value.
+      // Dropping it (Idx < 0) wrongly lets a less specific rule win — e.g.
+      // 'display: initial' must override an earlier 'display: none' rather
+      // than be ignored (issue #271). The initial value of 'display' is
+      // 'inline'; position/float blockification then promotes it as needed.
+      if (Idx < 0) and (Ident = 'initial') then
+      begin
+        if Name = Ord(psid_display) then
+          Idx := PixieValueIndex('inline', ValidStr)
+        else if Name = Ord(psid_visibility) then
+          Idx := PixieValueIndex('visible', ValidStr);
+      end;
       // 'oblique' has no separate representation — render it as italic.
       if (Name = Ord(psid_font_style)) and (Idx < 0) and (Ident = 'oblique') then
         Idx := Ord(fstItalic);
