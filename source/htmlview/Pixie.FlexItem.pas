@@ -1123,7 +1123,10 @@ begin
   begin
     Ri.Render(0, 0, SelfSize.NewWidth(SelfSize.RenderWidth.Value, SizeModeContent),
       TPixieFormattingContext(FmtCtx));
-    MinSize := Ri.Height + Ri.RenderOffsetHeight;
+    // Ri.Height is already the outer (margin-box) main size; adding
+    // RenderOffsetHeight again would double-count the vertical margins/
+    // padding/border (cf. the row variant using content size + offset once).
+    MinSize := Ri.Height;
   end
   else
     MinSize := Ri.Css.CssMinHeight.CalcPercent(SelfSize.Height.Value) +
@@ -1159,7 +1162,10 @@ begin
       Ord(fbMaxContent), Ord(fbFitContent):
       begin
         Ri.Render(0, 0, SelfSize, TPixieFormattingContext(FmtCtx));
-        BaseSize := Ri.Height + Ri.RenderOffsetHeight;
+        // Ri.Height is already the outer (margin-box) main size — the row
+        // variant uses Ri.Width directly. Adding RenderOffsetHeight again
+        // double-counts the item's vertical margins/padding/border.
+        BaseSize := Ri.Height;
       end;
       Ord(fbMinContent):
         BaseSize := MinSize;
