@@ -66,6 +66,12 @@ type
       const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); virtual; abstract;
     procedure AlignBaseline(var Ln: TPixieFlexLine;
       const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); virtual; abstract;
+    // Re-resolve an item's explicit cross-axis size against the now-known line
+    // cross size. Default does nothing; only column-direction items need it
+    // (their percentage/calc width resolves to zero in the intrinsic cross-size
+    // measure, so a non-stretch item would otherwise keep its content width).
+    procedure RenderCrossFromCss(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); virtual;
   end;
 
   { TPixieFlexItemRow — row direction flex item }
@@ -101,6 +107,8 @@ type
     procedure AlignStretch(var Ln: TPixieFlexLine;
       const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
     procedure AlignBaseline(var Ln: TPixieFlexLine;
+      const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
+    procedure RenderCrossFromCss(var Ln: TPixieFlexLine;
       const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer); override;
   end;
 
@@ -828,6 +836,14 @@ begin
   SetMainPosition(AMainPos);
   if not ApplyCrossAutoMargins(Ln.CrossStart, Ln.CrossSize) then
   begin
+    // A non-stretch item with an explicit percentage/calc cross size was
+    // measured at content width; re-resolve it against the line cross size
+    // before positioning. Stretch (the case else) re-renders in AlignStretch.
+    case Align and $FF of
+      Ord(faiBaseline), Ord(faiFlexEnd), Ord(faiEnd), Ord(faiCenter),
+      Ord(faiFlexStart), Ord(faiStart):
+        RenderCrossFromCss(Ln, SelfSize, FmtCtx);
+    end;
     case Align and $FF of
       Ord(faiBaseline):
         AlignBaseline(Ln, SelfSize, FmtCtx);
@@ -855,6 +871,13 @@ begin
       AlignStretch(Ln, SelfSize, FmtCtx);
     end;
   end;
+end;
+
+procedure TPixieFlexItem.RenderCrossFromCss(var Ln: TPixieFlexLine;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+begin
+  // Default: nothing. Row-direction items resolve an explicit cross-axis
+  // (height) size during the measure pass already; only column items override.
 end;
 
 function TPixieFlexItem.GetFirstBaseline(AType: TPixieBaselineType): TPixiePixel;
@@ -1281,6 +1304,29 @@ begin
       Mode),
     TPixieFormattingContext(FmtCtx));
   ApplyMainAutoMargins;
+end;
+
+procedure TPixieFlexItemColumn.RenderCrossFromCss(var Ln: TPixieFlexLine;
+  const SelfSize: TPixieContainingBlockContext; FmtCtx: Pointer);
+var
+  Ri: TPixieRenderItem;
+begin
+  Assert(TObject(El) is TPixieRenderItem);
+  Ri := TPixieRenderItem(El);
+  // Only an explicit (non-auto) width needs re-resolving; an auto-width item
+  // keeps the content width it was measured at. Render width from CSS (so a
+  // percentage/calc resolves against the line cross size) with the main-axis
+  // height pinned — mirroring AlignStretch's explicit-width branch, but this
+  // path never forces an auto-width item to fill the line.
+  if Ri.Css.CssWidth.IsPredefined then Exit;
+  Assert(TObject(FmtCtx) is TPixieFormattingContext);
+  Ri.Render(Ri.FPos.X - Ri.ContentOffsetLeft,
+    Ri.FPos.Y - Ri.ContentOffsetTop,
+    SelfSize.NewWidthHeight(
+      Ln.CrossSize - Ri.ContentOffsetWidth + Ri.BoxSizingWidth,
+      MainSize - Ri.ContentOffsetHeight + Ri.BoxSizingHeight,
+      SizeModeExactHeight),
+    TPixieFormattingContext(FmtCtx));
 end;
 
 procedure TPixieFlexItemColumn.AlignBaseline(var Ln: TPixieFlexLine;
