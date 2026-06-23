@@ -15,7 +15,7 @@ uses
   SysUtils, Generics.Collections, Math,
   Pixie.Types, Pixie.CssLength, Pixie.CssProperties, Pixie.WebColor,
   Pixie.Element, Pixie.FormattingContext, Pixie.ScrollView,
-  Pixie.Container;
+  Pixie.Container, Pixie.Matrix;
 
 type
   TPixieRenderItem = class;
@@ -41,7 +41,6 @@ type
     FSkip: Boolean;
     FLayoutPositioned: Boolean;          // True if positioned during layout
     FRelShiftDone: Boolean;              // True after ApplyRelativeShift ran
-    FTransformShiftDone: Boolean;        // True after ApplyTransformShift ran
     FPositioned: TPixieRenderItemVector; // non-owning
     FScrollView: TPixieScrollView;       // owned, can be nil
     FIntrinsicMinWidth: TPixiePixel;     // CSS min-content width; 0 = unknown
@@ -156,7 +155,11 @@ type
     function CalcAutoMargins(ParentWidth: TPixiePixel): TPixiePixel;
     procedure ApplyRelativeShift(
       const CbContext: TPixieContainingBlockContext);
-    procedure ApplyTransformShift;
+    // Builds the element's CSS transform matrix in draw coordinates (BaseX/
+    // BaseY = the parent's draw origin). False when the element has no
+    // transform. Composed about transform-origin.
+    function BuildTransformMatrix(BaseX, BaseY: TPixiePixel;
+      out M: TPixieMatrix): Boolean;
     procedure GetRelativeOffset(
       const CbContext: TPixieContainingBlockContext;
       out DX, DY: TPixiePixel);
@@ -240,7 +243,6 @@ begin
   FSkip := False;
   FLayoutPositioned := False;
   FRelShiftDone := False;
-  FTransformShiftDone := False;
   FPositioned := nil;
   FScrollView := nil;
   FIntrinsicMinWidth := 0;
@@ -747,7 +749,6 @@ begin
   FPos.Clear;
   FPos.MoveTo(X, Y);
   FRelShiftDone := False;
-  FTransformShiftDone := False;
 
   CLeft := ContentOffsetLeft;
   CTop := ContentOffsetTop;
@@ -911,44 +912,73 @@ procedure TPixieRenderItem.ApplyRelativeShift(
 var
   DX, DY: TPixiePixel;
 begin
-  if not FRelShiftDone then
+  if FRelShiftDone then Exit;
+  if FElement.Css.ElPosition = epRelative then
   begin
-    if FElement.Css.ElPosition = epRelative then
-    begin
-      GetRelativeOffset(CbContext, DX, DY);
-      FPos.X := FPos.X + DX;
-      FPos.Y := FPos.Y + DY;
-    end;
+    GetRelativeOffset(CbContext, DX, DY);
+    FPos.X := FPos.X + DX;
+    FPos.Y := FPos.Y + DY;
     FRelShiftDone := True;
   end;
-  ApplyTransformShift;
 end;
 
-// Apply a CSS transform:translate() as a purely visual shift of the final
-// position (siblings are already laid out, so they are unaffected). Percentages
-// resolve against the element's own border box. Runs once per layout; the
-// positioned path calls this directly since it bypasses ApplyRelativeShift.
-procedure TPixieRenderItem.ApplyTransformShift;
+function TPixieRenderItem.BuildTransformMatrix(BaseX, BaseY: TPixiePixel;
+  out M: TPixieMatrix): Boolean;
 var
   Doc: TPixieDocument;
-  BorderW, BorderH, TX, TY: TPixiePixel;
+  Ops: TPixieTransformOps;
+  Fm: TPixieFontMetrics;
+  BorderW, BorderH, OriginX, OriginY, TX, TY: TPixiePixel;
+  I: Integer;
+  Cur, MOp: TPixieMatrix;
 begin
-  if FTransformShiftDone then Exit;
-  FTransformShiftDone := True;
-  if not FElement.Css.HasTransformTranslate then Exit;
+  Result := False;
+  Ops := FElement.Css.TransformOps;
+  if Length(Ops) = 0 then Exit;
 
   Assert(FElement.GetDocument is TPixieDocument);
   Doc := TPixieDocument(FElement.GetDocument);
+  Fm := FElement.Css.FontMetrics;
+
   BorderW := FPos.Width + FPadding.Left + FPadding.Right +
     FBorders.Left + FBorders.Right;
   BorderH := FPos.Height + FPadding.Top + FPadding.Bottom +
     FBorders.Top + FBorders.Bottom;
-  TX := Doc.ToPixels(FElement.Css.TransformTranslateX, FElement.Css.FontMetrics,
-    BorderW);
-  TY := Doc.ToPixels(FElement.Css.TransformTranslateY, FElement.Css.FontMetrics,
-    BorderH);
-  FPos.X := FPos.X + TX;
-  FPos.Y := FPos.Y + TY;
+
+  // transform-origin in draw coordinates (border-box top-left + resolved origin)
+  OriginX := BaseX + FPos.X - FPadding.Left - FBorders.Left +
+    Doc.ToPixels(FElement.Css.TransformOriginX, Fm, BorderW);
+  OriginY := BaseY + FPos.Y - FPadding.Top - FBorders.Top +
+    Doc.ToPixels(FElement.Css.TransformOriginY, Fm, BorderH);
+
+  Cur := TPixieMatrix.Identity;
+  for I := 0 to High(Ops) do
+  begin
+    case Ops[I].Func of
+      ptfTranslate:
+      begin
+        TX := Doc.ToPixels(Ops[I].LenX, Fm, BorderW);
+        TY := Doc.ToPixels(Ops[I].LenY, Fm, BorderH);
+        Cur := Cur.Multiply(TPixieMatrix.CreateTranslate(TX, TY));
+      end;
+      ptfScale:
+        Cur := Cur.Multiply(TPixieMatrix.CreateScale(Ops[I].Num[0], Ops[I].Num[1]));
+      ptfRotate:
+        Cur := Cur.Multiply(TPixieMatrix.CreateRotate(Ops[I].Num[0]));
+      ptfSkew:
+        Cur := Cur.Multiply(TPixieMatrix.CreateSkew(Ops[I].Num[0], Ops[I].Num[1]));
+      ptfMatrix:
+      begin
+        MOp.A := Ops[I].Num[0]; MOp.B := Ops[I].Num[1]; MOp.C := Ops[I].Num[2];
+        MOp.D := Ops[I].Num[3]; MOp.E := Ops[I].Num[4]; MOp.F := Ops[I].Num[5];
+        Cur := Cur.Multiply(MOp);
+      end;
+    end;
+  end;
+
+  M := TPixieMatrix.CreateTranslate(OriginX, OriginY).Multiply(Cur).Multiply(
+    TPixieMatrix.CreateTranslate(-OriginX, -OriginY));
+  Result := True;
 end;
 
 // --- Split inlines ---
@@ -1577,10 +1607,6 @@ begin
         El.FPos := SavedPos;
       end;
 
-      // Visual transform:translate() shift, applied after the final position is
-      // known so the redraw box and any descendants follow the element.
-      El.ApplyTransformShift;
-
       if ElPosition = epFixed then
       begin
         FixedPos := El.Pos;
@@ -1687,6 +1713,9 @@ var
   El: TPixieRenderItem;
   Process: Boolean;
   BdrRadius: TPixieBorderRadiuses;
+  HasTfm: Boolean;
+  TfMatrix: TPixieMatrix;
+  TfBaseX, TfBaseY: TPixiePixel;
 begin
   ElPos := FPos;
   ElPos.X := ElPos.X + X - GetScrollLeft;
@@ -1754,6 +1783,32 @@ begin
           PseudoShiftY := -Offsets.Bottom.Val;
         El.FPos.X := El.FPos.X + PseudoShiftX;
         El.FPos.Y := El.FPos.Y + PseudoShiftY;
+      end;
+
+      // CSS transform: wrap this element and its subtree in its matrix. Fixed
+      // elements draw in viewport space (base 0,0); others in ElPos space.
+      // Skipped on backends that cannot honour a relative matrix (PDF).
+      HasTfm := El.SrcEl.Css.HasTransform and Cont.SupportsTransform;
+      if HasTfm then
+      begin
+        if El.SrcEl.Css.ElPosition = epFixed then
+        begin
+          TfBaseX := 0;
+          TfBaseY := 0;
+        end
+        else
+        begin
+          TfBaseX := ElPos.X;
+          TfBaseY := ElPos.Y;
+        end;
+        if El.BuildTransformMatrix(TfBaseX, TfBaseY, TfMatrix) then
+        begin
+          Cont.SaveState;
+          Cont.ConcatMatrix(TfMatrix.A, TfMatrix.B, TfMatrix.C,
+            TfMatrix.D, TfMatrix.E, TfMatrix.F);
+        end
+        else
+          HasTfm := False;
       end;
 
       HasOpacity := False;
@@ -1841,6 +1896,8 @@ begin
         end;
         if HasOpacity then Cont.PopOpacity;
       end;
+
+      if HasTfm then Cont.RestoreState;
 
       // Restore FPos after pseudo-relative shift
       if (PseudoShiftX <> 0) or (PseudoShiftY <> 0) then

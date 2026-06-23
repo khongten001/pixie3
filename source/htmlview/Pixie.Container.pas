@@ -135,6 +135,12 @@ type
       const BdrRadius: TPixieBorderRadiuses); virtual; abstract;
     procedure DelClip; virtual; abstract;
 
+    // Graphics state stack + affine transform (for CSS transforms)
+    procedure SaveState; virtual; abstract;
+    procedure RestoreState; virtual; abstract;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); virtual; abstract;
+    function SupportsTransform: Boolean; virtual; abstract;
+
     // Viewport & media
     procedure GetViewport(out Viewport: TPixiePosition); virtual; abstract;
     procedure GetMediaFeatures(

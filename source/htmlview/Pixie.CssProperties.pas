@@ -35,6 +35,17 @@ type
     ComputedValue: TPixiePixel;
   end;
 
+  // One parsed CSS transform function. Translate keeps lengths (resolved
+  // against the element box at layout/paint); the others carry resolved
+  // numbers: scale=(sx,sy), rotate=(deg), skew=(axDeg,ayDeg), matrix=(a..f).
+  TPixieTransformFunc = (ptfTranslate, ptfScale, ptfRotate, ptfSkew, ptfMatrix);
+  TPixieTransformOp = record
+    Func: TPixieTransformFunc;
+    LenX, LenY: TPixieCssLength;
+    Num: array[0..5] of Single;
+  end;
+  TPixieTransformOps = array of TPixieTransformOp;
+
   { TPixieCssProperties }
   TPixieCssProperties = class
   private
@@ -136,13 +147,15 @@ type
     FContent: string;
     FCursor: string;
 
-    // CSS transform (Phase 1: translate only). FTransform holds the raw value
-    // so transform:inherit can copy it from the parent (GetPropertyString reads
-    // the parent field at this offset); it is then parsed into the translate.
+    // CSS transform. FTransform/FTransformOriginStr hold the raw values so
+    // transform[-origin]:inherit can copy them from the parent (GetPropertyString
+    // reads the parent field at this offset); they are parsed into FTransformOps
+    // and the origin lengths.
     FTransform: string;
-    FHasTransformTranslate: Boolean;
-    FTransformTranslateX: TPixieCssLength;
-    FTransformTranslateY: TPixieCssLength;
+    FTransformOriginStr: string;
+    FTransformOps: TPixieTransformOps;
+    FTransformOriginX: TPixieCssLength;
+    FTransformOriginY: TPixieCssLength;
 
     // Line height
     FLineHeight: TPixieCssLineHeight;
@@ -277,14 +290,11 @@ type
     property Content: string read FContent write FContent;
     property Cursor: string read FCursor write FCursor;
 
-    // CSS transform (Phase 1: translate only)
-    property HasTransformTranslate: Boolean read FHasTransformTranslate;
-    property TransformTranslateX: TPixieCssLength read FTransformTranslateX;
-    property TransformTranslateY: TPixieCssLength read FTransformTranslateY;
-    // True when the element needs a purely visual post-layout shift of its
-    // final position — position:relative offsets or a transform:translate().
-    // The single trigger both ApplyRelativeShift call sites test.
-    function HasVisualShift: Boolean;
+    // CSS transform
+    property TransformOps: TPixieTransformOps read FTransformOps;
+    property TransformOriginX: TPixieCssLength read FTransformOriginX;
+    property TransformOriginY: TPixieCssLength read FTransformOriginY;
+    function HasTransform: Boolean;
 
     // Line height
     property LineHeight: TPixieCssLineHeight read FLineHeight write FLineHeight;
@@ -314,26 +324,61 @@ type
   end;
   PComputeContext = ^TComputeContext;
 
-// Parse a single transform-function argument ("-50%", "10px", "0") into a
-// length. A bare number is treated as pixels.
+  TPixieArgArray = array of string;
+
+// Locale-independent float parse that also accepts a leading decimal point
+// (".5", "-.5"), which System.Val rejects. Returns False on failure.
+function ParseLenientFloat(const S: string; out V: Single): Boolean;
+var
+  T: string;
+  Code: Integer;
+begin
+  V := 0;
+  T := Trim(S);
+  if T = '' then Exit(False);
+  if T[1] = '.' then
+    T := '0' + T
+  else if (Length(T) >= 2) and ((T[1] = '-') or (T[1] = '+')) and (T[2] = '.') then
+    Insert('0', T, 2);
+  Val(T, V, Code);
+  Result := Code = 0;
+end;
+
+// Split the numeric prefix and unit suffix of a length token at the first
+// non-(digit/sign/dot) character.
+procedure SplitNumberUnit(const S: string; out NumStr, UnitStr: string);
+var
+  T: string;
+  I, L: Integer;
+begin
+  T := Trim(S);
+  L := Length(T);
+  I := 1;
+  if (I <= L) and ((T[I] = '-') or (T[I] = '+')) then Inc(I);
+  while (I <= L) and (((T[I] >= '0') and (T[I] <= '9')) or (T[I] = '.')) do
+    Inc(I);
+  // scientific-notation exponent (1e2, 1.5E-3)
+  if (I <= L) and ((T[I] = 'e') or (T[I] = 'E')) then
+  begin
+    Inc(I);
+    if (I <= L) and ((T[I] = '-') or (T[I] = '+')) then Inc(I);
+    while (I <= L) and (T[I] >= '0') and (T[I] <= '9') do Inc(I);
+  end;
+  NumStr := Copy(T, 1, I - 1);
+  UnitStr := Trim(LowerCase(Copy(T, I, L - I + 1)));
+end;
+
+// Parse a length token ("-50%", "10px", ".5em", "0") into a CSS length.
+// A bare number is treated as pixels.
 function ParseTransformLen(const S: string): TPixieCssLength;
 var
-  T, NumStr, UnitStr: string;
-  I, L, Code, UIdx: Integer;
+  NumStr, UnitStr: string;
+  UIdx: Integer;
   V: Single;
 begin
   Result := TPixieCssLength.Create(0, cssUnitsPx);
-  T := Trim(S);
-  L := Length(T);
-  if L = 0 then Exit;
-  I := 1;
-  if (T[I] = '-') or (T[I] = '+') then Inc(I);
-  while (I <= L) and (((T[I] >= '0') and (T[I] <= '9')) or (T[I] = '.')) do
-    Inc(I);
-  NumStr := Copy(T, 1, I - 1);
-  UnitStr := Trim(Copy(T, I, L - I + 1));
-  Val(NumStr, V, Code);
-  if Code <> 0 then Exit;
+  SplitNumberUnit(S, NumStr, UnitStr);
+  if not ParseLenientFloat(NumStr, V) then Exit;
   if UnitStr = '' then
     Result := TPixieCssLength.Create(V, cssUnitsPx)
   else if UnitStr = '%' then
@@ -348,53 +393,257 @@ begin
   end;
 end;
 
-// Phase 1 transform parser: extract the first translate()/translateX()/
-// translateY() function from the value. Other functions (scale/rotate/...) are
-// ignored until later phases. Returns True when a translate was found.
-function ParseTransformTranslate(const S: string;
-  out TX, TY: TPixieCssLength): Boolean;
-var
-  Lower, FuncName, ArgsStr, A0, A1: string;
-  P, Q, CommaPos: Integer;
+// Parse a unitless number token (scale factor, matrix component).
+function ParseTransformNumber(const S: string): Single;
 begin
-  Result := False;
-  TX := TPixieCssLength.Create(0, cssUnitsPx);
-  TY := TPixieCssLength.Create(0, cssUnitsPx);
+  if not ParseLenientFloat(Trim(S), Result) then Result := 0;
+end;
+
+// Parse an angle token to degrees (deg/rad/turn/grad; bare number = deg).
+function ParseTransformAngle(const S: string): Single;
+var
+  NumStr, UnitStr: string;
+  V: Single;
+begin
+  Result := 0;
+  SplitNumberUnit(S, NumStr, UnitStr);
+  if not ParseLenientFloat(NumStr, V) then Exit;
+  if UnitStr = 'rad' then
+    Result := V * 180.0 / Pi
+  else if UnitStr = 'turn' then
+    Result := V * 360.0
+  else if UnitStr = 'grad' then
+    Result := V * 0.9
+  else
+    Result := V;
+end;
+
+// Split a function argument list on top-level commas (parens are tracked so
+// nested function args such as calc(a, b) are not mis-split).
+function SplitTransformArgs(const S: string): TPixieArgArray;
+var
+  I, Depth, Start, N: Integer;
+  Seg: string;
+begin
+  SetLength(Result, 0);
+  if Trim(S) = '' then Exit;
+  Depth := 0;
+  Start := 1;
+  N := 0;
+  for I := 1 to Length(S) do
+  begin
+    if S[I] = '(' then Inc(Depth)
+    else if S[I] = ')' then Dec(Depth)
+    else if (S[I] = ',') and (Depth = 0) then
+    begin
+      // Skip empty segments so a stray/trailing comma (e.g. "scale(2,)")
+      // doesn't inject a spurious 0 arg that clobbers a defaulted value.
+      Seg := Trim(Copy(S, Start, I - Start));
+      if Seg <> '' then
+      begin
+        SetLength(Result, N + 1);
+        Result[N] := Seg;
+        Inc(N);
+      end;
+      Start := I + 1;
+    end;
+  end;
+  Seg := Trim(Copy(S, Start, Length(S) - Start + 1));
+  if Seg <> '' then
+  begin
+    SetLength(Result, N + 1);
+    Result[N] := Seg;
+    Inc(N);
+  end;
+end;
+
+// Parse a full CSS transform value into an ordered op-list. Functions are
+// applied left-to-right (leftmost outermost). Unknown/3D functions are skipped.
+function ParseTransformOps(const S: string): TPixieTransformOps;
+var
+  Lower, FuncName, ArgsStr: string;
+  I, L, NameStart, ArgStart, Depth, N: Integer;
+  Args: TPixieArgArray;
+  Op: TPixieTransformOp;
+begin
+  SetLength(Result, 0);
+  N := 0;
+  Lower := LowerCase(S);
+  L := Length(Lower);
+  I := 1;
+  while I <= L do
+  begin
+    while (I <= L) and ((Lower[I] = ' ') or (Lower[I] = #9) or
+      (Lower[I] = ',')) do Inc(I);
+    if I > L then Break;
+    NameStart := I;
+    while (I <= L) and (Lower[I] <> '(') do Inc(I);
+    if I > L then Break;
+    FuncName := Trim(Copy(Lower, NameStart, I - NameStart));
+    Inc(I);
+    ArgStart := I;
+    Depth := 0;
+    while (I <= L) and not ((Lower[I] = ')') and (Depth = 0)) do
+    begin
+      if Lower[I] = '(' then Inc(Depth)
+      else if Lower[I] = ')' then Dec(Depth);
+      Inc(I);
+    end;
+    ArgsStr := Copy(Lower, ArgStart, I - ArgStart);
+    if I <= L then Inc(I);
+    Args := SplitTransformArgs(ArgsStr);
+
+    FillChar(Op, SizeOf(Op), 0);
+    if (FuncName = 'translate') or (FuncName = 'translatex') or
+       (FuncName = 'translatey') then
+    begin
+      Op.Func := ptfTranslate;
+      Op.LenX := TPixieCssLength.Create(0, cssUnitsPx);
+      Op.LenY := TPixieCssLength.Create(0, cssUnitsPx);
+      if FuncName = 'translatey' then
+      begin
+        if Length(Args) >= 1 then Op.LenY := ParseTransformLen(Args[0]);
+      end
+      else
+      begin
+        if Length(Args) >= 1 then Op.LenX := ParseTransformLen(Args[0]);
+        if (FuncName = 'translate') and (Length(Args) >= 2) then
+          Op.LenY := ParseTransformLen(Args[1]);
+      end;
+    end
+    else if (FuncName = 'scale') or (FuncName = 'scalex') or
+            (FuncName = 'scaley') then
+    begin
+      Op.Func := ptfScale;
+      Op.Num[0] := 1; Op.Num[1] := 1;
+      if FuncName = 'scalex' then
+      begin
+        if Length(Args) >= 1 then Op.Num[0] := ParseTransformNumber(Args[0]);
+      end
+      else if FuncName = 'scaley' then
+      begin
+        if Length(Args) >= 1 then Op.Num[1] := ParseTransformNumber(Args[0]);
+      end
+      else
+      begin
+        if Length(Args) >= 1 then Op.Num[0] := ParseTransformNumber(Args[0]);
+        if Length(Args) >= 2 then Op.Num[1] := ParseTransformNumber(Args[1])
+        else Op.Num[1] := Op.Num[0];
+      end;
+    end
+    else if FuncName = 'rotate' then
+    begin
+      Op.Func := ptfRotate;
+      if Length(Args) >= 1 then Op.Num[0] := ParseTransformAngle(Args[0]);
+    end
+    else if (FuncName = 'skew') or (FuncName = 'skewx') or
+            (FuncName = 'skewy') then
+    begin
+      Op.Func := ptfSkew;
+      if FuncName = 'skewy' then
+      begin
+        if Length(Args) >= 1 then Op.Num[1] := ParseTransformAngle(Args[0]);
+      end
+      else
+      begin
+        if Length(Args) >= 1 then Op.Num[0] := ParseTransformAngle(Args[0]);
+        if (FuncName = 'skew') and (Length(Args) >= 2) then
+          Op.Num[1] := ParseTransformAngle(Args[1]);
+      end;
+    end
+    else if FuncName = 'matrix' then
+    begin
+      if Length(Args) < 6 then Continue;
+      Op.Func := ptfMatrix;
+      Op.Num[0] := ParseTransformNumber(Args[0]);
+      Op.Num[1] := ParseTransformNumber(Args[1]);
+      Op.Num[2] := ParseTransformNumber(Args[2]);
+      Op.Num[3] := ParseTransformNumber(Args[3]);
+      Op.Num[4] := ParseTransformNumber(Args[4]);
+      Op.Num[5] := ParseTransformNumber(Args[5]);
+    end
+    else
+      Continue; // unknown / 3D function — skip
+
+    SetLength(Result, N + 1);
+    Result[N] := Op;
+    Inc(N);
+  end;
+end;
+
+// Resolve one transform-origin keyword/length component.
+function ParseOriginComponent(const S: string): TPixieCssLength;
+begin
+  if (S = 'left') or (S = 'top') then
+    Result := TPixieCssLength.Create(0, cssUnitsPercentage)
+  else if (S = 'right') or (S = 'bottom') then
+    Result := TPixieCssLength.Create(100, cssUnitsPercentage)
+  else if S = 'center' then
+    Result := TPixieCssLength.Create(50, cssUnitsPercentage)
+  else
+    Result := ParseTransformLen(S);
+end;
+
+// Parse transform-origin (default 50% 50%). Keyword pairs may appear in either
+// order (e.g. "top left"); a single value sets X with Y defaulting to centre.
+procedure ParseTransformOrigin(const S: string; out OX, OY: TPixieCssLength);
+var
+  Lower, P0, P1: string;
+  I, Start, N: Integer;
+  Parts: TPixieArgArray;
+  FirstIsVert: Boolean;
+begin
+  OX := TPixieCssLength.Create(50, cssUnitsPercentage);
+  OY := TPixieCssLength.Create(50, cssUnitsPercentage);
   Lower := Trim(LowerCase(S));
   if Lower = '' then Exit;
-  P := Pos('(', Lower);
-  if P = 0 then Exit;
-  FuncName := Trim(Copy(Lower, 1, P - 1));
-  Q := Pos(')', Lower);
-  if Q = 0 then Q := Length(Lower) + 1;
-  ArgsStr := Copy(Lower, P + 1, Q - P - 1);
-  CommaPos := Pos(',', ArgsStr);
-  if CommaPos > 0 then
+
+  SetLength(Parts, 0);
+  N := 0; Start := 0;
+  for I := 1 to Length(Lower) do
   begin
-    A0 := Copy(ArgsStr, 1, CommaPos - 1);
-    A1 := Copy(ArgsStr, CommaPos + 1, Length(ArgsStr));
+    if (Lower[I] = ' ') or (Lower[I] = #9) then
+    begin
+      if Start > 0 then
+      begin
+        SetLength(Parts, N + 1);
+        Parts[N] := Copy(Lower, Start, I - Start);
+        Inc(N); Start := 0;
+      end;
+    end
+    else if Start = 0 then
+      Start := I;
+  end;
+  if Start > 0 then
+  begin
+    SetLength(Parts, N + 1);
+    Parts[N] := Copy(Lower, Start, Length(Lower) - Start + 1);
+    Inc(N);
+  end;
+  if N = 0 then Exit;
+
+  if N = 1 then
+  begin
+    if (Parts[0] = 'top') or (Parts[0] = 'bottom') then
+      OY := ParseOriginComponent(Parts[0])
+    else
+      OX := ParseOriginComponent(Parts[0]);
+    Exit;
+  end;
+
+  P0 := Parts[0];
+  P1 := Parts[1];
+  FirstIsVert := (P0 = 'top') or (P0 = 'bottom') or
+    (P1 = 'left') or (P1 = 'right');
+  if FirstIsVert then
+  begin
+    OY := ParseOriginComponent(P0);
+    OX := ParseOriginComponent(P1);
   end
   else
   begin
-    A0 := ArgsStr;
-    A1 := '';
-  end;
-  if FuncName = 'translate' then
-  begin
-    TX := ParseTransformLen(A0);
-    if Trim(A1) <> '' then
-      TY := ParseTransformLen(A1);
-    Result := True;
-  end
-  else if FuncName = 'translatex' then
-  begin
-    TX := ParseTransformLen(A0);
-    Result := True;
-  end
-  else if FuncName = 'translatey' then
-  begin
-    TY := ParseTransformLen(A0);
-    Result := True;
+    OX := ParseOriginComponent(P0);
+    OY := ParseOriginComponent(P1);
   end;
 end;
 
@@ -587,9 +836,9 @@ begin
   inherited Destroy;
 end;
 
-function TPixieCssProperties.HasVisualShift: Boolean;
+function TPixieCssProperties.HasTransform: Boolean;
 begin
-  Result := (FElPosition = epRelative) or FHasTransformTranslate;
+  Result := Length(FTransformOps) > 0;
 end;
 
 function TPixieCssProperties.GetZIndex: Integer;
@@ -1560,12 +1809,14 @@ begin
   FCursor := Tag.GetPropertyString(Ord(psid_cursor), True, 'auto',
     PtrUInt(@FCursor) - PtrUInt(Self));
 
-  // CSS transform (Phase 1: translate only). Stored unresolved; percentages
-  // resolve against the element's own border box at layout time.
+  // CSS transform + transform-origin. Stored unresolved; lengths/percentages
+  // resolve against the element's own border box when the matrix is built.
   FTransform := Tag.GetPropertyString(Ord(psid_transform), False, '',
     PtrUInt(@FTransform) - PtrUInt(Self));
-  FHasTransformTranslate := ParseTransformTranslate(
-    FTransform, FTransformTranslateX, FTransformTranslateY);
+  FTransformOps := ParseTransformOps(FTransform);
+  FTransformOriginStr := Tag.GetPropertyString(Ord(psid_transform_origin),
+    False, '', PtrUInt(@FTransformOriginStr) - PtrUInt(Self));
+  ParseTransformOrigin(FTransformOriginStr, FTransformOriginX, FTransformOriginY);
 
   // 15. Text indent
   FCssTextIndent := Tag.GetPropertyLength(Ord(psid_text_indent), True,

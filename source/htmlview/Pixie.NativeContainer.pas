@@ -200,6 +200,12 @@ type
       const BdrRadius: TPixieBorderRadiuses); override;
     procedure DelClip; override;
 
+    // Graphics state stack + affine transform
+    procedure SaveState; override;
+    procedure RestoreState; override;
+    procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+    function SupportsTransform: Boolean; override;
+
     // Viewport & media
     procedure GetViewport(out Viewport: TPixiePosition); override;
     procedure GetMediaFeatures(out Media: TPixieMediaFeatures); override;
@@ -1399,6 +1405,26 @@ end;
 procedure TPixieNativeContainer.PopOpacity;
 begin
   FCanvas.PopOpacity;
+end;
+
+procedure TPixieNativeContainer.SaveState;
+begin
+  FCanvas.SaveState;
+end;
+
+procedure TPixieNativeContainer.RestoreState;
+begin
+  FCanvas.RestoreState;
+end;
+
+procedure TPixieNativeContainer.ConcatMatrix(A, B, C, D, E, F: Single);
+begin
+  FCanvas.ConcatMatrix(A, B, C, D, E, F);
+end;
+
+function TPixieNativeContainer.SupportsTransform: Boolean;
+begin
+  Result := FCanvas.SupportsTransform;
 end;
 
 procedure TPixieNativeContainer.SetClip(const Pos: TPixiePosition;

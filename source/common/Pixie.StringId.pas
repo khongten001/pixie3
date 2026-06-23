@@ -329,6 +329,7 @@ type
     psid_table_layout,
     psid_text_transform,
     psid_transform,
+    psid_transform_origin,
 
     psid_flex,
     psid_flex_flow,

@@ -39,6 +39,7 @@ contains
   Pixie.Utils in '..\source\common\Pixie.Utils.pas',
   Pixie.Utf8 in '..\source\common\Pixie.Utf8.pas',
   Pixie.CssLength in '..\source\common\Pixie.CssLength.pas',
+  Pixie.Matrix in '..\source\common\Pixie.Matrix.pas',
   Pixie.WebColor in '..\source\common\Pixie.WebColor.pas',
   Pixie.Borders in '..\source\common\Pixie.Borders.pas',
   Pixie.FontDescription in '..\source\common\Pixie.FontDescription.pas',

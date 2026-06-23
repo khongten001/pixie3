@@ -198,6 +198,7 @@ type
       FillRule: TPixieFillRule = frNonZero); override;
     procedure ClipPath(FillRule: TPixieFillRule = frNonZero); override;
     procedure ConcatMatrix(A, B, C, D, E, F: Single); override;
+    function SupportsTransform: Boolean; override;
 
     // Off-screen + image export — not meaningful for the PDF canvas
     // (PDF is itself a destination format). Stubs satisfy the abstract
@@ -2087,6 +2088,14 @@ begin
   EmitLn(PdfFloat(A) + ' ' + PdfFloat(B) + ' ' +
          PdfFloat(C) + ' ' + PdfFloat(D) + ' ' +
          PdfFloat(PxToPt(E)) + ' ' + PdfFloat(PxToY(F)) + ' cm');
+end;
+
+function TPixiePdfCanvas.SupportsTransform: Boolean;
+begin
+  // The HTML CSS-transform path passes relative draw-space matrices, which the
+  // per-primitive PDF coordinate conversion cannot honour. Opt out so those
+  // elements render untransformed in PDF rather than mis-placed off-page.
+  Result := False;
 end;
 
 procedure TPixiePdfCanvas.BeginOffscreen(Width, Height: Integer;

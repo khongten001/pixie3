@@ -249,6 +249,10 @@
         <UnitName Value="Pixie.MasterCss"/>
       </Item>
       <Item>
+        <Filename Value="../source/common/Pixie.Matrix.pas"/>
+        <UnitName Value="Pixie.Matrix"/>
+      </Item>
+      <Item>
         <Filename Value="../source/htmlview/Pixie.MediaQuery.pas"/>
         <UnitName Value="Pixie.MediaQuery"/>
       </Item>

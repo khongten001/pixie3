@@ -186,6 +186,7 @@
         <DCCReference Include="..\source\common\Pixie.WebPAnim.pas"/>
         <DCCReference Include="..\source\common\Pixie.FontMetrics.pas"/>
         <DCCReference Include="..\source\common\Pixie.Clipboard.pas"/>
+        <DCCReference Include="..\source\common\Pixie.Matrix.pas"/>
         <DCCReference Include="..\source\common\Pixie.SimpleXml.pas"/>
         <DCCReference Include="..\source\common\Pixie.SvgRenderer.pas"/>
         <DCCReference Include="..\source\common\Pixie.Canvas.FMX.pas"/>

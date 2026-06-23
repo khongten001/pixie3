@@ -12,24 +12,15 @@ interface
 
 uses
   SysUtils, Classes, Generics.Collections,
-  Pixie.Types, Pixie.WebColor, Pixie.Canvas;
+  Pixie.Types, Pixie.WebColor, Pixie.Canvas, Pixie.Matrix;
 
 const
   SvgDecorationThickness: Single = 0.05;       // fraction of font size
   SvgDecorationUnderlineOffset: Single = 0.15;  // fraction of font size
 
 type
-  { TPixieSvgMatrix - 2D affine transform [a b c d e f] }
-
-  TPixieSvgMatrix = record
-    A, B, C, D, E, F: Single;
-    class function Identity: TPixieSvgMatrix; static;
-    function Multiply(const M: TPixieSvgMatrix): TPixieSvgMatrix;
-    class function CreateTranslate(TX, TY: Single): TPixieSvgMatrix; static;
-    class function CreateScale(SX, SY: Single): TPixieSvgMatrix; static;
-    class function CreateRotate(Angle: Single): TPixieSvgMatrix; static;
-    class function CreateRotateAt(Angle, CX, CY: Single): TPixieSvgMatrix; static;
-  end;
+  { TPixieSvgMatrix - 2D affine transform, shared with the HTML engine }
+  TPixieSvgMatrix = Pixie.Matrix.TPixieMatrix;
 
   TPixieSingleArray = array of Single;
 
@@ -430,57 +421,6 @@ end;
 // ===========================================================================
 // TPixieSvgMatrix
 // ===========================================================================
-
-class function TPixieSvgMatrix.Identity: TPixieSvgMatrix;
-begin
-  Result.A := 1; Result.B := 0;
-  Result.C := 0; Result.D := 1;
-  Result.E := 0; Result.F := 0;
-end;
-
-function TPixieSvgMatrix.Multiply(const M: TPixieSvgMatrix): TPixieSvgMatrix;
-begin
-  // Column-vector convention matching SVG spec and ConcatMatrix
-  Result.A := A * M.A + C * M.B;
-  Result.B := B * M.A + D * M.B;
-  Result.C := A * M.C + C * M.D;
-  Result.D := B * M.C + D * M.D;
-  Result.E := A * M.E + C * M.F + E;
-  Result.F := B * M.E + D * M.F + F;
-end;
-
-class function TPixieSvgMatrix.CreateTranslate(TX, TY: Single): TPixieSvgMatrix;
-begin
-  Result := Identity;
-  Result.E := TX;
-  Result.F := TY;
-end;
-
-class function TPixieSvgMatrix.CreateScale(SX, SY: Single): TPixieSvgMatrix;
-begin
-  Result := Identity;
-  Result.A := SX;
-  Result.D := SY;
-end;
-
-class function TPixieSvgMatrix.CreateRotate(Angle: Single): TPixieSvgMatrix;
-var
-  Rad, S, C: Single;
-begin
-  Rad := Angle * Pi / 180.0;
-  S := Sin(Rad);
-  C := Cos(Rad);
-  Result.A := C;  Result.B := S;
-  Result.C := -S; Result.D := C;
-  Result.E := 0;  Result.F := 0;
-end;
-
-class function TPixieSvgMatrix.CreateRotateAt(Angle, CX, CY: Single): TPixieSvgMatrix;
-begin
-  Result := CreateTranslate(CX, CY).Multiply(
-    CreateRotate(Angle)).Multiply(
-    CreateTranslate(-CX, -CY));
-end;
 
 // ===========================================================================
 // TPixieSvgGradient

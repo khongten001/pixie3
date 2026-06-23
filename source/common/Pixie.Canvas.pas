@@ -269,6 +269,11 @@ type
     // Affine transform — concatenates with current CTM
     // Parameters match SVG matrix(a,b,c,d,e,f) convention
     procedure ConcatMatrix(A, B, C, D, E, F: Single); virtual;
+    // True when ConcatMatrix supports a relative draw-space concatenation as
+    // used by CSS transforms. The PDF backend converts coordinates per
+    // primitive (no base CTM flip), so it returns False and CSS-transformed
+    // elements render untransformed there rather than mis-placed.
+    function SupportsTransform: Boolean; virtual;
 
     // View size hint for render targets that need explicit sizing
     procedure SetViewSize(W, H: Integer; ACanvasScale: Single = 1); virtual;
@@ -828,6 +833,11 @@ end;
 
 procedure TPixieCanvas.ConcatMatrix(A, B, C, D, E, F: Single);
 begin
+end;
+
+function TPixieCanvas.SupportsTransform: Boolean;
+begin
+  Result := True;
 end;
 
 end.
