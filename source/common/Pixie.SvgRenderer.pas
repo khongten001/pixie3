@@ -2959,6 +2959,23 @@ begin
                      'Q','q','T','t','A','a','Z','z']) then
           Break;
 
+        // SVG arc flags (the large-arc-flag and sweep-flag — the 4th and 5th
+        // argument of each 7-argument A/a group) are single '0'/'1' characters
+        // that the grammar permits to abut the following number with no
+        // separator, e.g. "a19 19 0 00-4.88-1.5" packs both flags as "00".
+        // Read them as one digit so the remaining arc parameters don't shift.
+        if ((Cmd.Cmd = 'A') or (Cmd.Cmd = 'a')) and
+           ((ArgCount mod 7 = 3) or (ArgCount mod 7 = 4)) and
+           CharInSet(D[P], ['0', '1']) then
+        begin
+          if ArgCount >= Length(ArgList) then
+            SetLength(ArgList, Length(ArgList) * 2);
+          ArgList[ArgCount] := Ord(D[P]) - Ord('0');
+          Inc(ArgCount);
+          Inc(P);
+          Continue;
+        end;
+
         // Read number
         NumStr := '';
         if (P <= Len) and CharInSet(D[P], ['-', '+']) then

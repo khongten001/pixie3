@@ -12,7 +12,7 @@ interface
 uses
   SysUtils, Classes, Math, Generics.Collections,
   Pixie.Types, Pixie.WebColor, Pixie.FontDescription,
-  Pixie.GradientLayer, Pixie.Borders,
+  Pixie.GradientLayer, Pixie.Borders, Pixie.Html,
   Pixie.Canvas, Pixie.SvgRenderer;
 
 type
@@ -993,6 +993,8 @@ function TPixieSvgCanvasRenderer.LoadImageFromHref(
 var
   CacheKey: string;
   DataStream: TMemoryStream;
+  SvgHead: string;
+  HeadLen: Integer;
 {$IFDEF FPC}
   Img: TFPMemoryImage;
   Pixels: PByte;
@@ -1018,32 +1020,46 @@ begin
   begin
     if not DecodeDataUri(Href, DataStream) then Exit;
     try
-      // Try canvas-native stream loading (D2D/WIC, FMX)
-      Result := FCanvas.LoadImageFromStream(DataStream);
-    {$IFDEF FPC}
-      // FPC backends: FPImage fallback for Cairo/CG/Qt
-      if Result = 0 then
+      // An SVG embedded as a data: URI (e.g. shields.io badge logos carry the
+      // brand mark as `data:image/svg+xml;base64,...`) must go through the SVG
+      // path. The raster decoders below cannot read XML, and FPImage in
+      // particular raises an exception on the markup bytes. Sniff the decoded
+      // content rather than trusting the media type, which is sometimes
+      // missing or wrong.
+      HeadLen := DataStream.Size;
+      if HeadLen > 512 then HeadLen := 512;
+      SetString(SvgHead, PAnsiChar(DataStream.Memory), HeadLen);
+      if PixieIsLikelySvg(SvgHead) then
+        Result := FCanvas.LoadSvgFromData(DataStream.Memory, DataStream.Size)
+      else
       begin
-        Img := TFPMemoryImage.Create(0, 0);
-        try
+        // Try canvas-native stream loading (D2D/WIC, FMX)
+        Result := FCanvas.LoadImageFromStream(DataStream);
+      {$IFDEF FPC}
+        // FPC backends: FPImage fallback for Cairo/CG/Qt
+        if Result = 0 then
+        begin
+          Img := TFPMemoryImage.Create(0, 0);
           try
-            DataStream.Position := 0;
-            Img.LoadFromStream(DataStream);
-          except
-            Exit;
-          end;
-          ConvertFPImageToBGRA(Img, Pixels, W, H, Pitch);
-          if Pixels <> nil then
-          try
-            Result := FCanvas.LoadImageFromPixels(W, H, Pixels, Pitch);
+            try
+              DataStream.Position := 0;
+              Img.LoadFromStream(DataStream);
+            except
+              Exit;
+            end;
+            ConvertFPImageToBGRA(Img, Pixels, W, H, Pitch);
+            if Pixels <> nil then
+            try
+              Result := FCanvas.LoadImageFromPixels(W, H, Pixels, Pitch);
+            finally
+              FreeMem(Pixels);
+            end;
           finally
-            FreeMem(Pixels);
+            Img.Free;
           end;
-        finally
-          Img.Free;
         end;
+      {$ENDIF}
       end;
-    {$ENDIF}
     finally
       DataStream.Free;
     end;
