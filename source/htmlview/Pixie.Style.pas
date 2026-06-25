@@ -212,6 +212,7 @@ begin
 
   ValidValues.Add(Ord(psid_display), StyleDisplayStrings);
   ValidValues.Add(Ord(psid_visibility), VisibilityStrings);
+  ValidValues.Add(Ord(psid_user_select), UserSelectStrings);
   ValidValues.Add(Ord(psid_position), ElementPositionStrings);
   ValidValues.Add(Ord(psid_float), ElementFloatStrings);
   ValidValues.Add(Ord(psid_clear), ElementClearStrings);
@@ -1671,6 +1672,19 @@ begin
   FProperties.Clear;
 end;
 
+// Map the still-common vendor-prefixed spellings of 'user-select' onto the
+// standard property. Stripping prefixes wholesale would be risky: for divergent
+// pairs (e.g. '-webkit-appearance' vs 'appearance') a later prefixed hack could
+// overwrite the intended modern value, so we only alias the names we support.
+function PixieCanonicalPropertyName(const Name: string): string;
+begin
+  if (Name = '-webkit-user-select') or (Name = '-moz-user-select') or
+     (Name = '-ms-user-select') then
+    Result := 'user-select'
+  else
+    Result := Name;
+end;
+
 procedure TPixieStyle.Add(const Txt: string; const BaseUrl: string);
 var
   Tokens: TPixieCssTokenList;
@@ -1700,7 +1714,7 @@ begin
       if (Length(Decl.Name) >= 2) and (Decl.Name[1] = '-') and (Decl.Name[2] = '-') then
         Name := Decl.Name
       else
-        Name := PixieLowerCase(Decl.Name);
+        Name := PixieCanonicalPropertyName(PixieLowerCase(Decl.Name));
       AddProperty(PixieId(Name), Decl.Value, BaseUrl, Decl.Important);
     end;
   finally
@@ -1809,6 +1823,7 @@ begin
   // =============================  SINGLE KEYWORD  =============================
 
   if (Name = Ord(psid_display)) or (Name = Ord(psid_visibility)) or
+     (Name = Ord(psid_user_select)) or
      (Name = Ord(psid_position)) or (Name = Ord(psid_float)) or
      (Name = Ord(psid_clear)) or (Name = Ord(psid_appearance)) or
      (Name = Ord(psid_box_sizing)) or (Name = Ord(psid_overflow)) or

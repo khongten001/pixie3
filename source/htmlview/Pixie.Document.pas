@@ -2011,8 +2011,13 @@ begin
   for I := Lo to Hi do
   begin
     El := FAllElements[I];
+    // 'user-select: none' (inherited, resolved onto each text node) opts a run
+    // out of selection. Enforcing it here — the single point feeding both the
+    // highlight paint and clipboard copy — covers drag-through, Select All and
+    // table cells alike, regardless of which hit-test endpoint was used.
     if El.IsText and (El.Parent <> nil) and
-       (El.Parent.Css.Display <> displayNone) then
+       (El.Parent.Css.Display <> displayNone) and
+       (El.Css.UserSelect <> usNone) then
       FSelMap.AddOrSetValue(Pointer(El), True);
   end;
 end;

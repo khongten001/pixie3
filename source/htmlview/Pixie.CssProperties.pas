@@ -53,6 +53,7 @@ type
     FElPosition: TPixieElementPosition;
     FDisplay: TPixieDisplay;
     FVisibility: TPixieVisibility;
+    FUserSelect: TPixieUserSelect;
     FTextAlign: TPixieTextAlign;
     FOverflow: TPixieOverflow;
     FOverflowX: TPixieOverflow;
@@ -196,6 +197,7 @@ type
     property ElPosition: TPixieElementPosition read FElPosition write FElPosition;
     property Display: TPixieDisplay read FDisplay write FDisplay;
     property Visibility: TPixieVisibility read FVisibility write FVisibility;
+    property UserSelect: TPixieUserSelect read FUserSelect write FUserSelect;
     property TextAlign: TPixieTextAlign read FTextAlign write FTextAlign;
     property Overflow: TPixieOverflow read FOverflow write FOverflow;
     property OverflowX: TPixieOverflow read FOverflowX write FOverflowX;
@@ -776,6 +778,7 @@ begin
   FElPosition := epStatic;
   FDisplay := displayInline;
   FVisibility := visVisible;
+  FUserSelect := usAuto;
   FTextAlign := taLeft;
   FOverflow := ovVisible;
   FOverflowX := ovVisible;
@@ -895,6 +898,7 @@ begin
   List.Add('overflow=' + PixieIndexValue(Ord(FOverflow), OverflowStrings));
   List.Add('white_space=' + PixieIndexValue(Ord(FWhiteSpace), WhiteSpaceStrings));
   List.Add('visibility=' + PixieIndexValue(Ord(FVisibility), VisibilityStrings));
+  List.Add('user_select=' + PixieIndexValue(Ord(FUserSelect), UserSelectStrings));
   List.Add('appearance=' + PixieIndexValue(Ord(FAppearance), AppearanceStrings));
   List.Add('box_sizing=' + PixieIndexValue(Ord(FBoxSizing), BoxSizingStrings));
   List.Add('z_index=' + FZIndex.ToString);
@@ -1507,6 +1511,9 @@ begin
   FVisibility := TPixieVisibility(Tag.GetPropertyInt(
     Ord(psid_visibility), True, Ord(visVisible),
     PtrUInt(@FVisibility) - PtrUInt(Self)));
+  FUserSelect := TPixieUserSelect(Tag.GetPropertyInt(
+    Ord(psid_user_select), True, Ord(usAuto),
+    PtrUInt(@FUserSelect) - PtrUInt(Self)));
   FFloat := TPixieElementFloat(Tag.GetPropertyInt(
     Ord(psid_float), False, Ord(efNone),
     PtrUInt(@FFloat) - PtrUInt(Self)));

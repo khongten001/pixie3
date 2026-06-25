@@ -313,6 +313,7 @@ type
     psid_overflow_y,
     psid_display,
     psid_visibility,
+    psid_user_select,
     psid_appearance,
     psid_box_sizing,
     psid_z_index,

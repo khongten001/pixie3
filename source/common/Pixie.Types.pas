@@ -349,6 +349,15 @@ type
     visCollapse
   );
 
+  // User select
+  // 'auto;text;none;all'
+  TPixieUserSelect = (
+    usAuto,
+    usText,
+    usNone,
+    usAll
+  );
+
   // Border collapse
   // 'collapse;separate'
   TPixieBorderCollapse = (
@@ -610,6 +619,7 @@ const
   OverflowStrings = 'visible;hidden;scroll;auto;no-display;no-content';
   BackgroundSizeStrings = 'auto;cover;contain';
   VisibilityStrings = 'visible;hidden;collapse';
+  UserSelectStrings = 'auto;text;none;all';
   BorderCollapseStrings = 'collapse;separate';
   TableLayoutStrings = 'auto;fixed';
   ContentPropertyStrings = 'none;normal;open-quote;close-quote;no-open-quote;no-close-quote';

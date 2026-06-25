@@ -133,6 +133,7 @@ begin
   FCss.OverflowWrap := Par.Css.OverflowWrap;
   FCss.TextTransform := Par.Css.TextTransform;
   FCss.FontSize := Par.Css.FontSize;
+  FCss.UserSelect := Par.Css.UserSelect;
 
   // Get container from nearest html_tag ancestor
   Cont := nil;
