@@ -1558,6 +1558,8 @@ var
   DecColor: TPixieWebColor;
   DecSegStart, BoxRight, BoxBottom: TPixiePixel;
   HasTextContent: Boolean;
+  OutlineRadius: TPixieBorderRadiuses;
+  OutlineGrow: TPixieMargins;
 
   procedure DrawDecSegment(SegX1, SegX2: TPixiePixel);
   var
@@ -1726,6 +1728,21 @@ begin
         OutlineBox.Width := OutlineBox.Width + FCss.OutlineWidth * 2;
         OutlineBox.Height := OutlineBox.Height + FCss.OutlineWidth * 2;
         OutlineBox.DoRound;
+        // The outline follows the rounded border edge: take the element's
+        // border-radius (which applies even with no border) and grow each
+        // corner by the outline width so the stroke stays concentric.
+        OutlineRadius := FCss.CssBorders.Radius.CalcPercents(
+          BorderBox.Width, BorderBox.Height);
+        if OutlineRadius.HasRadius then
+        begin
+          OutlineGrow.Init;
+          OutlineGrow.Left := FCss.OutlineWidth;
+          OutlineGrow.Right := FCss.OutlineWidth;
+          OutlineGrow.Top := FCss.OutlineWidth;
+          OutlineGrow.Bottom := FCss.OutlineWidth;
+          OutlineRadius.AddMargins(OutlineGrow);
+          Borders.Radius := OutlineRadius;
+        end;
         Doc.Container.DrawBorders(Hdc, Borders, OutlineBox, False);
       end;
     end;

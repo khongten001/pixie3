@@ -734,6 +734,7 @@ type
     ColorIndex: Integer;
     Monochrome: Integer;
     Resolution: TPixiePixel;
+    PrefersDark: Boolean;
     procedure Init;
   end;
 
@@ -1028,6 +1029,9 @@ begin
   ColorIndex := 0;
   Monochrome := 0;
   Resolution := 0;
+  // No-preference browsers resolve 'prefers-color-scheme' to light, so a
+  // light-by-default stylesheet matches and dark-default themes show light.
+  PrefersDark := False;
 end;
 
 { TPixieTypedPixel }

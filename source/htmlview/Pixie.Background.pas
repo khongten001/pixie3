@@ -125,7 +125,14 @@ end;
 // Normalize a CSS length into a value between 0 and 1
 function NormalizeLength(const Len: TPixieCssLength; LineLen: Single): Single;
 begin
-  if Len.Units = cssUnitsCalc then
+  if Len.IsMath then
+  begin
+    if LineLen <> 0 then
+      Result := Len.CalcPercent(LineLen) / LineLen
+    else
+      Result := 0;
+  end
+  else if Len.Units = cssUnitsCalc then
   begin
     if LineLen <> 0 then
       Result := Len.CalcPercentCoeff / 100 + Len.Val / LineLen

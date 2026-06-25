@@ -1464,6 +1464,10 @@ begin
   Media.ColorIndex := 0;
   Media.Monochrome := 0;
   Media.Resolution := 96;
+  // No OS colour-scheme query yet: report the spec default (light) explicitly
+  // so every field of this out-parameter is defined and dark-scheme matching
+  // is deterministic rather than reading uninitialised caller state.
+  Media.PrefersDark := False;
 end;
 
 procedure TPixieNativeContainer.GetLanguage(

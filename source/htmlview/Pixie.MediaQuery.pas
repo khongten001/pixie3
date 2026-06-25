@@ -262,6 +262,8 @@ begin
   SupportedFeatures.Add('aspect-ratio',       MakeMfInfo(mfRange, mfvRatio));
   SupportedFeatures.Add('orientation',        MakeMfInfoKw(mfDiscrete, mfvKeyword,
     [Ord(psid_portrait), Ord(psid_landscape)]));
+  SupportedFeatures.Add('prefers-color-scheme', MakeMfInfoKw(mfDiscrete, mfvKeyword,
+    [Ord(psid_light), Ord(psid_dark)]));
   SupportedFeatures.Add('resolution',         MakeMfInfo(mfRange, mfvResolution));
   SupportedFeatures.Add('color',              MakeMfInfo(mfRange, mfvInteger));
   SupportedFeatures.Add('color-index',        MakeMfInfo(mfRange, mfvInteger));
@@ -1198,6 +1200,13 @@ begin
       Exit(Compare(Ord(psid_portrait)))
     else
       Exit(Compare(Ord(psid_landscape)));
+  end;
+  if Id = Ord(psid_prefers_color_scheme) then
+  begin
+    if Features.PrefersDark then
+      Exit(Compare(Ord(psid_dark)))
+    else
+      Exit(Compare(Ord(psid_light)));
   end;
   if Id = Ord(psid_aspect_ratio) then
   begin

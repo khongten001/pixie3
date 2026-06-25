@@ -5,7 +5,7 @@ unit Pixie.CssLength;
 interface
 
 uses
-  SysUtils, Generics.Collections, Pixie.Types, Pixie.Utils;
+  SysUtils, Math, Generics.Collections, Pixie.Types, Pixie.Utils;
 
 const
   // from_token options (flags)
@@ -23,6 +23,10 @@ const
   CssGridMinmaxMarker = $7FFE;
 
 type
+  // CSS math function applied to a length: min(), max() and clamp().
+  // mkNone means a plain length or a linear calc() (FCalcPercent dual form).
+  TPixieMathKind = (mkNone, mkMin, mkMax, mkClamp);
+
   { TPixieCssLength }
   TPixieCssLength = record
   private
@@ -31,12 +35,24 @@ type
     FPredef: Integer;
     FUnits: TPixieCssUnits;
     FIsPredefined: Boolean;
+    // min()/max()/clamp() storage. Each argument reduces to a linear term
+    // (px part + percentage coefficient) that resolves against the percentage
+    // basis at layout time, so the function as a whole stays representable as
+    // a small fixed set of such terms. Term 0 reuses FValue/FCalcPercent.
+    FMathKind: TPixieMathKind;
+    FMathCount: Integer;
+    FMathPx: array[1..2] of Single;
+    FMathPct: array[1..2] of Single;
   public
     class function Create(AValue: Single; AUnits: TPixieCssUnits = cssUnitsPx): TPixieCssLength; static;
     class function CreateCalc(AAbsolutePx, APercentCoeff: Single): TPixieCssLength; static;
+    class function CreateMath(AKind: TPixieMathKind;
+      const APx, APct: array of Single): TPixieCssLength; static;
     class function PredefValue(AVal: Integer = 0): TPixieCssLength; static;
     function IsPredefined: Boolean;
     function IsCalc: Boolean;
+    function IsMath: Boolean;
+    function PercentRelative: Boolean;
     function Predef: Integer;
     function Val: Single;
     function CalcPercentCoeff: Single;
@@ -87,10 +103,14 @@ begin
   Result.FPredef := 0;
   Result.FUnits := AUnits;
   Result.FIsPredefined := False;
+  Result.FMathKind := mkNone;
+  Result.FMathCount := 0;
 end;
 
 class function TPixieCssLength.CreateCalc(AAbsolutePx, APercentCoeff: Single): TPixieCssLength;
 begin
+  Result.FMathKind := mkNone;
+  Result.FMathCount := 0;
   if APercentCoeff = 0 then
   begin
     Result.FValue := AAbsolutePx;
@@ -117,6 +137,29 @@ begin
   end;
 end;
 
+class function TPixieCssLength.CreateMath(AKind: TPixieMathKind;
+  const APx, APct: array of Single): TPixieCssLength;
+var
+  I: Integer;
+begin
+  Result.FValue := APx[0];
+  Result.FCalcPercent := APct[0];
+  Result.FPredef := 0;
+  Result.FUnits := cssUnitsCalc;
+  Result.FIsPredefined := False;
+  Result.FMathKind := AKind;
+  Result.FMathCount := Length(APx);
+  // Zero the extra slots first so a folded 1- or 2-term min()/max() leaves the
+  // unused terms clear (the copy loop below only fills the supplied ones).
+  Result.FMathPx[1] := 0;  Result.FMathPct[1] := 0;
+  Result.FMathPx[2] := 0;  Result.FMathPct[2] := 0;
+  for I := 1 to High(APx) do
+  begin
+    Result.FMathPx[I] := APx[I];
+    Result.FMathPct[I] := APct[I];
+  end;
+end;
+
 class function TPixieCssLength.PredefValue(AVal: Integer): TPixieCssLength;
 begin
   Result.FValue := 0;
@@ -124,6 +167,8 @@ begin
   Result.FPredef := AVal;
   Result.FUnits := cssUnitsNone;
   Result.FIsPredefined := True;
+  Result.FMathKind := mkNone;
+  Result.FMathCount := 0;
 end;
 
 function TPixieCssLength.IsPredefined: Boolean;
@@ -133,7 +178,28 @@ end;
 
 function TPixieCssLength.IsCalc: Boolean;
 begin
-  Result := FUnits = cssUnitsCalc;
+  // A linear calc() only. min()/max()/clamp() reuse cssUnitsCalc storage but
+  // are non-linear, so they report via IsMath instead (never as plain calc).
+  Result := (FUnits = cssUnitsCalc) and (FMathKind = mkNone);
+end;
+
+function TPixieCssLength.IsMath: Boolean;
+begin
+  Result := FMathKind <> mkNone;
+end;
+
+function TPixieCssLength.PercentRelative: Boolean;
+begin
+  // True when the resolved value depends on the percentage basis: a raw
+  // percentage, a calc() with a percentage coefficient, or any math() term
+  // carrying a percentage.
+  if FIsPredefined then
+    Result := False
+  else if FMathKind <> mkNone then
+    Result := (FCalcPercent <> 0) or (FMathPct[1] <> 0) or (FMathPct[2] <> 0)
+  else
+    Result := (FUnits = cssUnitsPercentage) or
+              ((FUnits = cssUnitsCalc) and (FCalcPercent <> 0));
 end;
 
 function TPixieCssLength.Predef: Integer;
@@ -163,18 +229,48 @@ begin
 end;
 
 function TPixieCssLength.CalcPercent(AWidth: TPixiePixel): TPixiePixel;
+var
+  T0, T1, T2: TPixiePixel;
 begin
-  if not IsPredefined then
+  if IsPredefined then
+    Exit(0);
+
+  if FMathKind <> mkNone then
   begin
-    if FUnits = cssUnitsCalc then
-      Result := AWidth * FCalcPercent / 100 + FValue
-    else if FUnits = cssUnitsPercentage then
-      Result := AWidth * FValue / 100
+    // Resolve each stored linear term against the basis, then apply the
+    // function over all of them (min()/max() may carry up to three terms:
+    // a folded-px, a folded-pct and one mixed term).
+    T0 := AWidth * FCalcPercent / 100 + FValue;
+    T1 := AWidth * FMathPct[1] / 100 + FMathPx[1];
+    T2 := AWidth * FMathPct[2] / 100 + FMathPx[2];
+    case FMathKind of
+      mkMin:
+        begin
+          Result := T0;
+          if FMathCount >= 2 then Result := Min(Result, T1);
+          if FMathCount >= 3 then Result := Min(Result, T2);
+        end;
+      mkMax:
+        begin
+          Result := T0;
+          if FMathCount >= 2 then Result := Max(Result, T1);
+          if FMathCount >= 3 then Result := Max(Result, T2);
+        end;
+      mkClamp:
+        // clamp(min, val, max) = max(min, min(val, max))
+        Result := Max(T0, Min(T1, T2));
     else
-      Result := Val;
-  end
+      Result := T0;
+    end;
+    Exit;
+  end;
+
+  if FUnits = cssUnitsCalc then
+    Result := AWidth * FCalcPercent / 100 + FValue
+  else if FUnits = cssUnitsPercentage then
+    Result := AWidth * FValue / 100
   else
-    Result := 0;
+    Result := Val;
 end;
 
 procedure TPixieCssLength.SetValue(AVal: Single; AUnits: TPixieCssUnits);
@@ -183,6 +279,8 @@ begin
   FCalcPercent := 0;
   FIsPredefined := False;
   FUnits := AUnits;
+  FMathKind := mkNone;
+  FMathCount := 0;
 end;
 
 procedure TPixieCssLength.SetPredef(AVal: Integer);
@@ -190,12 +288,18 @@ begin
   FPredef := AVal;
   FCalcPercent := 0;
   FIsPredefined := True;
+  FMathKind := mkNone;
+  FMathCount := 0;
 end;
 
 function TPixieCssLength.ToString: string;
+const
+  MathNames: array[TPixieMathKind] of string = ('', 'min', 'max', 'clamp');
 begin
   if FIsPredefined then
     Result := 'predef(' + IntToStr(FPredef) + ')'
+  else if FMathKind <> mkNone then
+    Result := MathNames[FMathKind] + '(' + IntToStr(FMathCount) + ' terms)'
   else if FUnits = cssUnitsCalc then
     Result := 'calc(' + FloatToStr(FCalcPercent) + '% + ' + FloatToStr(FValue) + 'px)'
   else

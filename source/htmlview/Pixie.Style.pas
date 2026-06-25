@@ -434,7 +434,10 @@ begin
   begin
     Tok := Tokens[I];
     if (Tok.TokenType = cssTokenCvFunction) and
-       PixieStrEqualNoCase(Tok.Str, 'calc') and
+       (PixieStrEqualNoCase(Tok.Str, 'calc') or
+        PixieStrEqualNoCase(Tok.Str, 'min') or
+        PixieStrEqualNoCase(Tok.Str, 'max') or
+        PixieStrEqualNoCase(Tok.Str, 'clamp')) and
        (Tok.Value <> nil) and HasCalcContextUnit(Tok.Value) then
       Exit(True);
     if Tok.IsComponentValue and (Tok.Value <> nil) and
@@ -908,6 +911,115 @@ begin
   Result := True;
 end;
 
+function IsMathFuncName(const S: string): Boolean;
+var
+  LowerS: string;
+begin
+  LowerS := PixieLowerCase(S);
+  Result := (LowerS = 'min') or (LowerS = 'max') or (LowerS = 'clamp');
+end;
+
+// Parse min()/max()/clamp(). Each comma-separated argument is evaluated to a
+// linear (px + percentage) term via the calc evaluator, so context units
+// (em/rem/vw...) and nested calc() work exactly as in calc(). min()/max() fold
+// their pure-px and pure-% arguments together (both monotonic in the basis),
+// keeping any mixed term separate; clamp() keeps its three positional terms.
+function PixieParseMathFunction(const FuncName: string;
+  Tokens: TPixieCssTokenList; out Len: TPixieCssLength): Boolean;
+var
+  Kind: TPixieMathKind;
+  ArgPx, ArgPct, FinalPx, FinalPct: array of Single;
+  V: TCalcValue;
+  Pos, I, N: Integer;
+  FoldPx, FoldPct: Single;
+  HasPx, HasPct: Boolean;
+  LowerName: string;
+
+  procedure AddFinal(APx, APct: Single);
+  begin
+    SetLength(FinalPx, Length(FinalPx) + 1);
+    SetLength(FinalPct, Length(FinalPct) + 1);
+    FinalPx[High(FinalPx)] := APx;
+    FinalPct[High(FinalPct)] := APct;
+  end;
+
+begin
+  Result := False;
+  if (Tokens = nil) or (Tokens.Count = 0) then Exit;
+  LowerName := PixieLowerCase(FuncName);
+  if LowerName = 'min' then Kind := mkMin
+  else if LowerName = 'max' then Kind := mkMax
+  else if LowerName = 'clamp' then Kind := mkClamp
+  else Exit;
+
+  // Collect each argument as a linear term.
+  SetLength(ArgPx, 0);
+  SetLength(ArgPct, 0);
+  Pos := 0;
+  while True do
+  begin
+    if not EvalCalcSum(Tokens, Pos, V) then Exit;
+    SetLength(ArgPx, Length(ArgPx) + 1);
+    SetLength(ArgPct, Length(ArgPct) + 1);
+    ArgPx[High(ArgPx)] := V.Px;
+    ArgPct[High(ArgPct)] := V.Pct;
+    while (Pos < Tokens.Count) and (Tokens[Pos].TokenType = cssTokenWhitespace) do
+      Inc(Pos);
+    if Pos >= Tokens.Count then Break;
+    if Tokens[Pos].TokenType = cssTokenComma then
+    begin
+      Inc(Pos);
+      Continue;
+    end;
+    Exit; // unexpected token in the argument list
+  end;
+  N := Length(ArgPx);
+
+  if Kind = mkClamp then
+  begin
+    if N <> 3 then Exit;
+    Len := TPixieCssLength.CreateMath(mkClamp,
+      [ArgPx[0], ArgPx[1], ArgPx[2]],
+      [ArgPct[0], ArgPct[1], ArgPct[2]]);
+    Exit(True);
+  end;
+
+  if N < 1 then Exit;
+  SetLength(FinalPx, 0);
+  SetLength(FinalPct, 0);
+  HasPx := False;
+  HasPct := False;
+  FoldPx := 0;
+  FoldPct := 0;
+  for I := 0 to N - 1 do
+  begin
+    if ArgPct[I] = 0 then
+    begin
+      if not HasPx then FoldPx := ArgPx[I]
+      else if Kind = mkMin then FoldPx := Min(FoldPx, ArgPx[I])
+      else FoldPx := Max(FoldPx, ArgPx[I]);
+      HasPx := True;
+    end
+    else if ArgPx[I] = 0 then
+    begin
+      if not HasPct then FoldPct := ArgPct[I]
+      else if Kind = mkMin then FoldPct := Min(FoldPct, ArgPct[I])
+      else FoldPct := Max(FoldPct, ArgPct[I]);
+      HasPct := True;
+    end
+    else
+      AddFinal(ArgPx[I], ArgPct[I]);
+  end;
+  if HasPx then AddFinal(FoldPx, 0);
+  if HasPct then AddFinal(0, FoldPct);
+
+  N := Length(FinalPx);
+  // Storage holds at most three terms (term 0 plus two extras).
+  if (N < 1) or (N > 3) then Exit;
+  Len := TPixieCssLength.CreateMath(Kind, FinalPx, FinalPct);
+  Result := True;
+end;
+
 function PixieParseCssLength(Token: TPixieCssToken; out Len: TPixieCssLength;
   Options: Integer; const Keywords: string): Boolean;
 var
@@ -989,6 +1101,15 @@ begin
      (PixieLowerCase(Token.Str) = 'calc') then
   begin
     if PixieParseCalcExpression(Token.Value, Len) then
+      Exit(True);
+  end;
+
+  // Try min()/max()/clamp() math functions
+  if (Token.TokenType = cssTokenCvFunction) and
+     ((Options and clfLengthPercentage) <> 0) and
+     IsMathFuncName(Token.Str) then
+  begin
+    if PixieParseMathFunction(Token.Str, Token.Value, Len) then
       Exit(True);
   end;
 end;

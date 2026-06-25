@@ -2778,7 +2778,9 @@ begin
     if Len.Units = cssUnitsCalc then
     begin
       OutValue.Value := Len.CalcPercent(PercentBase);
-      if Len.CalcPercentCoeff <> 0 then
+      // calc()/min()/max()/clamp() count as percentage-derived when any term
+      // references the percentage basis, so the used value tracks the CB.
+      if Len.PercentRelative then
         OutValue.ValueType := cbcPercentage
       else
         OutValue.ValueType := cbcAbsolute;
