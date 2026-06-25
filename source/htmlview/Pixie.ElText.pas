@@ -171,8 +171,7 @@ begin
     end;
 
     // Newline handling in non-pre modes
-    if (WS <> wsNowrap) and (WS <> wsPre) and
-       (WS <> wsPreWrap) and (WS <> wsPreLine) then
+    if not (WS in [wsNowrap, wsPre, wsPreWrap, wsPreLine]) then
     begin
       if Pos(#10, FTransformedText) > 0 then
       begin

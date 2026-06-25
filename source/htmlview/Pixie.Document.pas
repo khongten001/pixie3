@@ -1397,8 +1397,7 @@ begin
     'display:' + DispStr);
   Doc.RegisterElement(AnonTag);
 
-  if (AnonTag.Css.Display = displayTable) or
-     (AnonTag.Css.Display = displayInlineTable) then
+  if AnonTag.Css.Display in [displayTable, displayInlineTable] then
     AnonRi := TPixieRenderTable.Create(AnonTag)
   else if AnonTag.Css.Display = displayTableRow then
     AnonRi := TPixieRenderTableRow.Create(AnonTag)

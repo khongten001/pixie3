@@ -1417,7 +1417,7 @@ begin
   else
     InitComputeContext(Tag, Ctx);
 
-  if (FDisplay = displayFlex) or (FDisplay = displayInlineFlex) then
+  if FDisplay in [displayFlex, displayInlineFlex] then
   begin
     FFlexDirection := TPixieFlexDirection(Tag.GetPropertyInt(
       Ord(psid_flex_direction), False, Ord(fdRow),
@@ -1450,7 +1450,7 @@ begin
 
   Par := Tag.Parent;
   if (Par <> nil) and
-     ((Par.Css.Display = displayFlex) or (Par.Css.Display = displayInlineFlex)) then
+     (Par.Css.Display in [displayFlex, displayInlineFlex]) then
   begin
     FFlexGrow := Tag.GetPropertyFloat(Ord(psid_flex_grow), False, 0,
       PtrUInt(@FFlexGrow) - PtrUInt(Self));
@@ -1468,7 +1468,7 @@ begin
     CtxCvtUnits(FFlexBasis, FFontMetrics, Ctx);
 
     // Flex item display normalization
-    if (FDisplay = displayInline) or (FDisplay = displayInlineBlock) then
+    if FDisplay in [displayInline, displayInlineBlock] then
       FDisplay := displayBlock
     else if FDisplay = displayInlineTable then
       FDisplay := displayTable
@@ -1558,7 +1558,7 @@ begin
   begin
     FFloat := efNone;
   end
-  else if (FElPosition = epAbsolute) or (FElPosition = epFixed) then
+  else if FElPosition in [epAbsolute, epFixed] then
   begin
     FFloat := efNone;
     if FDisplay = displayInlineTable then
@@ -1909,7 +1909,7 @@ begin
     InitComputeContext(Tag, Ctx);
 
   // Container properties (only for grid containers)
-  if (FDisplay = displayGrid) or (FDisplay = displayInlineGrid) then
+  if FDisplay in [displayGrid, displayInlineGrid] then
   begin
     // Grid template columns
     SrcVec := Tag.GetPropertyLengthVector(Ord(psid_grid_template_columns),
@@ -1971,7 +1971,7 @@ begin
   // Item properties (only for children of grid containers)
   Par := Tag.Parent;
   if (Par <> nil) and
-     ((Par.Css.Display = displayGrid) or (Par.Css.Display = displayInlineGrid)) then
+     (Par.Css.Display in [displayGrid, displayInlineGrid]) then
   begin
     FGridColumnStart := Tag.GetPropertyLength(Ord(psid_grid_column_start), False,
       TPixieCssLength.PredefValue(0),
@@ -1994,7 +1994,7 @@ begin
       PtrUInt(@FJustifySelf) - PtrUInt(Self)));
 
     // Grid item display normalization (same as flex)
-    if (FDisplay = displayInline) or (FDisplay = displayInlineBlock) then
+    if FDisplay in [displayInline, displayInlineBlock] then
       FDisplay := displayBlock
     else if FDisplay = displayInlineTable then
       FDisplay := displayTable

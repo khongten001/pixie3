@@ -72,11 +72,8 @@ end;
 
 function PixieSelectInline(El: TPixieRenderItem): Boolean;
 begin
-  Result := (El.SrcEl.Css.Display = displayInlineText) or
-            (El.SrcEl.Css.Display = displayInlineTable) or
-            (El.SrcEl.Css.Display = displayInlineBlock) or
-            (El.SrcEl.Css.Display = displayInlineFlex) or
-            (El.SrcEl.Css.Display = displayInlineGrid) or
+  Result := (El.SrcEl.Css.Display in [displayInlineText, displayInlineTable,
+             displayInlineBlock, displayInlineFlex, displayInlineGrid]) or
             (El.SrcEl.Css.Float_ <> efNone);
 end;
 

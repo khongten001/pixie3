@@ -450,7 +450,7 @@ begin
 
   // Fix justify-content for column direction
   JustifyContent := Css.FlexJustifyContent;
-  if ((JustifyContent = fjcRight) or (JustifyContent = fjcLeft)) and
+  if (JustifyContent in [fjcRight, fjcLeft]) and
      (not IsRowDirection) then
     JustifyContent := fjcStart;
 
@@ -467,8 +467,7 @@ begin
   for I := 0 to FChildren.Count - 1 do
   begin
     El := FChildren[I];
-    if (El.SrcEl.Css.ElPosition = epAbsolute) or
-       (El.SrcEl.Css.ElPosition = epFixed) then
+    if El.SrcEl.Css.ElPosition in [epAbsolute, epFixed] then
       El.Render(0, 0, SelfSize, FmtCtx);
   end;
 
@@ -530,8 +529,7 @@ begin
 
     // Absolutely/fixed-positioned children are out-of-flow and do not
     // participate in flex layout (CSS Flexbox §4.1).
-    if (El.SrcEl.Css.ElPosition = epAbsolute) or
-       (El.SrcEl.Css.ElPosition = epFixed) then
+    if El.SrcEl.Css.ElPosition in [epAbsolute, epFixed] then
       Continue;
 
     if IsRowDirection then
@@ -642,7 +640,7 @@ function TPixieRenderFlex.GetFirstBaseline: TPixiePixel;
 var
   FirstLine: TPixieFlexLine;
 begin
-  if (Css.FlexDirection = fdRow) or (Css.FlexDirection = fdRowReverse) then
+  if Css.FlexDirection in [fdRow, fdRowReverse] then
   begin
     if FLines.Count > 0 then
     begin
@@ -669,7 +667,7 @@ function TPixieRenderFlex.GetLastBaseline: TPixiePixel;
 var
   FirstLine: TPixieFlexLine;
 begin
-  if (Css.FlexDirection = fdRow) or (Css.FlexDirection = fdRowReverse) then
+  if Css.FlexDirection in [fdRow, fdRowReverse] then
   begin
     if FLines.Count > 0 then
     begin

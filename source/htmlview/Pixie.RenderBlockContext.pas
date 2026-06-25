@@ -110,7 +110,7 @@ begin
     if SecondPass then
     begin
       ElPosition := ElCss.ElPosition;
-      if (ElPosition = epAbsolute) or (ElPosition = epFixed) then
+      if ElPosition in [epAbsolute, epFixed] then
         Continue;
     end;
 
@@ -122,7 +122,7 @@ begin
     end
     else if ElCss.Display <> displayNone then
     begin
-      if (ElCss.ElPosition = epAbsolute) or (ElCss.ElPosition = epFixed) then
+      if ElCss.ElPosition in [epAbsolute, epFixed] then
       begin
         MinRenderedWidth := El.Render(0, ChildTop, SelfSize, FmtCtx);
         if (MinRenderedWidth < El.Width) and ElCss.CssWidth.IsPredefined then

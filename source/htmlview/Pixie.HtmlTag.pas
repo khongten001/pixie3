@@ -1647,8 +1647,7 @@ begin
   RiObj := TPixieRenderItem(Ri);
   Doc := TPixieDocument(FDoc);
 
-  if (FCss.Display <> displayInline) and
-     (FCss.Display <> displayTableRow) then
+  if not (FCss.Display in [displayInline, displayTableRow]) then
   begin
     // Block-level drawing
     Pos := RiObj.Pos;

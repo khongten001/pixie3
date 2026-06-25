@@ -267,37 +267,27 @@ end;
 
 function TPixieElement.InNormalFlow: Boolean;
 begin
-  Result := (FCss.ElPosition <> epAbsolute) and
-            (FCss.Display <> displayNone) and
-            (FCss.ElPosition <> epFixed);
+  Result := (FCss.Display <> displayNone) and
+            (not (FCss.ElPosition in [epAbsolute, epFixed]));
 end;
 
 function TPixieElement.IsInline: Boolean;
 begin
-  Result := (FCss.Display = displayInline) or
-            (FCss.Display = displayInlineTable) or
-            (FCss.Display = displayInlineBlock) or
-            (FCss.Display = displayInlineText) or
-            (FCss.Display = displayInlineFlex) or
-            (FCss.Display = displayInlineGrid);
+  Result := FCss.Display in [displayInline, displayInlineTable,
+    displayInlineBlock, displayInlineText, displayInlineFlex,
+    displayInlineGrid];
 end;
 
 function TPixieElement.IsInlineBox: Boolean;
 begin
-  Result := (FCss.Display = displayInlineTable) or
-            (FCss.Display = displayInlineBlock) or
-            (FCss.Display = displayInlineFlex) or
-            (FCss.Display = displayInlineGrid);
+  Result := FCss.Display in [displayInlineTable, displayInlineBlock,
+    displayInlineFlex, displayInlineGrid];
 end;
 
 function TPixieElement.IsBlockBox: Boolean;
 begin
-  Result := (FCss.Display = displayBlock) or
-            (FCss.Display = displayFlex) or
-            (FCss.Display = displayGrid) or
-            (FCss.Display = displayFlowRoot) or
-            (FCss.Display = displayTable) or
-            (FCss.Display = displayListItem);
+  Result := FCss.Display in [displayBlock, displayFlex, displayGrid,
+    displayFlowRoot, displayTable, displayListItem];
 end;
 
 function TPixieElement.IsPositioned: Boolean;
@@ -318,24 +308,16 @@ begin
   begin
     Par := Parent;
     if (Par <> nil) and
-       ((Par.Css.Display = displayInlineFlex) or
-        (Par.Css.Display = displayFlex) or
-        (Par.Css.Display = displayGrid) or
-        (Par.Css.Display = displayInlineGrid)) then
+       (Par.Css.Display in [displayInlineFlex, displayFlex, displayGrid,
+        displayInlineGrid]) then
       Exit(True);
   end;
-  if (FCss.Display = displayInlineBlock) or
-     (FCss.Display = displayTableCell) or
-     (FCss.Display = displayInlineFlex) or
-     (FCss.Display = displayFlex) or
-     (FCss.Display = displayGrid) or
-     (FCss.Display = displayInlineGrid) or
-     (FCss.Display = displayFlowRoot) or
-     (FCss.Display = displayTableCaption) or
+  if (FCss.Display in [displayInlineBlock, displayTableCell,
+        displayInlineFlex, displayFlex, displayGrid, displayInlineGrid,
+        displayFlowRoot, displayTableCaption]) or
      IsRoot or
      (FCss.Float_ <> efNone) or
-     (FCss.ElPosition = epAbsolute) or
-     (FCss.ElPosition = epFixed) or
+     (FCss.ElPosition in [epAbsolute, epFixed]) or
      (FCss.Overflow > ovVisible) then
     Exit(True);
   Result := False;

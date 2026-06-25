@@ -680,7 +680,7 @@ begin
     if Item.GetEl.SrcEl.IsBreak then
       Exit(True);
 
-    if (Ws = wsNowrap) or (Ws = wsPre) or
+    if (Ws in [wsNowrap, wsPre]) or
        ((Ws = wsPreWrap) and Item.GetEl.SrcEl.IsSpace) then
       Exit(True);
 
@@ -1078,8 +1078,8 @@ begin
     Ignore := False;
 
     // Align element by baseline
-    if not ((Lbi.GetEl.SrcEl.Css.Display = displayInlineText) or
-            (Lbi.GetEl.SrcEl.Css.Display = displayInline)) then
+    if not (Lbi.GetEl.SrcEl.Css.Display in [displayInlineText,
+            displayInline]) then
     begin
       ContentOffset := Lbi.GetEl.ContentOffsetTop;
       case Lbi.GetEl.Css.VerticalAlign of

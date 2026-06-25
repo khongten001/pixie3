@@ -684,9 +684,8 @@ begin
   for I := 0 to FChildren.Count - 1 do
   begin
     Part := FChildren[I];
-    if (Part.SrcEl.Css.Display = displayTableRowGroup) or
-       (Part.SrcEl.Css.Display = displayTableHeaderGroup) or
-       (Part.SrcEl.Css.Display = displayTableFooterGroup) then
+    if Part.SrcEl.Css.Display in [displayTableRowGroup,
+       displayTableHeaderGroup, displayTableFooterGroup] then
     begin
       // Find first and last tr children (skip non-row children like text nodes)
       FirstTr := nil;

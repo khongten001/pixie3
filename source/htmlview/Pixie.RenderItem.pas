@@ -692,9 +692,7 @@ begin
             (not IsFlexItem) and
             (not IsGridItem) and
             (not IsRoot) and
-            (Css.Overflow <> ovHidden) and
-            (Css.Overflow <> ovScroll) and
-            (Css.Overflow <> ovAuto);
+            (not (Css.Overflow in [ovHidden, ovScroll, ovAuto]));
 end;
 
 function TPixieRenderItem.CollapseBottomMargin: Boolean;
@@ -705,9 +703,7 @@ begin
             (FElement.Css.Float_ = efNone) and
             (FMargins.Bottom >= 0) and
             (not IsRoot) and
-            (Css.Overflow <> ovHidden) and
-            (Css.Overflow <> ovScroll) and
-            (Css.Overflow <> ovAuto);
+            (not (Css.Overflow in [ovHidden, ovScroll, ovAuto]));
 end;
 
 function TPixieRenderItem.IsVisible: Boolean;
@@ -723,8 +719,7 @@ var
 begin
   Par := FParent;
   if (Par <> nil) and
-     ((Par.Css.Display = displayInlineFlex) or
-      (Par.Css.Display = displayFlex)) then
+     (Par.Css.Display in [displayInlineFlex, displayFlex]) then
     Exit(True);
   Result := False;
 end;
@@ -735,8 +730,7 @@ var
 begin
   Par := FParent;
   if (Par <> nil) and
-     ((Par.Css.Display = displayGrid) or
-      (Par.Css.Display = displayInlineGrid)) then
+     (Par.Css.Display in [displayGrid, displayInlineGrid]) then
     Exit(True);
   Result := False;
 end;
@@ -1034,8 +1028,7 @@ begin
 
     // Direct block child in inline context?
     if Child.SrcEl.IsBlockBox and (Child.SrcEl.Css.Float_ = efNone) and
-       (Child.SrcEl.Css.ElPosition <> epAbsolute) and
-       (Child.SrcEl.Css.ElPosition <> epFixed) then
+       (not (Child.SrcEl.Css.ElPosition in [epAbsolute, epFixed])) then
     begin
       Result.Before := Clone;
       Result.Block := Child;
@@ -1121,7 +1114,7 @@ begin
     El.FLayoutPositioned := ElPos <> epStatic;
     if El.FLayoutPositioned then
       AddPositioned(El);
-    if (not Result) and ((ElPos = epAbsolute) or (ElPos = epFixed)) then
+    if (not Result) and (ElPos in [epAbsolute, epFixed]) then
       Result := True;
     if El.FetchPositioned then
       Result := True;
@@ -1915,9 +1908,8 @@ begin
             HasOpacity := El.SrcEl.Css.Opacity < 1;
             if HasOpacity then Cont.PushOpacity(El.SrcEl.Css.Opacity);
             El.SrcEl.Draw(Hdc, ElPos.X, ElPos.Y, Clip, El);
-            if (El.SrcEl.Css.Display = displayInlineBlock) or
-               (El.SrcEl.Css.Display = displayInlineFlex) or
-               (El.SrcEl.Css.Display = displayInlineGrid) then
+            if El.SrcEl.Css.Display in [displayInlineBlock, displayInlineFlex,
+              displayInlineGrid] then
             begin
               El.DrawStackingContext(Hdc, ElPos.X, ElPos.Y, Clip, False);
               if HasOpacity then Cont.PopOpacity;
@@ -2230,10 +2222,8 @@ begin
              (El.SrcEl.Css.Float_ = efNone) and
              (not El.FLayoutPositioned) then
           begin
-            if (El.SrcEl.Css.Display = displayInlineBlock) or
-               (El.SrcEl.Css.Display = displayInlineTable) or
-               (El.SrcEl.Css.Display = displayInlineFlex) or
-               (El.SrcEl.Css.Display = displayInlineGrid) then
+            if El.SrcEl.Css.Display in [displayInlineBlock, displayInlineTable,
+              displayInlineFlex, displayInlineGrid] then
             begin
               Ret := El.GetElementByPoint(ChildX, ChildY,
                 ClientX, ClientY, Check);
@@ -2274,9 +2264,8 @@ begin
         else
         begin
           if (El.SrcEl.Css.Float_ = efNone) and
-             (El.SrcEl.Css.Display <> displayInlineBlock) and
-             (El.SrcEl.Css.Display <> displayInlineFlex) and
-             (El.SrcEl.Css.Display <> displayInlineGrid) then
+             (not (El.SrcEl.Css.Display in [displayInlineBlock,
+              displayInlineFlex, displayInlineGrid])) then
           begin
             Ret := El.GetChildByPoint(ChildX, ChildY,
               ClientX, ClientY, Flag, ZIndex, Check);
@@ -2513,8 +2502,7 @@ var
   Offsets: TPixieCssOffsets;
   I: Integer;
 begin
-  if (FElement.Css.Display <> displayInline) and
-     (FElement.Css.Display <> displayTableRow) then
+  if not (FElement.Css.Display in [displayInline, displayTableRow]) then
   begin
     P := FPos;
     P.AddMargins(FPadding);
@@ -2561,8 +2549,7 @@ var
   ChildSize: TPixieSize;
   Boxes: TPixiePositionVector;
 begin
-  if (Css.Display <> displayInline) and
-     (Css.Display <> displayTableRow) then
+  if not (Css.Display in [displayInline, displayTableRow]) then
   begin
     if IsVisible then
     begin
@@ -2572,8 +2559,7 @@ begin
         Sz.Height := Max(Sz.Height, Y + Bottom);
       end;
 
-      if (FElement.Css.Overflow = ovScroll) or
-         (FElement.Css.Overflow = ovAuto) then
+      if FElement.Css.Overflow in [ovScroll, ovAuto] then
       begin
         ChildSize.Width := 0;
         ChildSize.Height := 0;
@@ -2706,8 +2692,7 @@ var
   Cont: TPixieContainer;
   Viewport: TPixiePosition;
 begin
-  if (FElement.Css.Display = displayInline) or
-     (FElement.Css.Display = displayTableRow) then
+  if FElement.Css.Display in [displayInline, displayTableRow] then
   begin
     GetInlineBoxes(Boxes);
     for I := 0 to Boxes.Count - 1 do
@@ -2825,8 +2810,7 @@ begin
   Result.SizeMode := CbContext.SizeMode and SizeModeContent;
   Result.Width.Value := CbContext.Width.Value - ContentOffsetWidth;
   Result.MaxWidth.Value := Result.Width.Value;
-  if (FElement.Css.ElPosition <> epAbsolute) and
-     (FElement.Css.ElPosition <> epFixed) then
+  if not (FElement.Css.ElPosition in [epAbsolute, epFixed]) then
     Result.Height.Value := CbContext.Height.Value - ContentOffsetHeight;
 
   // Width/height from CSS (skip for table-cell, except height for
@@ -2861,14 +2845,12 @@ begin
       UseWidth := True;
       CssW := Css.CssWidth;
       if (Par <> nil) and
-         ((Par.Css.Display = displayFlex) or
-          (Par.Css.Display = displayInlineFlex)) then
+         (Par.Css.Display in [displayFlex, displayInlineFlex]) then
       begin
         if (not Css.FlexBasis.IsPredefined) and
            (Css.FlexBasis.Val >= 0) then
         begin
-          if (Par.Css.FlexDirection = fdRow) or
-             (Par.Css.FlexDirection = fdRowReverse) then
+          if Par.Css.FlexDirection in [fdRow, fdRowReverse] then
           begin
             Result.Width.ValueType := cbcAuto;
             Result.Width.Value := 0;
@@ -2891,14 +2873,12 @@ begin
       UseHeight := True;
       CssH := Css.CssHeight;
       if (Par <> nil) and
-         ((Par.Css.Display = displayFlex) or
-          (Par.Css.Display = displayInlineFlex)) then
+         (Par.Css.Display in [displayFlex, displayInlineFlex]) then
       begin
         if (not Css.FlexBasis.IsPredefined) and
            (Css.FlexBasis.Val >= 0) then
         begin
-          if (Par.Css.FlexDirection = fdColumn) or
-             (Par.Css.FlexDirection = fdColumnReverse) then
+          if Par.Css.FlexDirection in [fdColumn, fdColumnReverse] then
           begin
             Result.Height.ValueType := cbcAuto;
             Result.Height.Value := 0;

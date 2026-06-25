@@ -192,12 +192,12 @@ begin
         Process := True;
       efLeft:
         begin
-          if (Fb.ClearFloats = ecLeft) or (Fb.ClearFloats = ecBoth) then
+          if Fb.ClearFloats in [ecLeft, ecBoth] then
             Process := True;
         end;
       efRight:
         begin
-          if (Fb.ClearFloats = ecRight) or (Fb.ClearFloats = ecBoth) then
+          if Fb.ClearFloats in [ecRight, ecBoth] then
             Process := True;
         end;
     end;
@@ -219,12 +219,12 @@ begin
         Process := True;
       efLeft:
         begin
-          if (Fb.ClearFloats = ecLeft) or (Fb.ClearFloats = ecBoth) then
+          if Fb.ClearFloats in [ecLeft, ecBoth] then
             Process := True;
         end;
       efRight:
         begin
-          if (Fb.ClearFloats = ecRight) or (Fb.ClearFloats = ecBoth) then
+          if Fb.ClearFloats in [ecRight, ecBoth] then
             Process := True;
         end;
     end;
