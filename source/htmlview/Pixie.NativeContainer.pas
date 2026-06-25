@@ -20,7 +20,7 @@ uses
 
 type
   TPixieAnchorClickEvent = procedure(Sender: TObject;
-    const Url: string) of object;
+    El: TObject; const Url: string) of object;
   TPixieElementClickEvent = function(Sender: TObject;
     El: TObject): Boolean of object;
   TPixieFetchUrlEvent = procedure(Sender: TObject;
@@ -1233,7 +1233,7 @@ procedure TPixieNativeContainer.OnAnchorClick(const Url: string;
   El: TObject);
 begin
   if Assigned(FOnAnchorClick) then
-    FOnAnchorClick(Self, Url);
+    FOnAnchorClick(Self, El, Url);
 end;
 
 function TPixieNativeContainer.OnElementClick(El: TObject): Boolean;

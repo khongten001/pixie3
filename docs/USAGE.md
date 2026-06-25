@@ -74,10 +74,10 @@ All drawing uses sub-pixel rendering, alpha blending, and hardware acceleration 
 ### OnAnchorClick
 
 ```pascal
-procedure(Sender: TObject; const Url: string) of object;
+procedure(Sender: TObject; El: TObject; const Url: string) of object;
 ```
 
-Fired when the user clicks an `<a href="...">` element. The `Url` is resolved against `BaseUrl`. Use this to open links in an external browser or navigate internally.
+Fired when the user clicks an `<a href="...">` element. `El` is the clicked anchor as a `TPixieHtmlTag` (cast from `TObject`) — use it to read attributes such as `target`, `id`, or `class` via `GetAttr`. The `Url` is resolved against `BaseUrl`. Use this to open links in an external browser or navigate internally. The parameter order mirrors `OnElementClick` (`Sender, El`), extended with the resolved `Url`.
 
 ### OnElementClick
 

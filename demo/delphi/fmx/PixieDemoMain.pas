@@ -76,7 +76,8 @@ type
       var KeyChar: WideChar; Shift: TShiftState);
     procedure BtnLoadSvgClick(Sender: TObject);
     procedure CbAlignmentChange(Sender: TObject);
-    procedure ViewAnchorClick(Sender: TObject; const Url: string);
+    procedure ViewAnchorClick(Sender: TObject; El: TObject;
+      const Url: string);
     function ViewElementClick(Sender: TObject; El: TObject): Boolean;
     procedure FetchUrl(Sender: TObject; const AUrl: string;
       Stream: TStream; var Success: Boolean);
@@ -762,7 +763,8 @@ end;
 // Document events
 // ---------------------------------------------------------------------------
 
-procedure TMainForm.ViewAnchorClick(Sender: TObject; const Url: string);
+procedure TMainForm.ViewAnchorClick(Sender: TObject; El: TObject;
+  const Url: string);
 var
   FullUrl: string;
 begin

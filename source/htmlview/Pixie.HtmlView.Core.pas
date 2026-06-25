@@ -22,7 +22,7 @@ uses
 
 type
   TPixieAnchorClickEvent = procedure(Sender: TObject;
-    const Url: string) of object;
+    El: TObject; const Url: string) of object;
   TPixieElementClickEvent = function(Sender: TObject;
     El: TObject): Boolean of object;
 
@@ -132,7 +132,8 @@ type
     function GetEffectiveScale: Double;
     procedure RebuildDocument;
     procedure RenderForExport(Width, Height: Integer; out EffH: Integer);
-    procedure DoAnchorClick(Sender: TObject; const Url: string);
+    procedure DoAnchorClick(Sender: TObject; Anchor: TObject;
+      const Url: string);
     function DoElementClick(Sender: TObject; El: TObject): Boolean;
     procedure DoFetchUrl(Sender: TObject; const Url: string;
       Stream: TStream; var Success: Boolean);
@@ -1023,7 +1024,7 @@ begin
 end;
 
 procedure TPixieHtmlViewCore.DoAnchorClick(Sender: TObject;
-  const Url: string);
+  Anchor: TObject; const Url: string);
 var
   El: TPixieElement;
   Ri: TPixieRenderItem;
@@ -1053,7 +1054,7 @@ begin
   end;
 
   if Assigned(FOnAnchorClick) then
-    FOnAnchorClick(Owner, Url);
+    FOnAnchorClick(Owner, Anchor, Url);
 end;
 
 function TPixieHtmlViewCore.DoElementClick(Sender: TObject;
