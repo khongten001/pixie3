@@ -11,9 +11,12 @@ uses
   SysUtils, Classes, Math, dynlibs,
   cairo, glib2, pango, pangocairo,
   Graphics, IntfGraphics, FPImage,
+  // FPImage format readers — registered so DecodeImageByContent's
+  // content sniffing works even in canvas-only builds (no NativeContainer).
+  FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF,
   Pixie.Types, Pixie.WebColor, Pixie.Borders,
   Pixie.GradientLayer, Pixie.FontDescription,
-  Pixie.Canvas;
+  Pixie.ImageUtils, Pixie.Canvas;
 
 type
   { TPixieCairoFont }
@@ -82,6 +85,11 @@ type
     procedure DrawBorderSide(const Border: TPixieBorder;
       X1, Y1, X2, Y2: Single);
     function DecodeImageFile(const Path: string): TPixieImageHandle;
+    function DecodeImageByContent(const Path: string): TPixieImageHandle;
+    // Wraps an owned premultiplied-BGRA buffer in a Cairo image surface; the
+    // surface takes ownership of Buf via Info.PixelData.
+    function NewCairoImageFromBuffer(Buf: PByte;
+      W, H, Pitch: Integer): TPixieImageHandle;
     function LoadSvgFile(const Path: string): TPixieImageHandle;
   public
     constructor Create;
@@ -1149,11 +1157,7 @@ var
   Bmp: TBitmap;
   RawImage: TLazIntfImage;
   PixelBuf: PByte;
-  Pitch, ImgX, ImgY, ImgW, ImgH: Integer;
-  Colour: TFPColor;
-  Dst: PByte;
-  A, R, G, B: Byte;
-  Info: TPixieCairoImage;
+  Pitch, ImgW, ImgH: Integer;
 begin
   Result := 0;
 
@@ -1162,6 +1166,10 @@ begin
     try
       Pic.LoadFromFile(Path);
     except
+      // TPicture picks its reader by file extension, so it raises when the
+      // extension misreports the format. Retry decoding by actual content
+      // (the FPImage readers match on magic bytes) — issue #266.
+      Result := DecodeImageByContent(Path);
       Exit;
     end;
 
@@ -1177,52 +1185,9 @@ begin
 
       RawImage := Bmp.CreateIntfImage;
       try
-        Pitch := ImgW * 4;
-        GetMem(PixelBuf, Pitch * ImgH);
-
-        // Copy pixels as premultiplied BGRA (Cairo ARGB32 = native-endian
-        // which on little-endian is BGRA in memory)
-        for ImgY := 0 to ImgH - 1 do
-        begin
-          Dst := PixelBuf + ImgY * Pitch;
-          for ImgX := 0 to ImgW - 1 do
-          begin
-            Colour := RawImage.Colors[ImgX, ImgY];
-            A := Colour.Alpha shr 8;
-            if A = 0 then
-            begin
-              Dst^ := 0; Inc(Dst);
-              Dst^ := 0; Inc(Dst);
-              Dst^ := 0; Inc(Dst);
-              Dst^ := 0; Inc(Dst);
-            end
-            else if A = 255 then
-            begin
-              Dst^ := Colour.Blue shr 8; Inc(Dst);
-              Dst^ := Colour.Green shr 8; Inc(Dst);
-              Dst^ := Colour.Red shr 8; Inc(Dst);
-              Dst^ := A; Inc(Dst);
-            end
-            else
-            begin
-              R := Colour.Red shr 8;
-              G := Colour.Green shr 8;
-              B := Colour.Blue shr 8;
-              Dst^ := B * A div 255; Inc(Dst);
-              Dst^ := G * A div 255; Inc(Dst);
-              Dst^ := R * A div 255; Inc(Dst);
-              Dst^ := A; Inc(Dst);
-            end;
-          end;
-        end;
-
-        Info := TPixieCairoImage.Create;
-        Info.Surface := cairo_image_surface_create_for_data(
-          PByte(PixelBuf), CAIRO_FORMAT_ARGB32, ImgW, ImgH, Pitch);
-        Info.PixelData := PixelBuf;
-        Info.ImgWidth := ImgW;
-        Info.ImgHeight := ImgH;
-        Result := TPixieImageHandle(Info);
+        ConvertFPImageToBGRA(RawImage, PixelBuf, ImgW, ImgH, Pitch);
+        if PixelBuf <> nil then
+          Result := NewCairoImageFromBuffer(PixelBuf, ImgW, ImgH, Pitch);
       finally
         RawImage.Free;
       end;
@@ -1232,6 +1197,59 @@ begin
   finally
     Pic.Free;
   end;
+end;
+
+// Decode a raster file by its actual content (the FPImage readers identify
+// the format from its magic bytes, not the file extension) and build a
+// premultiplied BGRA Cairo surface. Used as a fallback when the extension
+// misreports the format, so a JPEG saved as .png still renders (issue #266).
+function TPixieCairoCanvas.DecodeImageByContent(
+  const Path: string): TPixieImageHandle;
+var
+  Stream: TFileStream;
+  Img: TFPMemoryImage;
+  Pixels: PByte;
+  Pitch, W, H: Integer;
+begin
+  Result := 0;
+  Pixels := nil;
+  Img := TFPMemoryImage.Create(0, 0);
+  try
+    try
+      Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyNone);
+      try
+        Img.LoadFromStream(Stream);
+      finally
+        Stream.Free;
+      end;
+      ConvertFPImageToBGRA(Img, Pixels, W, H, Pitch);
+    except
+      // Any failure (unreadable, unknown format, bad dimensions) degrades to
+      // no image rather than raising into the layout/render pass.
+      if Pixels <> nil then FreeMem(Pixels);
+      Exit;
+    end;
+    // The buffer is freshly owned, so hand it to the surface directly rather
+    // than through LoadImageFromPixels, which would copy it.
+    if Pixels <> nil then
+      Result := NewCairoImageFromBuffer(Pixels, W, H, Pitch);
+  finally
+    Img.Free;
+  end;
+end;
+
+function TPixieCairoCanvas.NewCairoImageFromBuffer(
+  Buf: PByte; W, H, Pitch: Integer): TPixieImageHandle;
+var
+  Info: TPixieCairoImage;
+begin
+  Info := TPixieCairoImage.Create;
+  Info.Surface := cairo_image_surface_create_for_data(
+    Buf, CAIRO_FORMAT_ARGB32, W, H, Pitch);
+  Info.PixelData := Buf;
+  Info.ImgWidth := W;
+  Info.ImgHeight := H;
+  Result := TPixieImageHandle(Info);
 end;
 
 function TPixieCairoCanvas.LoadSvgFile(
@@ -1307,12 +1325,17 @@ begin
     Exit;
   end;
 
-  // Try PNG first (native Cairo support)
+  // Try PNG first (native Cairo support). cairo_image_surface_create_from_png
+  // returns a non-nil surface even on failure, so check its status: a file
+  // with a .png extension that is not actually a PNG (e.g. a JPEG saved as
+  // .png) yields an error surface here. Fall through to the content-sniffing
+  // decode path rather than returning a blank image (issue #266).
   if LowerCase(ExtractFileExt(Resolved)) = '.png' then
   begin
     Surface := cairo_image_surface_create_from_png(
       PAnsiChar(Resolved));
-    if Surface <> nil then
+    if (Surface <> nil) and
+       (cairo_surface_status(Surface) = CAIRO_STATUS_SUCCESS) then
     begin
       Info := TPixieCairoImage.Create;
       Info.Surface := Surface;
@@ -1321,6 +1344,13 @@ begin
       Result := TPixieImageHandle(Info);
       Exit;
     end;
+    if Surface <> nil then
+      cairo_surface_destroy(Surface);
+    // A .png Cairo rejected is almost always a file whose extension lies
+    // about its format (e.g. a JPEG saved as .png). Decode it by content
+    // directly — the extension-based TPicture path would only fail again.
+    Result := DecodeImageByContent(Resolved);
+    Exit;
   end;
 
   // Other formats: decode via LCL
@@ -1335,7 +1365,6 @@ end;
 function TPixieCairoCanvas.LoadImageFromPixels(Width, Height: Integer;
   Pixels: Pointer; Pitch: Integer): TPixieImageHandle;
 var
-  Info: TPixieCairoImage;
   BufSize: Integer;
   PixelCopy: Pointer;
 begin
@@ -1348,13 +1377,7 @@ begin
   GetMem(PixelCopy, BufSize);
   Move(Pixels^, PixelCopy^, BufSize);
 
-  Info := TPixieCairoImage.Create;
-  Info.Surface := cairo_image_surface_create_for_data(
-    PByte(PixelCopy), CAIRO_FORMAT_ARGB32, Width, Height, Pitch);
-  Info.PixelData := PixelCopy;
-  Info.ImgWidth := Width;
-  Info.ImgHeight := Height;
-  Result := TPixieImageHandle(Info);
+  Result := NewCairoImageFromBuffer(PByte(PixelCopy), Width, Height, Pitch);
 end;
 
 procedure TPixieCairoCanvas.FreeImage(Handle: TPixieImageHandle);

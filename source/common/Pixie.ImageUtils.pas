@@ -12,12 +12,12 @@ interface
 uses
   FPImage;
 
-procedure ConvertFPImageToBGRA(Img: TFPMemoryImage;
+procedure ConvertFPImageToBGRA(Img: TFPCustomImage;
   out Pixels: PByte; out W, H, Pitch: Integer);
 
 implementation
 
-procedure ConvertFPImageToBGRA(Img: TFPMemoryImage;
+procedure ConvertFPImageToBGRA(Img: TFPCustomImage;
   out Pixels: PByte; out W, H, Pitch: Integer);
 var
   X, Y: Integer;
