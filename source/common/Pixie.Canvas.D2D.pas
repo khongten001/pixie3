@@ -1579,8 +1579,7 @@ begin
 
       // libwebp fallback for systems without WIC WebP support. Sniff
       // RIFF/WEBP magic so we don't waste libwebp on unrelated files.
-      if PixieWebPAvailable and
-         CompareMem(Buf, PAnsiChar('RIFF'), 4) and
+      if CompareMem(Buf, PAnsiChar('RIFF'), 4) and
          CompareMem(PAnsiChar(Buf) + 8, PAnsiChar('WEBP'), 4) then
       begin
         if PixieWebPDecode(Buf, BufSize, PW, PH, Pixels) then

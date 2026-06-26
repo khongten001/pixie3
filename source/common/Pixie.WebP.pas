@@ -7,8 +7,6 @@ unit Pixie.WebP;
 
 interface
 
-function PixieWebPAvailable: Boolean;
-
 // Decode WebP data to premultiplied BGRA pixels.
 // Caller must free the returned Pixels with PixieWebPFreePixels.
 function PixieWebPDecode(Data: Pointer; DataSize: Integer;
@@ -20,11 +18,6 @@ implementation
 
 uses
   SysUtils, Pixie.WebP.Decoder;
-
-function PixieWebPAvailable: Boolean;
-begin
-  Result := True;
-end;
 
 function PixieWebPDecode(Data: Pointer; DataSize: Integer;
   out Width, Height: Integer; out Pixels: Pointer): Boolean;

@@ -227,6 +227,12 @@ uses
 // Helpers
 // ---------------------------------------------------------------------------
 
+type
+  TPixieStreamImageType = (sitUnknown, sitPng, sitJpeg, sitBmp, sitGif, sitSvg,
+    sitWebP);
+
+function DetectImageType(Stream: TStream): TPixieStreamImageType; forward;
+
 function IsHttpUrl(const Url: string): Boolean;
 begin
   Result := (Length(Url) > 7) and
@@ -422,7 +428,7 @@ begin
   end
   else
   begin
-    // Local file. Peek for the GIF magic so static formats avoid a
+    // Local file. Peek the header so animated formats and WebP avoid a
     // second open via the canvas's path-based LoadImage (which still
     // handles SVG + native WIC/Cairo/CG/Qt decoders).
     try
@@ -430,7 +436,13 @@ begin
       try
         if PixieIsGifStream(FileStream) or PixieIsApngStream(FileStream)
           or PixieIsWebPAnimStream(FileStream) then
-          TryDecodeAnimated(FileStream, Key, Result);
+          TryDecodeAnimated(FileStream, Key, Result)
+        else if DetectImageType(FileStream) = sitWebP then
+          // Static WebP: decode through Pixie's own native (alpha-preserving)
+          // decoder, not the platform path-based LoadImage whose LCL
+          // TPicture/TBitmap.Canvas.Draw round-trip flattens transparency to
+          // black on the gtk2 and Qt widgetsets (issue #282).
+          Result := DecodeStreamToHandle(FileStream, Key);
       finally
         FileStream.Free;
       end;
@@ -448,10 +460,6 @@ end;
 // ---------------------------------------------------------------------------
 // Image format detection and stream decoding
 // ---------------------------------------------------------------------------
-
-type
-  TPixieStreamImageType = (sitUnknown, sitPng, sitJpeg, sitBmp, sitGif, sitSvg,
-    sitWebP);
 
 function DetectImageType(Stream: TStream): TPixieStreamImageType;
 var
@@ -590,7 +598,7 @@ begin
   if Result <> 0 then Exit;
 
   // WebP — decode via libwebp
-  if (DetectImageType(Stream) = sitWebP) and PixieWebPAvailable then
+  if DetectImageType(Stream) = sitWebP then
   begin
     WebPBuf := TMemoryStream.Create;
     try
