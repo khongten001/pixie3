@@ -1127,7 +1127,7 @@ begin
   else
     FContainer.SetCursor('auto');
 
-  if Result then
+  if Result and (FRoot <> nil) then
     FRoot.FindStylesChanges(RedrawBoxes);
 end;
 
@@ -1153,7 +1153,7 @@ begin
 
   FContainer.SetCursor('auto');
 
-  if Result then
+  if Result and (FRoot <> nil) then
     FRoot.FindStylesChanges(RedrawBoxes);
 end;
 
@@ -1186,7 +1186,7 @@ begin
 
   FActiveElement := OverEl;
 
-  if Result then
+  if Result and (FRoot <> nil) then
     FRoot.FindStylesChanges(RedrawBoxes);
 end;
 
@@ -1251,7 +1251,7 @@ begin
 
   FActiveElement := nil;
 
-  if Result then
+  if Result and (FRoot <> nil) then
     FRoot.FindStylesChanges(RedrawBoxes);
 end;
 
