@@ -57,6 +57,8 @@ type
     procedure SetUserCss(const Value: string);
     function GetZoom: Double;
     procedure SetZoom(const Value: Double);
+    function GetColorScheme: TPixieColorScheme;
+    procedure SetColorScheme(Value: TPixieColorScheme);
     function GetScrollbar: TPixieScrollbarSettings;
     function GetAutoScrollSpeed: Integer;
     procedure SetAutoScrollSpeed(Value: Integer);
@@ -148,6 +150,8 @@ type
     property BaseUrl: string read GetBaseUrl write SetBaseUrl;
     property UserCss: string read GetUserCss write SetUserCss;
     property Zoom: Double read GetZoom write SetZoom;
+    property ColorScheme: TPixieColorScheme read GetColorScheme
+      write SetColorScheme default pcsAuto;
     property OnAnchorClick: TPixieAnchorClickEvent
       read GetOnAnchorClick write SetOnAnchorClick;
     property OnElementClick: TPixieElementClickEvent
@@ -390,6 +394,16 @@ end;
 procedure TPixieHtmlViewBase.SetZoom(const Value: Double);
 begin
   FCore.Zoom := Value;
+end;
+
+function TPixieHtmlViewBase.GetColorScheme: TPixieColorScheme;
+begin
+  Result := FCore.ColorScheme;
+end;
+
+procedure TPixieHtmlViewBase.SetColorScheme(Value: TPixieColorScheme);
+begin
+  FCore.ColorScheme := Value;
 end;
 
 function TPixieHtmlViewBase.GetAutoScrollSpeed: Integer;

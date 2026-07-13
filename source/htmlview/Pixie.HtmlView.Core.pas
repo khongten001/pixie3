@@ -127,6 +127,8 @@ type
     procedure SetBaseUrl(const Value: string);
     procedure SetUserCss(const Value: string);
     procedure SetZoom(const Value: Double);
+    function GetColorScheme: TPixieColorScheme;
+    procedure SetColorScheme(Value: TPixieColorScheme);
     procedure SetScrollY(Value: TPixiePixel);
     procedure DoScrollChanged;
     function GetEffectiveScale: Double;
@@ -206,6 +208,9 @@ type
     procedure HandlePaint(ACanvasHandle: PtrUInt;
       const AUpdateRect: TPixiePosition);
     procedure HandleResize;
+    // Re-evaluate media queries (e.g. after the OS colour scheme changes
+    // while ColorScheme = pcsAuto) and relayout if anything matched.
+    procedure RecheckMedia;
     procedure HandleCaretTimer;
 
     // Pause/resume the animation timer when the host control becomes
@@ -230,6 +235,8 @@ type
     property BaseUrl: string read FBaseUrl write SetBaseUrl;
     property UserCss: string read FUserCss write SetUserCss;
     property Zoom: Double read FZoom write SetZoom;
+    property ColorScheme: TPixieColorScheme read GetColorScheme
+      write SetColorScheme;
     property Scrollbar: TPixieScrollbarSettings read FScrollbar;
     property ContentHeight: TPixiePixel read FContentHeight;
     property ScrollY: TPixiePixel read FScrollY write SetScrollY;
@@ -803,6 +810,22 @@ begin
   Invalidate;
 end;
 
+function TPixieHtmlViewCore.GetColorScheme: TPixieColorScheme;
+begin
+  if FContainer <> nil then
+    Result := FContainer.ColorScheme
+  else
+    Result := pcsAuto;
+end;
+
+procedure TPixieHtmlViewCore.SetColorScheme(Value: TPixieColorScheme);
+begin
+  if FContainer = nil then Exit;
+  if FContainer.ColorScheme = Value then Exit;
+  FContainer.ColorScheme := Value;
+  RecheckMedia;
+end;
+
 function TPixieHtmlViewCore.GetEffectiveScale: Double;
 begin
   Result := FZoom;
@@ -1235,6 +1258,11 @@ begin
     FContainer.ViewportWidth := W;
     FContainer.ViewportHeight := H;
   end;
+  RecheckMedia;
+end;
+
+procedure TPixieHtmlViewCore.RecheckMedia;
+begin
   if (FDocument <> nil) and FDocument.CheckMediaChanged then
     FDocument.Rebuild;
   FNeedsLayout := True;

@@ -63,6 +63,7 @@ type
     FCursor: string;
     FCaretVisible: Boolean;
     FMediaType: TPixieMediaType;
+    FColorScheme: TPixieColorScheme;
 
     function ResolveUrl(const Src, ABaseUrl: string): string;
     function CacheKey(const Src, ABaseUrl: string): string;
@@ -124,6 +125,7 @@ type
       read FOnSetCaption write FOnSetCaption;
     property BaseUrl: string read FBaseUrl write FBaseUrl;
     property MediaType: TPixieMediaType read FMediaType write FMediaType;
+    property ColorScheme: TPixieColorScheme read FColorScheme write FColorScheme;
     property CaretVisible: Boolean read FCaretVisible write FCaretVisible;
 
     // ---- TPixieContainer overrides ----
@@ -219,9 +221,36 @@ type
 implementation
 
 uses
-  {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,{$ENDIF}
+  {$IFDEF FPC}FPReadPNG, FPReadJPEG, FPReadBMP, FPReadGIF, Pixie.ImageUtils,
+  Graphics,{$ELSE}{$IFDEF FRAMEWORK_VCL}Vcl.Graphics,{$ENDIF}{$ENDIF}
   Pixie.WebP, Pixie.Document, Pixie.GifDecode, Pixie.ApngDecode, Pixie.WebPAnim,
   Pixie.DataUri, Pixie.Utf8, Pixie.Url;
+
+// Best-effort OS dark-mode probe backing 'prefers-color-scheme' when the
+// application leaves ColorScheme at pcsAuto. Mirrors the luminance test
+// shared across SoftPerfect apps: read the system window background colour
+// and treat it as dark when its WCAG relative luminance drops below the
+// midpoint. Works on every LCL widgetset and on VCL; FMX exposes no
+// equivalent system colour, so it reports light there.
+function PixieSystemPrefersDark: Boolean;
+{$IF Defined(FPC) or Defined(FRAMEWORK_VCL)}
+var
+  WindowColor: LongInt;
+  R, G, B: Byte;
+  Luminance: Double;
+{$ENDIF}
+begin
+  {$IF Defined(FPC) or Defined(FRAMEWORK_VCL)}
+  WindowColor := ColorToRGB(clWindow);
+  R := Byte(WindowColor);
+  G := Byte(WindowColor shr 8);
+  B := Byte(WindowColor shr 16);
+  Luminance := (0.2126 * R + 0.7152 * G + 0.0722 * B) / 255.0;
+  Result := Luminance < 0.5;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -818,6 +847,7 @@ begin
   FViewportWidth := 1024;
   FViewportHeight := 768;
   FMediaType := mtScreen;
+  FColorScheme := pcsAuto;
 end;
 
 destructor TPixieNativeContainer.Destroy;
@@ -1472,10 +1502,14 @@ begin
   Media.ColorIndex := 0;
   Media.Monochrome := 0;
   Media.Resolution := 96;
-  // No OS colour-scheme query yet: report the spec default (light) explicitly
-  // so every field of this out-parameter is defined and dark-scheme matching
-  // is deterministic rather than reading uninitialised caller state.
-  Media.PrefersDark := False;
+  // Resolve the application's colour-scheme preference. pcsAuto follows the
+  // host OS/toolkit; pcsLight/pcsDark force the reported scheme.
+  case FColorScheme of
+    pcsLight: Media.PrefersDark := False;
+    pcsDark:  Media.PrefersDark := True;
+  else
+    Media.PrefersDark := PixieSystemPrefersDark;
+  end;
 end;
 
 procedure TPixieNativeContainer.GetLanguage(

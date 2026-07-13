@@ -723,6 +723,12 @@ type
     Metrics: TPixieFontMetrics;
   end;
 
+  { TPixieColorScheme }
+  // Preferred colour scheme reported to 'prefers-color-scheme' media
+  // queries. pcsAuto (the default) probes the host OS/toolkit; pcsLight
+  // and pcsDark let the application force a scheme (e.g. a user toggle).
+  TPixieColorScheme = (pcsAuto, pcsLight, pcsDark);
+
   { TPixieMediaFeatures }
   TPixieMediaFeatures = record
     MediaType: TPixieMediaType;
