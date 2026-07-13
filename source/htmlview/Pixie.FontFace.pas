@@ -314,14 +314,12 @@ begin
     if (PlatId = 3) and (EncId = 1) then
     begin
       if StrStart + NOff + NLen > Size then Continue;
-      Result := '';
-      J := 0;
-      while J < NLen do
-      begin
-        Result := Result + Char(
-          (P[StrStart + NOff + J] shl 8) or P[StrStart + NOff + J + 1]);
-        Inc(J, 2);
-      end;
+      // Length is known (one char per UCS-2 pair), so size the result once
+      // and fill by index instead of reallocating on every concatenation.
+      SetLength(Result, NLen div 2);
+      for J := 0 to (NLen div 2) - 1 do
+        Result[J + 1] := Char(
+          (P[StrStart + NOff + J * 2] shl 8) or P[StrStart + NOff + J * 2 + 1]);
       Exit;
     end;
 
@@ -329,9 +327,9 @@ begin
     if (PlatId = 1) and (EncId = 0) and (Result = '') then
     begin
       if StrStart + NOff + NLen > Size then Continue;
-      Result := '';
+      SetLength(Result, NLen);
       for J := 0 to NLen - 1 do
-        Result := Result + Char(P[StrStart + NOff + J]);
+        Result[J + 1] := Char(P[StrStart + NOff + J]);
     end;
   end;
 end;
