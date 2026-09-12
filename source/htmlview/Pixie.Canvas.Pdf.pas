@@ -108,6 +108,7 @@ type
     procedure BuildFontObjects(Info: TPixiePdfFontInfo);
     procedure FinalizeFonts;
     procedure FinalizePageResources;
+    function LoadJpegPassthrough(const Data: TBytes): TPixieImageHandle;
     {$IFDEF FPC}
     function LoadImageFPImage(const Data: TBytes): TPixieImageHandle;
     {$ENDIF}
@@ -161,6 +162,7 @@ type
     function PtToPx(Pt: Single): TPixiePixel; override;
 
     function LoadImage(const Path: string): TPixieImageHandle; override;
+    function LoadImageFromStream(Stream: TStream): TPixieImageHandle; override;
     function LoadImageFromPixels(Width, Height: Integer;
       Pixels: Pointer; Pitch: Integer): TPixieImageHandle; override;
     procedure FreeImage(Handle: TPixieImageHandle); override;
@@ -1635,17 +1637,147 @@ begin
 end;
 {$ENDIF}
 
+// Embeds a JPEG's own entropy-coded bytes as a /DCTDecode XObject, so the
+// PDF keeps the original compression instead of carrying a re-encoded raw
+// raster. Returns 0 when the data is not a JPEG, or is a variant DCTDecode
+// cannot represent -- arithmetic or lossless coding, or a component count
+// with no matching PDF colour space -- leaving the caller to decode it to
+// pixels instead.
+function TPixiePdfCanvas.LoadJpegPassthrough(
+  const Data: TBytes): TPixieImageHandle;
+var
+  ImgObj: TPixiePdfObject;
+  Info: TPixiePdfImageInfo;
+  ColorSpace: AnsiString;
+  W, H, Comps, SegLen, I: Integer;
+  Marker: Byte;
+  IsAdobe: Boolean;
+begin
+  Result := 0;
+  if Length(Data) < 4 then Exit;
+  if not ((Data[0] = $FF) and (Data[1] = $D8) and (Data[2] = $FF)) then Exit;
+
+  W := 0;
+  H := 0;
+  Comps := 0;
+  IsAdobe := False;
+
+  // Walk the marker segments looking for the frame header. An APP14
+  // "Adobe" segment is noted on the way past: those writers store CMYK
+  // samples inverted.
+  I := 2;
+  while I + 9 < Length(Data) do
+  begin
+    if Data[I] <> $FF then
+    begin
+      Inc(I);
+      Continue;
+    end;
+    Marker := Data[I + 1];
+
+    // Fill bytes and the standalone markers -- SOI/EOI, the restart
+    // markers and TEM -- carry no length field, so they must be stepped
+    // over rather than skipped by a segment length read from the two
+    // bytes that follow them.
+    if (Marker = $FF) or (Marker = $01) or
+       ((Marker >= $D0) and (Marker <= $D9)) then
+    begin
+      Inc(I, 2);
+      Continue;
+    end;
+
+    // SOF0/1/2 are the DCT frame headers DCTDecode understands. The rest
+    // of the SOFn space is arithmetic-coded or lossless, and is turned
+    // down by leaving W and H at zero.
+    if (Marker >= $C0) and (Marker <= $C2) then
+    begin
+      H := (Data[I + 5] shl 8) or Data[I + 6];
+      W := (Data[I + 7] shl 8) or Data[I + 8];
+      Comps := Data[I + 9];
+      Break;
+    end;
+
+    if (Marker = $EE) and
+       (Data[I + 4] = Ord('A')) and (Data[I + 5] = Ord('d')) and
+       (Data[I + 6] = Ord('o')) and (Data[I + 7] = Ord('b')) and
+       (Data[I + 8] = Ord('e')) then
+      IsAdobe := True;
+
+    SegLen := (Data[I + 2] shl 8) or Data[I + 3];
+    if SegLen < 2 then Exit; // malformed: the walk would not advance
+    Inc(I, 2 + SegLen);
+  end;
+
+  if (W <= 0) or (H <= 0) then Exit;
+
+  // The component count, not the file extension, decides the colour
+  // space; tagging a grayscale or CMYK frame as /DeviceRGB makes the
+  // viewer read three bytes per pixel out of one or four.
+  case Comps of
+    1: ColorSpace := '/DeviceGray';
+    3: ColorSpace := '/DeviceRGB';
+    4: ColorSpace := '/DeviceCMYK';
+  else
+    Exit;
+  end;
+
+  ImgObj := FWriter.AllocObject;
+  ImgObj.AddEntry('Type', '/XObject');
+  ImgObj.AddEntry('Subtype', '/Image');
+  ImgObj.AddEntry('Width', AnsiString(IntToStr(W)));
+  ImgObj.AddEntry('Height', AnsiString(IntToStr(H)));
+  ImgObj.AddEntry('ColorSpace', ColorSpace);
+  ImgObj.AddEntry('BitsPerComponent', '8');
+  ImgObj.AddEntry('Filter', '/DCTDecode');
+  if (Comps = 4) and IsAdobe then
+    ImgObj.AddEntry('Decode', '[1 0 1 0 1 0 1 0]');
+  ImgObj.SetStream(Data, False); // JPEG is already compressed
+
+  Info := TPixiePdfImageInfo.Create;
+  Info.PdfName := AllocImageName;
+  Info.ObjId := ImgObj.Id;
+  Info.SmaskObjId := 0;
+  Info.ImgWidth := W;
+  Info.ImgHeight := H;
+  FImages.Add(Info);
+  Result := TPixieImageHandle(Info);
+end;
+
+// The container hands stream-sourced images -- data: URIs, fetched URLs,
+// resources -- here ahead of its own decoding fallbacks. Claiming JPEG
+// gets those to the passthrough as well, instead of letting them arrive
+// as a raw raster via LoadImageFromPixels. Every other format is left to
+// the caller's existing paths.
+function TPixiePdfCanvas.LoadImageFromStream(
+  Stream: TStream): TPixieImageHandle;
+var
+  ImgData: TBytes;
+  SavePos: Int64;
+begin
+  Result := 0;
+  if Stream = nil then Exit;
+
+  SavePos := Stream.Position;
+  try
+    try
+      SetLength(ImgData, Stream.Size - SavePos);
+      if Length(ImgData) > 0 then
+        Stream.ReadBuffer(ImgData[0], Length(ImgData));
+    finally
+      Stream.Position := SavePos;
+    end;
+  except
+    Exit;
+  end;
+
+  Result := LoadJpegPassthrough(ImgData);
+end;
+
 function TPixiePdfCanvas.LoadImage(const Path: string): TPixieImageHandle;
 var
   Resolved: string;
   Stream: TFileStream;
   ImgData: TBytes;
-  ImgObj: TPixiePdfObject;
-  Info: TPixiePdfImageInfo;
-  W, H: Integer;
-  IsJpeg: Boolean;
-  SofLen: Integer;
-  I: Integer;
 begin
   Result := 0;
   Resolved := ExpandFileName(Path);
@@ -1683,62 +1815,14 @@ begin
     Exit;
   end;
 
-  // Detect JPEG by FF D8 FF header
-  IsJpeg := (ImgData[0] = $FF) and (ImgData[1] = $D8) and (ImgData[2] = $FF);
+  Result := LoadJpegPassthrough(ImgData);
+  if Result <> 0 then Exit;
 
-  if IsJpeg then
-  begin
-    // Parse JPEG SOF marker for dimensions
-    W := 0;
-    H := 0;
-    I := 2;
-    while I < Length(ImgData) - 8 do
-    begin
-      if ImgData[I] = $FF then
-      begin
-        if (ImgData[I + 1] >= $C0) and (ImgData[I + 1] <= $C3) then
-        begin
-          H := (ImgData[I + 5] shl 8) or ImgData[I + 6];
-          W := (ImgData[I + 7] shl 8) or ImgData[I + 8];
-          Break;
-        end;
-        SofLen := (ImgData[I + 2] shl 8) or ImgData[I + 3];
-        Inc(I, 2 + SofLen);
-      end
-      else
-        Inc(I);
-    end;
-
-    if (W = 0) or (H = 0) then Exit;
-
-    ImgObj := FWriter.AllocObject;
-    ImgObj.AddEntry('Type', '/XObject');
-    ImgObj.AddEntry('Subtype', '/Image');
-    ImgObj.AddEntry('Width', AnsiString(IntToStr(W)));
-    ImgObj.AddEntry('Height', AnsiString(IntToStr(H)));
-    ImgObj.AddEntry('ColorSpace', '/DeviceRGB');
-    ImgObj.AddEntry('BitsPerComponent', '8');
-    ImgObj.AddEntry('Filter', '/DCTDecode');
-    ImgObj.SetStream(ImgData, False); // JPEG is already compressed
-    ImgObj.CompressStream := False;
-
-    Info := TPixiePdfImageInfo.Create;
-    Info.PdfName := AllocImageName;
-    Info.ObjId := ImgObj.Id;
-    Info.SmaskObjId := 0;
-    Info.ImgWidth := W;
-    Info.ImgHeight := H;
-    FImages.Add(Info);
-    Result := TPixieImageHandle(Info);
-  end
   {$IFDEF FPC}
-  else
-  begin
-    // Decode PNG/BMP/GIF via FPImage and create from raw pixels
-    Result := LoadImageFPImage(ImgData);
-  end
+  // PNG/BMP/GIF, plus the JPEG variants the passthrough turned down,
+  // decode via FPImage and are created from raw pixels.
+  Result := LoadImageFPImage(ImgData);
   {$ENDIF}
-  ;
 end;
 
 function TPixiePdfCanvas.LoadImageFromPixels(Width, Height: Integer;
