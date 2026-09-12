@@ -253,10 +253,16 @@ begin
   FCore.OnHostResetCaret := HostResetCaret;
   FCore.OnHostUpdateIME := HostUpdateIME;
 
+  {$IFNDEF LCLNoGUI}
+  // The nogui widgetset implements no timers at all (CreateTimer always
+  // returns 0), so a caret blink there would raise EOutOfResources. It has
+  // no caret to blink either, so simply leave FCaretTimer nil.
   FCaretTimer := TTimer.Create(Self);
+  FCaretTimer.Enabled := False;
   FCaretTimer.Interval := 530;
   FCaretTimer.OnTimer := DoCaretTimer;
   FCaretTimer.Enabled := True;
+  {$ENDIF}
 end;
 
 destructor TPixieHtmlViewBase.Destroy;
@@ -329,8 +335,11 @@ end;
 
 procedure TPixieHtmlViewBase.HostResetCaret;
 begin
-  FCaretTimer.Enabled := False;
-  FCaretTimer.Enabled := True;
+  if FCaretTimer <> nil then
+  begin
+    FCaretTimer.Enabled := False;
+    FCaretTimer.Enabled := True;
+  end;
 end;
 
 procedure TPixieHtmlViewBase.HostUpdateIME;

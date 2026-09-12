@@ -215,10 +215,9 @@ type
 implementation
 
 uses
-  {$IFDEF LCLGtk2} Gtk2Def, gdk2 {$ENDIF}
-  {$IFDEF LCLGtk3} Gtk3Objects {$ENDIF}
-  , Pixie.SvgRenderer.Canvas
-  ;
+  {$IFDEF LCLGtk2} Gtk2Def, gdk2, {$ENDIF}
+  {$IFDEF LCLGtk3} Gtk3Objects, {$ENDIF}
+  Pixie.SvgRenderer.Canvas;
 
 var
   GCheckFontContext: PPangoContext;
