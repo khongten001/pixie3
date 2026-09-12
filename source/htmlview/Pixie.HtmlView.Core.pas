@@ -268,6 +268,14 @@ implementation
 uses
   Pixie.Element, Pixie.RenderItem;
 
+const
+  // The nogui widgetset implements no timers (TWidgetSet.CreateTimer always
+  // returns 0), so enabling a TTimer there raises EOutOfResources. Nothing
+  // driven by these timers (caret blink, kinetic auto-scroll, scrollbar
+  // fade-out, animated images) is observable without a UI, so headless
+  // builds simply skip them.
+  PixieTimersAvailable = {$IFDEF LCLNoGUI} False {$ELSE} True {$ENDIF};
+
 // ---------------------------------------------------------------------------
 // TPixieScrollbarSettings
 // ---------------------------------------------------------------------------
@@ -433,7 +441,7 @@ begin
   end;
 
   FAutoScrollDY := FAutoScrollSpeed * (1 + FAutoScrollAccel) * Dir;
-  if not FAutoScrollTimer.Enabled then
+  if PixieTimersAvailable and not FAutoScrollTimer.Enabled then
     FAutoScrollTimer.Enabled := True;
 end;
 
@@ -495,6 +503,7 @@ procedure TPixieHtmlViewCore.StartScrollbarHide;
 begin
   if FScrollbarOpacity <= 0 then Exit;
   if FScrollbarHoverZone or FScrollDragging then Exit;
+  if not PixieTimersAvailable then Exit;
   FScrollbarHideTimer.Interval := ScrollbarFadeInterval;
   FScrollbarHideTimer.Enabled := True;
 end;
@@ -594,14 +603,14 @@ begin
   FAutoScrollAccelThreshold := 3;
   FAutoScrollAccelMax := 3;
   FAutoScrollTimer := TTimer.Create(nil);
+  FAutoScrollTimer.Enabled := False;
   FAutoScrollTimer.Interval := 50;
   FAutoScrollTimer.OnTimer := DoAutoScrollTimer;
-  FAutoScrollTimer.Enabled := False;
   FScrollbarOpacity := 0;
   FScrollbarHoverZone := False;
   FScrollbarHideTimer := TTimer.Create(nil);
-  FScrollbarHideTimer.OnTimer := DoScrollbarHideTimer;
   FScrollbarHideTimer.Enabled := False;
+  FScrollbarHideTimer.OnTimer := DoScrollbarHideTimer;
   FScrollbar := TPixieScrollbarSettings.Create;
   FScrollbar.OnChanged := Invalidate;
 
@@ -615,9 +624,9 @@ begin
 
   FAnimCursors := TPixieAnimationCursorList.Create(True); // owns
   FAnimTimer := TTimer.Create(nil);
+  FAnimTimer.Enabled := False;
   FAnimTimer.Interval := 33; // ~30 Hz; GIF minimum delay is 20 ms
   FAnimTimer.OnTimer := DoAnimationTick;
-  FAnimTimer.Enabled := False;
 end;
 
 destructor TPixieHtmlViewCore.Destroy;
@@ -665,7 +674,7 @@ function TPixieHtmlViewCore.DoAcquireAnimationCursor(Sender: TObject;
 begin
   Result := TPixieAnimationCursor.Create(Image, Element, NowMs);
   FAnimCursors.Add(Result);
-  if not FAnimTimer.Enabled then
+  if PixieTimersAvailable and not FAnimTimer.Enabled then
     FAnimTimer.Enabled := True;
 end;
 
@@ -751,7 +760,7 @@ begin
     if not FAnimCursors[I].Finished then
       HasUnfinished := True;
   end;
-  if HasUnfinished then
+  if HasUnfinished and PixieTimersAvailable then
     FAnimTimer.Enabled := True;
 end;
 
